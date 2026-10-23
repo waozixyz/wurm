@@ -13,11 +13,14 @@ opening at the top center. An extra life is awarded every 33 points.
 
 ## Controls
 
-- Title: arrows select any of the 99 levels; Home/End select the first/last
+- Title: Enter, Space or a click opens the stages
+- Stages: Left/Right, A/D, a swipe or the side buttons change stage
+  (Garden, Space, Factory: 33 levels each, each with its own character);
+  Up/Down or the - and + buttons choose a level; Home/End pick the first/last
 - Enter or Space: start or retry
 - Arrows or WASD: steer
 - Escape, Space or P: pause and resume
-- Q while paused: title screen
+- Q while paused: back to the stages
 - R: restart the current level
 - M: mute and unmute
 

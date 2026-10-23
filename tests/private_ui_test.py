@@ -78,11 +78,12 @@ def main():
 
         time.sleep(0.35)
         capture("title")
-        for level, keys in ((1, ["Home"]), (11, ["Home"] + ["Right"] * 10),
-                            (34, ["Home"] + ["Right"] * 33), (67, ["End"] + ["Left"] * 32),
-                            (99, ["End"])):
-            key("q")
+        # Title -> stages; Q from a paused level returns to that level's stage.
+        for level, keys in ((1, ["Return", "Home"]), (11, ["q", "Home"] + ["Down"] * 10),
+                            (34, ["q", "Right", "Home"]), (67, ["q", "Right", "Home"]),
+                            (99, ["q", "End"])):
             key(*keys)
+            time.sleep(0.6)
             key("Return")
             time.sleep(0.3)
             key("space")
