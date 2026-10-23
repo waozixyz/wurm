@@ -25,6 +25,8 @@ main :: () -> s32 {
     for tick: 0..29 { Tick(*game) }
     Expect(game.length == 32 && game.target_length == 2, "original initial growth")
     Expect(game.board[Index(20, 29)] == 20, "entrance closes behind tail")
+    Expect(game.worm[4].x == 328 && game.worm[4].y == game.worm[0].y + 16 &&
+        game.worm[28].y == game.worm[0].y + 112, "body follows the head")
     unused ApplyInput(*game, 264)
     Expect(game.next_direction == DIR_UP, "no reverse turn")
     unused ApplyInput(*game, 262)
@@ -33,6 +35,13 @@ main :: () -> s32 {
     unused ApplyInput(*game, 32)
     unused Step(*game, 10000)
     Expect(game.mode == MODE_PAUSED && game.worm[0].x == old.x && game.worm[0].y == old.y, "pause stops simulation")
+    unused ApplyInput(*game, 256)
+    Expect(game.mode == MODE_PLAYING, "escape resumes")
+    unused ApplyInput(*game, 256)
+    Expect(game.mode == MODE_PAUSED, "escape pauses")
+    unused ApplyInput(*game, 113)
+    Expect(game.mode == MODE_TITLE, "q leaves a paused game")
+    game.mode = MODE_PAUSED
 
     // Collision bit 7 is meaningful: decorative false walls remain passable.
     game.board[Index(10, 10)] = 20

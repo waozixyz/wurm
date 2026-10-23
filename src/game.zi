@@ -284,7 +284,8 @@ Tick :: (game: *Game) {
         game.length += 1
         if game.length == 32 { CloseEntrance(game) }
     }
-    for index: game.length - 1..1 { game.worm[index] = game.worm[index - 1] }
+    // Shift tail first; Ziran ranges only ascend, so a reversed range needs `for <`.
+    for < index: 1..game.length - 1 { game.worm[index] = game.worm[index - 1] }
     game.worm[0] = next
     FinishTick(game)
 }
@@ -300,9 +301,10 @@ Step :: (game: *Game, now: s64) -> bool {
     return true
 }
 ApplyInput :: (game: *Game, key: s32) -> bool {
-    if key == 27 || key == 256 { game.mode = MODE_TITLE; return true }
+    // Escape, Space and P toggle pause; Q leaves a paused game for the title.
+    pause_key := key == 27 || key == 256 || key == 32 || key == 80 || key == 112
     if game.mode == MODE_PLAYING {
-        if key == 32 || key == 80 || key == 112 { game.mode = MODE_PAUSED; return true }
+        if pause_key { game.mode = MODE_PAUSED; return true }
         direction: s32 = -1
         if key == 262 || key == 68 || key == 100 { direction = DIR_RIGHT }
         else if key == 264 || key == 83 || key == 115 { direction = DIR_DOWN }
@@ -312,9 +314,9 @@ ApplyInput :: (game: *Game, key: s32) -> bool {
             game.next_direction = direction
             return true
         }
-    } else if game.mode == MODE_PAUSED && (key == 32 || key == 80 || key == 112) {
-        game.mode = MODE_PLAYING
-        return true
+    } else if game.mode == MODE_PAUSED {
+        if pause_key { game.mode = MODE_PLAYING; return true }
+        if key == 81 || key == 113 { game.mode = MODE_TITLE; return true }
     }
     return false
 }

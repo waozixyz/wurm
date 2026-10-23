@@ -16,9 +16,9 @@ opening at the top center. An extra life is awarded every 33 points.
 - Title: arrows select any of the 99 levels; Home/End select the first/last
 - Enter or Space: start or retry
 - Arrows or WASD: steer
-- Space or P: pause and resume
+- Escape, Space or P: pause and resume
+- Q while paused: title screen
 - R: restart the current level
-- Escape: title screen
 - M: mute and unmute
 
 ## Build

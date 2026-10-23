@@ -177,9 +177,9 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         TextLine(session, 16, apple_text, Rectangle.{hud.x + 279.0, hud.y + 11.0, 30.0, 20.0}, 14)
         TextLine(session, 17, "LIVES", Rectangle.{hud.x + 322.0, hud.y + 11.0, 46.0, 20.0}, 14)
         TextLine(session, 18, lives_text, Rectangle.{hud.x + 373.0, hud.y + 11.0, 28.0, 20.0}, 14)
-        TextLine(session, 19, "Space pauses", Rectangle.{hud.x + 430.0, hud.y + 11.0, 130.0, 20.0}, 14)
+        TextLine(session, 19, "Esc pauses",Rectangle.{hud.x + 430.0, hud.y + 11.0, 130.0, 20.0}, 14)
     }
-    if game.mode == MODE_PAUSED { Overlay(session, stage, "PAUSED", "Space resumes   Esc returns to title") }
+    if game.mode == MODE_PAUSED { Overlay(session, stage, "PAUSED", "Esc resumes   Q returns to title") }
     else if game.mode == MODE_DIED { Overlay(session, stage, "GAME OVER", "Enter retries   Esc returns to title") }
     else if game.mode == MODE_VICTORY { Overlay(session, stage, "ALL 99 LEVELS CLEAR", "Enter returns to the title") }
     return 0

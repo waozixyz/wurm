@@ -81,7 +81,7 @@ def main():
         for level, keys in ((1, ["Home"]), (11, ["Home"] + ["Right"] * 10),
                             (34, ["Home"] + ["Right"] * 33), (67, ["End"] + ["Left"] * 32),
                             (99, ["End"])):
-            key("Escape")
+            key("q")
             key(*keys)
             key("Return")
             time.sleep(0.3)
