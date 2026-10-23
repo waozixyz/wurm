@@ -1,0 +1,13 @@
+Original :: #import, file "../src/original_levels.zi";
+
+#program_export
+main :: () -> s32 {
+    for level: 0..98 {
+        for y: 0..29 {
+            for x: 0..39 {
+                print("%\n", Original.OriginalTile(cast(s32)level, cast(s32)x, cast(s32)y))
+            }
+        }
+    }
+    return 0
+}

@@ -1,0 +1,5 @@
+# Preserve recovered game resources byte for byte on every platform.
+assets/original/** -text
+*.zi text eol=lf
+*.py text eol=lf
+*.sh text eol=lf

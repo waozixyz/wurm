@@ -1,0 +1,42 @@
+[package]
+name = "Worm"
+entry = "src/app.zi"
+module_roots = ["src"]
+bridge_modules = ["app"]
+tool = "kryon"
+
+[toolchain]
+git = "https://github.com/ziranlang/ziran.git"
+ref = "master"
+
+[dependencies.kryon]
+git = "https://github.com/kryonlabs/kryon.git"
+ref = "master"
+
+[install]
+bin = "worm"
+
+[tool.kryon]
+default_profile = "desktop"
+entry = "src/app.zi"
+
+[tool.kryon.profiles.desktop]
+backend = "desktop"
+library = "SDL2"
+
+[tool.kryon.profiles.portable]
+backend = "desktop"
+codegen = "zib"
+assets = "assets"
+
+[tool.kryon.profiles.shot]
+backend = "pixmap"
+library = "SDL2"
+host = "src/shot_host.zi"
+
+[tool.kryon.install]
+profile = "desktop"
+name = "Worm"
+comment = "A Kryon and Ziran worm game"
+categories = "Game;"
+working_directory = "."

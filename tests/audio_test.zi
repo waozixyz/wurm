@@ -1,0 +1,33 @@
+Audio :: #import, file "../src/audio.zi";
+sdl :: #system_library "SDL2";
+CloseDevice :: (device: u32) #foreign sdl "SDL_CloseAudioDevice";
+Quit :: () #foreign sdl "SDL_Quit";
+Init :: (flags: u32) -> s32 #foreign sdl "SDL_InitSubSystem";
+Clear :: (device: u32) #foreign sdl "SDL_ClearQueuedAudio";
+Queued :: (device: u32) -> u32 #foreign sdl "SDL_GetQueuedAudioSize";
+
+#program_export
+main :: () -> s32 {
+    // Run only with SDL_VIDEODRIVER=dummy and SDL_AUDIODRIVER=dummy.
+    if Init(32) != 0 { return 1 }
+    defer Quit()
+    Audio.EnsureAudio()
+    if Audio.device == 0 { return 2 }
+    defer CloseDevice(Audio.device)
+    for index: 0..3 { if Audio.effects[index].count <= 0 { return 3 } }
+    for track: 1..3 {
+        Audio.ChangeMusic(cast(s32)track)
+        if Audio.music_bytes < 44100 { return 4 }
+        Audio.PlayEffect(3)
+        Clear(Audio.device)
+        Audio.PumpAudio()
+        if Audio.music_position == 0 || Queued(Audio.device) == 0 { return 5 }
+    }
+    heard := false
+    for index: 0..1023 { if Audio.mixed[index] != 0 { heard = true } }
+    if !heard { return 6 }
+    Audio.ToggleMute()
+    if !Audio.muted { return 7 }
+    print("Audio local test: four original effects and all three recovered scores mixed.\n")
+    return 0
+}

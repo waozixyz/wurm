@@ -1,0 +1,142 @@
+// Native SDL audio adapter. Game/rendering behavior remains in Ziran/Kryon.
+File :: #import "std/file_linux";
+sdl :: #system_library "SDL2";
+AudioInit :: (flags: u32) -> s32 #foreign sdl "SDL_InitSubSystem";
+VideoDriver :: () -> *u8 #foreign sdl "SDL_GetCurrentVideoDriver";
+AudioOpenDevice :: (name: *u8, capture: s32, desired: *AudioSpec, obtained: *AudioSpec, changes: s32) -> u32 #foreign sdl "SDL_OpenAudioDevice";
+AudioPauseDevice :: (device: u32, pause: s32) #foreign sdl "SDL_PauseAudioDevice";
+AudioQueue :: (device: u32, data: *u8, count: u32) -> s32 #foreign sdl "SDL_QueueAudio";
+AudioQueued :: (device: u32) -> u32 #foreign sdl "SDL_GetQueuedAudioSize";
+AudioClear :: (device: u32) #foreign sdl "SDL_ClearQueuedAudio";
+
+AudioSpec :: struct {
+    rate: s32
+    format: u16
+    channels: u8
+    silence: u8
+    samples: u16
+    padding: u16
+    size: u32
+    callback: *void
+    userdata: *void
+}
+Effect :: struct { bytes: [65536]u8; count: s32; position: s32; playing: bool; }
+device: u32;
+attempted: bool;
+muted: bool;
+effects: [4]Effect;
+music_file: File.FileHandle;
+music_bytes: s64;
+music_position: s64;
+music_track: s32;
+music_samples: [2048]u8;
+mixed: [1024]s16;
+previous_level: s32 = -1;
+previous_apples: s32;
+previous_death: s32;
+previous_transition: s32;
+was_playing: bool;
+
+SignedSample :: (low: u8, high: u8) -> s32 {
+    value := cast(s32)low | (cast(s32)high << 8)
+    if value >= 32768 { value -= 65536 }
+    return value
+}
+
+LoadEffect :: (index: s32, path: string) {
+    file := File.OpenRead(path)
+    if !file.valid { return }
+    defer File.CloseFile(file)
+    count := File.ReadAt(file, effects[index].bytes[:], 0)
+    if count > 0 && count <= 65536 { effects[index].count = cast(s32)count }
+}
+
+EnsureAudio :: () {
+    // Display-free pixmap verification never opens a real audio device.
+    if attempted || VideoDriver() == null { return }
+    attempted = true
+    if AudioInit(16) != 0 { return }
+    spec := AudioSpec.{.rate = 22050, .format = 32784, .channels = 1, .samples = 1024}
+    device = AudioOpenDevice(null, 0, *spec, null, 0)
+    if device == 0 { return }
+    LoadEffect(0, "assets/original/lvlstart.pcm")
+    LoadEffect(1, "assets/original/bloink.pcm")
+    LoadEffect(2, "assets/original/explode.pcm")
+    LoadEffect(3, "assets/original/apfel.pcm")
+    AudioPauseDevice(device, 0)
+}
+
+PlayEffect :: (index: s32) {
+    effects[index].position = 0
+    effects[index].playing = true
+}
+
+ChangeMusic :: (track: s32) {
+    if music_track == track && music_file.valid { return }
+    if music_file.valid { File.CloseFile(music_file) }
+    music_track = track
+    music_position = 0
+    if track == 1 { music_file = File.OpenRead("assets/original/wurm1.pcm") }
+    else if track == 2 { music_file = File.OpenRead("assets/original/wurm2.pcm") }
+    else { music_file = File.OpenRead("assets/original/wurm3.pcm") }
+    music_bytes = ifx music_file.valid then File.FileSize(music_file) else 0
+}
+
+ToggleMute :: () {
+    muted = !muted
+    if device != 0 { AudioClear(device) }
+}
+
+PumpAudio :: () {
+    if device == 0 || muted { return }
+    while AudioQueued(device) < 4096 {
+        for index: 0..2047 { music_samples[index] = 0 }
+        if music_file.valid && music_bytes > 0 {
+            count := File.ReadAt(music_file, music_samples[:], music_position)
+            if count > 0 { music_position += count }
+            if music_position >= music_bytes { music_position = 0 }
+        }
+        for index: 0..1023 {
+            value := SignedSample(music_samples[index * 2], music_samples[index * 2 + 1]) / 2
+            for effect: 0..3 {
+                sound := *effects[effect]
+                if sound.playing && sound.position + 1 < sound.count {
+                    value += SignedSample(sound.bytes[sound.position], sound.bytes[sound.position + 1])
+                    sound.position += 2
+                    if sound.position >= sound.count { sound.playing = false }
+                }
+            }
+            if value > 32767 { value = 32767 }
+            if value < -32768 { value = -32768 }
+            mixed[index] = cast(s16)value
+        }
+        if AudioQueue(device, cast(*u8)*mixed[0], 2048) != 0 { return }
+    }
+}
+
+UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: s32) {
+    EnsureAudio()
+    if device == 0 { return }
+    if playing {
+        if !was_playing || level != previous_level {
+            ChangeMusic(level / 33 + 1)
+            PlayEffect(0)
+        } else {
+            if apples < previous_apples { PlayEffect(3) }
+            if death > 0 && previous_death == 0 { PlayEffect(2) }
+            if death == 0 && previous_death > 0 { PlayEffect(0) }
+            if transition > 0 && previous_transition == 0 { PlayEffect(1) }
+        }
+        PumpAudio()
+    } else if was_playing {
+        AudioClear(device)
+        if music_file.valid { File.CloseFile(music_file) }
+        music_file.valid = false
+        for index: 0..3 { effects[index].playing = false }
+    }
+    was_playing = playing
+    previous_level = level
+    previous_apples = apples
+    previous_death = death
+    previous_transition = transition
+}

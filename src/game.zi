@@ -1,0 +1,320 @@
+#import, file "original_levels.zi";
+
+// Rules recovered from the owner's WURM.EXE. Coordinates are original pixels.
+COLUMNS :: 40;
+ROWS :: 30;
+CELLS :: 1200;
+LEVEL_COUNT :: 99;
+WORM_LIMIT :: 1000;
+MONSTER_LIMIT :: 100;
+TICK_MS :: 25;
+DIR_LEFT :: 0;
+DIR_UP :: 1;
+DIR_RIGHT :: 2;
+DIR_DOWN :: 3;
+MODE_TITLE :: 0;
+MODE_PLAYING :: 1;
+MODE_PAUSED :: 2;
+MODE_DIED :: 3;
+MODE_FINISHED :: 4;
+MODE_VICTORY :: 5;
+
+Point :: struct { x: s32; y: s32; }
+Monster :: struct { position: Point; kind: s32; direction: s32; }
+Particle :: struct { position: Point; life: s32; }
+Game :: struct {
+    mode: s32
+    level: s32
+    score: s32
+    lives: s32
+    board: [CELLS]u8
+    worm: [WORM_LIMIT]Point
+    length: s32
+    target_length: s32
+    direction: s32
+    next_direction: s32
+    next_step: s64
+    apples: s32
+    apple: Point
+    apple_flash: s32
+    monster_count: s32
+    monsters: [MONSTER_LIMIT]Monster
+    particles: [100]Particle
+    death_ticks: s32
+    transition_ticks: s32
+    random: u32
+    started: bool
+}
+
+Index :: (x: s64, y: s64) -> s32 { return cast(s32)(y * COLUMNS + x) }
+Inside :: (x: s64, y: s64) -> bool { return x >= 0 && x < COLUMNS && y >= 0 && y < ROWS }
+Abs :: (v: s32) -> s32 { if v < 0 { return -v }; return v }
+Near :: (a: Point, b: Point, distance: s32) -> bool {
+    return Abs(a.x - b.x) < distance && Abs(a.y - b.y) < distance
+}
+
+// Watcom rand(), WURM.EXE 0x4091dd: 32-bit LCG, high 15 bits.
+Random :: (game: *Game, limit: s32) -> s32 {
+    next := (cast(u64)game.random * 1103515245 + 12345) & 4294967295
+    game.random = cast(u32)next
+    return cast(s32)((game.random >> 16) & 32767) % limit
+}
+
+TileAt :: (game: *Game, position: Point) -> s32 {
+    if position.x < 0 || position.y < 0 || position.x >= 640 || position.y >= 480 { return 20 }
+    return cast(s32)game.board[Index(position.x / 16, position.y / 16)]
+}
+WallAt :: (game: *Game, position: Point) -> bool {
+    tile := TileAt(game, position)
+    // Bit 7 marks a visible but passable tile, including false walls.
+    return tile >= 20 && tile < 128
+}
+WormNear :: (game: *Game, position: Point, start: s32, distance: s32) -> bool {
+    index := start
+    while index < game.length - 4 {
+        if Near(position, game.worm[index], distance) { return true }
+        index += 4
+    }
+    return false
+}
+SpawnApple :: (game: *Game) {
+    if game.apples <= 0 { game.apple = Point.{-1, -1}; return }
+    // Original apples use pixel coordinates, not cell centers.
+    for attempt: 0..32767 {
+        candidate := Point.{Random(game, 640), Random(game, 480)}
+        if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) {
+            game.apple = candidate
+            game.apple_flash = 128
+            return
+        }
+    }
+    for at: 0..CELLS - 1 {
+        candidate := Point.{cast(s32)(at % COLUMNS) * 16 + 8, cast(s32)(at / COLUMNS) * 16 + 8}
+        if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) {
+            game.apple = candidate
+            game.apple_flash = 128
+            return
+        }
+    }
+    game.apple = Point.{-1, -1}
+}
+OpenEntrance :: (game: *Game) {
+    game.board[Index(20, 29)] = game.board[Index(20, 28)] & 127
+    game.board[Index(19, 29)] = 21
+    game.board[Index(21, 29)] = 21
+}
+CloseEntrance :: (game: *Game) { game.board[Index(20, 29)] = 20 }
+OpenExit :: (game: *Game) {
+    game.board[Index(20, 0)] = game.board[Index(20, 1)] & 127
+    game.board[Index(19, 0)] = 21
+    game.board[Index(21, 0)] = 21
+}
+Respawn :: (game: *Game) {
+    game.length = 1
+    game.target_length = 2
+    game.direction = DIR_UP
+    game.next_direction = DIR_UP
+    game.death_ticks = 0
+    game.worm[0] = Point.{328, 496}
+    OpenEntrance(game)
+}
+LoadLevel :: (game: *Game, level: s32, now: s64) {
+    if level < 0 { level = 0 }
+    if level >= LEVEL_COUNT { level = LEVEL_COUNT - 1 }
+    game.mode = MODE_PLAYING
+    game.level = level
+    game.apples = OriginalApples[level]
+    game.monster_count = 0
+    game.transition_ticks = 0
+    for index: 0..99 { game.particles[index].life = 0 }
+    game.next_step = now + TICK_MS
+    game.started = true
+    for y: 0..ROWS - 1 {
+        for x: 0..COLUMNS - 1 {
+            tile := OriginalTile(level, cast(s32)x, cast(s32)y)
+            game.board[Index(x, y)] = tile
+            kind := cast(s32)(tile & 127) - 39
+            if kind >= 1 && kind <= 6 && game.monster_count < MONSTER_LIMIT {
+                index := game.monster_count
+                game.monsters[index].position = Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8}
+                game.monsters[index].kind = kind
+                game.monsters[index].direction = ifx kind == 1 then Random(game, 4) else kind - 2
+                game.monster_count += 1
+                game.board[Index(x, y)] = tile & 128
+            }
+        }
+    }
+    game.length = 0
+    SpawnApple(game)
+    Respawn(game)
+}
+StartGame :: (game: *Game, level: s32, now: s64, seed: u32 = 1) {
+    game.random = seed
+    game.lives = 3
+    game.score = 0
+    LoadLevel(game, level, now)
+}
+MonsterBlocked :: (game: *Game, index: s32, position: Point) -> bool {
+    if WallAt(game, position) || WormNear(game, position, 0, 10) { return true }
+    for other: 0..game.monster_count - 1 {
+        if other != index && Near(position, game.monsters[other].position, 8) { return true }
+    }
+    return false
+}
+MonsterNext :: (position: Point, direction: s32) -> Point {
+    if direction == 0 { position.y -= 1 }
+    else if direction == 1 { position.x += 1 }
+    else if direction == 2 { position.y += 1 }
+    else { position.x -= 1 }
+    return position
+}
+MoveMonster :: (game: *Game, index: s32) {
+    monster := *game.monsters[index]
+    if monster.kind == 6 {
+        candidate := monster.position
+        if candidate.x > game.worm[0].x { candidate.x -= 1 }
+        if !MonsterBlocked(game, index, candidate) { monster.position = candidate }
+        candidate = monster.position
+        if candidate.x < game.worm[0].x { candidate.x += 1 }
+        if !MonsterBlocked(game, index, candidate) { monster.position = candidate }
+        candidate = monster.position
+        if candidate.y > game.worm[0].y { candidate.y -= 1 }
+        if !MonsterBlocked(game, index, candidate) { monster.position = candidate }
+        candidate = monster.position
+        if candidate.y < game.worm[0].y { candidate.y += 1 }
+        if !MonsterBlocked(game, index, candidate) { monster.position = candidate }
+        return
+    }
+    candidate := MonsterNext(monster.position, monster.direction)
+    blocked := MonsterBlocked(game, index, candidate)
+    if monster.kind == 1 {
+        if !blocked { blocked = Random(game, 25) == 0 || candidate.y < 16 }
+        if blocked { monster.direction = Random(game, 4) }
+        else { monster.position = candidate }
+    } else if blocked {
+        monster.direction = (monster.direction + 2) % 4
+        monster.kind = monster.direction + 2
+    } else { monster.position = candidate }
+}
+AddScore :: (game: *Game, amount: s32) {
+    previous := game.score / 33
+    game.score += amount
+    if game.score / 33 > previous { game.lives += 1 }
+}
+
+AddParticle :: (game: *Game, position: Point) {
+    y := position.y + Random(game, 16) - 8
+    x := position.x + Random(game, 16) - 8
+    life := (Random(game, 4) + 6) * 2
+    for index: 0..99 {
+        if game.particles[index].life == 0 {
+            game.particles[index] = Particle.{Point.{x, y}, life}
+            return
+        }
+    }
+}
+
+FinishTick :: (game: *Game) {
+    for index: 0..game.monster_count - 1 { MoveMonster(game, cast(s32)index) }
+    // Original particle slots remain occupied at life 1 until the next map.
+    for index: 0..99 {
+        if game.particles[index].life > 1 { game.particles[index].life -= 1 }
+    }
+    if game.apple_flash > 0 { game.apple_flash -= 1 }
+}
+
+Tick :: (game: *Game) {
+    if game.transition_ticks > 0 {
+        game.transition_ticks -= 1
+        if game.transition_ticks == 0 {
+            if game.level + 1 >= LEVEL_COUNT { game.mode = MODE_VICTORY }
+            else { game.mode = MODE_FINISHED }
+        }
+        FinishTick(game)
+        return
+    }
+    if game.death_ticks > 0 {
+        game.death_ticks -= 1
+        if game.death_ticks == 0 {
+            game.lives -= 1
+            if game.lives < 0 { game.mode = MODE_DIED }
+            else { Respawn(game) }
+        }
+        FinishTick(game)
+        return
+    }
+    game.direction = game.next_direction
+    next := game.worm[0]
+    if game.direction == DIR_LEFT { next.x -= 4 }
+    else if game.direction == DIR_UP { next.y -= 4 }
+    else if game.direction == DIR_RIGHT { next.x += 4 }
+    else { next.y += 4 }
+    if game.apples == 0 && next.y < 0 {
+        count := game.length
+        if count > 100 { count = 100 }
+        for index: 0..count - 1 {
+            segment := Random(game, game.length)
+            AddParticle(game, game.worm[segment])
+        }
+        AddScore(game, 5)
+        game.transition_ticks = 50
+        FinishTick(game)
+        return
+    }
+    collision := false
+    if game.length >= 16 {
+        collision = WallAt(game, next) || WormNear(game, next, 8, 10)
+        for index: 0..game.monster_count - 1 {
+            if Near(next, game.monsters[index].position, 8) { collision = true }
+        }
+    }
+    if collision { game.death_ticks = 20 }
+    if !collision && game.apples > 0 && Near(next, game.apple, 10) {
+        game.apples -= 1
+        AddScore(game, 1)
+        game.target_length += 4
+        if game.target_length > 62 { game.target_length = 62 }
+        SpawnApple(game)
+        if game.apples == 0 { OpenExit(game) }
+        count := Random(game, 5) + 3
+        for index: 0..count - 1 { AddParticle(game, next) }
+    }
+    if game.length / 16 < game.target_length && game.length < WORM_LIMIT {
+        game.worm[game.length] = game.worm[game.length - 1]
+        game.length += 1
+        if game.length == 32 { CloseEntrance(game) }
+    }
+    for index: game.length - 1..1 { game.worm[index] = game.worm[index - 1] }
+    game.worm[0] = next
+    FinishTick(game)
+}
+Step :: (game: *Game, now: s64) -> bool {
+    if game.mode != MODE_PLAYING || now < game.next_step { return false }
+    ticks := (now - game.next_step) / TICK_MS + 1
+    if ticks > 8 { ticks = 8; game.next_step = now - (ticks - 1) * TICK_MS }
+    for index: 0..ticks - 1 {
+        if game.mode != MODE_PLAYING { break }
+        Tick(game)
+        game.next_step += TICK_MS
+    }
+    return true
+}
+ApplyInput :: (game: *Game, key: s32) -> bool {
+    if key == 27 || key == 256 { game.mode = MODE_TITLE; return true }
+    if game.mode == MODE_PLAYING {
+        if key == 32 || key == 80 || key == 112 { game.mode = MODE_PAUSED; return true }
+        direction: s32 = -1
+        if key == 262 || key == 68 || key == 100 { direction = DIR_RIGHT }
+        else if key == 264 || key == 83 || key == 115 { direction = DIR_DOWN }
+        else if key == 263 || key == 65 || key == 97 { direction = DIR_LEFT }
+        else if key == 265 || key == 87 || key == 119 { direction = DIR_UP }
+        if direction >= 0 && game.length >= 8 && direction != (game.direction + 2) % 4 {
+            game.next_direction = direction
+            return true
+        }
+    } else if game.mode == MODE_PAUSED && (key == 32 || key == 80 || key == 112) {
+        game.mode = MODE_PLAYING
+        return true
+    }
+    return false
+}

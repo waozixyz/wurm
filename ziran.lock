@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "packages": [
+    {
+      "commit": "fafa2cea97d0cb379d832086ba45a989fa6f9c8e",
+      "dependencies": {},
+      "id": "p5a77c9c35110e925",
+      "name": "raylib",
+      "ref": "fafa2cea97d0cb379d832086ba45a989fa6f9c8e",
+      "source": true,
+      "url": "https://github.com/raysan5/raylib.git"
+    },
+    {
+      "commit": "3bb0c53fc5b887d4b3156ea7f7ca995eeaa76f45",
+      "dependencies": {"raylib": "p5a77c9c35110e925"},
+      "id": "pbca163a9b0c535c5",
+      "name": "kryon",
+      "ref": "master",
+      "url": "https://github.com/kryonlabs/kryon.git"
+    }
+  ],
+  "root": {
+    "dependencies": {"kryon": "pbca163a9b0c535c5"},
+    "name": "Worm"
+  },
+  "toolchain": {
+    "commit": "786f6249ec6a1d8de530e709980d85916281e526",
+    "ref": "master",
+    "url": "https://github.com/ziranlang/ziran.git"
+  }
+}

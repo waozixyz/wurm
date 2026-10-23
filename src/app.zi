@@ -1,0 +1,186 @@
+using UI :: #import "kryon/Widgets";
+Input :: #import "kryon/input_protocol";
+Timer :: #import "std/timer_linux";
+#import "std/number_text"
+#import, file "game.zi";
+Audio :: #import, file "audio.zi";
+
+game: Game;
+level_digits: [21]u8;
+score_digits: [21]u8;
+apple_digits: [21]u8;
+lives_digits: [21]u8;
+
+Sheet :: (level: s32, transparent: bool) -> string {
+    if level < 33 {
+        if transparent { return "assets/original/steine_1_sprites.png" }
+        return "assets/original/steine_1.png"
+    }
+    if level < 66 {
+        if transparent { return "assets/original/steine_2_sprites.png" }
+        return "assets/original/steine_2.png"
+    }
+    if transparent { return "assets/original/steine_3_sprites.png" }
+    return "assets/original/steine_3.png"
+}
+
+Picture :: (session: Session, key: u64, asset: string, bounds: Rectangle, source: Rectangle) {
+    unused Image(session, ImageProps.{.key = key, .asset_path = asset, .bounds = bounds,
+        .source = source, .smooth = false, .alt_text = "The Worm original artwork"})
+}
+
+TextLine :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32) {
+    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = text,
+        .font = size, .wrap = TextWrap.TextWrapNone})
+}
+
+Overlay :: (session: Session, stage: Rectangle, title: string, message: string) {
+    unused Box(session, BoxProps.{.key = 50,
+        .bounds = Rectangle.{stage.x + stage.width * 0.12, stage.y + stage.height * 0.4,
+            stage.width * 0.76, 90.0}, .fill = Color.{238, 235, 221, 246}})
+    TextLine(session, 51, title, Rectangle.{stage.x + stage.width * 0.16,
+        stage.y + stage.height * 0.4 + 12.0, stage.width * 0.68, 30.0}, 24)
+    TextLine(session, 52, message, Rectangle.{stage.x + stage.width * 0.16,
+        stage.y + stage.height * 0.4 + 51.0, stage.width * 0.68, 26.0}, 15)
+}
+
+Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source: Rectangle) {
+    scale := stage.width / 640.0
+    bounds := Rectangle.{stage.x + cast(float32)(position.x - 8) * scale,
+        stage.y + cast(float32)(position.y - 8) * scale, 16.0 * scale, 16.0 * scale}
+    if bounds.y < stage.y || bounds.y + bounds.height > stage.y + stage.height { return }
+    Picture(session, key, Sheet(game.level, true), bounds, source)
+}
+
+AppleFlash :: (session: Session, stage: Rectangle) {
+    if game.apple_flash <= 0 { return }
+    frame := (game.apple_flash / 4) % 6
+    source := Rectangle.{112.0, 144.0, 30.0, 30.0}
+    offset := Vector2.{15.0, 15.0}
+    if frame == 1 { source = Rectangle.{142.0, 144.0, 28.0, 28.0}; offset = Vector2.{14.0, 14.0} }
+    else if frame == 2 { source = Rectangle.{170.0, 144.0, 28.0, 26.0}; offset = Vector2.{14.0, 13.0} }
+    else if frame == 3 { source = Rectangle.{198.0, 144.0, 26.0, 24.0}; offset = Vector2.{13.0, 12.0} }
+    else if frame == 4 { source = Rectangle.{224.0, 144.0, 28.0, 26.0}; offset = Vector2.{14.0, 13.0} }
+    else if frame == 5 { source = Rectangle.{252.0, 144.0, 28.0, 28.0}; offset = Vector2.{14.0, 14.0} }
+    scale := stage.width / 640.0
+    bounds := Rectangle.{stage.x + (cast(float32)game.apple.x - offset.x) * scale,
+        stage.y + (cast(float32)game.apple.y - offset.y) * scale,
+        source.width * scale, source.height * scale}
+    Picture(session, 1401, Sheet(game.level, true), bounds, source)
+}
+
+DrawBoard :: (session: Session, stage: Rectangle) {
+    scale := stage.width / 640.0
+    for y: 0..ROWS - 1 {
+        for x: 0..COLUMNS - 1 {
+            at := Index(x, y)
+            tile := cast(s32)(game.board[at] & 127)
+            bounds := Rectangle.{stage.x + cast(float32)x * 16.0 * scale,
+                stage.y + cast(float32)y * 16.0 * scale, 16.0 * scale, 16.0 * scale}
+            source := Rectangle.{cast(float32)(tile % 20) * 16.0,
+                cast(float32)(tile / 20) * 16.0, 16.0, 16.0}
+            Picture(session, 100 + cast(u64)at, Sheet(game.level, false), bounds, source)
+        }
+    }
+    if game.apples > 0 && game.apple.x >= 0 {
+        Sprite(session, 1400, stage, game.apple, Rectangle.{0.0, 112.0, 16.0, 16.0})
+        AppleFlash(session, stage)
+    }
+    index: s32 = 0
+    while index < game.length {
+        column := 4
+        if index == 0 { column = game.direction }
+        else if index >= game.length - 4 { column = -1 }
+        else if index >= game.length - 8 { column = 6 }
+        else if index >= game.length - 12 { column = 5 }
+        if column >= 0 && (game.death_ticks == 0 || game.death_ticks / 2 > 2) {
+            Sprite(session, 2000 + cast(u64)index, stage, game.worm[index],
+                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0})
+        }
+        if game.death_ticks > 0 && index < game.length - 4 {
+            Sprite(session, 4000 + cast(u64)index, stage, game.worm[index],
+                Rectangle.{cast(float32)(5 - game.death_ticks / 4) * 16.0, 144.0, 16.0, 16.0})
+        }
+        index += 4
+    }
+    for monster: 0..game.monster_count - 1 {
+        Sprite(session, 6000 + cast(u64)monster, stage, game.monsters[monster].position,
+            Rectangle.{cast(float32)(game.monsters[monster].kind - 1) * 16.0, 32.0, 16.0, 16.0})
+    }
+    for particle: 0..99 {
+        life := game.particles[particle].life
+        if life > 1 && life <= 12 {
+            Sprite(session, 7000 + cast(u64)particle, stage, game.particles[particle].position,
+                Rectangle.{cast(float32)(life / 2) * 16.0, 160.0, 16.0, 16.0})
+        }
+    }
+}
+
+HandleInput :: (key: s32, now: s64) {
+    if key == 77 || key == 109 { Audio.ToggleMute(); return }
+    if game.mode == MODE_TITLE {
+        if key == Input.KeyEnter || key == 32 { StartGame(*game, game.level, now, cast(u32)(now & 4294967295)) }
+        else if key == 263 || key == 265 { game.level = (game.level + LEVEL_COUNT - 1) % LEVEL_COUNT }
+        else if key == 262 || key == 264 { game.level = (game.level + 1) % LEVEL_COUNT }
+        else if key == 268 { game.level = 0 }
+        else if key == 269 { game.level = LEVEL_COUNT - 1 }
+    } else if game.mode == MODE_PLAYING {
+        if key == 82 || key == 114 { LoadLevel(*game, game.level, now) }
+        else { unused ApplyInput(*game, key) }
+    } else if game.mode == MODE_PAUSED {
+        unused ApplyInput(*game, key)
+        if game.mode == MODE_PLAYING { game.next_step = now + TICK_MS }
+    } else if game.mode == MODE_FINISHED {
+        LoadLevel(*game, game.level + 1, now)
+    } else if game.mode == MODE_DIED {
+        if key == Input.KeyEnter || key == 32 { StartGame(*game, game.level, now) }
+        else if key == Input.KeyEscape { game.mode = MODE_TITLE }
+    } else if game.mode == MODE_VICTORY {
+        if key == Input.KeyEnter || key == 32 || key == Input.KeyEscape { game.mode = MODE_TITLE }
+    }
+}
+
+#program_export
+Frame :: (session: Session, viewport: Rectangle) -> s32 {
+    now := Timer.MonotonicMilliseconds()
+    if !game.started { game.mode = MODE_TITLE; game.started = true }
+    HandleInput(KeyboardTake(session), now)
+    unused Step(*game, now)
+    Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,
+        game.level, game.apples, game.death_ticks, game.transition_ticks)
+    unused Box(session, BoxProps.{.key = 1, .bounds = viewport, .fill = Color.{0, 0, 0, 255}})
+    available_height := viewport.height - 42.0
+    if available_height < 1.0 { available_height = 1.0 }
+    scale := viewport.width / 640.0
+    if available_height / 480.0 < scale { scale = available_height / 480.0 }
+    stage := Rectangle.{viewport.x + (viewport.width - 640.0 * scale) / 2.0,
+        viewport.y + (available_height - 480.0 * scale) / 2.0, 640.0 * scale, 480.0 * scale}
+    if game.mode == MODE_TITLE {
+        Picture(session, 2, "assets/original/titel_e.png", stage, Rectangle.{0.0, 0.0, 640.0, 480.0})
+    } else { DrawBoard(session, stage) }
+    hud := Rectangle.{viewport.x, viewport.y + viewport.height - 42.0, viewport.width, 42.0}
+    unused Box(session, BoxProps.{.key = 10, .bounds = hud, .fill = Color.{229, 226, 214, 255}})
+    level_text := FormatInteger(cast(s64)(game.level + 1), level_digits[:])
+    TextLine(session, 11, "LEVEL", Rectangle.{hud.x + 10.0, hud.y + 11.0, 44.0, 20.0}, 14)
+    TextLine(session, 12, level_text, Rectangle.{hud.x + 57.0, hud.y + 11.0, 30.0, 20.0}, 14)
+    if game.mode == MODE_TITLE {
+        TextLine(session, 13, "/ 99   Arrows choose level   Enter starts", Rectangle.{hud.x + 85.0, hud.y + 11.0, 400.0, 22.0}, 14)
+    } else {
+        score_text := FormatInteger(cast(s64)game.score, score_digits[:])
+        apple_text := FormatInteger(cast(s64)game.apples, apple_digits[:])
+        lives := game.lives
+        if lives < 0 { lives = 0 }
+        lives_text := FormatInteger(cast(s64)lives, lives_digits[:])
+        TextLine(session, 13, "SCORE", Rectangle.{hud.x + 102.0, hud.y + 11.0, 48.0, 20.0}, 14)
+        TextLine(session, 14, score_text, Rectangle.{hud.x + 153.0, hud.y + 11.0, 50.0, 20.0}, 14)
+        TextLine(session, 15, "APPLES", Rectangle.{hud.x + 218.0, hud.y + 11.0, 58.0, 20.0}, 14)
+        TextLine(session, 16, apple_text, Rectangle.{hud.x + 279.0, hud.y + 11.0, 30.0, 20.0}, 14)
+        TextLine(session, 17, "LIVES", Rectangle.{hud.x + 322.0, hud.y + 11.0, 46.0, 20.0}, 14)
+        TextLine(session, 18, lives_text, Rectangle.{hud.x + 373.0, hud.y + 11.0, 28.0, 20.0}, 14)
+        TextLine(session, 19, "Space pauses", Rectangle.{hud.x + 430.0, hud.y + 11.0, 130.0, 20.0}, 14)
+    }
+    if game.mode == MODE_PAUSED { Overlay(session, stage, "PAUSED", "Space resumes   Esc returns to title") }
+    else if game.mode == MODE_DIED { Overlay(session, stage, "GAME OVER", "Enter retries   Esc returns to title") }
+    else if game.mode == MODE_VICTORY { Overlay(session, stage, "ALL 99 LEVELS CLEAR", "Enter returns to the title") }
+    return 0
+}
