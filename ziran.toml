@@ -1,5 +1,5 @@
 [package]
-name = "Worm"
+name = "Apfelwurm"
 entry = "src/app.zi"
 module_roots = ["src"]
 bridge_modules = ["app"]
@@ -14,7 +14,7 @@ git = "https://github.com/kryonlabs/kryon.git"
 ref = "master"
 
 [install]
-bin = "worm"
+bin = "wurm"
 
 [tool.kryon]
 default_profile = "desktop"
@@ -36,7 +36,11 @@ host = "src/shot_host.zi"
 
 [tool.kryon.install]
 profile = "desktop"
-name = "Worm"
+name = "Apfelwurm"
 comment = "A Kryon and Ziran worm game"
 categories = "Game;"
 working_directory = "."
+
+# The application id.
+[tool.kryon.android]
+package = "xyz.waozi.wurm"

@@ -1,4 +1,7 @@
-# Worm
+# Apfelwurm
+
+Application id `xyz.waozi.wurm`.
+
 
 A native Ziran and Kryon game using all **99 original levels** recovered
 from the owner's `The-Worm_Win_EN/ONLY.ONE` archive. The game shows new art and

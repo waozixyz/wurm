@@ -21,7 +21,7 @@
   ],
   "root": {
     "dependencies": {"kryon": "pbca163a9b0c535c5"},
-    "name": "Worm"
+    "name": "Apfelwurm"
   },
   "toolchain": {
     "commit": "786f6249ec6a1d8de530e709980d85916281e526",

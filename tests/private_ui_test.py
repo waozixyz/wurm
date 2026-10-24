@@ -50,7 +50,7 @@ def main():
         env["DISPLAY"] = ":" + number
         evidence = {"server_pid": server.pid, "server_executable": str(executable),
                     "server_command": [x.decode() for x in command if x], "display": env["DISPLAY"]}
-        app = subprocess.Popen([str(ROOT / "build/Worm-desktop")], cwd=ROOT, env=env,
+        app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT, env=env,
                                stdout=open(OUT / "app.log", "wb"), stderr=subprocess.STDOUT, start_new_session=True)
         window = None
         for attempt in range(100):
@@ -63,7 +63,7 @@ def main():
                 break
             time.sleep(0.1)
         if window is None:
-            raise RuntimeError("No owned Worm window appeared")
+            raise RuntimeError("No owned Apfelwurm window appeared")
         evidence.update(app_pid=app.pid, app_executable=str(Path(f"/proc/{app.pid}/exe").resolve()), window=window)
 
         def key(*keys):

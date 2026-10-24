@@ -38,4 +38,4 @@ for name in ('remake-start', 'remake-level-99', 'remake-stages'):
 print('Headless local tests: opening stages, final level and Garden page at level 20 rendered with the new art.')
 PY
 ziran build --locked desktop
-printf '%s\n' 'Worm local tests passed; GitHub CI is separate.'
+printf '%s\n' 'Apfelwurm local tests passed; GitHub CI is separate.'
