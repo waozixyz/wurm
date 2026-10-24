@@ -2,6 +2,14 @@
   "format": 1,
   "packages": [
     {
+      "commit": "ce510505c384fb2b0c4b47e216b80cae53576b77",
+      "dependencies": {"raylib": "p5a77c9c35110e925"},
+      "id": "p28a106e741584b2c",
+      "name": "kryon",
+      "ref": "master",
+      "url": "https://github.com/kryonlabs/kryon.git"
+    },
+    {
       "commit": "fafa2cea97d0cb379d832086ba45a989fa6f9c8e",
       "dependencies": {},
       "id": "p5a77c9c35110e925",
@@ -9,18 +17,10 @@
       "ref": "fafa2cea97d0cb379d832086ba45a989fa6f9c8e",
       "source": true,
       "url": "https://github.com/raysan5/raylib.git"
-    },
-    {
-      "commit": "3bb0c53fc5b887d4b3156ea7f7ca995eeaa76f45",
-      "dependencies": {"raylib": "p5a77c9c35110e925"},
-      "id": "pbca163a9b0c535c5",
-      "name": "kryon",
-      "ref": "master",
-      "url": "https://github.com/kryonlabs/kryon.git"
     }
   ],
   "root": {
-    "dependencies": {"kryon": "pbca163a9b0c535c5"},
+    "dependencies": {"kryon": "p28a106e741584b2c"},
     "name": "Apfelwurm"
   },
   "toolchain": {

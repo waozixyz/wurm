@@ -64,6 +64,10 @@ def main():
             time.sleep(0.1)
         if window is None:
             raise RuntimeError("No owned Apfelwurm window appeared")
+        title = subprocess.run(["xdotool", "getwindowname", window], env=env,
+                               capture_output=True, text=True).stdout.strip()
+        if title != "Apfelwurm":
+            raise RuntimeError(f"Window is titled {title!r}, not Apfelwurm")
         evidence.update(app_pid=app.pid, app_executable=str(Path(f"/proc/{app.pid}/exe").resolve()), window=window)
 
         def key(*keys):
