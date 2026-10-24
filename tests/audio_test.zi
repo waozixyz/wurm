@@ -28,6 +28,6 @@ main :: () -> s32 {
     if !heard { return 6 }
     Audio.ToggleMute()
     if !Audio.muted { return 7 }
-    print("Audio local test: four original effects and all three recovered scores mixed.\n")
+    print("Audio local test: four effects and all three stage scores mixed.\n")
     return 0
 }

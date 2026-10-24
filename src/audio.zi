@@ -59,10 +59,10 @@ EnsureAudio :: () {
     spec := AudioSpec.{.rate = 22050, .format = 32784, .channels = 1, .samples = 1024}
     device = AudioOpenDevice(null, 0, *spec, null, 0)
     if device == 0 { return }
-    LoadEffect(0, "assets/original/lvlstart.pcm")
-    LoadEffect(1, "assets/original/bloink.pcm")
-    LoadEffect(2, "assets/original/explode.pcm")
-    LoadEffect(3, "assets/original/apfel.pcm")
+    LoadEffect(0, "assets/sounds/start.pcm")
+    LoadEffect(1, "assets/sounds/exit.pcm")
+    LoadEffect(2, "assets/sounds/lose.pcm")
+    LoadEffect(3, "assets/sounds/pickup.pcm")
     AudioPauseDevice(device, 0)
 }
 
@@ -76,9 +76,9 @@ ChangeMusic :: (track: s32) {
     if music_file.valid { File.CloseFile(music_file) }
     music_track = track
     music_position = 0
-    if track == 1 { music_file = File.OpenRead("assets/original/wurm1.pcm") }
-    else if track == 2 { music_file = File.OpenRead("assets/original/wurm2.pcm") }
-    else { music_file = File.OpenRead("assets/original/wurm3.pcm") }
+    if track == 1 { music_file = File.OpenRead("assets/sounds/garden.pcm") }
+    else if track == 2 { music_file = File.OpenRead("assets/sounds/space.pcm") }
+    else { music_file = File.OpenRead("assets/sounds/factory.pcm") }
     music_bytes = ifx music_file.valid then File.FileSize(music_file) else 0
 }
 

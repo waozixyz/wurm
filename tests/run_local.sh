@@ -24,18 +24,18 @@ print('Native local test: all 118,800 tile coordinates match the original files.
 PY
 LDLIBS=-lSDL2 ziran build --locked --project --root tests --target=c --entry audio_test:main --exe -o build/audio-test tests/audio_test.zi
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/audio-test/audio_test
-ziran run --locked shot > build/research/remake-title.ppm
+ziran run --locked shot > build/research/remake-start.ppm
 WORM_SHOT_LEVEL=99 ziran run --locked shot > build/research/remake-level-99.ppm
-WORM_SHOT_LEVEL=40 WORM_SHOT_STAGES=1 ziran run --locked shot > build/research/remake-stages.ppm
+WORM_SHOT_LEVEL=20 WORM_SHOT_STAGES=1 ziran run --locked shot > build/research/remake-stages.ppm
 python3 - <<'PY'
 from pathlib import Path
 from PIL import Image
-for name in ('remake-title', 'remake-level-99', 'remake-stages'):
+for name in ('remake-start', 'remake-level-99', 'remake-stages'):
     picture = Image.open(Path('build/research') / (name + '.ppm')).convert('RGB')
     assert picture.size == (960, 600)
     assert len(picture.getcolors(960 * 600)) > 100
     picture.save(Path('build/research') / (name + '.png'))
-print('Headless local tests: title, final level and stage pager rendered with recovered assets.')
+print('Headless local tests: opening stages, final level and Garden page at level 20 rendered with the new art.')
 PY
 ziran build --locked desktop
 printf '%s\n' 'Worm local tests passed; GitHub CI is separate.'

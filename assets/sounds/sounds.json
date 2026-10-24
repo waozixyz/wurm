@@ -1,0 +1,56 @@
+{
+  "format": "22050 Hz mono signed 16-bit little-endian PCM",
+  "effects": {
+    "start": {
+      "use": "Level start and respawn",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "prompt": "An isolated 0.9 second clean, friendly game sound for a level starting: three soft ascending kalimba notes, bright and warm, played quickly and ending on a gentle open note. Clean studio recording, no noise, no hiss, no drums, no long reverb. No speech or voices.",
+      "file": "start.pcm",
+      "sha256": "441dfedd5b84e6b5453bea8f341ffe29362c14baf1391edd04cff777521024e5"
+    },
+    "pickup": {
+      "use": "Apple collected",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "prompt": "An isolated 0.3 second clean game sound for collecting a fruit: one short, round, bubbly marimba blip, a single pure pitched tone that bends slightly upward. Immediate onset, quick soft decay. Pure tone, no noise, no hiss, no click, no reverb. No speech or voices.",
+      "file": "pickup.pcm",
+      "sha256": "5a12bc566aba22e7e26be081b9de5fcb101b8c7e3630c34956b3f828c6cbeb30"
+    },
+    "exit": {
+      "use": "Level left through the top exit",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "prompt": "An isolated 0.6 second clean game sound for completing a level: two quick ascending soft glockenspiel notes, a perfect fifth apart, pure and gentle. Clean studio recording, pure tones only, no noise, no hiss, no whoosh, no reverb. No speech or voices.",
+      "file": "exit.pcm",
+      "sha256": "086fc6dfb8be68c69d209686036d54178636e4a0e5f027fd6ac7702a6a3e76c4"
+    },
+    "lose": {
+      "use": "Life lost",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "prompt": "An isolated 0.9 second clean game sound effect for losing a life in a cute arcade game: a soft muffled cartoon poof with a short gentle descending wobble. Not harsh, not loud, no distortion, no explosion crackle. Clean studio recording, no noise, no hiss. No music, speech or voices.",
+      "file": "lose.pcm",
+      "sha256": "b1a933743ad5093b677f00f479484554700bf793d3fb619ed822536106c0610c"
+    }
+  },
+  "music": {
+    "garden": {
+      "model": "google/lyria-3-pro-preview",
+      "prompt": "Calm, cheerful instrumental background music for a gentle garden puzzle game where a little worm explores a sunny garden. Soft fingerpicked acoustic guitar, warm marimba melody, light shaker, round upright bass. About 100 BPM, steady and loopable, no big build-ups or endings. Clean, uncluttered, soft mix with no noise or distortion. No vocals.",
+      "file": "garden.pcm",
+      "loop": "trailing 6 s dropped, 3 s tail crossfaded into the head",
+      "sha256": "84a473de378b10ad5a152e7a81ae4d56d3608f87e4a3dd1be026a8db0fc97b0e"
+    },
+    "space": {
+      "model": "google/lyria-3-pro-preview",
+      "prompt": "Calm instrumental background music for a gentle space puzzle game where a small rocket drifts between stars and asteroids. Soft warm analog synth pads, a twinkling gentle arpeggio, deep round bass, light brushed percussion. About 90 BPM, steady and loopable, no big build-ups or endings. Clean, airy, uncluttered mix with no noise or distortion. No vocals.",
+      "file": "space.pcm",
+      "loop": "trailing 6 s dropped, 3 s tail crossfaded into the head",
+      "sha256": "b638b2cf14649f93c9ee7e5f208a28c985da8aef0abad7c24cf9703544cb974b"
+    },
+    "factory": {
+      "model": "google/lyria-3-pro-preview",
+      "prompt": "Playful instrumental background music for a gentle factory puzzle game where a little fire snake slides between pipes and conveyor belts. Muted plucked synths, soft wooden and metallic percussion like friendly ticking machines, bouncy round bass groove. About 105 BPM, steady and loopable, no big build-ups or endings. Clean, uncluttered mix with no harsh noise or distortion. No vocals.",
+      "file": "factory.pcm",
+      "loop": "trailing 6 s dropped, 3 s tail crossfaded into the head",
+      "sha256": "0f3d6ff636a3c71b112e67abdd1a02d6bb68e4e34ac66be23b64e287c691d504"
+    }
+  }
+}

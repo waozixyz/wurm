@@ -15,13 +15,12 @@ DIR_LEFT :: 0;
 DIR_UP :: 1;
 DIR_RIGHT :: 2;
 DIR_DOWN :: 3;
-MODE_TITLE :: 0;
+MODE_STAGES :: 0;
 MODE_PLAYING :: 1;
 MODE_PAUSED :: 2;
 MODE_DIED :: 3;
 MODE_FINISHED :: 4;
 MODE_VICTORY :: 5;
-MODE_STAGES :: 6;
 
 Point :: struct { x: s32; y: s32; }
 Monster :: struct { position: Point; kind: s32; direction: s32; }

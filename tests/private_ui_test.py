@@ -77,11 +77,11 @@ def main():
                             str(OUT / (name + ".png"))], env=env, check=True, timeout=15)
 
         time.sleep(0.35)
-        capture("title")
-        # Title -> stages; Q from a paused level returns to that level's stage.
-        for level, keys in ((1, ["Return", "Home"]), (11, ["q", "Home"] + ["Down"] * 10),
-                            (34, ["q", "Right", "Home"]), (67, ["q", "Right", "Home"]),
-                            (99, ["q", "End"])):
+        capture("stages")
+        # The game opens on the stages; Q from a paused level returns to that level's stage.
+        # Only Garden is open, so Left/Right must keep it.
+        for level, keys in ((1, ["Home"]), (11, ["q", "Home"] + ["Down"] * 10),
+                            (33, ["q", "Right", "End"])):
             key(*keys)
             time.sleep(0.6)
             key("Return")
@@ -90,7 +90,7 @@ def main():
             time.sleep(0.15)
             capture(f"level-{level:02}")
         (OUT / "receipt.json").write_text(json.dumps(evidence, indent=2) + "\n")
-        print("Private UI local test rendered title and levels 1, 11, 34, 67, 99.")
+        print("Private UI local test rendered the Garden stage and levels 1, 11, 33.")
     finally:
         os.close(read_fd)
         stop(app)

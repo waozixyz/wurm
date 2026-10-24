@@ -1,9 +1,11 @@
 # Worm
 
-A native Ziran and Kryon recreation using all **99 original levels** recovered
-from the owner's `The-Worm_Win_EN/ONLY.ONE` archive. The original maps replace
-the previous eleven generated approximations. All three tilesets, the title
-artwork, sprites, four sound effects, and three musical scores are recovered.
+A native Ziran and Kryon game using all **99 original levels** recovered
+from the owner's `The-Worm_Win_EN/ONLY.ONE` archive. The game shows new art and
+sound: each stage has its own cover, tiles, character, monsters, pickup and
+effects (`assets/art`), and new sound effects and stage music
+(`assets/sounds`). The recovered tilesets, title artwork, sounds and scores
+stay in `assets/original` as the reference for the level data.
 
 The executable was disassembled to recover the single-player rules: movement
 by four pixels every 25 ms, sequential apples, progressive growth, passable
@@ -13,10 +15,10 @@ opening at the top center. An extra life is awarded every 33 points.
 
 ## Controls
 
-- Title: Enter, Space or a click opens the stages
-- Stages: Left/Right, A/D, a swipe or the side buttons change stage
-  (Garden, Space, Factory: 33 levels each, each with its own character);
-  Up/Down or the - and + buttons choose a level; Home/End pick the first/last
+- The game opens on the Garden stage (33 levels, playing the Worm). Space and
+  Factory are switched off for now (`OPEN_STAGES` in `src/app.zi`); when open,
+  Left/Right, A/D, a swipe or the side buttons change stage
+- Up/Down or the - and + buttons choose a level; Home/End pick the first/last
 - Enter or Space: start or retry
 - Arrows or WASD: steer
 - Escape, Space or P: pause and resume
@@ -28,7 +30,7 @@ opening at the top center. An extra life is awarded every 33 points.
 
 ```sh
 ziran run --locked desktop
-ziran run --locked shot > build/title.ppm
+ziran run --locked shot > build/stages.ppm
 WORM_SHOT_LEVEL=99 ziran run --locked shot > build/level-99.ppm
 ziran check --locked
 sh tests/run_local.sh
@@ -36,7 +38,16 @@ sh tests/run_local.sh
 
 `tests/private_ui_test.py` additionally exercises the real desktop build on
 its own verified Xvfb server. It never uses the owner's desktop. The audio
-test uses SDL's dummy drivers and verifies that all recovered audio mixes.
+test uses SDL's dummy drivers and verifies that all effects and scores mix.
+
+## Art and sound
+
+Stage covers and the character, monster and pickup sprites were drawn with
+Codex image generation and fitted to 16-pixel cells; floors, walls and effect
+frames are drawn pixel by pixel. Each stage sheet keeps the original 320x200
+cell layout, so tile values in the recovered levels still mean the same floor
+or wall. `assets/sounds/sounds.json` records the OpenRouter model and prompt
+of every sound; the scores are trimmed and crossfaded into seamless loops.
 
 ## Recover the assets again
 

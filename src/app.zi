@@ -18,8 +18,11 @@ lives_digits: [21]u8;
 StagePager :: struct { selected: s32; position: float32; time: float64; }
 pager: StagePager;
 stage_levels: [STAGE_COUNT]s32;
+// Only Garden is open for now. Space and Factory keep their levels and art,
+// and come back by raising this.
+OPEN_STAGES :: 1;
 
-Wrap :: (page: s32) -> s32 { return ((page % STAGE_COUNT) + STAGE_COUNT) % STAGE_COUNT }
+Wrap :: (page: s32) -> s32 { return ((page % OPEN_STAGES) + OPEN_STAGES) % OPEN_STAGES }
 
 StageName :: (stage: s32) -> string {
     if stage == 1 { return "SPACE" }
@@ -37,22 +40,22 @@ StageClear :: (stage: s32) -> string {
     return "GARDEN CLEAR"
 }
 
-Sheet :: (stage: s32, transparent: bool) -> string {
-    if stage == 0 {
-        if transparent { return "assets/original/steine_1_sprites.png" }
-        return "assets/original/steine_1.png"
-    }
-    if stage == 1 {
-        if transparent { return "assets/original/steine_2_sprites.png" }
-        return "assets/original/steine_2.png"
-    }
-    if transparent { return "assets/original/steine_3_sprites.png" }
-    return "assets/original/steine_3.png"
+// Each stage's tiles, character, monsters, pickup and effects share one
+// 320x200 sheet of 16-pixel cells; floors and walls are opaque.
+Sheet :: (stage: s32) -> string {
+    if stage == 1 { return "assets/art/space.png" }
+    if stage == 2 { return "assets/art/factory.png" }
+    return "assets/art/garden.png"
+}
+Cover :: (stage: s32) -> string {
+    if stage == 1 { return "assets/art/space-cover.png" }
+    if stage == 2 { return "assets/art/factory-cover.png" }
+    return "assets/art/garden-cover.png"
 }
 
 Picture :: (session: Session, key: u64, asset: string, bounds: Rectangle, source: Rectangle) {
     unused Image(session, ImageProps.{.key = key, .asset_path = asset, .bounds = bounds,
-        .source = source, .smooth = false, .alt_text = "The Worm original artwork"})
+        .source = source, .smooth = false, .alt_text = "Worm artwork"})
 }
 
 TextLine :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32) {
@@ -79,10 +82,15 @@ Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source
     Picture(session, key, sheet, bounds, source)
 }
 
+Snap :: (value: float32) -> float32 { return cast(float32)cast(s32)(value + 0.5) }
+
+// Tile edges land on whole pixels, so scaled neighbours meet without seams.
 Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string) {
     scale := stage.width / 640.0
-    bounds := Rectangle.{stage.x + cast(float32)x * 16.0 * scale,
-        stage.y + cast(float32)y * 16.0 * scale, 16.0 * scale, 16.0 * scale}
+    left := Snap(stage.x + cast(float32)x * 16.0 * scale)
+    top := Snap(stage.y + cast(float32)y * 16.0 * scale)
+    bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale) - left,
+        Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale) - top}
     source := Rectangle.{cast(float32)(tile % 20) * 16.0,
         cast(float32)(tile / 20) * 16.0, 16.0, 16.0}
     Picture(session, key, sheet, bounds, source)
@@ -110,12 +118,12 @@ AppleFlash :: (session: Session, stage: Rectangle) {
     bounds := Rectangle.{stage.x + (cast(float32)game.apple.x - offset.x) * scale,
         stage.y + (cast(float32)game.apple.y - offset.y) * scale,
         source.width * scale, source.height * scale}
-    Picture(session, 1401, Sheet(StageOf(game.level), true), bounds, source)
+    Picture(session, 1401, Sheet(StageOf(game.level)), bounds, source)
 }
 
 DrawBoard :: (session: Session, stage: Rectangle) {
-    tiles := Sheet(StageOf(game.level), false)
-    sprites := Sheet(StageOf(game.level), true)
+    tiles := Sheet(StageOf(game.level))
+    sprites := tiles
     for y: 0..ROWS - 1 {
         for x: 0..COLUMNS - 1 {
             at := Index(x, y)
@@ -161,8 +169,8 @@ DrawBoard :: (session: Session, stage: Rectangle) {
 // character arriving from below.
 DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
     stage := BoardIn(area)
-    tiles := Sheet(StageOf(level), false)
-    sprites := Sheet(StageOf(level), true)
+    tiles := Sheet(StageOf(level))
+    sprites := tiles
     for row: 0..ROWS - 1 {
         for column: 0..COLUMNS - 1 {
             x := cast(s32)column
@@ -189,22 +197,44 @@ DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
     }
 }
 
+// A stage page: its cover filling the page, and the chosen level framed on it.
+DrawStagePage :: (session: Session, page: Rectangle, stage: s32) {
+    unused Image(session, ImageProps.{.key = 9000 + cast(u64)stage, .asset_path = Cover(stage), .bounds = page,
+        .fit = ImageFit.ImageFitCover, .smooth = true, .alt_text = StageName(stage)})
+    top := page.y + 106.0
+    bottom := page.y + page.height - 124.0
+    height := bottom - top
+    width := height * 4.0 / 3.0
+    if width > page.width - 160.0 { width = page.width - 160.0; height = width * 3.0 / 4.0 }
+    if width < 40.0 || height < 30.0 { return }
+    board := Rectangle.{page.x + (page.width - width) / 2.0, top + (bottom - top - height) / 2.0, width, height}
+    unused Box(session, BoxProps.{.key = 9100 + cast(u64)stage,
+        .bounds = Rectangle.{board.x - 6.0, board.y - 6.0, board.width + 12.0, board.height + 12.0},
+        .fill = Color.{24, 28, 36, 220}, .radius = 10.0})
+    DrawPreview(session, board, stage * STAGE_LEVELS + stage_levels[stage], 10000 + cast(u64)stage * 3000)
+}
+
 OpenStages :: () {
     game.mode = MODE_STAGES
     stage := StageOf(game.level)
-    stage_levels[stage] = game.level % STAGE_LEVELS
+    if stage >= OPEN_STAGES { stage = 0 }
+    else { stage_levels[stage] = game.level % STAGE_LEVELS }
     pager.selected = stage
     pager.position = cast(float32)stage
 }
 
-// Swipes, drags, arrows and the side buttons page between stages; Up/Down
-// and the level buttons choose a level. Returns true to start that level.
+// Swipes, drags, arrows and the side buttons page between open stages;
+// Up/Down and the level buttons choose a level. Returns true to start that level.
 DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> bool {
-    gesture := SwipeArea(session, SwipeAreaProps.{.key = 800, .bounds = area,
-        .label = "Stages", .now = now, .min_distance = 48.0})
+    paging := OPEN_STAGES > 1
+    gesture: SwipeAreaResult
+    if paging {
+        gesture = SwipeArea(session, SwipeAreaProps.{.key = 800, .bounds = area,
+            .label = "Stages", .now = now, .min_distance = 48.0})
+    }
     delta: s32 = 0
-    if gesture.swiped == 0 || key == 262 || key == 68 || key == 100 { delta = 1 }
-    if gesture.swiped == 2 || key == 263 || key == 65 || key == 97 { delta = -1 }
+    if paging && (gesture.swiped == 0 || key == 262 || key == 68 || key == 100) { delta = 1 }
+    if paging && (gesture.swiped == 2 || key == 263 || key == 65 || key == 97) { delta = -1 }
     stage := Wrap(pager.selected)
     level := stage_levels[stage]
     if key == 264 || key == 83 || key == 115 { level += 1 }
@@ -219,7 +249,7 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
     if elapsed < 0.0 || elapsed > 0.2 { elapsed = 0.016 }
     rate := elapsed * 10.0
     if rate > 1.0 { rate = 1.0 }
-    if gesture.down {
+    if paging && gesture.down {
         pager.position = cast(float32)pager.selected - (gesture.at_x - gesture.start_x) / area.width
     } else {
         pager.position += (cast(float32)pager.selected - pager.position) * rate
@@ -235,8 +265,7 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
         offset := (cast(float32)page - pager.position) * area.width
         if offset <= -area.width || offset >= area.width { continue }
         shown := Wrap(page)
-        DrawPreview(session, Rectangle.{area.x + offset, area.y, area.width, area.height},
-            shown * STAGE_LEVELS + stage_levels[shown], 10000 + cast(u64)shown * 3000)
+        DrawStagePage(session, Rectangle.{area.x + offset, area.y, area.width, area.height}, shown)
     }
 
     stage = Wrap(pager.selected)
@@ -247,12 +276,12 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
     unused Text(session, TextProps.{.key = 803, .bounds = Rectangle.{banner.x, banner.y + 44.0, banner.width, 22.0},
         .text = StageHero(stage), .font = 15, .align = TextAlign.TextAlignCenter})
     middle := area.y + area.height / 2.0 - 26.0
-    if Button(session, ButtonProps.{.key = 804, .bounds = Rectangle.{area.x + 14.0, middle, 52.0, 52.0},
+    if paging && Button(session, ButtonProps.{.key = 804, .bounds = Rectangle.{area.x + 14.0, middle, 52.0, 52.0},
             .label = "Previous stage", .icon_shape = "S2rr:M15 5L8 12L15 19", .icon_only = true,
             .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
         pager.selected -= 1
     }
-    if Button(session, ButtonProps.{.key = 805, .bounds = Rectangle.{area.x + area.width - 66.0, middle, 52.0, 52.0},
+    if paging && Button(session, ButtonProps.{.key = 805, .bounds = Rectangle.{area.x + area.width - 66.0, middle, 52.0, 52.0},
             .label = "Next stage", .icon_shape = "S2rr:M9 5L16 12L9 19", .icon_only = true,
             .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
         pager.selected += 1
@@ -272,7 +301,8 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
     if Button(session, ButtonProps.{.key = 808, .bounds = Rectangle.{centre - 96.0, row, 192.0, 52.0},
             .label = "Play level", .detail = play_text, .tone = ButtonTone.ButtonToneSuccess,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { start = true }
-    for page: cast(s32)0..STAGE_COUNT - 1 {
+    for page: cast(s32)0..OPEN_STAGES - 1 {
+        if !paging { break }
         unused Box(session, BoxProps.{.key = 810 + cast(u64)page,
             .bounds = Rectangle.{centre - 30.0 + cast(float32)page * 24.0, row - 26.0, 12.0, 12.0},
             .fill = ifx page == stage then Color.{46, 125, 74, 235} else Color.{255, 255, 255, 210}, .radius = 6.0})
@@ -282,11 +312,7 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
 
 HandleInput :: (key: s32, now: s64) {
     if key == 77 || key == 109 { Audio.ToggleMute(); return }
-    if game.mode == MODE_TITLE {
-        if key == Input.KeyEnter || key == 32 { OpenStages() }
-    } else if game.mode == MODE_STAGES {
-        if key == Input.KeyEscape || key == 27 { game.mode = MODE_TITLE }
-    } else if game.mode == MODE_PLAYING {
+    if game.mode == MODE_PLAYING {
         if key == 82 || key == 114 { LoadLevel(*game, game.level, now) }
         else { unused ApplyInput(*game, key) }
     } else if game.mode == MODE_PAUSED {
@@ -306,9 +332,10 @@ HandleInput :: (key: s32, now: s64) {
 #program_export
 Frame :: (session: Session, viewport: Rectangle) -> s32 {
     now := Timer.MonotonicMilliseconds()
-    if !game.started { game.mode = MODE_TITLE; game.started = true }
+    // The game opens on the stages.
+    if !game.started { game.started = true; OpenStages() }
     key := KeyboardTake(session)
-    // The key that opens the stages must not also start a level there.
+    // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
     HandleInput(key, now)
     unused Step(*game, now)
@@ -321,12 +348,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     if available_height / 480.0 < scale { scale = available_height / 480.0 }
     stage := Rectangle.{viewport.x + (viewport.width - 640.0 * scale) / 2.0,
         viewport.y + (available_height - 480.0 * scale) / 2.0, 640.0 * scale, 480.0 * scale}
-    if game.mode == MODE_TITLE {
-        Picture(session, 2, "assets/original/titel_e.png", stage, Rectangle.{0.0, 0.0, 640.0, 480.0})
-        title := SwipeArea(session, SwipeAreaProps.{.key = 799, .bounds = stage,
-            .label = "Choose a stage", .now = cast(float64)now / 1000.0})
-        if title.tapped || title.swiped >= 0 { OpenStages() }
-    } else if game.mode == MODE_STAGES {
+    if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, available_height}
         if DrawStages(session, area, stage_key, cast(float64)now / 1000.0) {
             chosen := Wrap(pager.selected)
@@ -338,16 +360,13 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     level_number := game.level % STAGE_LEVELS
     if game.mode == MODE_STAGES { level_number = stage_levels[Wrap(pager.selected)] }
     level_text := FormatInteger(cast(s64)(level_number + 1), level_digits[:])
-    if game.mode == MODE_TITLE {
-        TextLine(session, 11, "Enter or click chooses a stage", Rectangle.{hud.x + 10.0, hud.y + 11.0, 400.0, 22.0}, 14)
-    } else {
-        TextLine(session, 11, "LEVEL", Rectangle.{hud.x + 10.0, hud.y + 11.0, 44.0, 20.0}, 14)
-        TextLine(session, 12, level_text, Rectangle.{hud.x + 57.0, hud.y + 11.0, 30.0, 20.0}, 14)
-    }
+    TextLine(session, 11, "LEVEL", Rectangle.{hud.x + 10.0, hud.y + 11.0, 44.0, 20.0}, 14)
+    TextLine(session, 12, level_text, Rectangle.{hud.x + 57.0, hud.y + 11.0, 30.0, 20.0}, 14)
     if game.mode == MODE_STAGES {
-        TextLine(session, 13, "/ 33   Left/Right or swipe: stage   Up/Down: level   Enter plays",
+        TextLine(session, 13, ifx OPEN_STAGES > 1 then "/ 33   Left/Right or swipe: stage   Up/Down: level   Enter plays"
+            else "/ 33   Up/Down: level   Enter plays",
             Rectangle.{hud.x + 85.0, hud.y + 11.0, 600.0, 22.0}, 14)
-    } else if game.mode != MODE_TITLE {
+    } else {
         score_text := FormatInteger(cast(s64)game.score, score_digits[:])
         apple_text := FormatInteger(cast(s64)game.apples, apple_digits[:])
         lives := game.lives
