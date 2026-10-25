@@ -95,77 +95,75 @@ TextLine :: (session: Session, key: u64, text: string, bounds: Rectangle, size: 
         .font = size, .wrap = TextWrap.TextWrapNone})
 }
 
-Overlay :: (session: Session, stage: Rectangle, title: string, message: string) {
-    unused Box(session, BoxProps.{.key = 50,
-        .bounds = Rectangle.{stage.x + stage.width * 0.12, stage.y + stage.height * 0.4,
-            stage.width * 0.76, 90.0}, .fill = Color.{238, 235, 221, 246}})
-    TextLine(session, 51, title, Rectangle.{stage.x + stage.width * 0.16,
-        stage.y + stage.height * 0.4 + 12.0, stage.width * 0.68, 30.0}, 24)
-    TextLine(session, 52, message, Rectangle.{stage.x + stage.width * 0.16,
-        stage.y + stage.height * 0.4 + 51.0, stage.width * 0.68, 26.0}, 15)
+CentreText :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32) {
+    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = text,
+        .font = size, .align = TextAlign.TextAlignCenter})
 }
 
-// A logical-pixel sprite square. In portrait the whole board turns 90
-// degrees clockwise: the bottom entrance faces the screen's left edge, the
-// top exit its right edge, and positions rotate with it.
-Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source: Rectangle,
-    sheet: string, turn: bool) {
-    scale := stage.width / ifx turn then BOARD_HEIGHT else BOARD_WIDTH
-    px := cast(float32)position.x
-    py := cast(float32)position.y
-    if turn {
-        turned := px
-        px = BOARD_HEIGHT - py
-        py = turned
+// Pause, game over and stage clear: a dim veil over the board and one cream
+// card with a green cap, the title, the score when the run ended, and the
+// keys that move on.
+Overlay :: (session: Session, stage: Rectangle, title: string, message: string, score: s32 = -1) {
+    unused Box(session, BoxProps.{.key = 50, .bounds = stage, .fill = Color.{10, 18, 12, 150}})
+    card_width := stage.width * 0.74
+    if card_width > 400.0 { card_width = 400.0 }
+    if card_width < 220.0 { card_width = 220.0 }
+    card_height: float32 = ifx score >= 0 then 138.0 else 104.0
+    card := Rectangle.{stage.x + (stage.width - card_width) / 2.0,
+        stage.y + stage.height * 0.34, card_width, card_height}
+    unused Box(session, BoxProps.{.key = 51, .bounds = card, .fill = Color.{240, 242, 232, 250}, .radius = 14.0})
+    unused Box(session, BoxProps.{.key = 55,
+        .bounds = Rectangle.{card.x + 14.0, card.y, card.width - 28.0, 5.0},
+        .fill = Color.{46, 125, 74, 255}, .radius = 2.0})
+    CentreText(session, 52, title, Rectangle.{card.x, card.y + 16.0, card.width, 34.0}, 28)
+    if score >= 0 {
+        score_text := FormatInteger(cast(s64)score, score_digits[:])
+        CentreText(session, 53, score_text, Rectangle.{card.x, card.y + 52.0, card.width, 34.0}, 26)
+        CentreText(session, 56, message, Rectangle.{card.x + 10.0, card.y + 96.0, card.width - 20.0, 36.0}, 14)
+    } else {
+        CentreText(session, 53, message, Rectangle.{card.x + 10.0, card.y + 56.0, card.width - 20.0, 40.0}, 15)
     }
-    left := Snap(stage.x + (px - 8.0) * scale)
-    top := Snap(stage.y + (py - 8.0) * scale)
-    bounds := Rectangle.{left, top, Snap(stage.x + (px + 8.0) * scale) - left,
-        Snap(stage.y + (py + 8.0) * scale) - top}
-    if bounds.y < Snap(stage.y) || bounds.y + bounds.height > Snap(stage.y + stage.height) ||
-        bounds.x < Snap(stage.x) || bounds.x + bounds.width > Snap(stage.x + stage.width) { return }
+}
+
+// A logical-pixel sprite square on the live board.
+Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source: Rectangle,
+    sheet: string) {
+    scale := stage.width / (cast(float32)board_columns * 16.0)
+    left := Snap(stage.x + cast(float32)(position.x - 8) * scale)
+    top := Snap(stage.y + cast(float32)(position.y - 8) * scale)
+    bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(position.x + 8) * scale) - left,
+        Snap(stage.y + cast(float32)(position.y + 8) * scale) - top}
+    if bounds.y < Snap(stage.y) || bounds.y + bounds.height > Snap(stage.y + stage.height) { return }
     Picture(session, key, sheet, bounds, source)
 }
 
 Snap :: (value: float32) -> float32 { return cast(float32)cast(s32)(value + 0.5) }
 
 // Tile edges land on whole pixels, so scaled neighbours meet without seams.
-Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string,
-    turn: bool) {
-    scale := stage.width / ifx turn then BOARD_HEIGHT else BOARD_WIDTH
-    left: float32
-    top: float32
-    right: float32
-    bottom: float32
-    if turn {
-        left = Snap(stage.x + (BOARD_HEIGHT - cast(float32)(y + 1) * 16.0) * scale)
-        top = Snap(stage.y + cast(float32)x * 16.0 * scale)
-        right = Snap(stage.x + (BOARD_HEIGHT - cast(float32)y * 16.0) * scale)
-        bottom = Snap(stage.y + cast(float32)(x + 1) * 16.0 * scale)
-    } else {
-        left = Snap(stage.x + cast(float32)x * 16.0 * scale)
-        top = Snap(stage.y + cast(float32)y * 16.0 * scale)
-        right = Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale)
-        bottom = Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale)
-    }
-    bounds := Rectangle.{left, top, right - left, bottom - top}
+Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string) {
+    scale := stage.width / (cast(float32)board_columns * 16.0)
+    left := Snap(stage.x + cast(float32)x * 16.0 * scale)
+    top := Snap(stage.y + cast(float32)y * 16.0 * scale)
+    bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale) - left,
+        Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale) - top}
     source := Rectangle.{cast(float32)(tile % 20) * 16.0,
         cast(float32)(tile / 20) * 16.0, 16.0, 16.0}
     Picture(session, key, sheet, bounds, source)
 }
 
-// The board scaled to fit inside an area. Portrait turns the 640x480 board
-// into a 480x640 one, so a phone screen fills edge to edge.
-BoardIn :: (area: Rectangle, turn: bool) -> Rectangle {
-    wide: float32 = ifx turn then BOARD_HEIGHT else BOARD_WIDTH
-    tall: float32 = ifx turn then BOARD_WIDTH else BOARD_HEIGHT
+// The live board scaled to fit inside an area: 640x480 in landscape, the
+// same level standing 480x640 in portrait, so a phone screen fills edge to
+// edge while the worm keeps entering from the bottom and leaving at the top.
+BoardIn :: (area: Rectangle) -> Rectangle {
+    wide := cast(float32)board_columns * 16.0
+    tall := cast(float32)board_rows * 16.0
     scale := area.width / wide
     if area.height / tall < scale { scale = area.height / tall }
     return Rectangle.{area.x + (area.width - wide * scale) / 2.0,
         area.y + (area.height - tall * scale) / 2.0, wide * scale, tall * scale}
 }
 
-AppleFlash :: (session: Session, stage: Rectangle, turn: bool) {
+AppleFlash :: (session: Session, stage: Rectangle) {
     if game.apple_flash <= 0 { return }
     frame := (game.apple_flash / 4) % 6
     source := Rectangle.{112.0, 144.0, 30.0, 30.0}
@@ -175,61 +173,53 @@ AppleFlash :: (session: Session, stage: Rectangle, turn: bool) {
     else if frame == 3 { source = Rectangle.{198.0, 144.0, 26.0, 24.0}; offset = Vector2.{13.0, 12.0} }
     else if frame == 4 { source = Rectangle.{224.0, 144.0, 28.0, 26.0}; offset = Vector2.{14.0, 13.0} }
     else if frame == 5 { source = Rectangle.{252.0, 144.0, 28.0, 28.0}; offset = Vector2.{14.0, 14.0} }
-    scale := stage.width / ifx turn then BOARD_HEIGHT else BOARD_WIDTH
-    px := cast(float32)game.apple.x
-    py := cast(float32)game.apple.y
-    if turn {
-        turned := px
-        px = BOARD_HEIGHT - py
-        py = turned
-    }
-    bounds := Rectangle.{stage.x + (px - offset.x) * scale,
-        stage.y + (py - offset.y) * scale,
+    scale := stage.width / (cast(float32)board_columns * 16.0)
+    bounds := Rectangle.{stage.x + (cast(float32)game.apple.x - offset.x) * scale,
+        stage.y + (cast(float32)game.apple.y - offset.y) * scale,
         source.width * scale, source.height * scale}
     Picture(session, 1401, Sheet(StageOf(game.level)), bounds, source)
 }
 
-DrawBoard :: (session: Session, stage: Rectangle, turn: bool) {
+DrawBoard :: (session: Session, stage: Rectangle) {
     tiles := Sheet(StageOf(game.level))
     sprites := tiles
-    for y: 0..ROWS - 1 {
-        for x: 0..COLUMNS - 1 {
+    for y: 0..board_rows - 1 {
+        for x: 0..board_columns - 1 {
             at := Index(x, y)
             Tile(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
-                cast(s32)(game.board[at] & 127), tiles, turn)
+                cast(s32)(game.board[at] & 127), tiles)
         }
     }
     if game.apples > 0 && game.apple.x >= 0 {
-        Sprite(session, 1400, stage, game.apple, Rectangle.{0.0, 112.0, 16.0, 16.0}, sprites, turn)
-        AppleFlash(session, stage, turn)
+        Sprite(session, 1400, stage, game.apple, Rectangle.{0.0, 112.0, 16.0, 16.0}, sprites)
+        AppleFlash(session, stage)
     }
     index: s32 = 0
     while index < game.length {
         column := 4
-        // The head faces its visual direction; portrait turns it a quarter.
-        if index == 0 { column = ifx turn then (game.direction + 1) % 4 else game.direction }
+        if index == 0 { column = game.direction }
         else if index >= game.length - 4 { column = -1 }
         else if index >= game.length - 8 { column = 6 }
         else if index >= game.length - 12 { column = 5 }
         if column >= 0 && (game.death_ticks == 0 || game.death_ticks / 2 > 2) {
             Sprite(session, 2000 + cast(u64)index, stage, game.worm[index],
-                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, turn)
+                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites)
         }
         if game.death_ticks > 0 && index < game.length - 4 {
             Sprite(session, 4000 + cast(u64)index, stage, game.worm[index],
-                Rectangle.{cast(float32)(5 - game.death_ticks / 4) * 16.0, 144.0, 16.0, 16.0}, sprites, turn)
+                Rectangle.{cast(float32)(5 - game.death_ticks / 4) * 16.0, 144.0, 16.0, 16.0}, sprites)
         }
         index += 4
     }
     for monster: 0..game.monster_count - 1 {
         Sprite(session, 6000 + cast(u64)monster, stage, game.monsters[monster].position,
-            Rectangle.{cast(float32)(game.monsters[monster].kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites, turn)
+            Rectangle.{cast(float32)(game.monsters[monster].kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites)
     }
     for particle: 0..99 {
         life := game.particles[particle].life
         if life > 1 && life <= 12 {
             Sprite(session, 7000 + cast(u64)particle, stage, game.particles[particle].position,
-                Rectangle.{cast(float32)(life / 2) * 16.0, 160.0, 16.0, 16.0}, sprites, turn)
+                Rectangle.{cast(float32)(life / 2) * 16.0, 160.0, 16.0, 16.0}, sprites)
         }
     }
 }
@@ -237,7 +227,8 @@ DrawBoard :: (session: Session, stage: Rectangle, turn: bool) {
 // A level as it starts: open entrance, monsters at home, and the stage's
 // character arriving from below.
 DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
-    stage := BoardIn(area, false)
+    BoardSize(COLUMNS, ROWS)
+    stage := BoardIn(area)
     tiles := Sheet(StageOf(level))
     sprites := tiles
     for row: 0..ROWS - 1 {
@@ -248,11 +239,10 @@ DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
             tile := cast(s32)(Custom.EffectiveTile(level, x, ifx entrance then ROWS - 2 else y) & 127)
             kind := tile - 39
             if kind >= 1 && kind <= 6 { tile = 0 }
-            if y == ROWS - 1 && (x == 19 || x == 21) { tile = 21 }
-            Tile(session, key + cast(u64)Index(x, y), stage, x, y, tile, tiles, false)
+            Tile(session, key + cast(u64)Index(x, y), stage, x, y, tile, tiles)
             if kind >= 1 && kind <= 6 && !entrance {
                 Sprite(session, key + 1200 + cast(u64)Index(x, y), stage, Point.{x * 16 + 8, y * 16 + 8},
-                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites, false)
+                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites)
             }
         }
     }
@@ -262,7 +252,7 @@ DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
         if segment == 0 { column = DIR_UP }
         else if segment < 3 { column = 4 }
         Sprite(session, key + 2400 + cast(u64)segment, stage, Point.{328, 408 + segment * 16},
-            Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, false)
+            Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites)
     }
 }
 
@@ -284,6 +274,7 @@ DrawStagePage :: (session: Session, page: Rectangle, stage: s32) {
 }
 
 OpenStages :: () {
+    BoardSize(COLUMNS, ROWS)
     game.mode = MODE_STAGES
     stage := StageOf(game.level)
     if stage >= OPEN_STAGES { stage = 0 }
@@ -293,19 +284,31 @@ OpenStages :: () {
 }
 
 // Levels play from the effective source: the owner's saved override when one
-// exists, otherwise the recovered original.
-StartLevel :: (level: s32, now: s64, seed: u32) {
+// exists, otherwise the recovered original. A portrait window stands the
+// same level on its side (30x40), so the worm still enters from the bottom
+// and leaves at the top.
+PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool) {
     board: [CELLS]u8
+    turned: [CELLS]u8
     Custom.EnsureLoaded()
     Custom.EffectiveBoard(level, board[:])
-    StartGameData(*game, level, now, seed, board[:], Custom.EffectiveApples(level))
+    apples := Custom.EffectiveApples(level)
+    source := board[:]
+    columns: s32 = COLUMNS
+    rows: s32 = ROWS
+    if game_portrait {
+        for y: 0..ROWS - 1 {
+            for x: 0..COLUMNS - 1 { turned[x * ROWS + (ROWS - 1 - y)] = board[y * COLUMNS + x] }
+        }
+        source = turned[:]
+        columns = ROWS
+        rows = COLUMNS
+    }
+    if restart { LoadLevelData(*game, level, now, source, apples, columns, rows) }
+    else { StartGameData(*game, level, now, seed, source, apples, columns, rows) }
 }
-ReloadLevel :: (level: s32, now: s64) {
-    board: [CELLS]u8
-    Custom.EnsureLoaded()
-    Custom.EffectiveBoard(level, board[:])
-    LoadLevelData(*game, level, now, board[:], Custom.EffectiveApples(level))
-}
+StartLevel :: (level: s32, now: s64, seed: u32) { PlayBoard(level, now, seed, false) }
+ReloadLevel :: (level: s32, now: s64) { PlayBoard(level, now, 1, true) }
 
 // Leaving a paused or finished playtest returns to the editor; a normal game
 // returns to the stages.
@@ -410,7 +413,8 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     tiles := Sheet(stage_of_level)
     panel := Rectangle.{area.x + area.width - EDITOR_PANEL_WIDTH, area.y, EDITOR_PANEL_WIDTH, area.height}
     canvas := Rectangle.{area.x, area.y, area.width - EDITOR_PANEL_WIDTH, area.height}
-    stage := BoardIn(canvas, false)
+    BoardSize(COLUMNS, ROWS)
+    stage := BoardIn(canvas)
 
     pointer := PointerSample(session)
     secondary := SecondaryPointerSample(session)
@@ -441,10 +445,10 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
             kind := (raw & 127) - 39
             tile := raw & 127
             if kind >= 1 && kind <= 6 { tile = 0 }
-            Tile(session, 5000 + cast(u64)at, stage, cast(s32)x, cast(s32)y, tile, tiles, false)
+            Tile(session, 5000 + cast(u64)at, stage, cast(s32)x, cast(s32)y, tile, tiles)
             if kind >= 1 && kind <= 6 {
                 Sprite(session, 6200 + cast(u64)at, stage, Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8},
-                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, tiles, false)
+                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, tiles)
             }
         }
     }
@@ -595,12 +599,15 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
     }
 
     stage = Wrap(pager.selected)
-    banner := Rectangle.{area.x + (area.width - 340.0) / 2.0, area.y + 18.0, 340.0, 74.0}
-    unused Box(session, BoxProps.{.key = 801, .bounds = banner, .fill = Color.{238, 235, 221, 246}, .radius = 12.0})
-    unused Text(session, TextProps.{.key = 802, .bounds = Rectangle.{banner.x, banner.y + 8.0, banner.width, 32.0},
-        .text = StageName(stage), .font = 26, .align = TextAlign.TextAlignCenter})
-    unused Text(session, TextProps.{.key = 803, .bounds = Rectangle.{banner.x, banner.y + 44.0, banner.width, 22.0},
-        .text = StageHero(stage), .font = 15, .align = TextAlign.TextAlignCenter})
+    banner := Rectangle.{area.x + (area.width - 430.0) / 2.0, area.y + 22.0, 430.0, 92.0}
+    unused Box(session, BoxProps.{.key = 801, .bounds = banner, .fill = Color.{240, 242, 232, 248}, .radius = 16.0})
+    unused Box(session, BoxProps.{.key = 811,
+        .bounds = Rectangle.{banner.x + 18.0, banner.y, banner.width - 36.0, 5.0},
+        .fill = Color.{46, 125, 74, 255}, .radius = 2.0})
+    unused Text(session, TextProps.{.key = 802, .bounds = Rectangle.{banner.x, banner.y + 14.0, banner.width, 40.0},
+        .text = StageName(stage), .font = 32, .align = TextAlign.TextAlignCenter})
+    unused Text(session, TextProps.{.key = 803, .bounds = Rectangle.{banner.x, banner.y + 58.0, banner.width, 24.0},
+        .text = StageHero(stage), .font = 16, .align = TextAlign.TextAlignCenter})
     middle := area.y + area.height / 2.0 - 26.0
     if paging && Button(session, ButtonProps.{.key = 804, .bounds = Rectangle.{area.x + 14.0, middle, 52.0, 52.0},
             .label = "Previous stage", .icon_shape = "S2rr:M15 5L8 12L15 19", .icon_only = true,
@@ -612,19 +619,23 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
             .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
         pager.selected += 1
     }
-    row := area.y + area.height - 84.0
+    row := area.y + area.height - 78.0
     centre := area.x + area.width / 2.0
-    if Button(session, ButtonProps.{.key = 806, .bounds = Rectangle.{centre - 160.0, row, 52.0, 52.0},
+    // A quiet veil behind the controls keeps them readable on any cover.
+    unused Box(session, BoxProps.{.key = 812,
+        .bounds = Rectangle.{area.x, row - 22.0, area.width, area.height - (row - 22.0 - area.y)},
+        .fill = Color.{10, 18, 12, 130}})
+    if Button(session, ButtonProps.{.key = 806, .bounds = Rectangle.{centre - 194.0, row, 52.0, 52.0},
             .label = "Previous level", .icon_shape = "S2rr:M5 12L19 12",
             .icon_only = true, .tone = ButtonTone.ButtonToneNeutral,
             .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 { level -= 1 }
-    if Button(session, ButtonProps.{.key = 807, .bounds = Rectangle.{centre + 108.0, row, 52.0, 52.0},
+    if Button(session, ButtonProps.{.key = 807, .bounds = Rectangle.{centre + 142.0, row, 52.0, 52.0},
             .label = "Next level", .icon_shape = "S2rr:M5 12L19 12M12 5L12 19",
             .icon_only = true, .tone = ButtonTone.ButtonToneNeutral,
             .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 { level += 1 }
     stage_levels[stage] = (level + STAGE_LEVELS) % STAGE_LEVELS
     play_text := FormatInteger(cast(s64)(stage_levels[stage] + 1), level_digits[:])
-    if Button(session, ButtonProps.{.key = 808, .bounds = Rectangle.{centre - 96.0, row, 192.0, 52.0},
+    if Button(session, ButtonProps.{.key = 808, .bounds = Rectangle.{centre - 130.0, row, 260.0, 52.0},
             .label = "Play level", .detail = play_text, .tone = ButtonTone.ButtonToneSuccess,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { start = true }
     if Button(session, ButtonProps.{.key = 809, .bounds = Rectangle.{area.x + area.width - 66.0, area.y + 18.0, 52.0, 52.0},
@@ -646,7 +657,7 @@ HandleInput :: (key: s32, now: s64) {
     if key == 77 || key == 109 { Audio.ToggleMute(); return }
     if game.mode == MODE_PLAYING {
         if key == 82 || key == 114 { ReloadLevel(game.level, now) }
-        else { unused ApplyInput(*game, TurnKey(key)) }
+        else { unused ApplyInput(*game, key) }
     } else if game.mode == MODE_PAUSED {
         unused ApplyInput(*game, key)
         if game.mode == MODE_PLAYING { game.next_step = now + TICK_MS }
@@ -672,17 +683,6 @@ HandleInput :: (key: s32, now: s64) {
 // True while the window stands portrait: the board turns sideways and the
 // steering keys turn with it, so Up always means visually up.
 game_portrait: bool;
-
-// A visual direction becomes the worm's logical direction: portrait turns
-// the board a quarter clockwise, so the keys turn a quarter back.
-TurnKey :: (key: s32) -> s32 {
-    if !game_portrait { return key }
-    if key == 262 || key == 100 || key == 68 { return 265 }
-    if key == 265 || key == 119 || key == 87 { return 263 }
-    if key == 263 || key == 97 || key == 65 { return 264 }
-    if key == 264 || key == 115 || key == 83 { return 262 }
-    return key
-}
 
 // A swipe steers like the arrow keys: never into the worm's own neck.
 Steer :: (direction: s32) {
@@ -766,8 +766,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     hud := Rectangle.{viewport.x, viewport.y, viewport.width, bar_height}
     available_height := viewport.height - bar_height
     if available_height < 1.0 { available_height = 1.0 }
-    stage := BoardIn(Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height},
-        game_portrait && game.mode != MODE_STAGES && game.mode != MODE_EDITOR)
+    stage := BoardIn(Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height})
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         if DrawStages(session, area, stage_key, cast(float64)now / 1000.0) {
@@ -778,19 +777,20 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         area := Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height}
         DrawEditor(session, area, now)
     } else {
-        DrawBoard(session, stage, game_portrait)
-        // A swipe steers like the arrow keys, so touch plays in any
-        // orientation; a portrait swipe turns a quarter back to the worm.
+        DrawBoard(session, stage)
+        // A swipe steers like the arrow keys, so touch plays in any orientation.
         if game.mode == MODE_PLAYING {
             gesture := SwipeArea(session, SwipeAreaProps.{.key = 820, .bounds = stage,
                 .label = "Steer the worm", .now = cast(float64)now / 1000.0, .min_distance = 20.0})
-            turn_back: s32 = ifx game_portrait then 3 else 0
-            if gesture.swiped >= 0 { Steer((gesture.swiped + turn_back) % 4) }
+            if gesture.swiped == 0 { Steer(DIR_LEFT) }
+            else if gesture.swiped == 1 { Steer(DIR_UP) }
+            else if gesture.swiped == 2 { Steer(DIR_RIGHT) }
+            else if gesture.swiped == 3 { Steer(DIR_DOWN) }
         }
     }
     if showing_bar { DrawTopBar(session, hud) }
     if game.mode == MODE_PAUSED { Overlay(session, stage, "PAUSED", "Esc resumes   Q returns to the stages") }
-    else if game.mode == MODE_DIED { Overlay(session, stage, "GAME OVER", "Enter retries   Esc returns to the stages") }
-    else if game.mode == MODE_VICTORY { Overlay(session, stage, StageClear(StageOf(game.level)), "All 33 levels done   Enter returns to the stages") }
+    else if game.mode == MODE_DIED { Overlay(session, stage, "GAME OVER", "Enter retries · Esc returns to the stages", game.score) }
+    else if game.mode == MODE_VICTORY { Overlay(session, stage, StageClear(StageOf(game.level)), "All 33 levels done · Enter returns to the stages", game.score) }
     return 0
 }

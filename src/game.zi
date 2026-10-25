@@ -1,9 +1,18 @@
 #import, file "original_levels.zi";
 
 // Rules recovered from the owner's WURM.EXE. Coordinates are original pixels.
+// COLUMNS x ROWS is the recovered canonical grid, also the archive and
+// editor layout. The playing board may stand the same level turned a
+// quarter (30x40) for portrait windows; loaders set the live dimensions.
 COLUMNS :: 40;
 ROWS :: 30;
 CELLS :: 1200;
+board_columns: s32 = 40;
+board_rows: s32 = 30;
+BoardSize :: (columns: s32, rows: s32) {
+    board_columns = columns
+    board_rows = rows
+}
 LEVEL_COUNT :: 99;
 // Each tileset is a stage of 33 levels with its own character.
 STAGE_COUNT :: 3;
@@ -50,9 +59,9 @@ Game :: struct {
     started: bool
 }
 
-Index :: (x: s64, y: s64) -> s32 { return cast(s32)(y * COLUMNS + x) }
+Index :: (x: s64, y: s64) -> s32 { return cast(s32)(y * board_columns + x) }
 StageOf :: (level: s32) -> s32 { return level / STAGE_LEVELS }
-Inside :: (x: s64, y: s64) -> bool { return x >= 0 && x < COLUMNS && y >= 0 && y < ROWS }
+Inside :: (x: s64, y: s64) -> bool { return x >= 0 && x < board_columns && y >= 0 && y < board_rows }
 Abs :: (v: s32) -> s32 { if v < 0 { return -v }; return v }
 Near :: (a: Point, b: Point, distance: s32) -> bool {
     return Abs(a.x - b.x) < distance && Abs(a.y - b.y) < distance
@@ -66,7 +75,7 @@ Random :: (game: *Game, limit: s32) -> s32 {
 }
 
 TileAt :: (game: *Game, position: Point) -> s32 {
-    if position.x < 0 || position.y < 0 || position.x >= COLUMNS * 16 || position.y >= ROWS * 16 { return 20 }
+    if position.x < 0 || position.y < 0 || position.x >= board_columns * 16 || position.y >= board_rows * 16 { return 20 }
     return cast(s32)game.board[Index(position.x / 16, position.y / 16)]
 }
 WallAt :: (game: *Game, position: Point) -> bool {
@@ -86,7 +95,7 @@ SpawnApple :: (game: *Game) {
     if game.apples <= 0 { game.apple = Point.{-1, -1}; return }
     // Original apples use pixel coordinates, not cell centers.
     for attempt: 0..32767 {
-        candidate := Point.{Random(game, COLUMNS * 16), Random(game, ROWS * 16)}
+        candidate := Point.{Random(game, board_columns * 16), Random(game, board_rows * 16)}
         if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) {
             game.apple = candidate
             game.apple_flash = 128
@@ -94,7 +103,7 @@ SpawnApple :: (game: *Game) {
         }
     }
     for at: 0..CELLS - 1 {
-        candidate := Point.{cast(s32)(at % COLUMNS) * 16 + 8, cast(s32)(at / COLUMNS) * 16 + 8}
+        candidate := Point.{cast(s32)(at % board_columns) * 16 + 8, cast(s32)(at / board_columns) * 16 + 8}
         if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) {
             game.apple = candidate
             game.apple_flash = 128
@@ -103,16 +112,15 @@ SpawnApple :: (game: *Game) {
     }
     game.apple = Point.{-1, -1}
 }
+// The gates keep their neighbouring tiles: only the hole is carved.
 OpenEntrance :: (game: *Game) {
-    game.board[Index(20, 29)] = game.board[Index(20, 28)] & 127
-    game.board[Index(19, 29)] = 21
-    game.board[Index(21, 29)] = 21
+    half := board_columns / 2
+    game.board[Index(half, board_rows - 1)] = game.board[Index(half, board_rows - 2)] & 127
 }
-CloseEntrance :: (game: *Game) { game.board[Index(20, 29)] = 20 }
+CloseEntrance :: (game: *Game) { game.board[Index(board_columns / 2, board_rows - 1)] = 20 }
 OpenExit :: (game: *Game) {
-    game.board[Index(20, 0)] = game.board[Index(20, 1)] & 127
-    game.board[Index(19, 0)] = 21
-    game.board[Index(21, 0)] = 21
+    half := board_columns / 2
+    game.board[Index(half, 0)] = game.board[Index(half, 1)] & 127
 }
 Respawn :: (game: *Game) {
     game.length = 1
@@ -120,10 +128,11 @@ Respawn :: (game: *Game) {
     game.direction = DIR_UP
     game.next_direction = DIR_UP
     game.death_ticks = 0
-    game.worm[0] = Point.{328, 496}
+    game.worm[0] = Point.{board_columns / 2 * 16 + 8, board_rows * 16 + 16}
     OpenEntrance(game)
 }
-LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32) {
+LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, columns: s32, rows: s32) {
+    BoardSize(columns, rows)
     if level < 0 { level = 0 }
     if level >= LEVEL_COUNT { level = LEVEL_COUNT - 1 }
     game.mode = MODE_PLAYING
@@ -134,8 +143,8 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32) {
     for index: 0..99 { game.particles[index].life = 0 }
     game.next_step = now + TICK_MS
     game.started = true
-    for y: 0..ROWS - 1 {
-        for x: 0..COLUMNS - 1 {
+    for y: 0..board_rows - 1 {
+        for x: 0..board_columns - 1 {
             tile := board[Index(x, y)]
             game.board[Index(x, y)] = tile
             kind := cast(s32)(tile & 127) - 39
@@ -156,17 +165,18 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32) {
     SpawnApple(game)
 }
 LoadLevel :: (game: *Game, level: s32, now: s64) {
+    BoardSize(COLUMNS, ROWS)
     tiles: [CELLS]u8
     for y: 0..ROWS - 1 {
-        for x: 0..COLUMNS - 1 { tiles[Index(x, y)] = OriginalTile(level, cast(s32)x, cast(s32)y) }
+        for x: 0..COLUMNS - 1 { tiles[y * COLUMNS + x] = OriginalTile(level, cast(s32)x, cast(s32)y) }
     }
-    LoadLevelData(game, level, now, tiles[:], OriginalApples[level])
+    LoadLevelData(game, level, now, tiles[:], OriginalApples[level], COLUMNS, ROWS)
 }
-StartGameData :: (game: *Game, level: s32, now: s64, seed: u32, board: []u8, apples: s32) {
+StartGameData :: (game: *Game, level: s32, now: s64, seed: u32, board: []u8, apples: s32, columns: s32, rows: s32) {
     game.random = seed
     game.lives = 3
     game.score = 0
-    LoadLevelData(game, level, now, board, apples)
+    LoadLevelData(game, level, now, board, apples, columns, rows)
 }
 StartGame :: (game: *Game, level: s32, now: s64, seed: u32 = 1) {
     game.random = seed
@@ -187,8 +197,8 @@ LoadedTile :: (raw: u8) -> u8 {
 // checks begin. Bit 1 marks the entrance, bit 2 the exit.
 LevelBlockages :: (board: []u8) -> s32 {
     result: s32 = 0
-    entry := cast(s32)LoadedTile(board[Index(20, 27)])
-    leave := cast(s32)LoadedTile(board[Index(20, 1)])
+    entry := cast(s32)LoadedTile(board[Index(board_columns / 2, board_rows - 3)])
+    leave := cast(s32)LoadedTile(board[Index(board_columns / 2, 1)])
     if entry >= 20 && entry < 128 { result = result | 1 }
     if leave >= 20 && leave < 128 { result = result | 2 }
     return result

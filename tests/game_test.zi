@@ -59,7 +59,7 @@ main :: () -> s32 {
     Tick(*game)
     Expect(game.apples == 0 && game.score == 1, "last apple scores one")
     Expect(game.apple.x == -1 && game.target_length == 6, "apple gone and target grows by four")
-    Expect(game.board[Index(20, 0)] == 0 && game.board[Index(19, 0)] == 21 && game.board[Index(21, 0)] == 21, "original top exit")
+    Expect(game.board[Index(20, 0)] == 0 && game.board[Index(19, 0)] == 20 && game.board[Index(21, 0)] == 20, "top exit carves without touching its neighbours")
     game.length = 16
     for i: 0..15 { game.worm[i] = Point.{328, cast(s32)i * 4} }
     Tick(*game)

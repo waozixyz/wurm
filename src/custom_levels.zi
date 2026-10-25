@@ -14,6 +14,10 @@ GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
 
 LEVEL_FILE_BYTES :: 1201;
 
+// The archive and editor layout is always the canonical 40x30 grid,
+// independent of the orientation the engine is playing.
+At :: (x: s64, y: s64) -> s32 { return cast(s32)(y * COLUMNS + x) }
+
 custom_root: [96]u8;
 custom_root_length: s32;
 custom_loaded: bool;
@@ -95,7 +99,7 @@ EnsureLoaded :: () {
         custom_apples[level] = cast(s32)bytes[0]
         for column: 0..COLUMNS - 1 {
             for row: 0..ROWS - 1 {
-                custom_boards[level][Index(column, row)] =
+                custom_boards[level][At(column, row)] =
                     bytes[1 + column * ROWS + row]
             }
         }
@@ -111,7 +115,7 @@ HasCustomLevel :: (level: s32) -> bool {
 EffectiveTile :: (level: s32, x: s32, y: s32) -> u8 {
     EnsureLoaded()
     if level >= 0 && level < LEVEL_COUNT && custom_present[level] {
-        return custom_boards[level][Index(x, y)]
+        return custom_boards[level][At(x, y)]
     }
     return Originals.OriginalTile(level, x, y)
 }
@@ -138,7 +142,7 @@ EffectiveBoard :: (level: s32, board: []u8) {
     }
     for y: 0..ROWS - 1 {
         for x: 0..COLUMNS - 1 {
-            board[Index(x, y)] = Originals.OriginalTile(level, cast(s32)x, cast(s32)y)
+            board[At(x, y)] = Originals.OriginalTile(level, cast(s32)x, cast(s32)y)
         }
     }
 }
@@ -153,7 +157,7 @@ SaveCustomLevel :: (level: s32, board: []u8, apples: s32) -> bool {
     bytes[0] = cast(u8)apples
     for column: 0..COLUMNS - 1 {
         for row: 0..ROWS - 1 {
-            bytes[1 + column * ROWS + row] = board[Index(column, row)]
+            bytes[1 + column * ROWS + row] = board[At(column, row)]
         }
     }
     // LevelPath borrows one buffer, so the temporary name is copied aside

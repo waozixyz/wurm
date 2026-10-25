@@ -73,7 +73,7 @@ main :: () -> s32 {
     for at: 0..CELLS - 1 { board[at] = 0 }
     board[Index(3, 3)] = 45
     game: Game
-    LoadLevelData(*game, 0, 0, board[:], 2)
+    LoadLevelData(*game, 0, 0, board[:], 2, COLUMNS, ROWS)
     Expect(game.monster_count == 1 && game.monsters[0].kind == 6, "editor board spawns its monster")
     Expect(game.board[Index(3, 3)] == 0, "marker cell becomes floor")
 
