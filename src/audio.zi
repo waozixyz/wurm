@@ -42,8 +42,6 @@ SignedSample :: (low: u8, high: u8) -> s32 {
         if music_track == track && music_data.count > 0 { return }
         Assets.FreeAppAsset(music_data)
         path := "assets/sounds/garden.pcm"
-        if track == 2 { path = "assets/sounds/space.pcm" }
-        else if track == 3 { path = "assets/sounds/factory.pcm" }
         music_data = Assets.ReadAppAsset(path)
         music_bytes = music_data.count
         music_track = track
@@ -77,9 +75,7 @@ SignedSample :: (low: u8, high: u8) -> s32 {
         if music_file.valid { File.CloseFile(music_file) }
         music_track = track
         music_position = 0
-        if track == 1 { music_file = File.OpenRead("assets/sounds/garden.pcm") }
-        else if track == 2 { music_file = File.OpenRead("assets/sounds/space.pcm") }
-        else { music_file = File.OpenRead("assets/sounds/factory.pcm") }
+        music_file = File.OpenRead("assets/sounds/garden.pcm")
         music_bytes = ifx music_file.valid then File.FileSize(music_file) else 0
     }
 

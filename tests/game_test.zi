@@ -8,8 +8,8 @@ Expect :: (value: bool, message: string) {
 #program_export
 main :: () -> s32 {
     game: Game
-    Expect(LEVEL_COUNT == 99, "all original levels available")
-    for level: 0..98 {
+    Expect(LEVEL_COUNT == 66 && STAGE_COUNT == 2, "Garden then Forest campaign")
+    for level: 0..LEVEL_COUNT - 1 {
         StartGame(*game, cast(s32)level, 0)
         Expect(game.apples > 0 && game.apples <= 12, "original apple goal")
         Expect(game.worm[0].x == 328 && game.worm[0].y == 496, "original bottom entry")
@@ -18,7 +18,7 @@ main :: () -> s32 {
         Expect(game.monster_count <= MONSTER_LIMIT, "monsters fit original limit")
     }
     StartGame(*game, 0, 100)
-    Expect(game.apples == 5 && game.monster_count == 0, "original first level metadata")
+    Expect(game.apples == 5 && game.monster_count == 0, "gentle first level with five apples and no moving hazards")
     Expect(!Step(*game, 124), "no early movement")
     Expect(Step(*game, 125) && game.worm[0].y == 492, "four pixels per original tick")
     Expect(!ApplyInput(*game, 262), "no steering before spawn is established")
@@ -72,14 +72,16 @@ main :: () -> s32 {
     game.worm[0] = Point.{328, 0}
     Tick(*game)
     for i: 0..49 { Tick(*game) }
-    Expect(game.mode == MODE_VICTORY && StageOf(32) == 0 && StageOf(33) == 1, "each stage ends after 33 levels")
+    Expect(game.mode == MODE_FINISHED && StageOf(32) == 0 && StageOf(33) == 1, "Garden continues straight into Forest")
+    LoadLevel(*game, 33, 2000)
+    Expect(game.level == 33 && game.mode == MODE_PLAYING && game.lives == 3, "Forest continues the same run")
 
-    StartGame(*game, 98, 0)
+    StartGame(*game, 65, 0)
     game.apples = 0
     game.worm[0] = Point.{328, 0}
     Tick(*game)
     for i: 0..49 { Tick(*game) }
-    Expect(game.mode == MODE_VICTORY, "final original level wins")
+    Expect(game.mode == MODE_VICTORY, "Forest finale completes the campaign")
 
     StartGame(*game, 0, 0)
     game.score = 32
@@ -88,10 +90,23 @@ main :: () -> s32 {
     game.death_ticks = 1
     Tick(*game)
     Expect(game.lives == 3 && game.worm[0].y == 496, "death consumes a life and respawns")
-    game.lives = 0
+    game.lives = 1
     game.death_ticks = 1
     Tick(*game)
-    Expect(game.mode == MODE_DIED, "last life ends game")
+    Expect(game.mode == MODE_DIED && game.lives == 0, "last life ends the game at zero")
+    Expect(!Step(*game, 100000) && game.lives == 0, "game over cannot consume another life")
+    game.death_ticks = 1
+    Tick(*game)
+    Expect(game.mode == MODE_DIED && game.lives == 0, "a zero-life death cannot display minus one")
+
+    StartGame(*game, 0, 0)
+    for death: 0..2 {
+        game.death_ticks = 1
+        Tick(*game)
+        Expect(game.lives == 2 - cast(s32)death, "each of the three lives is consumed exactly once")
+        if death < 2 { Expect(game.mode == MODE_PLAYING, "remaining lives respawn") }
+        else { Expect(game.mode == MODE_DIED, "zero lives do not grant an extra turn") }
+    }
 
     StartGame(*game, 0, 0)
     game.monster_count = 1

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compare every recovered byte and generated map with the owner's archive."""
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -17,10 +18,19 @@ SOURCE = Path(sys.argv.pop(1)) if len(sys.argv) > 1 else Path("/mnt/storage/Game
 
 class RecoveryTest(unittest.TestCase):
     def test_every_archive_byte_recovered(self):
+        if not (SOURCE / 'ONLY.ONE').exists():
+            self.skipTest('Owner archive absent; committed archive file hashes are verified separately')
         entries = extractor.archive_entries((SOURCE / "ONLY.ONE").read_bytes())
         self.assertEqual(len(entries), 117)
         for name, raw in entries.items():
             self.assertEqual((ROOT / "assets/original" / name).read_bytes(), raw, name)
+
+    def test_committed_archive_file_hashes(self):
+        manifest = json.loads((ROOT / 'assets/original/manifest.json').read_text())
+        for name, expected in manifest['files'].items():
+            raw = (ROOT / 'assets/original' / name).read_bytes()
+            self.assertEqual(len(raw), expected['bytes'], name)
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), expected['sha256'], name)
 
     def test_generated_maps_match_all_original_coordinates(self):
         source = (ROOT / "src/original_levels.zi").read_text()

@@ -14,10 +14,11 @@ BoardSize :: (columns: s32, rows: s32) {
     board_columns = columns
     board_rows = rows
 }
-LEVEL_COUNT :: 99;
-// Each tileset is a stage of 33 levels with its own character.
-STAGE_COUNT :: 3;
+// Two connected chapters, played as the same worm. The complete recovered
+// 99-level archive remains untouched as reference data.
+STAGE_COUNT :: 2;
 STAGE_LEVELS :: 33;
+LEVEL_COUNT :: STAGE_COUNT * STAGE_LEVELS;
 WORM_LIMIT :: 1000;
 MONSTER_LIMIT :: 100;
 TICK_MS :: 25;
@@ -97,7 +98,10 @@ SpawnApple :: (game: *Game) {
     if game.apples <= 0 { game.apple = Point.{-1, -1}; return }
     // Original apples use pixel coordinates, not cell centers.
     for attempt: 0..32767 {
-        candidate := Point.{Random(game, board_columns * 16), Random(game, board_rows * 16)}
+        // Temporary edge gates can close behind the tail. Apples belong on
+        // the permanent interior floor, never inside those gate cells.
+        candidate := Point.{16 + Random(game, (board_columns - 2) * 16),
+            16 + Random(game, (board_rows - 2) * 16)}
         if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) {
             game.apple = candidate
             game.apple_flash = 128
@@ -106,6 +110,7 @@ SpawnApple :: (game: *Game) {
     }
     for at: 0..CELLS - 1 {
         candidate := Point.{cast(s32)(at % board_columns) * 16 + 8, cast(s32)(at / board_columns) * 16 + 8}
+        if candidate.x < 16 || candidate.y < 16 || candidate.x >= (board_columns - 1) * 16 || candidate.y >= (board_rows - 1) * 16 { continue }
         if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) {
             game.apple = candidate
             game.apple_flash = 128
@@ -167,18 +172,17 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     Respawn(game)
     SpawnApple(game)
 }
-// The playable base: the designed Garden levels, the recovered originals
-// beyond them.
+// The complete playable campaign is designed and certified. The recovered
+// 99-level archive stays an independent, untouched historical reference.
 BaseTile :: (level: s32, x: s32, y: s32) -> u8 {
-    if level >= 0 && level < 33 { return DesignedTile(level, x, y) }
-    return OriginalTile(level, x, y)
+    if level >= 0 && level < DESIGNED_LEVEL_COUNT { return DesignedTile(level, x, y) }
+    return 20
 }
 BaseApples :: (level: s32) -> s32 {
-    if level >= 0 && level < 33 { return DesignedApples[level] }
-    return OriginalApples[level]
+    if level >= 0 && level < DESIGNED_LEVEL_COUNT { return DesignedApples[level] }
+    return 2
 }
 BaseObject :: (level: s32, x: s32, y: s32) -> u8 {
-    if level >= 0 && level < 33 { return DesignedObject(level, x, y) }
     return 0
 }
 
@@ -376,7 +380,7 @@ Tick :: (game: *Game) {
     if game.transition_ticks > 0 {
         game.transition_ticks -= 1
         if game.transition_ticks == 0 {
-            if (game.level + 1) % STAGE_LEVELS == 0 { game.mode = MODE_VICTORY }
+            if game.level + 1 >= LEVEL_COUNT { game.mode = MODE_VICTORY }
             else { game.mode = MODE_FINISHED }
         }
         FinishTick(game)
@@ -385,8 +389,8 @@ Tick :: (game: *Game) {
     if game.death_ticks > 0 {
         game.death_ticks -= 1
         if game.death_ticks == 0 {
-            game.lives -= 1
-            if game.lives < 0 { game.mode = MODE_DIED }
+            if game.lives > 0 { game.lives -= 1 }
+            if game.lives <= 0 { game.lives = 0; game.mode = MODE_DIED }
             else { Respawn(game) }
         }
         FinishTick(game)

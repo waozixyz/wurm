@@ -21,10 +21,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('apk', type=Path)
     parser.add_argument('--serial', default='ZE2223BQZT', choices=('ZE2223BQZT',))
+    parser.add_argument('--verification', action='store_true')
     args = parser.parse_args()
+    package = 'xyz.waozi.wurm.verification' if args.verification else PACKAGE
     OUTPUT.mkdir(parents=True, exist_ok=True)
     adb = ['adb', '-s', args.serial]
-    receipt = {'serial': args.serial, 'apk_sha256': hashlib.sha256(args.apk.read_bytes()).hexdigest()}
+    receipt = {'serial': args.serial, 'package': package,
+               'apk_sha256': hashlib.sha256(args.apk.read_bytes()).hexdigest()}
 
     def run(*arguments, data=None, check=True):
         return subprocess.run([*adb, *arguments], input=data, capture_output=True,
@@ -36,27 +39,47 @@ def main():
     devices = subprocess.check_output(['adb', 'devices', '-l'], text=True)
     assert any(line.startswith(args.serial + ' ') and 'usb:' in line for line in devices.splitlines()), devices
     assert shell('getprop', 'ro.product.model').stdout.strip() == b'moto e6 play'
-    install = run('install', '--no-streaming', '-r', str(args.apk.resolve()))
-    assert b'Success' in install.stdout, install.stdout
+    running = shell('pidof', package, check=False).stdout.strip()
+    assert args.verification or not running, 'Preserve the already running owner game; use --verification'
+    owner_pid = shell('pidof', PACKAGE, check=False).stdout.strip() if args.verification else b''
+    rotation = {key: shell('settings', 'get', 'system', key).stdout.decode().strip()
+                for key in ('accelerometer_rotation', 'user_rotation')}
+    if running:
+        # Resume only the exact verification APK already installed by this
+        # test; no force-stop or replacement of a live process is needed.
+        installed = shell('pm', 'path', package).stdout.decode().strip().removeprefix('package:')
+        digest = shell('sha256sum', installed).stdout.decode().split()[0]
+        if digest != receipt['apk_sha256']:
+            previous = json.loads((OUTPUT / 'result.json').read_text())
+            assert args.verification and previous.get('package') == package and previous.get('apk_sha256') == digest, 'Preserve an unrecognized live install'
+            # A new owner-requested build updates only this known verification
+            # package. Android handles the update; the normal app stays intact.
+            (OUTPUT / 'previous-result.json').write_text(json.dumps(previous, indent=2) + '\n')
+            install = run('install', '--no-streaming', '-r', str(args.apk.resolve()))
+            assert b'Success' in install.stdout, install.stdout
+    else:
+        install = run('install', '--no-streaming', '-r', str(args.apk.resolve()))
+        assert b'Success' in install.stdout, install.stdout
     # Only a newly created driver directory belongs to this test.
     create = 'test ! -e ' + DRIVER + ' && mkdir -p ' + DRIVER
-    shell('run-as', PACKAGE, 'sh', '-c', create)
+    shell('run-as', package, 'sh', '-c', create)
     sequence = 0
     launched_pid = None
+    launch_requested = False
 
     def command(verb, **fields):
         nonlocal sequence
         sequence += 1
         line = '\t'.join([str(sequence), verb, *(str(k) + '=' + str(v) for k, v in fields.items())]) + '\n'
         script = 'cat > ' + DRIVER + '/command.tmp && mv ' + DRIVER + '/command.tmp ' + DRIVER + '/command'
-        shell('run-as', PACKAGE, 'sh', '-c', script, data=line.encode())
+        shell('run-as', package, 'sh', '-c', script, data=line.encode())
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
-            response = shell('run-as', PACKAGE, 'cat', DRIVER + '/reply', check=False)
+            response = shell('run-as', package, 'cat', DRIVER + '/reply', check=False)
             if response.returncode == 0:
                 reply = json.loads(response.stdout)
                 if reply.get('serial') == sequence:
-                    shell('run-as', PACKAGE, 'rm', DRIVER + '/reply')
+                    shell('run-as', package, 'rm', DRIVER + '/reply')
                     assert reply.get('ok'), reply
                     return reply
             time.sleep(.1)
@@ -77,30 +100,67 @@ def main():
     def capture(name):
         activity = shell('dumpsys', 'activity', 'activities').stdout.decode()
         focused = next(line for line in activity.splitlines() if 'mResumedActivity:' in line)
-        assert PACKAGE + '/' in focused, focused
+        assert package + '/' in focused, focused
         (OUTPUT / (name + '.png')).write_bytes(run('exec-out', 'screencap', '-p').stdout)
         tree = command('tree')
         (OUTPUT / (name + '.json')).write_text(json.dumps(tree, indent=2) + '\n')
         return tree
 
+    def orient(value):
+        shell('settings', 'put', 'system', 'accelerometer_rotation', '0')
+        shell('settings', 'put', 'system', 'user_rotation', str(value))
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            root = command('tree')['nodes'][0]
+            if (root['width'] > root['height']) == (value == 1):
+                time.sleep(.3)
+                return
+            time.sleep(.2)
+        raise AssertionError('Moto did not rotate the game')
+
+    def title(name):
+        play = wait('Play', 'button')
+        tree = capture(name)
+        root = tree['nodes'][0]
+        assert play['width'] >= 48 and play['height'] >= 48, play
+        assert play['visible_width'] >= play['width'] - 1 and play['visible_height'] >= play['height'] - 1, play
+        assert root['y'] <= play['y'] and play['y'] + play['height'] <= root['y'] + root['height'], play
+        assert sum(n.get('kind') == 'button' and n.get('interactive') and n.get('visible') for n in tree['nodes']) == 1
+        return play, root
+
     try:
+        shell('input', 'keyevent', 'KEYCODE_WAKEUP')
+        shell('wm', 'dismiss-keyguard')
+        launch_requested = True
         launch = shell('am', 'start', '-W', '-a', 'android.intent.action.MAIN',
-                       '-c', 'android.intent.category.LAUNCHER', '-n', PACKAGE + '/.MainActivity')
+                       '-c', 'android.intent.category.LAUNCHER', '-n', package + '/xyz.waozi.wurm.MainActivity')
         assert b'Status: ok' in launch.stdout, launch.stdout
-        launched_pid = shell('pidof', PACKAGE).stdout.strip()
+        launched_pid = shell('pidof', package).stdout.strip()
         assert launched_pid, 'Android game process did not start'
-        wait('Play level', 'button')
-        capture('stages')
-        command('press', label='Play level', role='button')
-        wait('Ⅱ', 'button')
-        command('press', label='Ⅱ', role='button')
-        wait('PAUSED')
+        wait('Play', 'button')
+        orient(1)
+        title('title-landscape')
+        command('press', label='Play', role='button')
+        wait('Pause', 'button')
+        command('press', label='Pause', role='button')
+        capture('paused-landscape')
+        command('press', label='Back to title', role='button')
+        orient(0)
+        play, root = title('title-portrait')
+        # The real OS touch path starts the game from the visible Play button.
+        with Image.open(OUTPUT / 'title-portrait.png') as picture:
+            scale = picture.width / root['width']
+        shell('input', 'tap', str(round((play['x'] + play['width'] / 2) * scale)),
+              str(round((play['y'] + play['height'] / 2) * scale)))
+        wait('Pause', 'button')
+        command('press', label='Pause', role='button')
+        wait('Paused')
         wait('Resume', 'button')
         capture('paused')
         command('press', label='Resume', role='button')
-        wait('Ⅱ', 'button')
+        wait('Pause', 'button')
         board = wait('Steer the worm')
-        before = next(node for node in command('tree')['nodes'] if node.get('key') == 2000)
+        before = command('find', key=2000)['nodes'][0]
         # Use the OS touch path for steering, then inspect actual worm motion.
         command('pointer', real=1)
         with Image.open(OUTPUT / 'paused.png') as picture:
@@ -108,24 +168,38 @@ def main():
         x = round((board['x'] + board['width'] / 2) * scale)
         y = round((board['y'] + board['height'] / 2) * scale)
         shell('input', 'swipe', str(x), str(y), str(x + round(60 * scale)), str(y), '250')
-        playing = command('tree')
-        assert sum(node.get('kind') == 'image' for node in playing['nodes']) > 3
-        after = next(node for node in playing['nodes'] if node.get('key') == 2000)
-        assert after['x'] > before['x'] + before['width'], (before, after)
-        command('press', label='Ⅱ', role='button')
+        # Inspect only the head while the clock runs. Transferring the full
+        # 1,500-node tree can otherwise take long enough to reach a wall.
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            after = command('find', key=2000)['nodes'][0]
+            if after['x'] > before['x'] + before['width']:
+                break
+        else:
+            raise AssertionError(('OS swipe did not steer right', before, after))
+        command('press', label='Pause', role='button')
         capture('steered')
-        wait('Stages', 'button')
-        command('press', label='Stages', role='button')
-        wait('Play level', 'button')
-        receipt.update(passed=True, behaviors=['touch start', 'pause', 'resume', 'swipe steering', 'return to stages'])
+        wait('Back to title', 'button')
+        command('press', label='Back to title', role='button')
+        wait('Play', 'button')
+        capture('title-returned')
+        if args.verification and owner_pid:
+            assert shell('pidof', PACKAGE, check=False).stdout.strip() == owner_pid, 'Normal owner game process changed'
+        receipt.update(passed=True, preserved_normal_process=bool(owner_pid),
+                       behaviors=['portrait and landscape title', '60-unit Play button', 'OS touch start',
+                                  'pause in both orientations', 'resume', 'OS swipe steering', 'return to title'])
     finally:
         # This directory was absent before the test and contains only its protocol files.
-        shell('run-as', PACKAGE, 'rm', '-rf', DRIVER)
-        current_pid = shell('pidof', PACKAGE, check=False).stdout.strip()
-        if launched_pid and current_pid == launched_pid:
-            shell('am', 'force-stop', PACKAGE)
+        shell('run-as', package, 'rm', '-rf', DRIVER)
+        for key, value in rotation.items():
+            if value == 'null':
+                shell('settings', 'delete', 'system', key)
+            else:
+                shell('settings', 'put', 'system', key, value)
+        # Leave the requested game open on its title for the owner. Never
+        # stop another app or the pre-existing normal game to clean up a test.
         (OUTPUT / 'result.json').write_text(json.dumps(receipt, indent=2) + '\n')
-    print('USB Moto local test: touch start, pause, resume, swipe steering and stages passed.')
+    print('USB Moto local test: portrait/landscape title, OS touch Play, pause, resume, swipe and title passed; normal game preserved.')
 
 
 if __name__ == '__main__':

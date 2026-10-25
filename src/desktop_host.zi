@@ -8,11 +8,33 @@
 #import "kryon/tree"
 #import "kryon/tree_input"
 #import "kryon/Frame"
+File :: #import "std/file_linux";
 App :: #import "app";
 
 libc :: #system_library "libc";
 GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
 ParseNumber :: (text: *u8) -> s32 #foreign libc "atoi";
+ChangeDirectory :: (path: *u8) -> s32 #foreign libc "chdir";
+ReadExecutableLink :: (path: *u8, output: *u8, capacity: u64) -> s64 #foreign libc "readlink";
+
+// A direct desktop launch starts beside the executable in build/. Resolve
+// its asset root before any image, sound or saved level is opened.
+FindAssets :: () -> bool {
+    if File.PathExists("assets/art/title.png") { return true }
+    link: [32]u8
+    path: [4096]u8
+    if !CopyCString("/proc/self/exe", link[:]) { return false }
+    count := ReadExecutableLink(*link[0], *path[0], 4095)
+    if count <= 0 { return false }
+    index := cast(s32)count - 1
+    while index > 0 && path[index] != #char "/" { index -= 1 }
+    if index <= 0 { return false }
+    path[index] = 0
+    if ChangeDirectory(*path[0]) != 0 { return false }
+    if File.PathExists("assets/art/title.png") { return true }
+    if !CopyCString("..", link[:]) || ChangeDirectory(*link[0]) != 0 { return false }
+    return File.PathExists("assets/art/title.png")
+}
 
 window_width: s32;
 window_height: s32;
@@ -76,6 +98,10 @@ DrawFrame :: (session: Session) -> bool {
 
 #program_export
 main :: () -> s32 {
+    if !FindAssets() {
+        print("Apfelwurm could not find assets/art/title.png beside the game or its parent directory.\n")
+        return 1
+    }
     WindowSize()
     if !OpenDesktopSized(window_width, window_height) {
         CloseDesktop()

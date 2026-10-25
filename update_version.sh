@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+python3 - <<'PY'
+import json
+from pathlib import Path
+import re
+match = re.search(r'^## \[(\d+\.\d+\.\d+)\]', Path('CHANGELOG.md').read_text(), re.M)
+if not match:
+    raise SystemExit('CHANGELOG.md needs a numeric release entry')
+path = Path('version.json')
+previous = json.loads(path.read_text()) if path.exists() else None
+version = match[1]
+code = 1
+if previous:
+    old = tuple(map(int, previous['version'].split('.')))
+    new = tuple(map(int, version.split('.')))
+    if new < old:
+        raise SystemExit('Release versions cannot decrease')
+    code = previous['version_code'] + (new > old)
+path.write_text(json.dumps(dict(version=version, version_code=code), indent=2) + '\n')
+print('Apfelwurm release metadata synchronized: ' + version)
+PY

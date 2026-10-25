@@ -15,6 +15,9 @@ Custom :: #import, file "custom_levels.zi";
 Audio :: #import, file "audio.zi";
 
 PLAY_STEERING_KEY :: 100000;
+WORM_BODY_SIZE :: 16.5;
+WORM_HEAD_SIZE :: 19.0;
+WORM_DRAW_STEP :: 3;
 
 // The playable board: the recovered 40x30 grid of 16-pixel cells.
 BOARD_WIDTH :: 640.0;
@@ -24,26 +27,12 @@ game: Game;
 level_digits: [21]u8;
 score_digits: [21]u8;
 apple_digits: [21]u8;
-lives_digits: [21]u8;
-
-// The stage pager: `selected` keeps counting past either end so the pages
-// wrap, and `position` eases towards it or follows a dragging pointer.
-StagePager :: struct { selected: s32; position: float32; time: float64; }
-pager: StagePager;
-stage_levels: [STAGE_COUNT]s32;
-// Only Garden is open for now. Space and Factory keep their levels and art,
-// and come back by raising this. The title screen pages stage covers and,
-// after them, one Level Editor page you swipe to.
-OPEN_STAGES :: 1;
-PAGE_COUNT :: OPEN_STAGES + 1;
 
 // The level editor paints one level's raw tiles and apple count, and saves
 // them as an override beside the recovered originals (custom_levels.zi).
 EDITOR_PANEL_WIDTH :: 248.0;
-// Brush values: 0..127 paint tiles, 128 is the smart hedge, 200+id paint
-// decoration objects.
+// Brush values: 0..127 paint tiles; 128 is the smart hedge.
 BRUSH_SMART_WALL :: 128;
-BRUSH_OBJECT :: 200;
 EditorState :: struct {
     level: s32
     board: [CELLS]u8
@@ -62,21 +51,12 @@ editor: EditorState;
 editor_digits: [21]u8;
 brush_digits: [21]u8;
 
-Wrap :: (page: s32) -> s32 { return ((page % PAGE_COUNT) + PAGE_COUNT) % PAGE_COUNT }
-
 StageName :: (stage: s32) -> string {
-    if stage == 1 { return "SPACE" }
-    if stage == 2 { return "FACTORY" }
+    if stage == 1 { return "FOREST" }
     return "GARDEN"
 }
-StageHero :: (stage: s32) -> string {
-    if stage == 1 { return "Play as the Rocket" }
-    if stage == 2 { return "Play as the Fire Snake" }
-    return "Play as the Worm"
-}
 StageClear :: (stage: s32) -> string {
-    if stage == 1 { return "SPACE CLEAR" }
-    if stage == 2 { return "FACTORY CLEAR" }
+    if stage == 1 { return "FOREST CLEAR" }
     return "GARDEN CLEAR"
 }
 
@@ -85,15 +65,13 @@ StageClear :: (stage: s32) -> string {
 // cells) so the sprites keep their detail; floors and walls are opaque.
 SHEET_SCALE :: 2.0;
 Sheet :: (stage: s32) -> string {
-    if stage == 1 { return "assets/art/space.png" }
-    if stage == 2 { return "assets/art/factory.png" }
+    if stage == 1 { return "assets/art/forest.png" }
     return "assets/art/garden.png"
 }
 preview_path: [64]u8;
 PreviewPath :: (stage: s32, number: s32) -> string {
     prefix := "garden-"
-    if stage == 1 { prefix = "space-" }
-    else if stage == 2 { prefix = "factory-" }
+    if stage == 1 { prefix = "forest-" }
     digits: [16]u8
     at := CopyInto(preview_path[:], 0, "assets/art/previews/")
     at = CopyInto(preview_path[:], at, prefix)
@@ -106,17 +84,11 @@ CopyInto :: (buffer: []u8, at: s32, text: string) -> s32 {
     for index: 0..text.count - 1 { buffer[at + index] = text[index] }
     return at + cast(s32)text.count
 }
-Cover :: (stage: s32) -> string {
-    if stage == 1 { return "assets/art/space-cover.png" }
-    if stage == 2 { return "assets/art/factory-cover.png" }
-    return "assets/art/garden-cover.png"
-}
-
 Picture :: (session: Session, key: u64, asset: string, bounds: Rectangle, source: Rectangle) {
     unused Image(session, ImageProps.{.key = key, .asset_path = asset, .bounds = bounds,
         .source = Rectangle.{source.x * SHEET_SCALE, source.y * SHEET_SCALE,
             source.width * SHEET_SCALE, source.height * SHEET_SCALE},
-        .smooth = false, .alt_text = "Worm artwork"})
+        .smooth = true, .alt_text = "Worm artwork"})
 }
 
 TextLine :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32) {
@@ -129,57 +101,121 @@ CentreText :: (session: Session, key: u64, text: string, bounds: Rectangle, size
         .font = size, .align = TextAlign.TextAlignCenter})
 }
 
-// Pause, game over and stage clear: a dim veil over the board and one cream
-// card with a green cap, the title, the score when the run ended, and the
-// keys that move on.
-Overlay :: (session: Session, stage: Rectangle, title: string, message: string, score: s32 = -1) {
-    unused Box(session, BoxProps.{.key = 50, .bounds = stage, .fill = Color.{10, 18, 12, 150}})
-    card_width := stage.width * 0.74
-    if card_width > 400.0 { card_width = 400.0 }
-    if card_width < 220.0 { card_width = 220.0 }
-    card_height: float32 = ifx score >= 0 then 194.0 else 160.0
-    card := Rectangle.{stage.x + (stage.width - card_width) / 2.0,
-        stage.y + stage.height * 0.34, card_width, card_height}
-    unused Box(session, BoxProps.{.key = 51, .bounds = card, .fill = Color.{240, 242, 232, 250}, .radius = 14.0})
-    unused Box(session, BoxProps.{.key = 55,
-        .bounds = Rectangle.{card.x + 14.0, card.y, card.width - 28.0, 5.0},
-        .fill = Color.{46, 125, 74, 255}, .radius = 2.0})
-    CentreText(session, 52, title, Rectangle.{card.x, card.y + 16.0, card.width, 34.0}, 28)
-    if score >= 0 {
-        score_text := FormatInteger(cast(s64)score, score_digits[:])
-        CentreText(session, 53, score_text, Rectangle.{card.x, card.y + 52.0, card.width, 34.0}, 26)
-        CentreText(session, 56, message, Rectangle.{card.x + 10.0, card.y + 96.0, card.width - 20.0, 36.0}, 14)
-    } else {
-        CentreText(session, 53, message, Rectangle.{card.x + 10.0, card.y + 56.0, card.width - 20.0, 40.0}, 15)
+// A single visual language for the title, HUD and every dialog. These are
+// ordinary Kryon style rules, shared by desktop and Android.
+styles_ready: bool;
+GameSelector :: (kind: s32, class_name: s32 = 0) -> StyleSelector {
+    return StyleSelector.{.kind = kind, .class_name = class_name, .role = -1,
+        .tone = -1, .emphasis = -1, .size = -1, .state = -1, .validation = -1,
+        .orientation = -1, .placement = -1}
+}
+GameStyles :: () {
+    if styles_ready { return }
+    rules := ActiveStyleRules()
+    at := rules.count
+    rules.items[at] = StyleRule.{.selector = GameSelector(StyleKindText()),
+        .style = StyleData.{.fields = 2, .foreground = 0x244734FF}}
+    rules.items[at + 1] = StyleRule.{.selector = GameSelector(StyleKindText(), 2),
+        .style = StyleData.{.fields = 2, .foreground = 0x596D54FF}}
+    rules.items[at + 2] = StyleRule.{.selector = GameSelector(StyleKindButton()),
+        .style = StyleData.{.fields = 1040, .font_size = 16.0, .radius = 16.0}}
+    // Filled and quiet actions keep readable contrast in every host theme.
+    rules.items[at + 3] = StyleRule.{.selector = GameSelector(StyleKindButton(), 10),
+        .style = StyleData.{.fields = 1079, .background = 0x326A45FF, .foreground = 0xFFF9E9FF,
+            .border = 0x265437FF, .border_width = 2.0, .radius = 24.0, .font_size = 21.0}}
+    rules.items[at + 4] = StyleRule.{.selector = GameSelector(StyleKindButton(), 11),
+        .style = StyleData.{.fields = 1079, .background = 0xE8EEDAFF, .foreground = 0x31533EFF,
+            .border = 0xD5DFC4FF, .border_width = 1.0, .radius = 20.0, .font_size = 17.0}}
+    rules.items[at + 5] = StyleRule.{.selector = GameSelector(StyleKindButton(), 13),
+        .style = StyleData.{.fields = 1079, .background = 0xF5CE64FF, .foreground = 0x274734FF,
+            .border = 0xD8AE4BFF, .border_width = 2.0, .radius = 30.0, .font_size = 22.0}}
+    rules.count = at + 6
+    styles_ready = InstallStyleRules(rules)
+}
+GameText :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32, muted: bool = false,
+             centre: bool = false) {
+    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = text, .font = size,
+        .class_name = ifx muted then 2 else 0, .align = ifx centre then TextAlign.TextAlignCenter else TextAlign.TextAlignStart,
+        .wrap = TextWrap.TextWrapNone})
+}
+
+// Pause, game over and completion use the same roomy card, with full-width
+// touch actions. Short landscape screens use the compact composition.
+Overlay :: (session: Session, area: Rectangle, title: string, message: string, score: s32 = -1) {
+    unused Box(session, BoxProps.{.key = 50, .bounds = area, .fill = Color.{17, 38, 27, 155}})
+    compact := area.height < 400.0
+    width := area.width - 32.0
+    if width > 360.0 { width = 360.0 }
+    height: float32 = ifx compact then 252.0 else 292.0
+    if score >= 0 { height = ifx compact then 288.0 else 340.0 }
+    card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0, width, height}
+    unused Box(session, BoxProps.{.key = 51,
+        .bounds = Rectangle.{card.x, card.y + 6.0, card.width, card.height},
+        .fill = Color.{10, 30, 18, 70}, .radius = 28.0})
+    unused Box(session, BoxProps.{.key = 52, .bounds = card,
+        .fill = Color.{255, 250, 234, 255}, .border = Color.{218, 225, 198, 255}, .radius = 28.0})
+    title_y: float32 = ifx compact then 22.0 else 86.0
+    if !compact {
+        centre := card.x + card.width / 2.0
+        unused Box(session, BoxProps.{.key = 53,
+            .bounds = Rectangle.{centre - 27.0, card.y + 22.0, 54.0, 54.0},
+            .fill = Color.{231, 237, 208, 255}, .radius = 27.0})
+        shape := "F:M7 5H10V19H7ZM14 5H17V19H14Z"
+        color := Color.{65, 113, 68, 255}
+        if game.mode == MODE_DIED { shape = HeartIcon.Shape; color = Color.{213, 95, 89, 255} }
+        else if game.mode == MODE_VICTORY { shape = StarIcon.Shape; color = Color.{218, 153, 45, 255} }
+        SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{centre - 14.0, card.y + 35.0, 28.0, 28.0},
+            .shape = shape, .color = color})
     }
-    button_y := card.y + card.height - 50.0
-    button_width := (card.width - 36.0) / 2.0
-    primary := ifx game.mode == MODE_PAUSED then "Resume" else "Retry"
-    if game.mode == MODE_VICTORY { primary = "Stages" }
+    GameText(session, 54, title, Rectangle.{card.x + 12.0, card.y + title_y, card.width - 24.0, 36.0}, 28, false, true)
+    GameText(session, 55, message, Rectangle.{card.x + 16.0, card.y + title_y + 42.0, card.width - 32.0, 24.0}, 15, true, true)
+    if score >= 0 {
+        score_y := card.y + title_y + 80.0
+        GameText(session, 56, "SCORE", Rectangle.{card.x + 22.0, score_y + 4.0, card.width / 2.0 - 22.0, 22.0}, 12, true)
+        score_text := FormatInteger(cast(s64)score, score_digits[:])
+        GameText(session, 60, score_text, Rectangle.{card.x + card.width / 2.0, score_y, card.width / 2.0 - 22.0, 32.0}, 24)
+    }
+    primary := ifx game.mode == MODE_PAUSED then "Resume" else "Try again"
+    if game.mode == MODE_VICTORY { primary = "Play again" }
     if Button(session, ButtonProps.{.key = 57,
-            .bounds = Rectangle.{card.x + 12.0, button_y, button_width, 40.0},
-            .label = primary, .tone = ButtonTone.ButtonToneSuccess,
+            .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 120.0, card.width - 40.0, 48.0},
+            .label = primary, .class_name = 10, .tone = ButtonTone.ButtonToneSuccess,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
         key: s32 = cast(s32)(ifx game.mode == MODE_PAUSED then Input.KeyEscape else Input.KeyEnter)
         HandleInput(key, Timer.MonotonicMilliseconds())
     }
     if Button(session, ButtonProps.{.key = 58,
-            .bounds = Rectangle.{card.x + 24.0 + button_width, button_y, button_width, 40.0},
-            .label = "Stages", .tone = ButtonTone.ButtonToneSuccess}) != 0 {
-        LeavePlay()
-    }
+            .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 60.0, card.width - 40.0, 48.0},
+            .label = "Back to title", .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { LeavePlay() }
 }
 
 // A logical-pixel sprite square on the live board.
 Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source: Rectangle,
-    sheet: string) {
+    sheet: string, size: float32 = 16.0) {
     scale := stage.width / (cast(float32)board_columns * 16.0)
-    left := Snap(stage.x + cast(float32)(position.x - 8) * scale)
-    top := Snap(stage.y + cast(float32)(position.y - 8) * scale)
-    bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(position.x + 8) * scale) - left,
-        Snap(stage.y + cast(float32)(position.y + 8) * scale) - top}
-    if bounds.y < Snap(stage.y) || bounds.y + bounds.height > Snap(stage.y + stage.height) { return }
-    Picture(session, key, sheet, bounds, source)
+    left := Snap(stage.x + (cast(float32)position.x - size / 2.0) * scale)
+    top := Snap(stage.y + (cast(float32)position.y - size / 2.0) * scale)
+    right := Snap(stage.x + (cast(float32)position.x + size / 2.0) * scale)
+    bottom := Snap(stage.y + (cast(float32)position.y + size / 2.0) * scale)
+    width := right - left
+    height := bottom - top
+    if width <= 0.0 || height <= 0.0 { return }
+    // Clip, rather than hide, a sprite moving through an edge gate.
+    clipped_left := left
+    clipped_top := top
+    clipped_right := right
+    clipped_bottom := bottom
+    if clipped_left < Snap(stage.x) { clipped_left = Snap(stage.x) }
+    if clipped_top < Snap(stage.y) { clipped_top = Snap(stage.y) }
+    if clipped_right > Snap(stage.x + stage.width) { clipped_right = Snap(stage.x + stage.width) }
+    if clipped_bottom > Snap(stage.y + stage.height) { clipped_bottom = Snap(stage.y + stage.height) }
+    if clipped_right <= clipped_left || clipped_bottom <= clipped_top { return }
+    fragment := Rectangle.{source.x + (clipped_left - left) / width * source.width,
+        source.y + (clipped_top - top) / height * source.height,
+        (clipped_right - clipped_left) / width * source.width,
+        (clipped_bottom - clipped_top) / height * source.height}
+    Picture(session, key, sheet,
+        Rectangle.{clipped_left, clipped_top, clipped_right - clipped_left, clipped_bottom - clipped_top}, fragment)
 }
 
 // Garden-only dressage: animated water frames and grass floor variants,
@@ -191,13 +227,78 @@ GRASS_TILES :: 9;
 
 Snap :: (value: float32) -> float32 { return cast(float32)cast(s32)(value + 0.5) }
 
-// Tile edges land on whole pixels, so scaled neighbours meet without seams.
-Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string) {
+// Shared bounds keep neighbouring textures and their outside edges aligned.
+TileBounds :: (stage: Rectangle, x: s32, y: s32) -> Rectangle {
     scale := stage.width / (cast(float32)board_columns * 16.0)
     left := Snap(stage.x + cast(float32)x * 16.0 * scale)
     top := Snap(stage.y + cast(float32)y * 16.0 * scale)
-    bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale) - left,
+    return Rectangle.{left, top, Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale) - left,
         Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale) - top}
+}
+
+WallMaterial :: (tile: s32) -> s32 {
+    value := tile & 127
+    if value == 20 || (value >= 50 && value <= 58) { return 20 }
+    if value == 21 || value == 22 { return value }
+    return 0
+}
+
+// Only exposed edges have an outline. Equal touching materials share one
+// continuous surface, including corners and walls painted in the editor.
+WallEdges :: (board: []u8, x: s32, y: s32, tile: s32) -> s32 {
+    material := WallMaterial(tile)
+    if material == 0 { return 0 }
+    mask: s32
+    for side: 0..3 {
+        nx := x
+        ny := y
+        if side == 0 { nx -= 1 }
+        else if side == 1 { ny -= 1 }
+        else if side == 2 { nx += 1 }
+        else { ny += 1 }
+        if !Inside(nx, ny) || WallMaterial(cast(s32)board[Index(nx, ny)]) != material {
+            mask |= 1 << cast(s32)side
+        }
+    }
+    return mask
+}
+
+DrawWallEdges :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, board: []u8) {
+    mask := WallEdges(board, x, y, tile)
+    if mask == 0 { return }
+    bounds := TileBounds(stage, x, y)
+    edge := Snap(stage.width / (cast(float32)board_columns * 16.0) * 1.2)
+    if edge < 1.0 { edge = 1.0 }
+    material := WallMaterial(tile)
+    dark := Color.{31, 76, 42, 255}
+    light := Color.{94, 143, 67, 255}
+    if material == 21 { dark = Color.{82, 83, 75, 255}; light = Color.{176, 174, 153, 255} }
+    else if material == 22 { dark = Color.{36, 105, 113, 255}; light = Color.{110, 190, 177, 255} }
+    for side: 0..3 {
+        if (mask & (1 << cast(s32)side)) == 0 { continue }
+        line := bounds
+        if side == 0 { line.width = edge }
+        else if side == 1 { line.height = edge }
+        else if side == 2 { line.x += line.width - edge; line.width = edge }
+        else { line.y += line.height - edge; line.height = edge }
+        unused Box(session, BoxProps.{.key = 20000 + key * 4 + cast(u64)side, .bounds = line,
+            .fill = ifx side < 2 then light else dark})
+    }
+}
+
+// Tile edges land on whole pixels, so scaled neighbours meet without seams.
+Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string) {
+    bounds := TileBounds(stage, x, y)
+    if WallMaterial(tile) == 20 && sheet == Sheet(1) {
+        // Sample one continuous forest field in board coordinates. Turning
+        // the board also turns the field, so every shared tile edge matches.
+        canopy := ifx board_columns == ROWS then "assets/art/forest-canopy-portrait.png" else "assets/art/forest-canopy.png"
+        unused Image(session, ImageProps.{.key = key, .asset_path = canopy, .bounds = bounds,
+            .source = Rectangle.{cast(float32)x * 16.0 * SHEET_SCALE, cast(float32)y * 16.0 * SHEET_SCALE,
+                16.0 * SHEET_SCALE, 16.0 * SHEET_SCALE},
+            .smooth = true, .alt_text = "Forest wall"})
+        return
+    }
     source := Rectangle.{cast(float32)(tile % 20) * 16.0,
         cast(float32)(tile / 20) * 16.0, 16.0, 16.0}
     if fancy_garden {
@@ -226,23 +327,32 @@ BoardIn :: (area: Rectangle) -> Rectangle {
 
 AppleFlash :: (session: Session, stage: Rectangle) {
     if game.apple_flash <= 0 { return }
-    frame := (game.apple_flash / 4) % 6
-    source := Rectangle.{112.0, 144.0, 30.0, 30.0}
-    offset := Vector2.{15.0, 15.0}
-    if frame == 1 { source = Rectangle.{142.0, 144.0, 28.0, 28.0}; offset = Vector2.{14.0, 14.0} }
-    else if frame == 2 { source = Rectangle.{170.0, 144.0, 28.0, 26.0}; offset = Vector2.{14.0, 13.0} }
-    else if frame == 3 { source = Rectangle.{198.0, 144.0, 26.0, 24.0}; offset = Vector2.{13.0, 12.0} }
-    else if frame == 4 { source = Rectangle.{224.0, 144.0, 28.0, 26.0}; offset = Vector2.{14.0, 13.0} }
-    else if frame == 5 { source = Rectangle.{252.0, 144.0, 28.0, 28.0}; offset = Vector2.{14.0, 14.0} }
+    // A quiet sparkle uses the same clean icon art as the interface.
+    if (game.apple_flash / 8) % 2 == 0 { return }
     scale := stage.width / (cast(float32)board_columns * 16.0)
-    bounds := Rectangle.{stage.x + (cast(float32)game.apple.x - offset.x) * scale,
-        stage.y + (cast(float32)game.apple.y - offset.y) * scale,
-        source.width * scale, source.height * scale}
-    Picture(session, 1401, Sheet(StageOf(game.level)), bounds, source)
+    SvgIcon(session, SvgIconProps.{
+        .bounds = Rectangle.{stage.x + cast(float32)(game.apple.x + 3) * scale,
+            stage.y + cast(float32)(game.apple.y - 13) * scale, 7.0 * scale, 7.0 * scale},
+        .shape = StarIcon.Shape, .color = Color.{255, 227, 116, 220}})
+}
+
+// Stone posts mark each open gate in both chapters. Their tiles and the
+// centre opening keep their existing collision data and width.
+DrawGatePosts :: (session: Session, stage: Rectangle) {
+    half := board_columns / 2
+    for gate: 0..1 {
+        row := ifx gate == 0 then board_rows - 1 else 0
+        centre := game.board[Index(half, row)]
+        if centre >= 20 && centre < 128 { continue }
+        for side: 0..1 {
+            column := half - 1 + cast(s32)side * 2
+            Tile(session, 11000 + cast(u64)gate * 2 + cast(u64)side, stage, column, row, 21, Sheet(0))
+        }
+    }
 }
 
 DrawBoard :: (session: Session, stage: Rectangle) {
-    fancy_garden = StageOf(game.level) == 0
+    fancy_garden = true
     tiles := Sheet(StageOf(game.level))
     sprites := tiles
     for y: 0..board_rows - 1 {
@@ -250,34 +360,41 @@ DrawBoard :: (session: Session, stage: Rectangle) {
             at := Index(x, y)
             Tile(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
                 cast(s32)(game.board[at] & 127), tiles)
+            DrawWallEdges(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
+                cast(s32)game.board[at], game.board[:])
         }
     }
+    DrawGatePosts(session, stage)
     if game.apples > 0 && game.apple.x >= 0 {
         Sprite(session, 1400, stage, game.apple, Rectangle.{0.0, 112.0, 16.0, 16.0}, sprites)
         AppleFlash(session, stage)
     }
-    index: s32 = 0
-    while index < game.length {
+    // Follow the full movement history with overlapping segments. Drawing
+    // tail first leaves the larger face cleanly above the neck.
+    index := game.length - 1
+    while index > 0 {
         column := 4
-        if index == 0 { column = game.direction }
-        else if index >= game.length - 4 { column = -1 }
-        else if index >= game.length - 8 { column = 6 }
-        else if index >= game.length - 12 { column = 5 }
-        if column >= 0 && (game.death_ticks == 0 || game.death_ticks / 2 > 2) {
+        from_tail := game.length - 1 - index
+        if from_tail < 2 { column = 6 }
+        else if from_tail < 8 { column = 5 }
+        if game.death_ticks == 0 || game.death_ticks / 2 > 2 {
             Sprite(session, 2000 + cast(u64)index, stage, game.worm[index],
-                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites)
+                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, WORM_BODY_SIZE)
         }
         if game.death_ticks > 0 && index < game.length - 4 {
             Sprite(session, 4000 + cast(u64)index, stage, game.worm[index],
                 Rectangle.{cast(float32)(5 - game.death_ticks / 4) * 16.0, 144.0, 16.0, 16.0}, sprites)
         }
-        index += 4
+        index -= WORM_DRAW_STEP
+    }
+    if game.length > 0 && (game.death_ticks == 0 || game.death_ticks / 2 > 2) {
+        Sprite(session, 2000, stage, game.worm[0],
+            Rectangle.{cast(float32)game.direction * 16.0, 48.0, 16.0, 16.0}, sprites, WORM_HEAD_SIZE)
     }
     for monster: 0..game.monster_count - 1 {
         Sprite(session, 6000 + cast(u64)monster, stage, game.monsters[monster].position,
             Rectangle.{cast(float32)(game.monsters[monster].kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites)
     }
-    DrawObjects(session, stage, game.objects[:], 9000, sprites, game_portrait)
     for particle: 0..99 {
         life := game.particles[particle].life
         if life > 1 && life <= 12 {
@@ -287,26 +404,9 @@ DrawBoard :: (session: Session, stage: Rectangle) {
     }
 }
 
-// A stage page: its cover filling the page. The editor page shows the
-// garden cover under a working veil, so it reads as a place, not a stage.
-DrawStagePage :: (session: Session, page: Rectangle, stage: s32) {
-    cover := ifx stage >= OPEN_STAGES then Cover(0) else Cover(stage)
-    unused Image(session, ImageProps.{.key = 9000 + cast(u64)stage, .asset_path = cover, .bounds = page,
-        .fit = ImageFit.ImageFitCover, .smooth = true, .alt_text = StageName(stage)})
-    if stage >= OPEN_STAGES {
-        unused Box(session, BoxProps.{.key = 9500 + cast(u64)stage, .bounds = page,
-            .fill = Color.{14, 34, 20, 190}})
-    }
-}
-
 OpenStages :: () {
     BoardSize(COLUMNS, ROWS)
     game.mode = MODE_STAGES
-    stage := StageOf(game.level)
-    if stage >= OPEN_STAGES { stage = 0 }
-    else { stage_levels[stage] = game.level % STAGE_LEVELS }
-    pager.selected = stage
-    pager.position = cast(float32)stage
 }
 
 // Levels play from the effective source: the owner's saved override when one
@@ -439,8 +539,6 @@ EditorExit :: () {
     editor.playtest = false
     editor.turned = false
     OpenStages()
-    pager.selected = OPEN_STAGES
-    pager.position = cast(float32)OPEN_STAGES
 }
 
 EditorPlaytest :: (now: s64) {
@@ -466,19 +564,10 @@ EditorSetApples :: (delta: s32) {
 
 // One palette swatch: the brush value it selects and its sheet art.
 PaletteEntry :: struct { brush: s32; source_x: float32; source_y: float32 }
-floor_entries: [4]PaletteEntry = .[
-    .{0, 0.0, 0.0}, .{1, 16.0, 0.0}, .{2, 32.0, 0.0}, .{22, 32.0, 16.0}];
-wall_entries: [3]PaletteEntry = .[
-    .{BRUSH_SMART_WALL, 160.0, 32.0}, .{20, 0.0, 16.0}, .{21, 16.0, 16.0}];
-object_entries: [7]PaletteEntry = .[
-    .{BRUSH_OBJECT + OBJECT_LOG, 0.0, 208.0},
-    .{BRUSH_OBJECT + OBJECT_FLOWERS, 16.0, 208.0},
-    .{BRUSH_OBJECT + OBJECT_MUSHROOM, 32.0, 208.0},
-    .{BRUSH_OBJECT + OBJECT_ROCK, 48.0, 208.0},
-    .{BRUSH_OBJECT + OBJECT_BUTTERFLY, 64.0, 208.0},
-    .{BRUSH_OBJECT + OBJECT_SNAIL, 96.0, 208.0},
-    .{BRUSH_OBJECT + OBJECT_BIRD, 112.0, 208.0}];
-
+floor_entries: [3]PaletteEntry = .[
+    .{0, 0.0, 0.0}, .{1, 16.0, 0.0}, .{2, 32.0, 0.0}];
+wall_entries: [4]PaletteEntry = .[
+    .{BRUSH_SMART_WALL, 160.0, 32.0}, .{20, 0.0, 16.0}, .{21, 16.0, 16.0}, .{22, 32.0, 16.0}];
 // One titled run of palette swatches. Returns the content cursor below it.
 DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32, label: string,
                     entries: []PaletteEntry, tiles: string,
@@ -509,7 +598,7 @@ DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32,
 // sampled small as the picture, the number as the caption, a green frame on
 // saved edits, the current level filled, one click to edit. Back returns.
 DrawLevelBrowser :: (session: Session, area: Rectangle) {
-    unused Box(session, BoxProps.{.key = 8700, .bounds = area, .fill = Color.{18, 26, 20, 255}})
+    unused Box(session, BoxProps.{.key = 8700, .bounds = area, .fill = Color.{229, 237, 210, 255}})
     if Button(session, ButtonProps.{.key = 8703, .bounds = Rectangle.{area.x + 10.0, area.y + 8.0, 88.0, 36.0},
             .label = "Back", .tone = ButtonTone.ButtonToneNeutral}) != 0 { editor.browsing = false; return }
     CentreText(session, 8701, "Levels",
@@ -541,14 +630,14 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
             return
         }
         unused Box(session, BoxProps.{.key = 8710 + cast(u64)index, .bounds = bounds,
-            .fill = ifx current then Color.{46, 125, 74, 250} else Color.{240, 242, 232, 26},
+            .fill = ifx current then Color.{207, 225, 175, 255} else Color.{251, 248, 231, 255},
             .border = ifx edited then Color.{120, 220, 150, 255} else Color.{240, 242, 232, 90},
             .radius = 10.0})
         // The picture: the level's rendered preview board.
         thumb := Rectangle.{bounds.x + 6.0, bounds.y + 6.0, bounds.width - 12.0, (bounds.width - 12.0) * 0.75}
         unused Image(session, ImageProps.{.key = 88000 + cast(u64)index,
             .asset_path = PreviewPath(StageOf(editor.level), cast(s32)index + 1),
-            .bounds = thumb, .fit = ImageFit.ImageFitStretch, .smooth = false, .alt_text = "Level board preview"})
+            .bounds = thumb, .fit = ImageFit.ImageFitStretch, .smooth = true, .alt_text = "Level board preview"})
         number := FormatInteger(cast(s64)(index + 1), editor_digits[:])
         CentreText(session, 8760 + cast(u64)index, number,
             Rectangle.{bounds.x, bounds.y + bounds.height - 26.0, bounds.width, 22.0}, 15)
@@ -563,7 +652,7 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
 DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     if editor.browsing { DrawLevelBrowser(session, area); return }
     stage_of_level := StageOf(editor.level)
-    fancy_garden = stage_of_level == 0
+    fancy_garden = true
     tiles := Sheet(stage_of_level)
     panel := Rectangle.{area.x + area.width - EDITOR_PANEL_WIDTH, area.y, EDITOR_PANEL_WIDTH, area.height}
     canvas := Rectangle.{area.x, area.y, area.width - EDITOR_PANEL_WIDTH, area.height}
@@ -582,12 +671,6 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
                 if editor.brush == BRUSH_SMART_WALL {
                     ApplyWallBrush(editor.board[:], cell_x, cell_y)
                     editor.dirty = true
-                } else if editor.brush >= BRUSH_OBJECT {
-                    object := cast(u8)(editor.brush - BRUSH_OBJECT)
-                    if editor.objects[at] != object {
-                        editor.objects[at] = object
-                        editor.dirty = true
-                    }
                 } else if editor.board[at] != cast(u8)editor.brush {
                     ApplyFloorBrush(editor.board[:], cell_x, cell_y, cast(u8)editor.brush)
                     editor.dirty = true
@@ -616,13 +699,13 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
             tile := raw & 127
             if kind >= 1 && kind <= 6 { tile = 0 }
             Tile(session, 5000 + cast(u64)at, stage, cast(s32)x, cast(s32)y, tile, tiles)
+            DrawWallEdges(session, 5000 + cast(u64)at, stage, cast(s32)x, cast(s32)y, tile, editor.board[:])
             if kind >= 1 && kind <= 6 {
                 Sprite(session, 6200 + cast(u64)at, stage, Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8},
                     Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, tiles)
             }
         }
     }
-    DrawObjects(session, stage, editor.objects[:], 6400, tiles, false)
     // The fixed entrance and exit the game carves at runtime, marked so a
     // level is never drawn without its way in and out. These keys sit below
     // the canvas tile range, which starts at 5000.
@@ -645,7 +728,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
         }
     }
 
-    unused Box(session, BoxProps.{.key = 8200, .bounds = panel, .fill = Color.{24, 28, 36, 235}})
+    unused Box(session, BoxProps.{.key = 8200, .bounds = panel, .fill = Color.{251, 248, 231, 255}})
     level_text := FormatInteger(cast(s64)(editor.level % STAGE_LEVELS + 1), editor_digits[:])
     TextLine(session, 8202, "LEVEL", Rectangle.{panel.x + 8.0, panel.y + 8.0, 50.0, 20.0}, 14)
     TextLine(session, 8203, level_text, Rectangle.{panel.x + 60.0, panel.y + 8.0, 30.0, 20.0}, 14)
@@ -681,15 +764,13 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     }
 
     inner := Rectangle.{panel.x + 8.0, panel.y + 104.0, panel.width - 16.0, panel.height - 254.0}
-    palette := Scroll(session, ScrollProps.{.key = 8214, .bounds = inner, .content_height = 300,
+    palette := Scroll(session, ScrollProps.{.key = 8214, .bounds = inner, .content_height = 180,
         .scroll_offset = editor.palette_scroll})
     editor.palette_scroll = palette.scroll_offset
     if palette.opened {
         cursor := DrawPalettePart(session, 8300, palette.content, 6, "FLOOR", floor_entries[:], tiles,
             pointer.x, pointer.y, pointer.pressed)
-        cursor = DrawPalettePart(session, 8400, palette.content, cursor, "WALL", wall_entries[:], tiles,
-            pointer.x, pointer.y, pointer.pressed)
-        unused DrawPalettePart(session, 8600, palette.content, cursor, "OBJECTS", object_entries[:], tiles,
+        cursor = DrawPalettePart(session, 8400, palette.content, cursor, "OBSTACLES", wall_entries[:], tiles,
             pointer.x, pointer.y, pointer.pressed)
         unused End(session)
     }
@@ -722,108 +803,45 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
             .label = "Playtest", .tone = ButtonTone.ButtonToneSuccess,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { EditorPlaytest(now) }
     if Button(session, ButtonProps.{.key = 8222, .bounds = Rectangle.{panel.x + 130.0, bottom + 88.0, 110.0, 40.0},
-            .label = "Stages", .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorExit() }
+            .label = "Title", .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorExit() }
 }
 
-// The title screen: swipe, drag or arrow between the stage covers and the
-// Level Editor page behind them. The play button starts the game where the
-// run stands; picking a level is the editor's business, not the title's.
-DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> bool {
-    gesture := SwipeArea(session, SwipeAreaProps.{.key = 800, .bounds = area,
-        .label = "Pages", .now = now, .min_distance = 48.0})
-    delta: s32 = 0
-    if gesture.swiped == 0 || key == 262 || key == 68 || key == 100 { delta = 1 }
-    if gesture.swiped == 2 || key == 263 || key == 65 || key == 97 { delta = -1 }
-    stage := Wrap(pager.selected)
-    editor_page := stage == OPEN_STAGES
-    level := ifx editor_page then game.level % STAGE_LEVELS else stage_levels[stage]
-    start := (key == Input.KeyEnter || key == 32) && !editor_page
-    open_editor := (key == Input.KeyEnter || key == 32) && editor_page
-
-    pager.selected += delta
-    elapsed := cast(float32)(now - pager.time)
-    pager.time = now
-    if elapsed < 0.0 || elapsed > 0.2 { elapsed = 0.016 }
-    rate := elapsed * 10.0
-    if rate > 1.0 { rate = 1.0 }
-    if gesture.down {
-        pager.position = cast(float32)pager.selected - (gesture.at_x - gesture.start_x) / area.width
-    } else {
-        pager.position += (cast(float32)pager.selected - pager.position) * rate
-        distance := pager.position - cast(float32)pager.selected
-        if distance < 0.002 && distance > -0.002 {
-            pager.selected = Wrap(pager.selected)
-            pager.position = cast(float32)pager.selected
-        }
+// One illustrated title, one Play button. Garden flows straight into Forest;
+// stage and level selection do not stand between the player and the game.
+DrawTitle :: (session: Session, area: Rectangle, key: s32) -> bool {
+    portrait := area.height > area.width
+    artwork := ifx portrait then "assets/art/title-portrait.png" else "assets/art/title.png"
+    art_bounds := area
+    source: Rectangle
+    // Wide landscape crops the lower grass first, preserving the logo.
+    if !portrait && area.width > area.height * 1.6 {
+        source = Rectangle.{0.0, 0.0, 1536.0, 1536.0 * area.height / area.width}
     }
-    first := cast(s32)pager.position
-    if cast(float32)first > pager.position { first -= 1 }
-    for page: first..first + 1 {
-        offset := (cast(float32)page - pager.position) * area.width
-        if offset <= -area.width || offset >= area.width { continue }
-        shown := Wrap(page)
-        DrawStagePage(session, Rectangle.{area.x + offset, area.y, area.width, area.height}, shown)
-    }
-
-    stage = Wrap(pager.selected)
-    banner := Rectangle.{area.x + (area.width - 430.0) / 2.0, area.y + 22.0, 430.0, 92.0}
-    unused Box(session, BoxProps.{.key = 801, .bounds = banner, .fill = Color.{240, 242, 232, 248}, .radius = 16.0})
-    unused Box(session, BoxProps.{.key = 811,
-        .bounds = Rectangle.{banner.x + 18.0, banner.y, banner.width - 36.0, 5.0},
-        .fill = Color.{46, 125, 74, 255}, .radius = 2.0})
-    title := StageName(stage)
-    subtitle := StageHero(stage)
-    if editor_page {
-        title = "LEVEL EDITOR"
-        subtitle = "Remix the Garden's levels, then play them"
-    }
-    unused Text(session, TextProps.{.key = 802, .bounds = Rectangle.{banner.x, banner.y + 14.0, banner.width, 40.0},
-        .text = title, .font = 32, .align = TextAlign.TextAlignCenter})
-    unused Text(session, TextProps.{.key = 803, .bounds = Rectangle.{banner.x, banner.y + 58.0, banner.width, 24.0},
-        .text = subtitle, .font = 16, .align = TextAlign.TextAlignCenter})
-    middle := area.y + area.height / 2.0 - 26.0
-    if Button(session, ButtonProps.{.key = 804, .bounds = Rectangle.{area.x + 14.0, middle, 52.0, 52.0},
-            .label = "Previous page", .icon_shape = "S2rr:M15 5L8 12L15 19", .icon_only = true,
-            .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
-        pager.selected -= 1
-    }
-    if Button(session, ButtonProps.{.key = 805, .bounds = Rectangle.{area.x + area.width - 66.0, middle, 52.0, 52.0},
-            .label = "Next page", .icon_shape = "S2rr:M9 5L16 12L9 19", .icon_only = true,
-            .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
-        pager.selected += 1
-    }
-    row := area.y + area.height - 78.0
-    centre := area.x + area.width / 2.0
-    // A quiet veil behind the controls keeps them readable on any cover.
-    unused Box(session, BoxProps.{.key = 812,
-        .bounds = Rectangle.{area.x, row - 22.0, area.width, area.height - (row - 22.0 - area.y)},
-        .fill = Color.{10, 18, 12, 130}})
-    if editor_page {
-        if Button(session, ButtonProps.{.key = 808, .bounds = Rectangle.{centre - 150.0, row, 300.0, 52.0},
-                .label = "Open the editor", .tone = ButtonTone.ButtonToneSuccess,
-                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { open_editor = true }
-    } else {
-        stage_levels[stage] = level
-        play_text := FormatInteger(cast(s64)(level + 1), level_digits[:])
-        if Button(session, ButtonProps.{.key = 808, .bounds = Rectangle.{centre - 150.0, row, 300.0, 52.0},
-                .label = "Play level", .detail = play_text, .tone = ButtonTone.ButtonToneSuccess,
-                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { start = true }
-    }
-    for page: cast(s32)0..PAGE_COUNT - 1 {
-        unused Box(session, BoxProps.{.key = 810 + cast(u64)page,
-            .bounds = Rectangle.{centre - cast(float32)(PAGE_COUNT - 1) * 12.0 + cast(float32)page * 24.0,
-                row - 26.0, 12.0, 12.0},
-            .fill = ifx page == stage then Color.{46, 125, 74, 235} else Color.{255, 255, 255, 210}, .radius = 6.0})
-    }
-    if open_editor {
-        editor.browsing = true
-        OpenEditor(game.level)
-    }
-    return start
+    unused Box(session, BoxProps.{.key = 800, .bounds = area, .fill = Color.{34, 66, 39, 255}})
+    unused Image(session, ImageProps.{.key = 801, .asset_path = artwork, .bounds = art_bounds, .source = source,
+        .fit = ImageFit.ImageFitCover, .smooth = true,
+        .alt_text = "Apfelwurm: a cheerful worm and an apple, from the garden into the forest"})
+    // The artwork keeps this lower strip clear for the real interactive button.
+    unused Box(session, BoxProps.{.key = 802,
+        .bounds = Rectangle.{area.x, area.y + area.height - 140.0, area.width, 140.0},
+        .fill = Color.{20, 47, 22, 0}, .fill_bottom = Color.{20, 47, 22, 170}, .has_fill_bottom = true})
+    width := area.width - 48.0
+    if width > 280.0 { width = 280.0 }
+    clicked := Button(session, ButtonProps.{.key = 808,
+        .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + area.height - 100.0, width, 60.0},
+        .label = "Play", .class_name = 13, .icon_shape = "F:M8 5L19 12L8 19Z", .pill = true,
+        .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneSuccess,
+        .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0
+    return clicked || key == Input.KeyEnter || key == 32
 }
 
 HandleInput :: (key: s32, now: s64) {
     if key == 77 || key == 109 { Audio.ToggleMute(); return }
+    if game.mode == MODE_STAGES && (key == 69 || key == 101) {
+        editor.browsing = true
+        OpenEditor(game.level)
+        return
+    }
     if game.mode == MODE_PLAYING {
         if key == 82 || key == 114 { ReloadLevel(game.level, now) }
         else { unused ApplyInput(*game, key) }
@@ -837,7 +855,8 @@ HandleInput :: (key: s32, now: s64) {
         if key == Input.KeyEnter || key == 32 { StartLevel(game.level, now, 1) }
         else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_VICTORY {
-        if key == Input.KeyEnter || key == 32 || key == Input.KeyEscape { LeavePlay() }
+        if key == Input.KeyEnter || key == 32 { StartLevel(0, now, 1) }
+        else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_EDITOR {
         if editor.browsing {
             if key == Input.KeyEscape || key == 76 || key == 108 || key == 69 || key == 101 {
@@ -859,102 +878,96 @@ HandleInput :: (key: s32, now: s64) {
 // steering keys turn with it, so Up always means visually up.
 game_portrait: bool;
 
-// Decoration objects above the tiles; the butterfly flaps on the water
-// clock. Object art sits in sheet row 208, one cell per object kind.
-DrawObjects :: (session: Session, stage: Rectangle, objects: []u8, key_base: u64, sheet: string, turn: bool) {
-    for y: 0..board_rows - 1 {
-        for x: 0..board_columns - 1 {
-            object := cast(s32)objects[Index(x, y)]
-            if object == 0 { continue }
-            column := object - 1
-            if object == OBJECT_BUTTERFLY { column += water_frame % 2 }
-            scale := stage.width / (cast(float32)board_columns * 16.0)
-            left := Snap(stage.x + cast(float32)x * 16.0 * scale)
-            top := Snap(stage.y + cast(float32)y * 16.0 * scale)
-            bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale) - left,
-                Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale) - top}
-            Picture(session, key_base + cast(u64)Index(x, y), sheet, bounds,
-                Rectangle.{cast(float32)column * 16.0, 208.0, 16.0, 16.0})
-        }
-    }
-    unused turn
-}
-
 // A swipe steers like the arrow keys: never into the worm's own neck.
 Steer :: (direction: s32) {
     if game.length >= 8 && direction != (game.direction + 2) % 4 { game.next_direction = direction }
 }
 
-// One cream value chip on the green bar; the default text colour stays
-// readable on it the way it does on the stage banner.
-Badge :: (session: Session, key: u64, text: string, bounds: Rectangle) {
-    unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = Color.{240, 242, 232, 248}, .radius = 7.0})
-    TextLine(session, key + 1, text, Rectangle.{bounds.x, bounds.y + 4.0, bounds.width, bounds.height - 8.0}, 13)
+// One icon and one number per status chip: widths stay fixed as lives and
+// scores grow, so they cannot collide with the pause target on a phone.
+StatusChip :: (session: Session, key: u64, bounds: Rectangle, shape: string, color: Color, value: string) {
+    unused Box(session, BoxProps.{.key = key, .bounds = bounds,
+        .fill = Color.{233, 238, 215, 255}, .radius = 16.0})
+    SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{bounds.x + 10.0, bounds.y + (bounds.height - 21.0) / 2.0, 21.0, 21.0},
+        .shape = shape, .color = color})
+    GameText(session, key + 1, value, Rectangle.{bounds.x + 37.0, bounds.y + (bounds.height - 24.0) / 2.0,
+        bounds.width - 43.0, 24.0}, 18)
 }
 
-// The green top bar: hearts for lives, the apple goal and the star score in
-// play, the level and its stage at the right edge; the stages and the editor
-// carry their hint instead of the play icons.
+LivesChip :: (session: Session, bounds: Rectangle) {
+    unused Box(session, BoxProps.{.key = 17, .bounds = bounds,
+        .fill = Color.{233, 238, 215, 255}, .radius = 16.0})
+    slots := game.lives
+    if slots < 3 { slots = 3 }
+    columns := slots
+    if columns > 5 { columns = 5 }
+    rows := (slots + columns - 1) / columns
+    size := (bounds.width - 16.0) / cast(float32)columns - 2.0
+    if size > 21.0 { size = 21.0 }
+    height_size := (bounds.height - 6.0) / cast(float32)rows - 2.0
+    if size > height_size { size = height_size }
+    width := cast(float32)columns * (size + 2.0) - 2.0
+    height := cast(float32)rows * (size + 2.0) - 2.0
+    for heart: 0..slots - 1 {
+        SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{bounds.x + (bounds.width - width) / 2.0 +
+                cast(float32)(heart % columns) * (size + 2.0), bounds.y + (bounds.height - height) / 2.0 +
+                cast(float32)(heart / columns) * (size + 2.0), size, size},
+            .shape = HeartIcon.Shape, .color = ifx heart < game.lives then Color.{218, 105, 104, 255}
+                else Color.{201, 211, 185, 255}})
+    }
+}
+
 DrawTopBar :: (session: Session, hud: Rectangle) {
-    unused Box(session, BoxProps.{.key = 10, .bounds = hud, .fill = Color.{31, 78, 46, 255}})
+    unused Box(session, BoxProps.{.key = 10, .bounds = hud, .fill = Color.{251, 248, 231, 255}})
+    unused Box(session, BoxProps.{.key = 15,
+        .bounds = Rectangle.{hud.x, hud.y + hud.height - 2.0, hud.width, 2.0}, .fill = Color.{207, 221, 184, 255}})
+    if game.mode == MODE_EDITOR {
+        if Button(session, ButtonProps.{.key = 8225, .bounds = Rectangle.{hud.x + 12.0, hud.y + 5.0, 124.0, 32.0},
+                .label = "Levels", .tone = ButtonTone.ButtonToneSuccess}) != 0 {
+            EditorSave(); editor.browsing = true
+        }
+        return
+    }
+    narrow := hud.width < 520.0
+    chapter := ifx StageOf(game.level) == 0 then "Garden" else "Forest"
+    GameText(session, 11, chapter, Rectangle.{hud.x + 16.0, hud.y + 10.0, 100.0, 22.0}, 17)
+    level_text := FormatInteger(cast(s64)(game.level % STAGE_LEVELS + 1), level_digits[:])
+    if narrow {
+        GameText(session, 12, level_text, Rectangle.{hud.x + 112.0, hud.y + 12.0, 26.0, 20.0}, 15)
+        GameText(session, 13, "/ 33", Rectangle.{hud.x + 138.0, hud.y + 12.0, 38.0, 20.0}, 14, true)
+    } else {
+        GameText(session, 12, level_text, Rectangle.{hud.x + 16.0, hud.y + 36.0, 26.0, 20.0}, 15)
+        GameText(session, 13, "/ 33", Rectangle.{hud.x + 42.0, hud.y + 36.0, 38.0, 20.0}, 14, true)
+    }
+    group_x := hud.x + 124.0
+    group_width := hud.width - 200.0
+    if group_width > 340.0 { group_x += (group_width - 340.0) / 2.0; group_width = 340.0 }
+    chip_y := hud.y + 16.0
+    chip_height: float32 = 40.0
+    if narrow {
+        group_x = hud.x + 12.0
+        group_width = hud.width - 24.0
+        chip_y = hud.y + 60.0
+        chip_height = 34.0
+    }
+    chip_width := (group_width - 16.0) / 3.0
+    apples_text := FormatInteger(cast(s64)game.apples, apple_digits[:])
+    score_text := FormatInteger(cast(s64)game.score, score_digits[:])
+    LivesChip(session, Rectangle.{group_x, chip_y, chip_width, chip_height})
+    StatusChip(session, 19, Rectangle.{group_x + chip_width + 8.0, chip_y, chip_width, chip_height}, AppleIcon.Shape, Color.{210, 78, 65, 255}, apples_text)
+    StatusChip(session, 21, Rectangle.{group_x + (chip_width + 8.0) * 2.0, chip_y, chip_width, chip_height}, StarIcon.Shape, Color.{210, 152, 46, 255}, score_text)
     if game.mode == MODE_PLAYING {
         if Button(session, ButtonProps.{.key = 59,
-                .bounds = Rectangle.{hud.x + hud.width - 140.0, hud.y + 3.0, 44.0, 36.0},
-                .label = "Ⅱ", .tone = ButtonTone.ButtonToneSuccess}) != 0 {
-            HandleInput(Input.KeyEscape, Timer.MonotonicMilliseconds())
-        }
-    }
-    icon: float32 = 20.0
-    top := hud.y + (hud.height - icon) / 2.0
-    at: float32 = hud.x + 12.0
-    level_number := game.level % STAGE_LEVELS
-    if game.mode == MODE_STAGES { level_number = stage_levels[Wrap(pager.selected)] }
-    else if game.mode == MODE_EDITOR { level_number = editor.level % STAGE_LEVELS }
-    level_text := FormatInteger(cast(s64)(level_number + 1), level_digits[:])
-    // In play the level sits on the right; in the editor it is the left sign.
-    if game.mode != MODE_EDITOR {
-        Badge(session, 11, level_text, Rectangle.{hud.x + hud.width - 92.0, hud.y + 10.0, 36.0, 22.0})
-        TextLine(session, 13, "/33", Rectangle.{hud.x + hud.width - 54.0, hud.y + 12.0, 30.0, 18.0}, 12)
-    }
-
-    if game.mode == MODE_EDITOR {
-        // The level sign is the way into the level selector, Shovey-style.
-        if Button(session, ButtonProps.{.key = 8225, .bounds = Rectangle.{hud.x + 12.0, hud.y + 5.0, 124.0, 32.0},
-                .label = "Levels", .detail = level_text, .tone = ButtonTone.ButtonToneSuccess,
-                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
-            EditorSave()
-            editor.browsing = true
-        }
-    } else {
-        lives := game.lives
-        if lives < 0 { lives = 0 }
-        shown := lives
-        if shown > 5 { shown = 5 }
-        for index: 0..shown - 1 {
-            SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{at, top, icon, icon},
-                .shape = HeartIcon.Shape, .color = Color.{236, 90, 90, 255}})
-            at += 23.0
-        }
-        if lives > 5 {
-            extra := FormatInteger(cast(s64)(lives - 5), lives_digits[:])
-            Badge(session, 17, extra, Rectangle.{at, hud.y + 10.0, 34.0, 22.0})
-            at += 40.0
-        }
-        at += 8.0
-        SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{at, top, icon, icon},
-            .shape = AppleIcon.Shape, .color = Color.{242, 240, 224, 255}})
-        apple_text := FormatInteger(cast(s64)game.apples, apple_digits[:])
-        Badge(session, 18, apple_text, Rectangle.{at + 24.0, hud.y + 10.0, 32.0, 22.0})
-        at += 66.0
-        SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{at, top, icon, icon},
-            .shape = StarIcon.Shape, .color = Color.{247, 203, 77, 255}})
-        score_text := FormatInteger(cast(s64)game.score, score_digits[:])
-        Badge(session, 19, score_text, Rectangle.{at + 24.0, hud.y + 10.0, 52.0, 22.0})
+                .bounds = Rectangle.{hud.x + hud.width - 60.0, hud.y + 8.0, 48.0, 48.0},
+                .label = "Pause", .icon_only = true, .class_name = 10,
+                .icon_shape = "F:M7 5H10V19H7ZM14 5H17V19H14Z", .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { HandleInput(Input.KeyEscape, Timer.MonotonicMilliseconds()) }
     }
 }
 
 #program_export
 Frame :: (session: Session, viewport: Rectangle) -> s32 {
+    GameStyles()
     now := Timer.MonotonicMilliseconds()
     // The game opens on the stages.
     if !game.started { game.started = true; OpenStages() }
@@ -967,21 +980,22 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     unused Step(*game, now)
     Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,
         game.level, game.apples, game.death_ticks, game.transition_ticks)
-    unused Box(session, BoxProps.{.key = 1, .bounds = viewport, .fill = Color.{0, 0, 0, 255}})
+    unused Box(session, BoxProps.{.key = 1, .bounds = viewport, .fill = Color.{229, 237, 210, 255}})
     // The stages screen is one full-bleed cover; every other mode carries the
     // green icon bar across the top with the board letterboxed below it, so
     // portrait and landscape both keep their proportions.
     showing_bar := game.mode != MODE_STAGES
-    bar_height: float32 = ifx showing_bar then 42.0 else 0.0
+    bar_height: float32 = 0.0
+    if showing_bar { bar_height = ifx viewport.width < 520.0 then 104.0 else 72.0 }
+    if game.mode == MODE_EDITOR { bar_height = 42.0 }
     hud := Rectangle.{viewport.x, viewport.y, viewport.width, bar_height}
     available_height := viewport.height - bar_height
     if available_height < 1.0 { available_height = 1.0 }
     stage := BoardIn(Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height})
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
-        if DrawStages(session, area, stage_key, cast(float64)now / 1000.0) {
-            chosen := Wrap(pager.selected)
-            StartLevel(chosen * STAGE_LEVELS + stage_levels[chosen], now, cast(u32)(now & 4294967295))
+        if DrawTitle(session, area, stage_key) {
+            StartLevel(0, now, cast(u32)(now & 4294967295))
         }
     } else if game.mode == MODE_EDITOR {
         area := Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height}
@@ -1001,8 +1015,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         }
     }
     if showing_bar { DrawTopBar(session, hud) }
-    if game.mode == MODE_PAUSED { Overlay(session, stage, "PAUSED", "Esc resumes   Q returns to the stages") }
-    else if game.mode == MODE_DIED { Overlay(session, stage, "GAME OVER", "Enter retries · Esc returns to the stages", game.score) }
-    else if game.mode == MODE_VICTORY { Overlay(session, stage, StageClear(StageOf(game.level)), "All 33 levels done · Enter returns to the stages", game.score) }
+    if game.mode == MODE_PAUSED { Overlay(session, viewport, "Paused", "Your worm is waiting.") }
+    else if game.mode == MODE_DIED { Overlay(session, viewport, "Game over", "Another apple adventure?", game.score) }
+    else if game.mode == MODE_VICTORY { Overlay(session, viewport, "You did it!", "Garden and Forest complete.", game.score) }
     return 0
 }

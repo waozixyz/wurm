@@ -1,0 +1,136 @@
+// A private-display UI probe, never installed or used as the game launcher.
+using UI :: #import "kryon/Widgets";
+#import "kryon/Desktop"
+#import "kryon/session"
+#import "kryon/tree"
+#import "kryon/tree_input"
+#import "kryon/Frame"
+#import "std/c_string"
+Timer :: #import "std/timer_linux";
+App :: #import "app";
+#import, file "game.zi";
+libc :: #system_library "libc";
+GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
+ParseNumber :: (text: *u8) -> s32 #foreign libc "atoi";
+Flush :: (stream: *void) -> s32 #foreign libc "fflush";
+
+Number :: (name: string, fallback: s32) -> s32 {
+    buffer: [64]u8
+    if !CopyCString(name, buffer[:]) { return fallback }
+    value := GetEnvironment(*buffer[0])
+    return ifx value == null then fallback else ParseNumber(value)
+}
+
+#program_export
+main :: () -> s32 {
+    width := Number("WURM_PROBE_WIDTH", 320)
+    height := Number("WURM_PROBE_HEIGHT", 568)
+    if !OpenDesktopSized(width, height) { return 1 }
+    defer CloseDesktop()
+    session := SessionOpen()
+    if !SessionValid(session) { return 2 }
+    defer CloseSession(session)
+    App.game_portrait = height > width
+    App.StartLevel(Number("WURM_PROBE_LEVEL", 0), Timer.MonotonicMilliseconds(), 1)
+    state: *Game = *App.game
+    // Behavioural adjacency cases: internal joins never receive borders,
+    // while an unlike material keeps its own exposed edge.
+    walls: [CELLS]u8
+    walls[Index(5, 5)] = 20
+    if App.WallEdges(walls[:], 5, 5, 20) != 15 { return 10 }
+    walls[Index(4, 5)] = 20
+    walls[Index(6, 5)] = 20
+    if App.WallEdges(walls[:], 5, 5, 20) != 10 { return 11 }
+    walls[Index(5, 4)] = 21
+    if App.WallEdges(walls[:], 5, 5, 20) != 10 { return 12 }
+    walls[Index(5, 4)] = 20
+    if App.WallEdges(walls[:], 5, 5, 20) != 8 { return 13 }
+    walls[Index(5, 6)] = 20
+    if App.WallEdges(walls[:], 5, 5, 20) != 0 { return 14 }
+    state.mode = Number("WURM_PROBE_MODE", 2)
+    state.score = 1234
+    if state.mode == 3 { state.lives = 0 }
+    // Deterministic, display-only scenes keep the gates and a long bent
+    // worm visible without running the clock or modifying saved levels.
+    scene := Number("WURM_PROBE_SCENE", 0)
+    if scene > 0 {
+        columns: s32 = ifx height > width then 30 else 40
+        rows: s32 = ifx height > width then 40 else 30
+        for y: 0..rows - 1 {
+            for x: 0..columns - 1 {
+                state.board[y * columns + x] = ifx x == 0 || x == columns - 1 || y == 0 || y == rows - 1 then 20 else 0
+                state.objects[y * columns + x] = 0
+            }
+        }
+        state.monster_count = 0
+        state.mode = 1
+        state.lives = 3
+        state.apples = 5
+        state.board[(rows - 1) * columns + columns / 2] = 0
+        if scene == 2 || scene == 5 {
+            state.apples = 0
+            state.board[columns / 2] = 0
+            state.board[(rows - 1) * columns + columns / 2] = 20
+        }
+        state.length = 84
+        head := Point.{columns / 2 * 16 + 8, rows / 2 * 16 + 8}
+        state.direction = 2
+        for segment: 0..83 {
+            if segment < 40 { state.worm[segment] = Point.{head.x - cast(s32)segment * 4, head.y} }
+            else { state.worm[segment] = Point.{head.x - 156, head.y + (cast(s32)segment - 39) * 4} }
+        }
+        if scene == 6 {
+            state.direction = 3
+            for segment: 0..83 {
+                if segment < 40 { state.worm[segment] = Point.{head.x, head.y - cast(s32)segment * 4} }
+                else { state.worm[segment] = Point.{head.x - (cast(s32)segment - 39) * 4, head.y - 156} }
+            }
+        }
+        state.apple = Point.{head.x + 80, head.y - 64}
+        if scene == 7 || scene == 8 {
+            for x: 5..columns - 6 {
+                state.board[Index(x, 6)] = 20
+                state.board[Index(x, 7)] = 20
+            }
+            for y: 8..rows - 10 {
+                state.board[Index(columns - 7, y)] = 20
+                state.board[Index(columns - 6, y)] = 20
+            }
+            for y: rows - 12..rows - 8 {
+                for x: 5..9 { state.board[Index(x, y)] = 21 }
+            }
+            state.length = 12
+        }
+        if scene == 4 || scene == 5 {
+            state.length = 12
+            state.direction = 1
+            head.y = ifx scene == 4 then rows * 16 - 2 else 2
+            for segment: 0..11 { state.worm[segment] = Point.{head.x, head.y + cast(s32)segment * 4} }
+        }
+        state.next_step = Timer.MonotonicMilliseconds() + 600000
+        if scene == 3 {
+            state.lives = 1
+            state.death_ticks = 1
+            Tick(state)
+        }
+    }
+    if Number("WURM_PROBE_FREEZE", 0) != 0 { state.next_step = Timer.MonotonicMilliseconds() + 600000 }
+    previous: s32 = -1
+    while PollDesktop() {
+        BeginDesktopFrame()
+        TreePointerUpdate(session, PollPointer())
+        key := DesktopPressedKey()
+        if key != 0 { KeyboardSend(session, key) }
+        viewport := DesktopViewport()
+        if cast(s32)BeginFrame(session, 1, viewport) != 0 { return 3 }
+        if App.Frame(session, viewport) != 0 { return 4 }
+        if cast(s32)EndFrame(session) != 0 || !EndDesktopFrame() { return 5 }
+        if previous != state.mode {
+            previous = state.mode
+            print("mode=% lives=%\n", previous, state.lives)
+            unused Flush(null)
+        }
+        PauseDesktop()
+    }
+    return 0
+}

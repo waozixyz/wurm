@@ -1,4 +1,5 @@
 build/
+backup/
 droid/
 ziran.local.toml
 __pycache__/

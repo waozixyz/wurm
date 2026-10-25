@@ -7,6 +7,7 @@ import select
 import shutil
 import signal
 import subprocess
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ def stop(process):
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
+    level_directory = Path(tempfile.mkdtemp(prefix="levels-", dir=OUT))
     env = dict(os.environ)
     for name in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS",
                  "SESSION_MANAGER", "DESKTOP_AUTOSTART_ID"):
@@ -34,7 +36,8 @@ def main():
                SDL_FRAMEBUFFER_ACCELERATION="0", SDL_AUDIODRIVER="dummy", LP_NUM_THREADS="1", ZIRAN_PAR_THREADS="1",
                # The editor writes level overrides into this private directory,
                # never into the repository's assets.
-               WURM_LEVEL_DIR=str(ROOT / "build/research/ui/levels"))
+               WURM_LEVEL_DIR=str(level_directory))
+    env["WURM_PROBE_SCENE"] = "0"
     read_fd, write_fd = os.pipe()
     server = app = None
     try:
@@ -54,7 +57,7 @@ def main():
         env["DISPLAY"] = ":" + number
         evidence = {"server_pid": server.pid, "server_executable": str(executable),
                     "server_command": [x.decode() for x in command if x], "display": env["DISPLAY"]}
-        app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT, env=env,
+        app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT / "build", env=env,
                                stdout=open(OUT / "app.log", "wb"), stderr=subprocess.STDOUT, start_new_session=True)
         window = None
         for attempt in range(100):
@@ -97,9 +100,13 @@ def main():
 
         time.sleep(0.35)
         capture("stages")
-        # The title opens on the Garden page; the play button starts the
-        # run's standing level. Q from a paused level returns to the title.
-        key("Return")
+        from PIL import Image
+        import numpy
+        title_pixels = numpy.asarray(Image.open(OUT / "stages.png").convert("RGB"))
+        assert ((title_pixels.max(axis=2) > 40).mean()) > 0.95, "title artwork is missing or black"
+        # Launch from build/, as the actual desktop launcher does, then use
+        # the single Play button. Q from a paused level returns to the title.
+        pointer(480, 530)
         time.sleep(0.4)
         key("space")
         time.sleep(0.15)
@@ -107,21 +114,22 @@ def main():
         key("q")
         time.sleep(0.4)
 
-        # The title pages: swipe or arrow to the Level Editor page and open
-        # the editor straight into its all-levels view.
+        # Arrow keys no longer page to another menu. The editor remains
+        # accessible through its existing desktop shortcut, outside Play.
         key("Right")
         time.sleep(0.4)
-        capture("title-editor")
-        pointer(480, 548)  # the Open the editor button
+        capture("title-no-pages")
+        returned = numpy.asarray(Image.open(OUT / "title-no-pages.png").convert("RGB"))
+        assert numpy.array_equal(returned[:450], title_pixels[:450]), "title unexpectedly changed pages"
+        key("e")
         time.sleep(0.3)
         capture("editor-browser")
         from PIL import Image
         import numpy
         browser = numpy.asarray(Image.open(OUT / "editor-browser.png").convert("RGB"), dtype=int)
-        # The browser is a dark ground (every channel under 64) holding
-        # light numbered cards; the editor canvas or a cover is neither.
-        dark = float(((browser < 64).all(axis=2)).mean())
-        assert dark > 0.5, f"browser ground is only {dark:.0%} dark"
+        # The browser now uses the same pale garden surface as the game UI.
+        pale = float(((browser[:, :, 0] > 210) & (browser[:, :, 1] > 220)).mean())
+        assert pale > 0.5, f"browser surface is only {pale:.0%} pale"
 
         # Card 33 of the browser, laid out with the same column search as
         # DrawLevelBrowser for the 960x600 window.
@@ -150,8 +158,8 @@ def main():
         capture("editor-painted")
         pointer(775, 518)  # Save
         time.sleep(0.3)
-        edited = ROOT / "build/research/ui/levels/level33.dat"
-        original = (ROOT / "assets/original/level33.dat").read_bytes()
+        edited = level_directory / "level33.dat"
+        original = (ROOT / "build/designed/level33.dat").read_bytes()
         painted = edited.read_bytes()
         assert len(painted) == 2401, f"override size {len(painted)}"
         assert painted[0] == original[0], "apple count unchanged"
@@ -163,7 +171,7 @@ def main():
         time.sleep(0.3)
         capture("editor-turned")
         turned = numpy.asarray(Image.open(OUT / "editor-turned.png").convert("RGB"), dtype=int)
-        side_columns = ((turned[100:500, 0:712] < 20).all(axis=2)).mean(axis=0)
+        side_columns = ((turned[100:500, 0:712, 0] > 220) & (turned[100:500, 0:712, 1] > 225)).mean(axis=0)
         assert (side_columns > 0.9).sum() > 100, "the canvas board did not stand up"
         key("t")
         time.sleep(0.2)
@@ -171,14 +179,14 @@ def main():
         time.sleep(0.3)
         capture("editor-exit")
         (OUT / "receipt.json").write_text(json.dumps(evidence, indent=2) + "\n")
-        print("Private UI local test played the standing level, browsed every level from the title's editor page and edited one.")
+        print("Private UI local test played the standing level, opened the editor with E, browsed every Garden level and edited one.")
 
         # A portrait window proves the mobile-first layout: WURM_WINDOW sizes
-        # the second launch, the green icon bar stays on top and the board
+        # the second launch, the cream status bar stays on top and the board
         # letterboxes below it.
         stop(app)
         env.update(WURM_WINDOW="480x700")
-        app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT, env=env,
+        app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT / "build", env=env,
                                stdout=open(OUT / "app-portrait.log", "wb"), stderr=subprocess.STDOUT,
                                start_new_session=True)
         portrait = None
@@ -197,6 +205,8 @@ def main():
         window = portrait
         time.sleep(0.5)
         capture("portrait-stages")
+        portrait_title = numpy.asarray(Image.open(OUT / "portrait-stages.png").convert("RGB"))
+        assert ((portrait_title.max(axis=2) > 40).mean()) > 0.95, "portrait title artwork is missing"
         key("Return")
         time.sleep(0.5)
         capture("portrait-level")
@@ -205,7 +215,7 @@ def main():
         assert picture.size == (480, 700), picture.size
         top = picture.crop((0, 0, 480, 42))
         top_green = sum(channel * count for channel, count in enumerate(top.histogram()[256:512]))
-        assert top_green > 480 * 42 * 90, "the icon bar is not green across the top"
+        assert top_green > 480 * 42 * 90, "the status bar did not render across the top"
         board = picture.crop((0, 42, 480, 698))
         # The turned board fills the portrait width edge to edge: a green
         # field taller than wide with no black bars at the sides.
@@ -219,6 +229,172 @@ def main():
                 black_columns += 1
         assert black_columns == 0, f"{black_columns} black side columns; the board did not turn"
         print("Private UI local test rendered the turned portrait board and the top icon bar.")
+
+        # Each dialog is exercised in a narrow phone portrait and a short
+        # phone landscape window. The probe is a separate, uninstalled host.
+        for width, height in ((320, 568), (640, 360)):
+            for mode, label in ((2, "paused"), (3, "game-over"), (5, "complete")):
+                stop(app)
+                name = f"{width}x{height}-{label}"
+                log = OUT / (name + ".log")
+                env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height), WURM_PROBE_MODE=str(mode))
+                app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
+                                       stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
+                for attempt in range(100):
+                    if app.poll() is not None:
+                        raise RuntimeError(f"{name} exited with {app.returncode}: {log.read_text()[-1000:]}")
+                    result = subprocess.run(["xdotool", "search", "--onlyvisible", "--pid", str(app.pid)],
+                                            env=env, capture_output=True, text=True)
+                    if result.returncode == 0 and result.stdout.strip():
+                        window = result.stdout.splitlines()[0]
+                        break
+                    time.sleep(.1)
+                else:
+                    raise RuntimeError("No owned dialog probe window")
+                time.sleep(.4)
+                capture(name)
+                picture = Image.open(OUT / (name + ".png")).convert("RGB")
+                assert picture.size == (width, height), name
+                # Both full-width actions must fit entirely inside the window.
+                compact = height < 400
+                card_height = (252 if compact else 292) if mode == 2 else (288 if compact else 340)
+                card_top = (height - card_height) / 2
+                primary_y = round(card_top + card_height - 96)
+                secondary_y = round(card_top + card_height - 36)
+                assert 24 < primary_y < secondary_y < height - 24, name
+                # Exercise each primary action and require a real state change.
+                pointer(width // 2, primary_y)
+                for attempt in range(30):
+                    if "mode=1" in log.read_text():
+                        break
+                    time.sleep(.05)
+                else:
+                    raise AssertionError(name + " primary action did not start/resume play")
+                key("space")
+                time.sleep(.15)
+                # Reopened pause uses the pause card, including after game over.
+                pause_height = 252 if compact else 292
+                pointer(width // 2, round((height + pause_height) / 2 - 36))
+                for attempt in range(30):
+                    if "mode=0" in log.read_text():
+                        break
+                    time.sleep(.05)
+                else:
+                    raise AssertionError(name + " Back to title action failed")
+        print("Private UI local test: all three dialogs fit portrait/landscape; all primary and title actions worked.")
+        for width, height in ((320, 568), (360, 800), (800, 360)):
+            stop(app)
+            env.update(WURM_WINDOW=f"{width}x{height}")
+            app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT / "build", env=env,
+                                   stdout=open(OUT / f"title-{width}x{height}.log", "wb"),
+                                   stderr=subprocess.STDOUT, start_new_session=True)
+            for attempt in range(100):
+                if app.poll() is not None:
+                    raise RuntimeError("Responsive title app exited")
+                result = subprocess.run(["xdotool", "search", "--onlyvisible", "--pid", str(app.pid)],
+                                        env=env, capture_output=True, text=True)
+                if result.returncode == 0 and result.stdout.strip():
+                    window = result.stdout.splitlines()[0]
+                    break
+                time.sleep(.1)
+            else:
+                raise RuntimeError("Responsive title did not open")
+            time.sleep(.3)
+            capture(f"title-{width}x{height}")
+            pointer(width // 2, height - 70)
+            time.sleep(.15)
+            key("space")
+            capture(f"play-{width}x{height}")
+        print("Private UI local test: title and Play worked on small/tall portraits and wide landscape.")
+
+        # Show the full, bent worm and both gates without a modal obscuring
+        # them. These scenes use only the separate test host and no clock.
+        for width, height in ((960, 600), (320, 568)):
+            for scene, label in ((1, "entrance"), (2, "exit"), (3, "zero-lives"),
+                                 (4, "entering"), (5, "leaving"), (6, "downward"), (7, "walls"), (8, "forest-walls")):
+                stop(app)
+                name = f"gameplay-{width}x{height}-{label}"
+                log = OUT / (name + ".log")
+                env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height),
+                           WURM_PROBE_SCENE=str(scene), WURM_PROBE_MODE="1",
+                           WURM_PROBE_LEVEL="33" if scene == 8 else "0")
+                app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
+                                       stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
+                for attempt in range(100):
+                    if app.poll() is not None:
+                        raise RuntimeError(f"{name} exited: {log.read_text()[-1000:]}")
+                    result = subprocess.run(["xdotool", "search", "--onlyvisible", "--pid", str(app.pid)],
+                                            env=env, capture_output=True, text=True)
+                    if result.returncode == 0 and result.stdout.strip():
+                        window = result.stdout.splitlines()[0]
+                        break
+                    time.sleep(.1)
+                else:
+                    raise RuntimeError("No owned gameplay probe window")
+                time.sleep(.3)
+                capture(name)
+                if scene == 3:
+                    assert "mode=3 lives=0" in log.read_text(), "game over did not stop at zero lives"
+                    continue
+                picture = numpy.asarray(Image.open(OUT / (name + ".png")).convert("RGB"), dtype=int)
+                columns, rows = (30, 40) if height > width else (40, 30)
+                bar = 104 if width < 520 else 72
+                scale = min(width / (columns * 16), (height - bar) / (rows * 16))
+                left = (width - columns * 16 * scale) / 2
+                top = bar + (height - bar - rows * 16 * scale) / 2
+
+                def patch(x0, y0, x1, y1):
+                    return picture[max(0, round(y0)):min(height, round(y1)),
+                                   max(0, round(x0)):min(width, round(x1))]
+
+                def orange(pixels):
+                    return ((pixels[:, :, 0] > 90) & (pixels[:, :, 1] > 35) &
+                            (pixels[:, :, 2] < 140) & (pixels[:, :, 0] > pixels[:, :, 1] * 1.15))
+
+                row = 0 if scene in (2, 5) else rows - 1
+                for column in (columns // 2 - 1, columns // 2 + 1):
+                    stone = patch(left + (column * 16 + 2) * scale, top + (row * 16 + 2) * scale,
+                                  left + (column * 16 + 14) * scale, top + (row * 16 + 14) * scale)
+                    neutral = stone.max(axis=2) - stone.min(axis=2) < 55
+                    assert neutral.mean() > .25, name + " is missing a stone gate post"
+                head_x = columns // 2 * 16 + 8
+                head_y = rows // 2 * 16 + 8
+                if scene == 1:
+                    chip_x = 12 if width < 520 else 334
+                    chip_y = 60 if width < 520 else 16
+                    hearts = patch(chip_x, chip_y, chip_x + (width - 40) / 3 if width < 520 else chip_x + 108, chip_y + 34)
+                    red = (hearts[:, :, 0] > 180) & (hearts[:, :, 0] > hearts[:, :, 1] * 1.5)
+                    occupied = red.any(axis=0)
+                    groups = int(occupied[0]) + int((occupied[1:] & ~occupied[:-1]).sum())
+                    assert groups == 3, name + " must show three separate life hearts"
+                if scene in (1, 2):
+                    ribbon = orange(patch(left + (head_x - 140) * scale, top + head_y * scale - 2,
+                                          left + (head_x - 32) * scale, top + head_y * scale + 3))
+                    assert ribbon.any(axis=0).mean() > .9, name + " has large gaps between body segments"
+                    face = orange(patch(left + (head_x - 10) * scale, top + (head_y - 13) * scale,
+                                        left + (head_x + 10) * scale, top + (head_y + 13) * scale)).any(axis=1)
+                    body = orange(patch(left + (head_x - 61) * scale, top + (head_y - 13) * scale,
+                                        left + (head_x - 59) * scale, top + (head_y + 13) * scale)).any(axis=1)
+                    face_rows, body_rows = numpy.flatnonzero(face), numpy.flatnonzero(body)
+                    assert len(body_rows) > 3 and len(face_rows) > 3, "worm artwork missing"
+                    assert face_rows[-1] - face_rows[0] >= body_rows[-1] - body_rows[0], "head is smaller than the body"
+                elif scene == 6:
+                    head = patch(left + (head_x - 12) * scale, top + (head_y - 12) * scale,
+                                 left + (head_x + 12) * scale, top + (head_y + 12) * scale)
+                    blue = (head[:, :, 2] > head[:, :, 0] * 1.1) & (head[:, :, 2] > head[:, :, 1] * 1.05)
+                    assert blue.any(), name + " has no visible directional eyes"
+                elif scene in (7, 8):
+                    wall = patch(left + 6 * 16 * scale, top + (6 * 16 + 3) * scale,
+                                 left + (columns - 7) * 16 * scale, top + (8 * 16 - 3) * scale)
+                    if scene == 7:
+                        assert (wall[:, :, 0] < 130).mean() > .9, name + " has gaps in the joined hedge"
+                    else:
+                        assert wall[:, :, 1].mean() < 125, name + " has missing forest canopy"
+                else:
+                    opening = patch(left + columns // 2 * 16 * scale, top + row * 16 * scale,
+                                    left + (columns // 2 + 1) * 16 * scale, top + (row + 1) * 16 * scale)
+                    assert orange(opening).sum() > 2, name + " hides the head while it passes through the gate"
+        print("Private UI local test: stone gates, long spaced body, directional head and zero-life game over passed in landscape and portrait.")
     finally:
         os.close(read_fd)
         stop(app)

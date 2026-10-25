@@ -15,7 +15,7 @@ main :: () -> s32 {
     if Audio.device == 0 { return 2 }
     defer CloseDevice(Audio.device)
     for index: 0..3 { if Audio.effects[index].count <= 0 { return 3 } }
-    for track: 1..3 {
+    for track: 1..2 {
         Audio.ChangeMusic(cast(s32)track)
         if Audio.music_bytes < 44100 { return 4 }
         Audio.PlayEffect(3)
@@ -28,6 +28,6 @@ main :: () -> s32 {
     if !heard { return 6 }
     Audio.ToggleMute()
     if !Audio.muted { return 7 }
-    print("Audio local test: four effects and all three stage scores mixed.\n")
+    print("Audio local test: four effects and both nature chapters mixed.\n")
     return 0
 }

@@ -34,7 +34,7 @@ main :: () -> s32 {
     board[Index(20, 1)] = 128
     Expect(LevelBlockages(board[:]) == 1, "false wall keeps the exit passable")
 
-    for level: 0..98 {
+    for level: 0..LEVEL_COUNT - 1 {
         Custom.EffectiveBoard(cast(s32)level, board[:])
         Expect(LevelBlockages(board[:]) == 0, "recovered originals stay playable")
     }

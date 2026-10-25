@@ -9,49 +9,69 @@ using UI :: #import "kryon/Widgets";
 App :: #import "app";
 Game :: #import, file "game.zi";
 File :: #import "std/file_linux";
+using Vectors :: #import "std/vec";
 #import "std/c_string";
 libc :: #system_library "libc";
 GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
 ParseNumber :: (text: *u8) -> s32 #foreign libc "atoi";
-
-Pixels :: struct { values: [307200]u32; }
-pictures: [6]Pixels;
 
 U32 :: (bytes: []u8, at: s32) -> u32 {
     return cast(u32)bytes[at] | (cast(u32)bytes[at + 1] << 8) |
         (cast(u32)bytes[at + 2] << 16) | (cast(u32)bytes[at + 3] << 24)
 }
 
-LoadPicture :: (slot: s32, png: string, binary: string) -> bool {
+ReadPicture :: (binary: string) -> (pixels: Vec(u32), width: s32, height: s32) {
+    pixels: Vec(u32)
+    width: s32
+    height: s32
     file := File.OpenRead(binary)
-    if !file.valid { return false }
-    defer File.CloseFile(file)
-    bytes: [4096]u8
-    if File.ReadAt(file, bytes[0:8], 0) != 8 { return false }
-    width := cast(s32)U32(bytes[:], 0)
-    height := cast(s32)U32(bytes[:], 4)
-    count := width * height
-    if width <= 0 || height <= 0 || count > 307200 { return false }
-    pixel: s32 = 0
-    while pixel < count {
-        next := count - pixel
-        if next > 1024 { next = 1024 }
-        if File.ReadAt(file, bytes[0:next * 4], 8 + cast(s64)pixel * 4) != next * 4 { return false }
-        for index: 0..next - 1 { pictures[slot].values[pixel + index] = U32(bytes[:], cast(s32)index * 4) }
-        pixel += next
+    if file.valid {
+        bytes: [4096]u8
+        if File.ReadAt(file, bytes[0:8], 0) == 8 {
+            width = cast(s32)U32(bytes[:], 0)
+            height = cast(s32)U32(bytes[:], 4)
+            if width <= 0 || height <= 0 || width > 2048 || height > 2048 || width * height > 2097152 {
+                width = 0; height = 0
+            }
+            count := width * height
+            pixel: s32 = 0
+            ok := true
+            while pixel < count && ok {
+                next := count - pixel
+                if next > 1024 { next = 1024 }
+                if File.ReadAt(file, bytes[0:next * 4], 8 + cast(s64)pixel * 4) != next * 4 {
+                    ok = false
+                } else {
+                    for index: 0..next - 1 {
+                        if !VecPush(pixels, U32(bytes[:], cast(s32)index * 4)) { ok = false; break }
+                    }
+                }
+                pixel += next
+            }
+            if !ok { width = 0; height = 0 }
+        }
+        File.CloseFile(file)
     }
-    return PixmapSetImage(slot, png, width, height, pictures[slot].values[0:count])
+    return pixels, width, height
 }
 
 #program_export
 main :: () -> s32 {
-    // Covers are registered at 640x400 under their full-size paths.
-    if !LoadPicture(0, "assets/art/garden.png", "assets/art/garden.argb") ||
-        !LoadPicture(1, "assets/art/space.png", "assets/art/space.argb") ||
-        !LoadPicture(2, "assets/art/factory.png", "assets/art/factory.argb") ||
-        !LoadPicture(3, "assets/art/garden-cover.png", "assets/art/garden-cover.argb") ||
-        !LoadPicture(4, "assets/art/space-cover.png", "assets/art/space-cover.argb") ||
-        !LoadPicture(5, "assets/art/factory-cover.png", "assets/art/factory-cover.argb") { return 1 }
+    // Keep the owned image buffers in this scope while the raster host
+    // borrows them. Full-size title pixels preserve desktop crop coordinates.
+    garden, garden_w, garden_h := ReadPicture("assets/art/garden.argb")
+    forest, forest_w, forest_h := ReadPicture("assets/art/forest.argb")
+    title, title_w, title_h := ReadPicture("assets/art/title.argb")
+    portrait, portrait_w, portrait_h := ReadPicture("assets/art/title-portrait.argb")
+    canopy, canopy_w, canopy_h := ReadPicture("assets/art/forest-canopy.argb")
+    canopy_turned, canopy_turned_w, canopy_turned_h := ReadPicture("assets/art/forest-canopy-portrait.argb")
+    if !PixmapSetImage(0, "assets/art/garden.png", garden_w, garden_h, VecSlice(garden, 0, garden.count)) ||
+        !PixmapSetImage(1, "assets/art/forest.png", forest_w, forest_h, VecSlice(forest, 0, forest.count)) ||
+        !PixmapSetImage(2, "assets/art/title.png", title_w, title_h, VecSlice(title, 0, title.count)) ||
+        !PixmapSetImage(3, "assets/art/title-portrait.png", portrait_w, portrait_h, VecSlice(portrait, 0, portrait.count)) ||
+        !PixmapSetImage(4, "assets/art/forest-canopy.png", canopy_w, canopy_h, VecSlice(canopy, 0, canopy.count)) ||
+        !PixmapSetImage(5, "assets/art/forest-canopy-portrait.png", canopy_turned_w, canopy_turned_h,
+            VecSlice(canopy_turned, 0, canopy_turned.count)) { return 1 }
     name: [32]u8
     unused CopyCString("WORM_SHOT_LEVEL", name[:])
     level := GetEnvironment(*name[0])
@@ -81,11 +101,13 @@ main :: () -> s32 {
     if !SessionValid(session) { return 2 }
     defer { PixmapCloseWorkers(); CloseSession(session) }
     viewport := Rectangle.{0.0, 0.0, cast(float32)PixmapWidth, cast(float32)PixmapHeight}
-    for frame: 0..1 {
+    frame: s32 = 0
+    while frame < 2 {
         PixmapBegin(cast(u32)PixmapBackground)
         if cast(s32)BeginFrame(session, 1, viewport) != 0 { return 3 }
         if App.Frame(session, viewport) != 0 { return 4 }
         if cast(s32)EndFrame(session) != 0 { return 5 }
+        frame += 1
     }
     PixmapPresent()
     return 0

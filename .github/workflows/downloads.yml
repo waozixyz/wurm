@@ -1,0 +1,152 @@
+name: Downloads
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wurm-downloads
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Game tests and signed Android APKs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      ZIRAN_PAR_THREADS: '1'
+      MAKEFLAGS: -j1
+      OMP_NUM_THREADS: '1'
+      YUE_DESKTOP_RECOVERY: '0'
+    defaults:
+      run:
+        working-directory: waozixyz/wurm
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          path: waozixyz/wurm
+          persist-credentials: false
+      - name: Read the locked compiler and release version
+        id: version
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          print('compiler=' + json.loads(Path('ziran.lock').read_text())['toolchain']['commit'])
+          print('version=' + json.loads(Path('version.json').read_text())['version'])
+          PY
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          repository: ziranlang/ziran
+          ref: ${{ steps.version.outputs.compiler }}
+          path: ziranlang/ziran
+          persist-credentials: false
+      - name: Install native and private-display test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config python3-pil python3-numpy libssl-dev libsdl2-dev libcairo2-dev libfreetype-dev libfontconfig-dev libpango1.0-dev libx11-dev libxcursor-dev libxinerama-dev libxrandr-dev libxi-dev libgl1-mesa-dev xvfb xauth xdotool imagemagick
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install the pinned Android SDK tools
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358' 'build-tools;36.0.0' 'platforms;android-36' 'cmake;3.22.1'
+      - name: Build the locked compiler
+        working-directory: ziranlang/ziran
+        run: |
+          env -u DISPLAY -u WAYLAND_DISPLAY make -j1
+          echo "$PWD/build/bin" >> "$GITHUB_PATH"
+      - name: Fetch only locked packages
+        run: ziran fetch --locked
+      - name: Verify release metadata
+        run: |
+          sh update_version.sh
+          git diff --exit-code -- version.json
+      - name: Run the game and asset tests
+        run: sh tests/run_local.sh
+      - name: Exercise the app on its own private display
+        run: python3 tests/private_ui_test.py
+      - name: Build both ARM architectures in one production APK
+        run: python3 tools/build_android.py --release --abi universal
+      - name: Sign and verify the standard and F-Droid-style downloads
+        env:
+          KEYSTORE: ${{ secrets.WURM_ANDROID_KEYSTORE }}
+          PASSWORD: ${{ secrets.WURM_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$KEYSTORE" && test -n "$PASSWORD"
+          trap 'rm -f "$RUNNER_TEMP/wurm-release.p12" "$RUNNER_TEMP/wurm-password"' EXIT
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/wurm-release.p12"
+          printf '%s\n' "$PASSWORD" > "$RUNNER_TEMP/wurm-password"
+          python3 tools/android_release.py sign build/android/Apfelwurm-universal-release-unsigned.apk \
+            --keystore "$RUNNER_TEMP/wurm-release.p12" --password-file "$RUNNER_TEMP/wurm-password"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wurm-android
+          path: waozixyz/wurm/build/downloads/*.apk
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: wurm-verification
+          path: |
+            waozixyz/wurm/build/research/ui/*.png
+            waozixyz/wurm/build/research/ui/*.log
+            waozixyz/wurm/backup/android-release/verification.json
+          retention-days: 7
+
+  release:
+    name: Publish the new changelog version
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wurm-android
+          path: build/downloads
+      - name: Require both download names and extract release notes
+        run: |
+          test -f "build/downloads/wurm-v$VERSION.apk"
+          test -f "build/downloads/wurm-$VERSION-fdroid.apk"
+          cmp "build/downloads/wurm-v$VERSION.apk" "build/downloads/wurm-$VERSION-fdroid.apk"
+          python3 - <<'PY' > build/release-notes.md
+          import os, re
+          from pathlib import Path
+          text = Path('CHANGELOG.md').read_text()
+          section = re.search(r'^## \[' + re.escape(os.environ['VERSION']) + r'\] - .*?\n(.*?)(?=^## |\Z)', text, re.M | re.S)
+          assert section
+          print(section[1].strip())
+          PY
+      - name: Publish this version only after its downloads are ready
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          state=$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null || echo missing)
+          if [ "$state" = false ]; then
+            echo "Apfelwurm $VERSION is already published; downloads remain available as this run's artifacts."
+            exit 0
+          fi
+          if [ "$state" = missing ]; then
+            gh release create "$tag" --draft --target "$GITHUB_SHA" --title "Apfelwurm $VERSION" --notes-file build/release-notes.md
+          fi
+          gh release upload "$tag" "build/downloads/wurm-v$VERSION.apk" "build/downloads/wurm-$VERSION-fdroid.apk" --clobber
+          gh release edit "$tag" --draft=false --latest

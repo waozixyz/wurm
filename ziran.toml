@@ -40,6 +40,12 @@ backend = "pixmap"
 library = "SDL2"
 host = "src/shot_host.zi"
 
+# Private Xvfb tests exercise all dialogs without changing the shipped host.
+[tool.kryon.profiles.modal-test]
+backend = "desktop"
+library = "SDL2"
+host = "src/modal_test_host.zi"
+
 [tool.kryon.install]
 profile = "desktop"
 name = "Apfelwurm"
