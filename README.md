@@ -70,6 +70,7 @@ redirects where overrides are read and written.
 
 ```sh
 ziran run --locked desktop
+python3 tools/build_android.py --abi arm64-v8a
 ziran run --locked shot > build/stages.ppm
 WORM_SHOT_LEVEL=99 ziran run --locked shot > build/level-99.ppm
 ziran check --locked
@@ -79,6 +80,12 @@ sh tests/run_local.sh
 `tests/private_ui_test.py` additionally exercises the real desktop build on
 its own verified Xvfb server. It never uses the owner's desktop. The audio
 test uses SDL's dummy drivers and verifies that all effects and scores mix.
+
+The Android debug APK is written to `build/android/`. Use `--abi armeabi-v7a`
+for the development Moto. `tests/android_controls_test.py APK` verifies touch
+start, pause, resume, steering and return to the stages on that USB device.
+On phones, swipe over the board to steer, use the top pause button, and tap
+the pause or game-over card's buttons to continue or return to the stages.
 
 ## Art and sound
 
