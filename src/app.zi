@@ -21,12 +21,18 @@
     using UI :: #import "kryon/Widgets";
 }
 #import "kryon/joystick";
+#import "kryon/direction_pad";
+Controls :: #import, file "controls.zi";
+Progress :: #import, file "progress.zi";
+FingerSwipe :: #import "mingcute/mingcute_filled_finger_swipe";
 Touch :: #import, file "steering.zi";
 #import "kryon/svg_icon_props"
 #import "kryon/svg_icon_widget"
 HeartIcon :: #import "mingcute/mingcute_filled_heart";
 AppleIcon :: #import "mingcute/mingcute_filled_apple_fruit";
 StarIcon :: #import "mingcute/mingcute_filled_star";
+LockIcon :: #import "mingcute/mingcute_filled_lock";
+CheckIcon :: #import "mingcute/mingcute_filled_check_circle";
 Input :: #import "kryon/input_protocol";
 #if #defined(WURM_PORTABLE) {
     Timer :: #import "portable_runtime";
@@ -43,27 +49,29 @@ Input :: #import "kryon/input_protocol";
 Custom :: #import, file "custom_levels.zi";
 
 #if #defined(WURM_PORTABLE) {
-    ART_MEADOW :: "assets/wurm/art/meadow.png";
-    ART_LEAFWOOD :: "assets/wurm/art/leafwood.png";
-    ART_PINEWOOD :: "assets/wurm/art/pinewood.png";
-    ART_LAKE :: "assets/wurm/art/lake.png";
-    ART_MOUNTAINS :: "assets/wurm/art/mountains.png";
+    ART_MEADOW :: "assets/wurm/art/campaign-meadow.png";
+    ART_LEAFWOOD :: "assets/wurm/art/campaign-leafwood.png";
+    ART_PINEWOOD :: "assets/wurm/art/campaign-pinewood.png";
+    ART_LAKE :: "assets/wurm/art/campaign-lake.png";
+    ART_MOUNTAINS :: "assets/wurm/art/campaign-mountains.png";
     ART_CANOPY :: "assets/wurm/art/forest-canopy.png";
     ART_CANOPY_PORTRAIT :: "assets/wurm/art/forest-canopy-portrait.png";
+    ART_COVERS :: "assets/wurm/art/stage-covers.png";
     ART_TITLE :: "assets/wurm/art/title.png";
     ART_TITLE_PORTRAIT :: "assets/wurm/art/title-portrait.png";
-    ART_PREVIEWS :: "assets/wurm/art/previews/";
+    ART_PREVIEWS :: "assets/wurm/art/campaign-previews/";
 } else {
-    ART_MEADOW :: "assets/art/meadow.png";
-    ART_LEAFWOOD :: "assets/art/leafwood.png";
-    ART_PINEWOOD :: "assets/art/pinewood.png";
-    ART_LAKE :: "assets/art/lake.png";
-    ART_MOUNTAINS :: "assets/art/mountains.png";
+    ART_MEADOW :: "assets/art/campaign-meadow.png";
+    ART_LEAFWOOD :: "assets/art/campaign-leafwood.png";
+    ART_PINEWOOD :: "assets/art/campaign-pinewood.png";
+    ART_LAKE :: "assets/art/campaign-lake.png";
+    ART_MOUNTAINS :: "assets/art/campaign-mountains.png";
     ART_CANOPY :: "assets/art/forest-canopy.png";
     ART_CANOPY_PORTRAIT :: "assets/art/forest-canopy-portrait.png";
+    ART_COVERS :: "assets/art/stage-covers.png";
     ART_TITLE :: "assets/art/title.png";
     ART_TITLE_PORTRAIT :: "assets/art/title-portrait.png";
-    ART_PREVIEWS :: "assets/art/previews/";
+    ART_PREVIEWS :: "assets/art/campaign-previews/";
 }
 
 PLAY_STEERING_KEY :: 100000;
@@ -129,11 +137,12 @@ Sheet :: (stage: s32) -> string {
     return ART_MEADOW
 }
 preview_path: [64]u8;
-PreviewPath :: (stage: s32, number: s32) -> string {
+PreviewPath :: (stage: s32, number: s32, portrait: bool = false) -> string {
     digits: [16]u8
     at := CopyInto(preview_path[:], 0, ART_PREVIEWS)
     at = CopyInto(preview_path[:], at, StageKey(stage))
     at = CopyInto(preview_path[:], at, FormatInteger(cast(s64)number, digits[:]))
+    if portrait { at = CopyInto(preview_path[:], at, "-portrait") }
     at = CopyInto(preview_path[:], at, ".png")
     preview_path[at] = 0
     return TextUntilNul(preview_path[:])
@@ -232,6 +241,7 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     if width > 360.0 { width = 360.0 }
     height: float32 = ifx compact then 252.0 else 292.0
     if score >= 0 { height = ifx compact then 288.0 else 340.0 }
+    if game.mode == MODE_PAUSED { height += 56.0 }
     card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0, width, height}
     unused Box(session, BoxProps.{.key = 51,
         .bounds = Rectangle.{card.x, card.y + 6.0, card.width, card.height},
@@ -261,12 +271,23 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     }
     primary := ifx game.mode == MODE_PAUSED then "Resume" else "Try again"
     if game.mode == MODE_VICTORY { primary = "Play again" }
+    primary_offset: float32 = ifx game.mode == MODE_PAUSED then 176.0 else 120.0
     if Button(session, ButtonProps.{.key = 57,
-            .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 120.0, card.width - 40.0, 48.0},
+            .bounds = Rectangle.{card.x + 20.0, card.y + card.height - primary_offset, card.width - 40.0, 48.0},
             .label = primary, .class_name = 10, .tone = ButtonTone.ButtonToneSuccess,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
         key: s32 = cast(s32)(ifx game.mode == MODE_PAUSED then Input.KeyEscape else Input.KeyEnter)
         HandleInput(key, Timer.MonotonicMilliseconds())
+    }
+    if game.mode == MODE_PAUSED {
+        if Button(session, ButtonProps.{.key = 61,
+                .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 120.0, (card.width - 52.0) / 2.0, 48.0},
+                .label = "Controls", .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { AskControls() }
+    }
+    if game.mode == MODE_PAUSED && !editor.playtest {
+        if Button(session, ButtonProps.{.key = 62,
+                .bounds = Rectangle.{card.x + card.width / 2.0 + 6.0, card.y + card.height - 120.0, (card.width - 52.0) / 2.0, 48.0},
+                .label = "Stages", .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenJourney() }
     }
     if Button(session, ButtonProps.{.key = 58,
             .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 60.0, card.width - 40.0, 48.0},
@@ -306,6 +327,7 @@ Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source
 // both chosen per frame and per cell so boards feel alive without any
 // change to the level data.
 water_frame: s32;
+enemy_frame: s32;
 fancy_garden: bool;
 GRASS_TILES :: 9;
 
@@ -373,6 +395,14 @@ DrawWallEdges :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, 
 // Tile edges land on whole pixels, so scaled neighbours meet without seams.
 Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string) {
     bounds := TileBounds(stage, x, y)
+    kind := tile & 127
+    if kind >= 40 && kind <= 45 {
+        Picture(session, key, sheet, bounds, Rectangle.{0.0, 0.0, 16.0, 16.0})
+        column := kind - 40
+        if kind == 40 { column = 6 + enemy_frame }
+        Picture(session, key + 1000000, sheet, bounds, Rectangle.{cast(float32)column * 16.0, 32.0, 16.0, 16.0})
+        return
+    }
     if WallMaterial(tile) == 20 && sheet == Sheet(1) {
         // Sample one continuous forest field in board coordinates. Turning
         // the board also turns the field, so every shared tile edge matches.
@@ -476,8 +506,10 @@ DrawBoard :: (session: Session, stage: Rectangle) {
             Rectangle.{cast(float32)game.direction * 16.0, 48.0, 16.0, 16.0}, sprites, WORM_HEAD_SIZE)
     }
     for monster: 0..game.monster_count - 1 {
+        column := game.monsters[monster].kind - 1
+        if game.monsters[monster].kind == 1 { column = 6 + enemy_frame }
         Sprite(session, 6000 + cast(u64)monster, stage, game.monsters[monster].position,
-            Rectangle.{cast(float32)(game.monsters[monster].kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites)
+            Rectangle.{cast(float32)column * 16.0, 32.0, 16.0, 16.0}, sprites)
     }
     for particle: 0..99 {
         life := game.particles[particle].life
@@ -493,37 +525,28 @@ OpenStages :: () {
     game.mode = MODE_STAGES
 }
 
-// Levels play from the effective source: the owner's saved override when one
-// exists, otherwise the recovered original. A portrait window stands the
-// same level on its side (30x40), so the worm still enters from the bottom
-// and leaves at the top.
-PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, force_turn: bool = false) {
+// Play the selected layout from its own private override, authored board
+// or best guess. An explicit editor mode takes precedence over window shape.
+PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, layout: s32 = -1) {
     touch_steering.active = false
+    recorded_level = -1
     board: [CELLS]u8
-    turned: [CELLS]u8
     objects: [CELLS]u8
-    turned_objects: [CELLS]u8
-    Custom.EnsureLoaded()
-    Custom.EffectiveBoard(level, board[:])
-    Custom.EffectiveObjects(level, objects[:])
-    apples := Custom.EffectiveApples(level)
-    source := board[:]
-    object_source := objects[:]
-    columns: s32 = COLUMNS
-    rows: s32 = ROWS
-    if game_portrait || force_turn {
-        TurnForward(board[:], turned[:])
-        TurnForward(objects[:], turned_objects[:])
-        source = turned[:]
-        object_source = turned_objects[:]
-        columns = ROWS
-        rows = COLUMNS
-    }
-    if restart { LoadLevelData(*game, level, now, source, apples, columns, rows, object_source) }
-    else { StartGameData(*game, level, now, seed, source, apples, columns, rows, object_source) }
+    portrait := ifx layout < 0 then game_portrait else layout == 1
+    Custom.EffectiveBoard(level,board[:],portrait)
+    Custom.EffectiveObjects(level,objects[:],portrait)
+    apples := Custom.EffectiveApples(level,portrait)
+    columns: s32 = ifx portrait then ROWS else COLUMNS
+    rows: s32 = ifx portrait then COLUMNS else ROWS
+    if restart { LoadLevelData(*game,level,now,board[:],apples,columns,rows,objects[:]) }
+    else { StartGameData(*game,level,now,seed,board[:],apples,columns,rows,objects[:]) }
 }
 StartLevel :: (level: s32, now: s64, seed: u32) { PlayBoard(level, now, seed, false) }
-ReloadLevel :: (level: s32, now: s64) { PlayBoard(level, now, 1, true) }
+ReloadLevel :: (level: s32, now: s64) {
+    layout: s32 = -1
+    if editor.playtest { layout = ifx editor.turned then 1 else 0 }
+    PlayBoard(level,now,1,true,layout)
+}
 
 // Leaving a paused or finished playtest returns to the editor; a normal game
 // returns to the stages.
@@ -541,21 +564,10 @@ EditorAtStartup :: (level: s32) {
 }
 
 EditorLoad :: (level: s32) {
-    board: [CELLS]u8
-    objects: [CELLS]u8
-    Custom.EnsureLoaded()
-    Custom.EffectiveBoard(level, board[:])
-    Custom.EffectiveObjects(level, objects[:])
-    if editor.turned {
-        TurnForward(board[:], editor.board[:])
-        TurnForward(objects[:], editor.objects[:])
-        BoardSize(ROWS, COLUMNS)
-    } else {
-        editor.board = board
-        editor.objects = objects
-        BoardSize(COLUMNS, ROWS)
-    }
-    editor.apples = Custom.EffectiveApples(level)
+    Custom.EffectiveBoard(level,editor.board[:],editor.turned)
+    Custom.EffectiveObjects(level,editor.objects[:],editor.turned)
+    BoardSize(ifx editor.turned then ROWS else COLUMNS,ifx editor.turned then COLUMNS else ROWS)
+    editor.apples = Custom.EffectiveApples(level,editor.turned)
 }
 
 OpenEditor :: (level: s32) {
@@ -568,38 +580,20 @@ OpenEditor :: (level: s32) {
     game.mode = MODE_EDITOR
 }
 
-// T stands the working level up on its side, exactly as portrait plays it,
-// and back again; the working tiles and edits turn with it.
+// T switches independently saved layouts. An unsaved portrait starts from
+// a best guess; editing either layout never rotates changes into its sibling.
 EditorTurn :: () {
-    tiles: [CELLS]u8
-    decorations: [CELLS]u8
-    if editor.turned {
-        TurnBack(editor.board[:], tiles[:])
-        TurnBack(editor.objects[:], decorations[:])
-        editor.turned = false
-        BoardSize(COLUMNS, ROWS)
-    } else {
-        TurnForward(editor.board[:], tiles[:])
-        TurnForward(editor.objects[:], decorations[:])
-        editor.turned = true
-        BoardSize(ROWS, COLUMNS)
-    }
-    editor.board = tiles
-    editor.objects = decorations
+    EditorSave()
+    if editor.save_failed { return }
+    editor.turned = !editor.turned
+    EditorLoad(editor.level)
+    editor.dirty = false
+    editor.reset_armed = false
 }
 
 EditorSave :: () {
-    if !editor.dirty { return }
-    tiles: [CELLS]u8
-    objects: [CELLS]u8
-    if editor.turned {
-        TurnBack(editor.board[:], tiles[:])
-        TurnBack(editor.objects[:], objects[:])
-    } else {
-        tiles = editor.board
-        objects = editor.objects
-    }
-    if Custom.SaveCustomLevel(editor.level, tiles[:], objects[:], editor.apples) {
+    if !editor.dirty && (!editor.turned || Custom.HasCustomLevel(editor.level,true)) { return }
+    if Custom.SaveCustomLevel(editor.level,editor.board[:],editor.objects[:],editor.apples,editor.turned) {
         editor.dirty = false
         editor.save_failed = false
     } else { editor.save_failed = true }
@@ -607,7 +601,7 @@ EditorSave :: () {
 
 // Deleting the override restores the recovered original in the working copy.
 EditorReset :: () {
-    unused Custom.ClearCustomLevel(editor.level)
+    unused Custom.ClearCustomLevel(editor.level,editor.turned)
     EditorLoad(editor.level)
     editor.dirty = false
     editor.reset_armed = false
@@ -621,6 +615,7 @@ EditorReloadSaved :: () {
 
 EditorExit :: () {
     EditorSave()
+    if editor.save_failed { return }
     editor.playtest = false
     editor.turned = false
     OpenStages()
@@ -628,12 +623,14 @@ EditorExit :: () {
 
 EditorPlaytest :: (now: s64) {
     EditorSave()
+    if editor.save_failed { return }
     editor.playtest = true
-    PlayBoard(editor.level, now, cast(u32)(now & 4294967295), false, editor.turned)
+    PlayBoard(editor.level, now, cast(u32)(now & 4294967295), false, ifx editor.turned then 1 else 0)
 }
 
 EditorSwitch :: (delta: s32) {
     EditorSave()
+    if editor.save_failed { return }
     level := (editor.level + delta + LEVEL_COUNT) % LEVEL_COUNT
     OpenEditor(level)
 }
@@ -656,6 +653,13 @@ wall_entries: [4]PaletteEntry = PaletteEntry.[
     PaletteEntry.{.brush = 20, .source_x = 0.0, .source_y = 16.0},
     PaletteEntry.{.brush = 21, .source_x = 16.0, .source_y = 16.0},
     PaletteEntry.{.brush = 22, .source_x = 32.0, .source_y = 16.0}];
+enemy_entries: [6]PaletteEntry = .[
+    PaletteEntry.{.brush = 40, .source_x = 96.0, .source_y = 32.0},
+    PaletteEntry.{.brush = 41, .source_x = 16.0, .source_y = 32.0},
+    PaletteEntry.{.brush = 42, .source_x = 32.0, .source_y = 32.0},
+    PaletteEntry.{.brush = 43, .source_x = 48.0, .source_y = 32.0},
+    PaletteEntry.{.brush = 44, .source_x = 64.0, .source_y = 32.0},
+    PaletteEntry.{.brush = 45, .source_x = 80.0, .source_y = 32.0}];
 // One titled run of palette swatches. Returns the content cursor below it.
 DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32, label: string,
                     entries: []PaletteEntry, tiles: string,
@@ -720,7 +724,7 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
             area.y + 56.0 + cast(float32)row * (item_height + 8.0), item_width, item_height}
         level := first + cast(s32)index
         current := level == editor.level
-        edited := Custom.HasCustomLevel(level)
+        edited := Custom.HasCustomLevel(level,editor.turned)
         if pointer.pressed && Input.PointInBounds(pointer.x, pointer.y, bounds) {
             EditorSave()
             editor.browsing = false
@@ -734,8 +738,8 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
         // The picture: the level's rendered preview board.
         thumb := Rectangle.{bounds.x + 6.0, bounds.y + 6.0, bounds.width - 12.0, (bounds.width - 12.0) * 0.75}
         unused Image(session, ImageProps.{.key = 88000 + cast(u64)index,
-            .asset_path = PreviewPath(StageOf(editor.level), cast(s32)index + 1),
-            .bounds = thumb, .fit = ImageFit.ImageFitStretch, .smooth = true, .alt_text = "Level board preview"})
+            .asset_path = PreviewPath(StageOf(editor.level), cast(s32)index + 1,editor.turned),
+            .bounds = thumb, .fit = ImageFit.ImageFitContain, .smooth = true, .alt_text = "Level board preview"})
         number := FormatInteger(cast(s64)(index + 1), editor_digits[:])
         CentreText(session, 8760 + cast(u64)index, number,
             Rectangle.{bounds.x, bounds.y + bounds.height - 26.0, bounds.width, 22.0}, 15)
@@ -779,7 +783,18 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
                     editor.objects[at] = 0
                     editor.dirty = true
                 } else {
-                    original := OriginalTile(editor.level, cell_x, cell_y)
+                    default_board: [CELLS]u8
+                    if editor.turned {
+                        landscape: [CELLS]u8
+                        Custom.EffectiveBoard(editor.level,landscape[:])
+                        if Custom.HasCustomLevel(editor.level) { GuessPortrait(landscape[:],default_board[:]) }
+                        else { PortraitBoard(editor.level,landscape[:],default_board[:]) }
+                    } else {
+                        for y: 0..ROWS - 1 {
+                            for x: 0..COLUMNS - 1 { default_board[y * COLUMNS + x] = BaseTile(editor.level,cast(s32)x,cast(s32)y) }
+                        }
+                    }
+                    original := default_board[at]
                     if editor.board[at] != original {
                         editor.board[at] = original
                         editor.dirty = true
@@ -831,12 +846,6 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     TextLine(session, 8202, "LEVEL", Rectangle.{panel.x + 8.0, panel.y + 8.0, 50.0, 20.0}, 14)
     TextLine(session, 8203, level_text, Rectangle.{panel.x + 60.0, panel.y + 8.0, 30.0, 20.0}, 14)
     TextLine(session, 8204, StageName(stage_of_level), Rectangle.{panel.x + 110.0, panel.y + 8.0, 90.0, 20.0}, 14)
-    if Button(session, ButtonProps.{.key = 8224, .bounds = Rectangle.{panel.x + panel.width - 74.0, panel.y + 6.0, 30.0, 30.0},
-            .label = "Turn the level", .icon_shape = "S2rr:M20 12A8 8 0 1 1 12 4M12 4L16 4M12 4L12 8",
-            .icon_only = true, .tone = ifx editor.turned then ButtonTone.ButtonToneSuccess
-                else ButtonTone.ButtonToneNeutral,
-            .emphasis = ifx editor.turned then ButtonEmphasis.ButtonEmphasisFilled
-                else ButtonEmphasis.ButtonEmphasisSoft}) != 0 { EditorTurn() }
     if editor.dirty {
         TextLine(session, 8205, "unsaved", Rectangle.{panel.x + 140.0, panel.y + 8.0, 60.0, 20.0}, 13)
     } else if editor.save_failed {
@@ -851,6 +860,9 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     TextLine(session, 8210, "BRUSH", Rectangle.{panel.x + 56.0, panel.y + 34.0, 70.0, 18.0}, 13)
     brush_text := FormatInteger(cast(s64)editor.brush, brush_digits[:])
     TextLine(session, 8211, brush_text, Rectangle.{panel.x + 56.0, panel.y + 54.0, 40.0, 18.0}, 13)
+    if editor.turned && !Custom.HasCustomLevel(editor.level,true) && (!HasPortraitDesign(editor.level) || Custom.HasCustomLevel(editor.level)) {
+        TextLine(session,8224,"Best guess — edit and save",Rectangle.{panel.x + 8.0,panel.y + 80.0,232.0,20.0},12)
+    }
     blocked := LevelBlockages(editor.board[:])
     if blocked != 0 {
         note := "entrance blocked"
@@ -862,13 +874,15 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     }
 
     inner := Rectangle.{panel.x + 8.0, panel.y + 104.0, panel.width - 16.0, panel.height - 254.0}
-    palette := Scroll(session, ScrollProps.{.key = 8214, .bounds = inner, .content_height = 180,
+    palette := Scroll(session, ScrollProps.{.key = 8214, .bounds = inner, .content_height = 270,
         .scroll_offset = editor.palette_scroll})
     editor.palette_scroll = palette.scroll_offset
     if palette.opened {
         cursor := DrawPalettePart(session, 8300, palette.content, 6, "FLOOR", floor_entries[:], tiles,
             pointer.x, pointer.y, pointer.pressed)
         cursor = DrawPalettePart(session, 8400, palette.content, cursor, "OBSTACLES", wall_entries[:], tiles,
+            pointer.x, pointer.y, pointer.pressed)
+        cursor = DrawPalettePart(session, 8500, palette.content, cursor, "ENEMIES", enemy_entries[:], tiles,
             pointer.x, pointer.y, pointer.pressed)
         unused End(session)
     }
@@ -906,7 +920,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
 
 // One illustrated title, one Play button. Garden flows straight into Forest;
 // stage and level selection do not stand between the player and the game.
-DrawTitle :: (session: Session, area: Rectangle, key: s32) -> bool {
+DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = true) -> bool {
     portrait := area.height > area.width
     artwork := ifx portrait then ART_TITLE_PORTRAIT else ART_TITLE
     art_bounds := area
@@ -923,6 +937,7 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32) -> bool {
     unused Box(session, BoxProps.{.key = 802,
         .bounds = Rectangle.{area.x, area.y + area.height - 140.0, area.width, 140.0},
         .fill = Color.{20, 47, 22, 0}, .fill_bottom = Color.{20, 47, 22, 170}, .has_fill_bottom = true})
+    if !play_button { return false }
     width := area.width - 48.0
     if width > 280.0 { width = 280.0 }
     clicked := Button(session, ButtonProps.{.key = 808,
@@ -933,8 +948,165 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32) -> bool {
     return clicked || key == Input.KeyEnter || key == 32
 }
 
+selected_stage: s32;
+journey_scroll: s32;
+recorded_level: s32 = -1;
+progress_digits: [21]u8;
+OpenJourney :: () {
+    editor.playtest = false
+    touch_steering.active = false
+    game.mode = MODE_JOURNEY
+}
+DrawJourney :: (session: Session, area: Rectangle) {
+    unused DrawTitle(session, area, 0, false)
+    unused Box(session, BoxProps.{.key = 24000, .bounds = area, .fill = Color.{25, 55, 34, 90}})
+    unused Box(session, BoxProps.{.key = 24001, .bounds = Rectangle.{area.x + 10.0, area.y + 10.0, area.width - 20.0, 56.0},
+        .fill = Color.{255, 250, 234, 245}, .radius = 20.0})
+    if Button(session, ButtonProps.{.key = 24002, .bounds = Rectangle.{area.x + 18.0, area.y + 14.0, 48.0, 48.0},
+            .label = "Back to title", .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18"}) != 0 { OpenStages() }
+    CentreText(session, 24003, "Your journey", Rectangle.{area.x + 72.0, area.y + 23.0, area.width - 144.0, 32.0}, 24)
+    card_height: float32 = ifx area.width < 520.0 then 90.0 else 110.0
+    content_width := area.width - 24.0
+    if content_width > 680.0 { content_width = 680.0 }
+    scroll := Scroll(session, ScrollProps.{.key = 24004,
+        .bounds = Rectangle.{area.x + (area.width - content_width) / 2.0, area.y + 76.0, content_width, area.height - 84.0},
+        .content_height = cast(s32)(5.0 * (card_height + 12.0)), .scroll_offset = journey_scroll})
+    journey_scroll = scroll.scroll_offset
+    if scroll.opened {
+        for chapter: 0..4 {
+            stage := cast(s32)chapter
+            unlocked := Progress.Unlocked(stage)
+            completed := Progress.Cleared(stage)
+            card := Rectangle.{scroll.content.x + 2.0, scroll.content.y + cast(float32)chapter * (card_height + 12.0), content_width - 12.0, card_height}
+            unused Box(session, BoxProps.{.key = 24100 + cast(u64)chapter, .bounds = card,
+                .fill = Color.{255, 250, 234, 255}, .border = ifx unlocked then Color.{99, 151, 79, 255} else Color.{191, 195, 172, 255}, .radius = 18.0})
+            cover_width := card.width * 0.36
+            unused Image(session, ImageProps.{.key = 24110 + cast(u64)chapter,
+                .asset_path = ART_COVERS, .bounds = Rectangle.{card.x + 6.0, card.y + 6.0, cover_width, card.height - 12.0},
+                .source = Rectangle.{0.0, cast(float32)chapter * 320.0, 960.0, 320.0}, .fit = ImageFit.ImageFitCover, .smooth = true})
+            text_x := card.x + cover_width + 18.0
+            text_width := card.width - cover_width - 54.0
+            GameText(session, 24120 + cast(u64)chapter, StageName(stage), Rectangle.{text_x, card.y + 12.0, text_width + 20.0, 26.0}, 20)
+            progress := FormatInteger(cast(s64)completed, progress_digits[:])
+            GameText(session, 24130 + cast(u64)chapter, ifx unlocked then progress else "40 levels",
+                Rectangle.{text_x, card.y + card.height - 30.0, text_width, 22.0}, 14, !unlocked)
+            if unlocked { GameText(session, 24140 + cast(u64)chapter, "/ 40", Rectangle.{text_x + 25.0, card.y + card.height - 30.0, text_width - 25.0, 22.0}, 14, true) }
+            if unlocked {
+                unused Box(session, BoxProps.{.key = 24150 + cast(u64)chapter,
+                    .bounds = Rectangle.{text_x, card.y + card.height - 45.0, text_width, 6.0},
+                    .fill = Color.{220, 228, 202, 255}, .radius = 3.0})
+                if completed > 0 {
+                    unused Box(session, BoxProps.{.key = 24160 + cast(u64)chapter,
+                        .bounds = Rectangle.{text_x, card.y + card.height - 45.0, text_width * cast(float32)completed / 40.0, 6.0},
+                        .fill = Color.{86, 141, 68, 255}, .radius = 3.0})
+                }
+            }
+            if !unlocked || completed == 40 {
+                SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{card.x + card.width - 34.0, card.y + 32.0, 22.0, 22.0},
+                    .shape = ifx unlocked then CheckIcon.Shape else LockIcon.Shape,
+                    .color = ifx unlocked then Color.{65, 113, 68, 255} else Color.{117, 120, 98, 255}})
+            }
+            if Button(session, ButtonProps.{.key = 24010 + cast(u64)chapter, .bounds = card,
+                    .label = StageName(stage), .detail = ifx unlocked then "Choose a level" else "Locked", .invisible = true,
+                    .disabled = !unlocked}) != 0 { selected_stage = stage; game.mode = MODE_LEVELS }
+        }
+        unused End(session)
+    }
+}
+DrawPlayableLevels :: (session: Session, area: Rectangle, now: s64) {
+    unused Box(session, BoxProps.{.key = 24200, .bounds = area, .fill = Color.{229, 237, 210, 255}})
+    if Button(session, ButtonProps.{.key = 24201, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 72.0, 48.0},
+            .label = "Stages", .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenJourney() }
+    CentreText(session, 24202, StageName(selected_stage), Rectangle.{area.x + 88.0, area.y + 20.0, area.width - 176.0, 32.0}, 24)
+    columns: s32 = ifx area.width < 520.0 then 5 else 10
+    side := (area.width - 24.0 - cast(float32)(columns - 1) * 8.0) / cast(float32)columns
+    if side > 80.0 { side = 80.0 }
+    start_x := area.x + (area.width - (cast(float32)columns * side + cast(float32)(columns - 1) * 8.0)) / 2.0
+    for number: 0..39 {
+        level := selected_stage * 40 + cast(s32)number
+        label := FormatInteger(cast(s64)number + 1, level_digits[:])
+        bounds := Rectangle.{start_x + cast(float32)(number % columns) * (side + 8.0),
+            area.y + 84.0 + cast(float32)(number / columns) * (side + 8.0), side, side}
+        if Button(session, ButtonProps.{.key = 24300 + cast(u64)number, .bounds = bounds, .label = label,
+                .disabled = !Progress.LevelUnlocked(level), .class_name = 10, .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ifx Progress.Cleared(selected_stage) > number then ButtonEmphasis.ButtonEmphasisSoft else ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
+            StartLevel(level, now, cast(u32)(now & 4294967295))
+        }
+    }
+}
+
+controls_previous_mode: s32 = MODE_STAGES;
+AskControls :: () {
+    controls_previous_mode = game.mode
+    game.mode = MODE_CONTROLS
+    touch_steering.active = false
+}
+ChooseControls :: (pad: bool, now: s64) {
+    unused Controls.SetPad(pad)
+    touch_steering.active = false
+    if controls_previous_mode == MODE_STAGES { OpenJourney() }
+    else { game.mode = controls_previous_mode; game.next_step = now + TickInterval(game.level) }
+}
+DrawControls :: (session: Session, area: Rectangle, now: s64) {
+    unused Box(session, BoxProps.{.key = 23000, .bounds = area, .fill = Color.{17, 38, 27, 175}})
+    width := area.width - 24.0
+    if width > 560.0 { width = 560.0 }
+    height: float32 = ifx area.height < 400.0 then 248.0 else 342.0
+    card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0, width, height}
+    unused Box(session, BoxProps.{.key = 23001, .bounds = card, .fill = Color.{255, 250, 234, 255}, .radius = 24.0})
+    CentreText(session, 23002, "How do you want to move?", Rectangle.{card.x + 12.0, card.y + 18.0, width - 24.0, 28.0}, 20)
+    CentreText(session, 23003, "Change this later in Pause > Controls.", Rectangle.{card.x + 12.0, card.y + 50.0, width - 24.0, 22.0}, 13)
+    tile_width := (width - 42.0) / 2.0
+    tile_height := height - 96.0
+    for choice: 0..1 {
+        tile := Rectangle.{card.x + 14.0 + cast(float32)choice * (tile_width + 14.0), card.y + 80.0, tile_width, tile_height}
+        unused Box(session, BoxProps.{.key = 23010 + cast(u64)choice, .bounds = tile,
+            .fill = Color.{231, 238, 213, 255}, .border = Color.{200, 214, 180, 255}, .radius = 16.0})
+        art_height := tile.height - 56.0
+        side := art_height - 12.0
+        if side > tile.width - 16.0 { side = tile.width - 16.0 }
+        square := Rectangle.{tile.x + (tile.width - side) / 2.0, tile.y + (art_height - side) / 2.0, side, side}
+        if choice == 0 {
+            Picture(session, 23020, Sheet(0), square, Rectangle.{0.0, 48.0, 16.0, 16.0})
+            SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{square.x + side * 0.4, square.y + side * 0.35, side * 0.65, side * 0.65},
+                .shape = FingerSwipe.Shape, .color = Color.{255, 250, 234, 255}})
+        } else {
+            preview := DirectionPad(session, DirectionPadProps.{.key = 23021, .bounds = square,
+                .label = "Try the direction pad", .now = cast(float64)now / 1000.0})
+            if preview.step { ChooseControls(true, now) }
+        }
+        label := ifx choice == 0 then "Swipe" else "Direction pad"
+        if Button(session, ButtonProps.{.key = 23030 + cast(u64)choice,
+                .bounds = Rectangle.{tile.x + 6.0, tile.y + tile.height - 50.0, tile.width - 12.0, 44.0},
+                .label = label, .class_name = 10, .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { ChooseControls(choice == 1, now) }
+    }
+}
+
 HandleInput :: (key: s32, now: s64) {
     if key == 77 || key == 109 { Audio.ToggleMute(); return }
+    if game.mode == MODE_CONTROLS {
+        if key == 49 { ChooseControls(false, now) }
+        else if key == 50 { ChooseControls(true, now) }
+        else if key == Input.KeyEscape { game.mode = controls_previous_mode }
+        return
+    }
+    if game.mode == MODE_JOURNEY {
+        if key == Input.KeyEscape { OpenStages() }
+        else if key >= 49 && key <= 53 && Progress.Unlocked(key - 49) {
+            selected_stage = key - 49; game.mode = MODE_LEVELS
+        }
+        return
+    }
+    if game.mode == MODE_LEVELS {
+        if key == Input.KeyEscape { OpenJourney() }
+        else if key == Input.KeyEnter || key == 32 {
+            within := Progress.Cleared(selected_stage)
+            if within >= 40 { within = 39 }
+            StartLevel(selected_stage * 40 + within, now, cast(u32)(now & 4294967295))
+        }
+        return
+    }
     if game.mode == MODE_STAGES && (key == 69 || key == 101) {
         editor.browsing = true
         OpenEditor(game.level)
@@ -945,10 +1117,11 @@ HandleInput :: (key: s32, now: s64) {
         else { unused ApplyInput(*game, key) }
     } else if game.mode == MODE_PAUSED {
         unused ApplyInput(*game, key)
-        if game.mode == MODE_PLAYING { game.next_step = now + TICK_MS }
+        if game.mode == MODE_PLAYING { game.next_step = now + TickInterval(game.level) }
         if game.mode == MODE_STAGES { LeavePlay() }
     } else if game.mode == MODE_FINISHED {
-        ReloadLevel(game.level + 1, now)
+        if !editor.playtest && (game.level + 1) % 40 == 0 { OpenJourney() }
+        else { ReloadLevel(game.level + 1, now) }
     } else if game.mode == MODE_DIED {
         if key == Input.KeyEnter || key == 32 { StartLevel(game.level, now, 1) }
         else if key == Input.KeyEscape { LeavePlay() }
@@ -972,8 +1145,8 @@ HandleInput :: (key: s32, now: s64) {
     }
 }
 
-// True while the window stands portrait: the board turns sideways and the
-// steering keys turn with it, so Up always means visually up.
+// Normal play follows the window shape; editor playtests keep their explicit
+// layout. Steering stays in screen directions in either case.
 game_portrait: bool;
 touch_steering: Touch.TouchSteering;
 stage_digits: [21]u8;
@@ -1023,10 +1196,14 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
     unused Box(session, BoxProps.{.key = 15,
         .bounds = Rectangle.{hud.x, hud.y + hud.height - 2.0, hud.width, 2.0}, .fill = Color.{207, 221, 184, 255}})
     if game.mode == MODE_EDITOR {
-        if Button(session, ButtonProps.{.key = 8225, .bounds = Rectangle.{hud.x + 12.0, hud.y + 5.0, 124.0, 32.0},
+        if Button(session, ButtonProps.{.key = 8225, .bounds = Rectangle.{hud.x + 12.0, hud.y + 5.0, 88.0, 32.0},
                 .label = "Levels", .tone = ButtonTone.ButtonToneSuccess}) != 0 {
             EditorSave(); editor.browsing = true
         }
+        if Button(session,ButtonProps.{.key = 8226,.bounds = Rectangle.{hud.x + 108.0,hud.y + 5.0,96.0,32.0},
+                .label = "Landscape",.tone = ifx !editor.turned then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral}) != 0 && editor.turned { EditorTurn() }
+        if Button(session,ButtonProps.{.key = 8227,.bounds = Rectangle.{hud.x + 212.0,hud.y + 5.0,86.0,32.0},
+                .label = "Portrait",.tone = ifx editor.turned then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral}) != 0 && !editor.turned { EditorTurn() }
         return
     }
     narrow := hud.width < 520.0
@@ -1083,8 +1260,15 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     now := Timer.MonotonicMilliseconds()
     // The game opens on the stages.
     if !game.started { game.started = true; OpenStages() }
+    was_portrait := game_portrait
     game_portrait = viewport.height > viewport.width
+    if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED) {
+        paused := game.mode == MODE_PAUSED
+        ReloadLevel(game.level,now)
+        if paused { game.mode = MODE_PAUSED }
+    }
     water_frame = cast(s32)((now / 130) % 3)
+    enemy_frame = cast(s32)((now / 110) % 4)
     key: s32
     #if #defined(WURM_PORTABLE) {
         key = Timer.PressedKey()
@@ -1098,7 +1282,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // The stages screen is one full-bleed cover; every other mode carries the
     // green icon bar across the top with the board letterboxed below it, so
     // portrait and landscape both keep their proportions.
-    showing_bar := game.mode != MODE_STAGES
+    showing_bar := game.mode != MODE_STAGES && game.mode != MODE_JOURNEY && game.mode != MODE_LEVELS && !(game.mode == MODE_CONTROLS && controls_previous_mode == MODE_STAGES)
     bar_height: float32 = 0.0
     if showing_bar { bar_height = ifx viewport.width < 520.0 then 104.0 else 72.0 }
     if game.mode == MODE_EDITOR { bar_height = 42.0 }
@@ -1109,7 +1293,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // Read the held pointer before simulation, so the next 25 ms step can
     // already use this frame's direction. SwipeArea supplies captured contact;
     // its release-only swipe result is deliberately unused.
-    if game.mode == MODE_PLAYING && game.death_ticks == 0 && game.transition_ticks == 0 {
+    if game.mode == MODE_PLAYING && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
         contact := SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
             .label = "Steer the worm", .now = cast(float64)now / 1000.0,
             .min_distance = 6.0})
@@ -1117,18 +1301,40 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         if direction >= 0 { Steer(direction) }
     } else { touch_steering.active = false }
     unused Step(*game, now)
+    if (game.mode == MODE_FINISHED || game.mode == MODE_VICTORY) && !editor.playtest && recorded_level != game.level {
+        if Progress.Win(game.level) { recorded_level = game.level }
+    }
     Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,
         game.level, game.apples, game.death_ticks, game.transition_ticks)
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         if DrawTitle(session, area, stage_key) {
-            StartLevel(0, now, cast(u32)(now & 4294967295))
+            if Controls.Chosen() { OpenJourney() }
+            else { AskControls() }
         }
+    } else if game.mode == MODE_JOURNEY {
+        DrawJourney(session, viewport)
+    } else if game.mode == MODE_LEVELS {
+        DrawPlayableLevels(session, viewport, now)
+    } else if game.mode == MODE_CONTROLS {
+        if controls_previous_mode == MODE_STAGES { unused DrawTitle(session, viewport, 0, false) }
+        else { DrawBoard(session, stage) }
+        DrawControls(session, viewport, now)
     } else if game.mode == MODE_EDITOR {
         area := Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height}
         DrawEditor(session, area, now)
     } else {
         DrawBoard(session, stage)
+        if game.mode == MODE_PLAYING && Controls.Pad() {
+            size := viewport.width * 0.34
+            if size < 132.0 { size = 132.0 }
+            if size > 192.0 { size = 192.0 }
+            pad := DirectionPad(session, DirectionPadProps.{.key = PLAY_STEERING_KEY,
+                .bounds = Rectangle.{viewport.x + 12.0, viewport.y + viewport.height - size - 12.0, size, size},
+                .label = "Direction pad", .now = cast(float64)now / 1000.0, .repeat_seconds = 0.08,
+                .floating = true, .disabled = game.death_ticks > 0 || game.transition_ticks > 0})
+            if pad.step { Steer(pad.direction) }
+        }
     }
     if showing_bar { DrawTopBar(session, hud) }
     if game.mode == MODE_PAUSED { Overlay(session, viewport, "Paused", "Your worm is waiting.") }

@@ -17,7 +17,7 @@ BoardSize :: (columns: s32, rows: s32) {
 // Five connected landscapes, played as the same worm. The complete recovered
 // 99-level archive remains untouched as reference data.
 STAGE_COUNT :: 5;
-LEVEL_COUNT :: 66;
+LEVEL_COUNT :: 200;
 WORM_LIMIT :: 1000;
 MONSTER_LIMIT :: 100;
 TICK_MS :: 25;
@@ -32,6 +32,16 @@ MODE_DIED :: 3;
 MODE_FINISHED :: 4;
 MODE_VICTORY :: 5;
 MODE_EDITOR :: 6;
+MODE_CONTROLS :: 7;
+MODE_JOURNEY :: 8;
+MODE_LEVELS :: 9;
+
+// A gentle Meadow introduction, reaching the recovered pace at Leafwood.
+TickInterval :: (level: s32) -> s64 {
+    interval := 32 - level / 2
+    if interval < TICK_MS { interval = TICK_MS }
+    return cast(s64)interval
+}
 
 Point :: struct { x: s32; y: s32; }
 Monster :: struct { position: Point; kind: s32; direction: s32; }
@@ -156,7 +166,7 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     game.monster_count = 0
     game.transition_ticks = 0
     for index: 0..99 { game.particles[index].life = 0 }
-    game.next_step = now + TICK_MS
+    game.next_step = now + TickInterval(level)
     game.started = true
     for y: 0..board_rows - 1 {
         for x: 0..board_columns - 1 {
@@ -292,6 +302,103 @@ TurnForward :: (canonical: []u8, turned: []u8) {
 TurnBack :: (turned: []u8, canonical: []u8) {
     for y: 0..ROWS - 1 {
         for x: 0..COLUMNS - 1 { canonical[y * COLUMNS + x] = turned[x * ROWS + (ROWS - 1 - y)] }
+    }
+}
+
+GuessFloor :: (board: []u8, x: s32, y: s32) -> bool {
+    if x < 1 || y < 1 || x >= 29 || y >= 39 { return false }
+    tile := LoadedTile(board[y * 30 + x])
+    return tile < 20 || tile >= 128
+}
+ClearGuessCell :: (board: []u8, x: s32, y: s32) {
+    if x < 1 || y < 1 || x >= 29 || y >= 39 { return }
+    if !GuessFloor(board,x,y) { board[y * 30 + x] = 0 }
+}
+// A starting point for a separately authored portrait board. Keep the
+// rotated rooms, then join both fixed gates to the largest playable region.
+// Existing authored portrait boards never pass through this conversion.
+GuessPortrait :: (landscape: []u8, portrait: []u8) {
+    TurnForward(landscape,portrait)
+    labels: [CELLS]s32
+    queue: [CELLS]s32
+    component: s32
+    largest: s32
+    largest_size: s32
+    for start: 0..CELLS - 1 {
+        if labels[start] != 0 || !GuessFloor(portrait,cast(s32)start % 30,cast(s32)start / 30) { continue }
+        component += 1
+        labels[start] = component
+        queue[0] = cast(s32)start
+        head: s32 = 0
+        tail: s32 = 1
+        while head < tail {
+            at := queue[head]; head += 1
+            for d: 0..3 {
+                x := at % 30; y := at / 30
+                if d == 0 { x -= 1 } else if d == 1 { y -= 1 } else if d == 2 { x += 1 } else { y += 1 }
+                if !GuessFloor(portrait,x,y) || labels[y * 30 + x] != 0 { continue }
+                labels[y * 30 + x] = component
+                queue[tail] = y * 30 + x; tail += 1
+            }
+        }
+        if tail > largest_size { largest_size = tail; largest = component }
+    }
+    for x: 14..15 {
+        for y: 35..38 { ClearGuessCell(portrait,cast(s32)x,cast(s32)y) }
+        for y: 1..3 { ClearGuessCell(portrait,cast(s32)x,cast(s32)y) }
+    }
+    if largest == 0 {
+        for y: 1..38 { ClearGuessCell(portrait,14,cast(s32)y); ClearGuessCell(portrait,15,cast(s32)y) }
+        return
+    }
+    for gate: 0..1 {
+        start := ifx gate == 0 then 36 * 30 + 15 else 2 * 30 + 15
+        if labels[start] == largest { continue }
+        distance: [CELLS]s32
+        previous: [CELLS]s32
+        visited: [CELLS]bool
+        for i: 0..CELLS - 1 { distance[i] = 100000; previous[i] = -1 }
+        distance[start] = 0
+        target: s32 = -1
+        for step: 0..CELLS - 1 {
+            at: s32 = -1
+            for i: 0..CELLS - 1 {
+                if !visited[i] && distance[i] < 100000 && (at < 0 || distance[i] < distance[at]) { at = cast(s32)i }
+            }
+            if at < 0 { break }
+            if labels[at] == largest { target = at; break }
+            visited[at] = true
+            for d: 0..3 {
+                x := at % 30; y := at / 30
+                if d == 0 { x -= 1 } else if d == 1 { y -= 1 } else if d == 2 { x += 1 } else { y += 1 }
+                if x < 1 || y < 1 || x >= 29 || y >= 39 { continue }
+                next := y * 30 + x
+                cost := distance[at] + (ifx GuessFloor(portrait,x,y) then 1 else 6)
+                if cost < distance[next] { distance[next] = cost; previous[next] = at }
+            }
+        }
+        while target >= 0 {
+            x := target % 30; y := target / 30
+            ClearGuessCell(portrait,x,y)
+            before := previous[target]
+            if before >= 0 && before / 30 == y { ClearGuessCell(portrait,x,y + 1) }
+            else { ClearGuessCell(portrait,x + 1,y) }
+            target = before
+        }
+    }
+}
+
+HasPortraitDesign :: (level: s32) -> bool { return DesignedPortraitText(level).count == CELLS }
+PortraitBoard :: (level: s32, landscape: []u8, portrait: []u8) {
+    text := DesignedPortraitText(level)
+    if text.count != CELLS { GuessPortrait(landscape,portrait); return }
+    for y: 0..39 {
+        for x: 0..29 {
+            code := text[x * 40 + y]
+            for index: 0..DesignedAlphabet.count - 1 {
+                if DesignedAlphabet[index] == code { portrait[y * 30 + x] = DesignedCodebook[index]; break }
+            }
+        }
     }
 }
 
@@ -451,12 +558,13 @@ Tick :: (game: *Game) {
 }
 Step :: (game: *Game, now: s64) -> bool {
     if game.mode != MODE_PLAYING || now < game.next_step { return false }
-    ticks := (now - game.next_step) / TICK_MS + 1
-    if ticks > 8 { ticks = 8; game.next_step = now - (ticks - 1) * TICK_MS }
+    interval := TickInterval(game.level)
+    ticks := (now - game.next_step) / interval + 1
+    if ticks > 8 { ticks = 8; game.next_step = now - (ticks - 1) * interval }
     for index: 0..ticks - 1 {
         if game.mode != MODE_PLAYING { break }
         Tick(game)
-        game.next_step += TICK_MS
+        game.next_step += interval
     }
     return true
 }

@@ -8,7 +8,7 @@ Expect :: (value: bool, message: string) {
 #program_export
 main :: () -> s32 {
     game: Game
-    Expect(LEVEL_COUNT == 66 && STAGE_COUNT == 5, "complete five-landscape campaign")
+    Expect(LEVEL_COUNT == 200 && STAGE_COUNT == 5, "complete five-landscape campaign")
     for level: 0..LEVEL_COUNT - 1 {
         StartGame(*game, cast(s32)level, 0)
         Expect(game.apples > 0 && game.apples <= 12, "original apple goal")
@@ -17,10 +17,11 @@ main :: () -> s32 {
         Expect(game.apple.x >= 0 && game.apple.y >= 0 && TileAt(*game, game.apple) < 20, "apple in permitted terrain")
         Expect(game.monster_count <= MONSTER_LIMIT, "monsters fit original limit")
     }
+    Expect(TickInterval(0) == 32 && TickInterval(10) == 27 && TickInterval(40) == 25, "gentle introduction reaches the original pace")
     StartGame(*game, 0, 100)
     Expect(game.apples == 5 && game.monster_count == 0, "gentle first level with five apples and no moving hazards")
-    Expect(!Step(*game, 124), "no early movement")
-    Expect(Step(*game, 125) && game.worm[0].y == 492, "four pixels per original tick")
+    Expect(!Step(*game, 131), "no early movement")
+    Expect(Step(*game, 132) && game.worm[0].y == 492, "four pixels per original tick")
     Expect(!ApplyInput(*game, 262), "no steering before spawn is established")
     for tick: 0..29 { Tick(*game) }
     Expect(game.length == 32 && game.target_length == 2, "original initial growth")
@@ -70,7 +71,7 @@ main :: () -> s32 {
     for stage: 0..STAGE_COUNT - 2 {
         first := StageFirst(cast(s32)stage + 1)
         Expect(StageOf(first - 1) == stage && StageOf(first) == stage + 1, "landscape boundary")
-        Expect(StageNumber(first) == 1 && StageLevels(cast(s32)stage) >= 13, "chapter numbering")
+        Expect(StageNumber(first) == 1 && StageLevels(cast(s32)stage) == 40, "chapter numbering")
         StartGame(*game, first - 1, 0)
         game.score = 12
         game.apples = 0
@@ -83,7 +84,7 @@ main :: () -> s32 {
             "next landscape preserves lives and score")
     }
 
-    StartGame(*game, 65, 0)
+    StartGame(*game, LEVEL_COUNT - 1, 0)
     game.apples = 0
     game.worm[0] = Point.{328, 0}
     Tick(*game)

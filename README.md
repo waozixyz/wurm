@@ -4,17 +4,21 @@ Application id `xyz.waozi.wurm`.
 
 
 A native Ziran and Kryon game. The illustrated Apfelwurm title has one
-**Play** button. Follow the little orange worm towards the mountain in the
-title picture through **66 unique designed levels**: Meadow (14), deciduous
-Leafwood (13), coniferous Pinewood (13), Lake (13), then Mountains (13).
-Every landscape has its own terrain, wide routes and solid obstacles on the
-original 40x30 grid. Lakes use shore paths, reed banks and water crossings;
-mountains lead through stone terraces and high passes. The opening levels
-need five apples, with longer goals and gentler breaks later on.
-The campaign contains no passive decoration props or monsters.
-`tools/design_levels.py` regenerates all boards and complete route
-certificates. Local tests complete every level in both orientations with
-three apple seeds. Existing editor overrides and level IDs are preserved.
+**Play** button. Choose swipe steering or a direction pad on first play,
+then select your stage in **Your journey**. Follow the little orange worm
+through **200 unique original-inspired levels**, with 40 each in Meadow,
+deciduous Leafwood, coniferous Pinewood, Lake and Mountains.
+Rooms, spirals, crossings, islands and narrow passes draw from 83 recovered
+layouts. The six original enemy types include wandering fire, bouncing
+patrols and chasing creatures. Enemy counts and apple goals increase across
+stages, while the first six levels introduce movement without enemies.
+Opening Meadow levels move more slowly before reaching the original pace.
+Complete all 40 levels to unlock the next landscape. Unlocked stages and
+cleared levels remain selectable; progress and the control choice persist.
+`tools/design_levels.py` regenerates the boards and static route certificates.
+The local engine replay wins all 200 levels in both orientations with enemies
+active, using recorded seeds and routes from `tests/campaign_cases.json`.
+This is separate from device and Android input verification.
 The **99 recovered levels** from the owner's `The-Worm_Win_EN/ONLY.ONE`
 archive stay the byte-exact reference in `assets/original`.
 The game uses new art and sound with the same worm and apples throughout.
@@ -30,16 +34,19 @@ losing the last one ends the game at zero.
 
 ## Controls
 
-- Click Play, Enter or Space: start immediately; Enter or Space also retries
-- Arrows, WASD or move a held finger over the board: steer immediately
+- Click Play, Enter or Space: choose controls, then a stage and level; Enter or Space also retries
+- Arrows, WASD, a held finger moving over the board, or the direction pad: steer immediately
+- Pause > Controls: change between swipe steering and the direction pad
+- Pause > Stages: select an unlocked stage and level
 - Escape, Space or P: pause and resume
 - Q while paused: back to the title
 - R: restart the current level
 - M: mute and unmute
 - E on the title: open the level editor
 
-Collect the apples, then leave through the top opening. All five landscapes
-connect automatically, keeping your lives and score until the mountain finale.
+Collect the apples, then leave through the top opening. Levels within each landscape
+connect automatically, keeping lives and score. A completed landscape returns
+to Your journey with the next stage unlocked.
 
 ## Mobile-first layout
 
@@ -49,9 +56,13 @@ Pause button clear. Pause, game-over and completion dialogs use large stacked
 touch buttons and a compact composition for short landscape screens; the title artwork fills the
 whole screen with a composition for each orientation. Landscape letterboxes
 the 640x480 board. In portrait
-the same level data stands on its side as a 30x40 board that fills the
-screen edge to edge, and the gates follow the board: the worm still enters
-from the bottom edge and exits at the top. Steering keys and finger movements stay
+the game loads its separate 30x40 portrait board, filling the screen edge
+to edge. A missing portrait design starts from a best guess: rotate the
+landscape rooms and connect both gates to the largest playable region.
+Portrait level 2 has its own horizontal divider and a clear approach.
+The worm enters from the bottom and exits at the top in both layouts.
+Rotating during play reloads the current level in the other layout, keeping
+lives and score. Steering keys and finger movements stay
 natural, so Up is always visually up. The gates carve only their own hole;
 the neighbouring walls keep their tiles. Open entrance and exit gates show
 stone posts on both sides, in either orientation. The worm follows its full
@@ -71,22 +82,28 @@ the editor opens facing its level selector: use its landscape arrows to browse a
 choose a card with the
 level's rendered board as its picture, a green frame on saved edits, and
 one click to edit that level. Tab or Enter playtests. The held left button paints the selected brush across the canvas, the
-right button restores the recovered original tile, and the palette offers the
-stage's floors and solid obstacles. The apple goal
-is set with the - and + buttons or keys. Up/Down switches through all 66 levels (saving
+right button restores the current layout's base tile, and the palette offers the
+stage's floors, solid obstacles and six enemies. The apple goal
+is set with the - and + buttons or keys. Up/Down switches through all 200 levels (saving
 first), Enter playtests from the entrance, and E returns to the title.
 Saving is automatic on switch, exit and playtest, plus the Save button; Reset
-(deleting the override) restores the designed campaign level. T or the turn
-button stands the working level up exactly as portrait plays it and back,
-so the sideways view can be edited and playtested directly.
+(deleting the override) restores the selected layout's base board. The
+**Landscape** and **Portrait** buttons select the layout; T switches between them.
+Each mode has its own tiles, objects and apple goal, and saves without changing
+the other. A missing portrait version is labelled **Best guess**; Save keeps
+it as an independent layout. Playtest uses the selected mode even when the
+editor window has the other shape.
 
-Edits live in `assets/levels/level<N>.dat`, one file per edited level:
-apple count, the 40x30 tiles, then the 40x30 object ids, all in column
-order. The palette paints floors (grass, dirt, sand), a smart hedge that
+Landscape edits live in `assets/campaign-levels/level<N>.dat`; portrait edits
+use `level<N>-portrait.dat`. Each file contains an apple count, 1,200 tiles,
+and 1,200 object ids in column order: 40 columns of 30 rows for landscape,
+or 30 columns of 40 rows for portrait. Reset changes only the selected mode. The palette paints floors (grass, dirt, sand), a smart hedge that
 fits its own edge and corner pieces, plain hedges, stone and solid water.
 Existing object data remains readable, but passive props are not rendered.
 A level without a file plays its designed campaign board, so removing a file
-restores it. The entrance (bottom centre, green marker) and exit (top centre, red
+restores it. Earlier 66-level edits remain untouched in `assets/levels/`
+(and the earlier Android/portable record names); the new campaign uses separate
+records. The entrance (bottom centre, green marker) and exit (top centre, red
 marker) are carved at runtime from the tiles above and below the edges; the
 editor warns when a level could not be entered or left. `WURM_LEVEL_DIR`
 redirects where overrides are read and written.
@@ -103,7 +120,7 @@ streaming soundtrack and secondary-pointer editor controls.
 ziran run --locked desktop
 python3 tools/build_android.py --abi arm64-v8a
 ziran run --locked shot > build/stages.ppm
-WORM_SHOT_LEVEL=66 ziran run --locked shot > build/forest-finale.ppm
+WORM_SHOT_LEVEL=200 ziran run --locked shot > build/forest-finale.ppm
 ziran check --locked
 sh tests/run_local.sh
 ```
@@ -119,7 +136,13 @@ for the development Moto. `tests/android_controls_test.py APK` verifies touch
 start, pause, resume, steering and return to the title on that USB device.
 Use `--verification` on both commands for the separate
 `xyz.waozi.wurm.verification` install, preserving the normal game and data.
-The device test leaves its own game open on the title.
+The device test leaves its own game open on the title. To win every level
+with the unchanged game engine on the physical USB Moto, run
+`python3 tests/android_campaign_test.py`. It builds an ARMv7 test executable,
+replays all 400 level/orientation cases with normal steering and collisions,
+and saves per-level results under `build/android-campaign/`. It uses its own
+`/data/local/tmp` directory and preserves the normal game process and saves.
+`--build-only` prepares the runner without claiming any device test result.
 On phones, keep your finger down and move it in the direction you want to
 turn. You can make successive corners without lifting or returning to the
 press position; a small movement is enough, and lifting makes no extra turn.

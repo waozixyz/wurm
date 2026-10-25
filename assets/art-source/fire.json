@@ -1,0 +1,6 @@
+{
+  "tool": "built-in image_gen",
+  "prompt": "Use case: stylized-concept. Asset type: transparent 2D game sprite atlas, four animation frames for the ORIGINAL Wurm game's wandering fire enemy, redrawn to match Apfelwurm's clean friendly storybook cartoon sprites. Use the reference sheet only for line weight, clean shading and visual style; do not copy any worms, apples or insects. Create EXACTLY a 2 by 2 grid of four equal square transparent cells, no border, no gutters, no text. Each cell contains the SAME small upright flame hazard centered at the same baseline and scale, four successive gentle flickering poses, row-major. Hot red-orange outer flame silhouette, golden yellow core, a slight soft glow INSIDE the silhouette, crisp readable outline. No face, limbs, eyes, props, ground, cast shadow or background. Leave clean transparent space around each frame and preserve genuine alpha transparency. This is a moving hazard, clearly distinct from the orange worm and beetles. All four flames fill about 78 percent of their square's height and 60 percent of its width, consistent proportions and pivot. Square atlas.",
+  "layout": "2 by 2 flame animation frames",
+  "file": "fire.png"
+}

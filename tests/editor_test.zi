@@ -11,6 +11,7 @@ Expect :: (value: bool, message: string) {
 
 #program_export
 main :: () -> s32 {
+    game: Game
     // A private root keeps the test's overrides out of the repository assets.
     Expect(Custom.CustomSetRoot("build/test-levels/"), "test root accepted")
     Custom.EnsureLoaded()
@@ -110,10 +111,47 @@ main :: () -> s32 {
     for at: 0..CELLS - 1 { if board[at] != again[at] { same = false } }
     Expect(same, "turn round-trip keeps every tile")
 
+    // Portrait is independently saved in 30x40 column order. Its lower
+    // rows must not index the landscape's 40x30 buffer.
+    unused Custom.ClearCustomLevel(1,true)
+    Custom.EffectiveBoard(1,turned[:],true)
+    BoardSize(30,40)
+    Expect(LevelBlockages(turned[:]) == 0,"portrait level 2 has clear gates")
+    for at: 0..CELLS - 1 { objects[at] = 0 }
+    StartGameData(*game,1,0,1,turned[:],5,30,40,objects[:])
+    for tick: 0..63 { Tick(*game) }
+    Expect(game.death_ticks == 0 && game.lives == 3,"portrait level 2 allows a two-second straight approach")
+    turned[Custom.At(7,35,true)] = 21
+    objects[Custom.At(8,36,true)] = OBJECT_SNAIL
+    Expect(Custom.SaveCustomLevel(1,turned[:],objects[:],9,true),"independent portrait save")
+    Expect(Custom.EffectiveApples(1,true) == 9 && Custom.EffectiveApples(1) == BaseApples(1),"portrait apple goal is independent")
+    Custom.custom_loaded = false
+    Custom.EnsureLoaded()
+    Expect(Custom.EffectiveTile(1,7,35,true) == 21,"portrait lower rows survive a restart")
+    Custom.EffectiveObjects(1,loaded_objects[:],true)
+    Expect(loaded_objects[Custom.At(8,36,true)] == OBJECT_SNAIL,"portrait objects survive a restart")
+    Expect(Custom.EffectiveTile(1,7,10) == BaseTile(1,7,10),"portrait edits leave landscape alone")
+    Expect(Custom.ClearCustomLevel(1,true),"reset only portrait")
+    Expect(!Custom.HasCustomLevel(1,true),"portrait reset uses the generated layout again")
+
+    // A straight rotation can put a wall at the fixed portrait entrance.
+    // The best guess joins that entrance and exit to the interior floor.
+    BoardSize(40,30)
+    for at: 0..CELLS - 1 { board[at] = 0 }
+    for y: 0..29 { board[y * 40 + 37] = 20 }
+    TurnForward(board[:],turned[:])
+    BoardSize(30,40)
+    Expect((LevelBlockages(turned[:]) & 1) != 0,"regression fixture blocks a naive rotated entrance")
+    GuessPortrait(board[:],turned[:])
+    Expect(LevelBlockages(turned[:]) == 0,"best guess repairs fixed portrait gates")
+    StartGameData(*game,1,0,1,turned[:],5,30,40,objects[:])
+    for tick: 0..31 { Tick(*game) }
+    Expect(game.death_ticks == 0 && game.lives == 3,"converted entrance survives normal spawn ticks")
+    BoardSize(40,30)
+
     // An edited board drives play through the same loader as the originals.
     for at: 0..CELLS - 1 { board[at] = 0 }
     board[Index(3, 3)] = 45
-    game: Game
     for at: 0..CELLS - 1 { objects[at] = 0 }
     objects[Index(5, 5)] = OBJECT_SNAIL
     LoadLevelData(*game, 0, 0, board[:], 2, COLUMNS, ROWS, objects[:])

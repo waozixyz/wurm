@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.3] - 2026-10-25
+
+- Explore 200 distinct levels inspired by the original Worm game, with 40 challenges in each landscape and more demanding encounters as the journey climbs.
+- Meet wandering fire, bouncing patrols and chasing enemies among original-inspired rooms, spirals, islands and mountain passes.
+- Unlock each landscape by completing its 40 levels, then return to any unlocked stage or level from Your journey.
+- Choose swipe steering or a direction pad on first play, remember that choice and change it from Pause.
+- Learn at a gentler pace in the opening Meadow levels before reaching the original speed.
+- Edit and playtest independent Landscape and Portrait layouts; start missing portrait boards from a best guess, with clear gate approaches and a separate portrait level 2.
+- Browse all 200 boards in the editor while keeping edits from the earlier campaign separate.
+
 ## [0.1.2] - 2026-10-25
 
 - Travel through all 66 levels from Meadow through deciduous Leafwood, coniferous Pinewood and Lake to the Mountains, with distinct terrain and challenges throughout.

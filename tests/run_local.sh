@@ -24,6 +24,8 @@ ziran build $lock --project --root tests --target=c --entry steering_test:main -
 build/steering-test/steering_test
 ziran build $lock --project --root tests --target=c --entry campaign_replay:main --exe -o build/campaign-replay tests/campaign_replay.zi
 build/campaign-replay/campaign_replay
+ziran build $lock --project --root tests --target=c --entry progress_test:main --exe -o build/progress-test tests/progress_test.zi
+build/progress-test/progress_test
 ziran build $lock --project --root tests --target=c --entry editor_test:main --exe -o build/editor-test tests/editor_test.zi
 build/editor-test/editor_test
 ziran build $lock --project --root tests --target=c --entry level_probe:main --exe -o build/level-probe tests/level_probe.zi
@@ -42,7 +44,7 @@ PY
 LDLIBS=-lSDL2 ziran build $lock --project --root tests --target=c --entry audio_test:main --exe -o build/audio-test tests/audio_test.zi
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/audio-test/audio_test
 ziran run $lock shot > build/research/remake-start.ppm
-WORM_SHOT_LEVEL=66 ziran run $lock shot > build/research/remake-mountain-finale.ppm
+WORM_SHOT_LEVEL=200 ziran run $lock shot > build/research/remake-mountain-finale.ppm
 WORM_SHOT_LEVEL=20 WORM_SHOT_STAGES=1 ziran run $lock shot > build/research/remake-stages.ppm
 WORM_SHOT_EDITOR=1 ziran run $lock shot > build/research/remake-editor.ppm
 python3 - <<'PY'

@@ -107,7 +107,13 @@ def main():
         # Launch from build/, as the actual desktop launcher does, then use
         # the single Play button. Q from a paused level returns to the title.
         pointer(480, 530)
-        time.sleep(0.4)
+        time.sleep(0.15)
+        capture("controls-choice")
+        pointer(340, 428)
+        assert (level_directory / "controls.dat").read_bytes() == bytes([0]), "swipe choice was not persisted"
+        capture("journey-selector")
+        key("1", "Return")
+        time.sleep(0.2)
         key("space")
         time.sleep(0.15)
         capture("level-01")
@@ -137,12 +143,12 @@ def main():
             time.sleep(.15)
             capture('browser-' + chapter)
 
-        # Card 14 of the Meadow browser, laid out with the same column search as
+        # Card 14 of the forty-level Meadow browser, laid out with the same column search as
         # DrawLevelBrowser for the 960x600 window.
         area_w, area_h = 960, 558
         columns = next(c for c in range(4, 12)
-                       if -(-14 // c) * (((area_w - 16 - (c - 1) * 8) / c) * 0.75 + 30)
-                       + ((-(-14 // c)) - 1) * 8 + 56 <= area_h)
+                       if -(-40 // c) * (((area_w - 16 - (c - 1) * 8) / c) * 0.75 + 30)
+                       + ((-(-40 // c)) - 1) * 8 + 56 <= area_h)
         item_w = (area_w - 16 - (columns - 1) * 8) / columns
         item_h = item_w * 0.75 + 30
         index = 13
@@ -179,8 +185,19 @@ def main():
         turned = numpy.asarray(Image.open(OUT / "editor-turned.png").convert("RGB"), dtype=int)
         side_columns = ((turned[100:500, 0:712, 0] > 220) & (turned[100:500, 0:712, 1] > 225)).mean(axis=0)
         assert (side_columns > 0.9).sum() > 100, "the canvas board did not stand up"
-        key("t")
-        time.sleep(0.2)
+        pointer(813, 269)  # Stone brush.
+        pointer(223, 537)  # Portrait cell (5, 35), beyond landscape rows.
+        pointer(775, 518)  # Save just this orientation.
+        portrait_edit = level_directory / "level14-portrait.dat"
+        assert portrait_edit.read_bytes()[1 + 5 * 40 + 35] == 21, "portrait lower-row edit was not saved"
+        assert edited.read_bytes() == painted, "portrait save changed the landscape"
+        pointer(156, 20)  # Landscape mode.
+        capture("editor-landscape-independent")
+        pointer(255, 20)  # Portrait mode.
+        key("Tab", "space")
+        capture("portrait-playtest")
+        key("q")
+        pointer(156, 20)
         key("e")
         time.sleep(0.3)
         capture("editor-exit")
@@ -213,8 +230,8 @@ def main():
         capture("portrait-stages")
         portrait_title = numpy.asarray(Image.open(OUT / "portrait-stages.png").convert("RGB"))
         assert ((portrait_title.max(axis=2) > 40).mean()) > 0.95, "portrait title artwork is missing"
-        key("Return")
-        time.sleep(0.5)
+        key("Return", "1", "Return")
+        time.sleep(0.2)
         capture("portrait-level")
         from PIL import Image
         picture = Image.open(OUT / "portrait-level.png").convert("RGB")
@@ -264,8 +281,10 @@ def main():
                 # Both full-width actions must fit entirely inside the window.
                 compact = height < 400
                 card_height = (252 if compact else 292) if mode == 2 else (288 if compact else 340)
+                if mode == 2:
+                    card_height += 56
                 card_top = (height - card_height) / 2
-                primary_y = round(card_top + card_height - 96)
+                primary_y = round(card_top + card_height - (152 if mode == 2 else 96))
                 secondary_y = round(card_top + card_height - 36)
                 assert 24 < primary_y < secondary_y < height - 24, name
                 # Exercise each primary action and require a real state change.
@@ -279,7 +298,7 @@ def main():
                 key("space")
                 time.sleep(.15)
                 # Reopened pause uses the pause card, including after game over.
-                pause_height = 252 if compact else 292
+                pause_height = (252 if compact else 292) + 56
                 pointer(width // 2, round((height + pause_height) / 2 - 36))
                 for attempt in range(30):
                     if "mode=0" in log.read_text():
@@ -308,6 +327,7 @@ def main():
             time.sleep(.3)
             capture(f"title-{width}x{height}")
             pointer(width // 2, height - 70)
+            key("1", "Return")
             time.sleep(.15)
             key("space")
             capture(f"play-{width}x{height}")
@@ -355,8 +375,100 @@ def main():
         env.pop("WURM_PROBE_STEERING", None)
         print("Private UI local test: right, down and left turns took effect before release in both orientations.")
 
+        # The saved pad choice drives the same actual pointer path. Sliding
+        # between arms must steer while one contact remains held.
+        (level_directory / "controls.dat").write_bytes(bytes([1]))
+        for width, height in ((640, 480), (320, 568)):
+            stop(app)
+            log = OUT / f"pad-{width}x{height}.log"
+            env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height),
+                       WURM_PROBE_SCENE="1", WURM_PROBE_STEERING="1", WURM_PROBE_MODE="1")
+            app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
+                                   stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
+            for attempt in range(100):
+                if app.poll() is not None:
+                    raise RuntimeError(log.read_text()[-1000:])
+                result = subprocess.run(["xdotool", "search", "--onlyvisible", "--pid", str(app.pid)],
+                                        env=env, capture_output=True, text=True)
+                if result.returncode == 0 and result.stdout.strip():
+                    window = result.stdout.splitlines()[0]
+                    break
+                time.sleep(.05)
+            else:
+                raise RuntimeError("No owned direction-pad probe")
+            time.sleep(.15)
+            side = min(192, max(132, width * .34))
+            left, top = 12, height - side - 12
+            try:
+                for direction, x, y in ((2, left + side * .84, top + side * .5),
+                                        (3, left + side * .5, top + side * .84),
+                                        (0, left + side * .16, top + side * .5)):
+                    subprocess.run(["xdotool", "mousemove", "--window", window, "--sync", str(round(x)), str(round(y)),
+                                    *(["mousedown", "1"] if direction == 2 else [])], env=env, check=True)
+                    deadline = time.monotonic() + 1
+                    while time.monotonic() < deadline:
+                        if f"steering={direction} touch=1" in log.read_text():
+                            break
+                        time.sleep(.02)
+                    else:
+                        raise AssertionError("Held direction-pad turn missing: " + log.read_text())
+                capture(f"direction-pad-{width}x{height}")
+            finally:
+                subprocess.run(["xdotool", "mouseup", "1"], env=env, check=True)
+        (level_directory / "controls.dat").write_bytes(bytes([0]))
+        env.pop("WURM_PROBE_STEERING", None)
+        print("Private UI local test: saved direction-pad choice and held arm changes steer in both orientations.")
+
+        # A playtest uses the selected editor layout even in a window of
+        # the other shape; the two choices are not a viewport-dependent turn.
+        for width,height,layout,columns,rows in ((320,568,0,40,30),(640,480,1,30,40)):
+            stop(app)
+            log=OUT/f"layout-{layout}-{width}x{height}.log"
+            env.update(WURM_PROBE_WIDTH=str(width),WURM_PROBE_HEIGHT=str(height),WURM_PROBE_LEVEL="1",
+                       WURM_PROBE_SCENE="0",WURM_PROBE_EDITOR_LAYOUT=str(layout),WURM_PROBE_MODE="1")
+            app=subprocess.Popen([str(ROOT/"build/Apfelwurm-modal-test")],cwd=ROOT,env=env,
+                                 stdout=open(log,"wb"),stderr=subprocess.STDOUT,start_new_session=True)
+            for attempt in range(100):
+                if app.poll() is not None:raise RuntimeError(log.read_text()[-1000:])
+                result=subprocess.run(["xdotool","search","--onlyvisible","--pid",str(app.pid)],env=env,capture_output=True,text=True)
+                if result.returncode==0 and result.stdout.strip():
+                    window=result.stdout.splitlines()[0];break
+                time.sleep(.05)
+            else:raise RuntimeError("No owned orientation playtest")
+            time.sleep(.2)
+            assert f"board={columns}x{rows}" in log.read_text(), log.read_text()
+            capture(f"editor-playtest-{columns}x{rows}")
+        env.pop("WURM_PROBE_EDITOR_LAYOUT",None)
+        print("Private UI local test: independent portrait edits survive mode switches; both playtest layouts ignore window shape.")
+
+        # Turning a running game selects its other board and preserves the
+        # paused state, lives and score. Only this owned Xvfb window is resized.
+        stop(app)
+        log=OUT/"rotate-active.log"
+        env.update(WURM_PROBE_WIDTH="640",WURM_PROBE_HEIGHT="480",WURM_PROBE_LEVEL="1",
+                   WURM_PROBE_SCENE="0",WURM_PROBE_MODE="2")
+        app=subprocess.Popen([str(ROOT/"build/Apfelwurm-modal-test")],cwd=ROOT,env=env,
+                             stdout=open(log,"wb"),stderr=subprocess.STDOUT,start_new_session=True)
+        for attempt in range(100):
+            if app.poll() is not None:raise RuntimeError(log.read_text()[-1000:])
+            result=subprocess.run(["xdotool","search","--onlyvisible","--pid",str(app.pid)],env=env,capture_output=True,text=True)
+            if result.returncode==0 and result.stdout.strip():
+                window=result.stdout.splitlines()[0];break
+            time.sleep(.05)
+        else:raise RuntimeError("No owned rotation probe")
+        time.sleep(.15)
+        for width,height,columns,rows in ((320,568,30,40),(640,480,40,30)):
+            subprocess.run(["xdotool","windowsize",window,str(width),str(height)],env=env,check=True)
+            deadline=time.monotonic()+3
+            while time.monotonic()<deadline:
+                if f"board={columns}x{rows} lives=3 score=1234 mode=2" in log.read_text():break
+                time.sleep(.05)
+            else:raise AssertionError("Rotation lost board orientation or run state: "+log.read_text())
+            capture(f"rotate-level-2-{columns}x{rows}")
+        print("Private UI local test: rotating level 2 loads the other layout, preserving pause, lives and score.")
+
         # Render an actual board from every landscape, without a modal.
-        for chapter, level in (("meadow", 0), ("leafwood", 14), ("pinewood", 27), ("lake", 40), ("mountains", 53)):
+        for chapter, level in (("meadow", 0), ("leafwood", 40), ("pinewood", 80), ("lake", 120), ("mountains", 160)):
             stop(app)
             log = OUT / (chapter + ".log")
             env.update(WURM_PROBE_WIDTH="640", WURM_PROBE_HEIGHT="480", WURM_PROBE_SCENE="7",
@@ -388,7 +500,7 @@ def main():
                 log = OUT / (name + ".log")
                 env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height),
                            WURM_PROBE_SCENE=str(scene), WURM_PROBE_MODE="1",
-                           WURM_PROBE_LEVEL="14" if scene == 8 else "0")
+                           WURM_PROBE_LEVEL="40" if scene == 8 else "0")
                 app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
                                        stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
                 for attempt in range(100):

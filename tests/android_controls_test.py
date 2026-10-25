@@ -128,6 +128,18 @@ def main():
         assert sum(n.get('kind') == 'button' and n.get('interactive') and n.get('visible') for n in tree['nodes']) == 1
         return play, root
 
+    def start_level():
+        command('press', label='Play', role='button')
+        # A new profile asks once; a retained profile keeps its choice.
+        choice = command('find', label='Swipe', role='button', visible=1)
+        if choice.get('nodes'):
+            command('press', label='Swipe', role='button')
+        wait('Your journey')
+        command('press', label='Meadow', role='button')
+        wait('Stages', 'button')
+        command('press', label='1', role='button')
+        wait('Pause', 'button')
+
     try:
         shell('input', 'keyevent', 'KEYCODE_WAKEUP')
         shell('wm', 'dismiss-keyguard')
@@ -140,9 +152,10 @@ def main():
         wait('Play', 'button')
         orient(1)
         title('title-landscape')
-        command('press', label='Play', role='button')
-        wait('Pause', 'button')
+        start_level()
         command('press', label='Pause', role='button')
+        command('press', label='Controls', role='button')
+        command('press', label='Swipe', role='button')
         capture('paused-landscape')
         command('press', label='Back to title', role='button')
         orient(0)
@@ -152,6 +165,10 @@ def main():
             scale = picture.width / root['width']
         shell('input', 'tap', str(round((play['x'] + play['width'] / 2) * scale)),
               str(round((play['y'] + play['height'] / 2) * scale)))
+        # The OS tap also passes through the retained stage selector.
+        wait('Your journey')
+        command('press', label='Meadow', role='button')
+        command('press', label='1', role='button')
         wait('Pause', 'button')
         command('press', label='Pause', role='button')
         wait('Paused')
@@ -185,6 +202,28 @@ def main():
             gesture.communicate(timeout=10)
         assert gesture.returncode == 0, 'OS touch command failed'
         capture('steered')
+        command('press', label='Controls', role='button')
+        wait('Direction pad', 'button')
+        capture('control-choice')
+        command('press', label='Direction pad', role='button')
+        command('press', label='Resume', role='button')
+        pad = wait('Direction pad')
+        before = command('find', key=2000)['nodes'][0]
+        # A physical OS tap on the up arm follows Android's native input
+        # path. The remaining head moves must already be upward.
+        command('pointer', real=1)
+        x = round((pad['x'] + pad['width'] * .5) * scale)
+        y = round((pad['y'] + pad['height'] * .16) * scale)
+        shell('input', 'tap', str(x), str(y))
+        deadline = time.monotonic() + 1.2
+        while time.monotonic() < deadline:
+            after = command('find', key=2000)['nodes'][0]
+            if after['y'] < before['y'] - before['height']:
+                break
+        else:
+            raise AssertionError(('Direction pad did not steer up', before, after))
+        command('press', label='Pause', role='button')
+        capture('direction-pad')
         wait('Back to title', 'button')
         command('press', label='Back to title', role='button')
         wait('Play', 'button')
@@ -193,7 +232,7 @@ def main():
             assert shell('pidof', PACKAGE, check=False).stdout.strip() == owner_pid, 'Normal owner game process changed'
         receipt.update(passed=True, preserved_normal_process=bool(owner_pid),
                        behaviors=['portrait and landscape title', '60-unit Play button', 'OS touch start',
-                                  'pause in both orientations', 'resume', 'OS steering before touch release', 'return to title'])
+                                  'pause in both orientations', 'resume', 'OS steering before touch release', 'stage selector', 'control choice', 'OS direction-pad steering', 'return to title'])
     finally:
         # This directory was absent before the test and contains only its protocol files.
         shell('run-as', package, 'rm', '-rf', DRIVER)

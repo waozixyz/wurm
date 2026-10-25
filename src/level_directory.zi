@@ -10,7 +10,7 @@
 
     ReadBundledLevel :: (level: s32, output: []u8) -> s64 {
         digits: [16]u8
-        parts: [3]string = .["assets/levels/level", FormatInteger(cast(s64)(level + 1), digits[:]), ".dat"]
+        parts: [3]string = .["assets/campaign-levels/level", FormatInteger(cast(s64)(level + 1), digits[:]), ".dat"]
         at: s64 = 0
         for part: parts {
             for byte: part {
@@ -28,13 +28,13 @@
 
     LevelDirectory :: () -> string {
         private := AndroidPrivateDataPath(private_directory[:])
-        if private.count == 0 || private.count + 8 >= directory.count { return "" }
+        if private.count == 0 || private.count + 18 >= directory.count { return "" }
         at: s64 = 0
         for byte: private {
             directory[at] = byte
             at += 1
         }
-        for byte: "/levels/" {
+        for byte: "/campaign-levels/" {
             directory[at] = byte
             at += 1
         }
@@ -42,7 +42,7 @@
         return TextUntilNul(directory[:])
     }
 } else {
-    LevelDirectory :: () -> string { return "assets/levels/" }
+    LevelDirectory :: () -> string { return "assets/campaign-levels/" }
     ReadBundledLevel :: (level: s32, output: []u8) -> s64 {
         unused level
         unused output

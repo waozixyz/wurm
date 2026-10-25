@@ -19,42 +19,54 @@ def main():
     arguments = parser.parse_args()
 
     changed = 0
-    destination = ROOT / "assets/art/previews"
+    destination = ROOT / "assets/art/campaign-previews"
     if not arguments.check:
         destination.mkdir(parents=True, exist_ok=True)
     for stage, first, end in STAGES:
-        sheet = Image.open(ROOT / f"assets/art/{stage}.png").convert("RGBA")
+        sheet = Image.open(ROOT / f"assets/art/campaign-{stage}.png").convert("RGBA")
         canopy = Image.open(ROOT / 'assets/art/forest-canopy.png').convert('RGBA') if stage == 'leafwood' else None
         for number in range(1, end - first + 1):
             designed = ROOT / "build/designed" / f"level{first + number}.dat"
             raw_path = designed
             raw = raw_path.read_bytes()
             tiles = raw[1:1201] if len(raw) > 1201 else raw[1:]
-            preview = Image.new("RGB", (WIDTH, HEIGHT))
-            for y in range(30):
-                for x in range(40):
-                    tile = tiles[x * 30 + y] & 127
-                    if 40 <= tile <= 45:
-                        tile = 0
-                    source = sheet.crop(((tile % 20) * 32, (tile // 20) * 32,
-                                         (tile % 20) * 32 + 32, (tile // 20) * 32 + 32))
-                    if canopy is not None and (tile == 20 or 50 <= tile <= 58):
-                        source = canopy.crop((x * 32, y * 32, (x + 1) * 32, (y + 1) * 32))
-                    preview.paste(source.resize((WIDTH // 40, HEIGHT // 30)), (x * (WIDTH // 40), y * (HEIGHT // 30)))
-            path = destination / f"{stage}-{number}.png"
-            if arguments.check:
-                encoded = preview.tobytes()
-                if not path.exists():
-                    raise SystemExit(f"{path} is missing; rerun tools/render_previews.py")
-                if Image.open(path).tobytes() != encoded:
-                    raise SystemExit(f"{path} does not match regeneration; rerun tools/render_previews.py")
-            elif not path.exists() or Image.open(path).tobytes() != preview.tobytes():
-                preview.save(path)
-                changed += 1
+            for portrait in (False,True):
+                columns,rows=(30,40) if portrait else (40,30)
+                width,height=(150,200) if portrait else (200,150)
+                board={(x,y):tiles[x*30+y] for x in range(40) for y in range(30)}
+                if portrait:
+                    authored=ROOT/'build/designed'/f"level{first+number}-portrait.dat"
+                    if authored.exists():
+                        data=authored.read_bytes()
+                        board={(x,y):data[1+x*40+y] for x in range(30) for y in range(40)}
+                    else:board={(29-y,x):tile for (x,y),tile in board.items()}
+                field=canopy
+                if portrait and canopy is not None:field=Image.open(ROOT/'assets/art/forest-canopy-portrait.png').convert('RGBA')
+                preview=Image.new('RGB',(width,height))
+                for y in range(rows):
+                    for x in range(columns):
+                        tile=board[x,y]&127
+                        enemy=tile if 40<=tile<=45 else None
+                        if enemy is not None:tile=0
+                        source=sheet.crop(((tile%20)*32,(tile//20)*32,(tile%20)*32+32,(tile//20)*32+32))
+                        if field is not None and (tile==20 or 50<=tile<=58):
+                            source=field.crop((x*32,y*32,(x+1)*32,(y+1)*32))
+                        if enemy is not None:
+                            column=6 if enemy==40 else enemy-40
+                            source=source.copy()
+                            source.alpha_composite(sheet.crop((column*32,64,column*32+32,96)))
+                        preview.paste(source.resize((5,5)),(x*5,y*5))
+                suffix='-portrait' if portrait else ''
+                path=destination/f"{stage}-{number}{suffix}.png"
+                if arguments.check:
+                    if not path.exists() or Image.open(path).tobytes()!=preview.tobytes():
+                        raise SystemExit(f"{path} does not match regeneration; rerun tools/render_previews.py")
+                elif not path.exists() or Image.open(path).tobytes()!=preview.tobytes():
+                    preview.save(path);changed+=1
     if arguments.check:
         print("Preview pictures match regeneration.")
     else:
-        print(f"Previews written: {changed} changed, 66 total.")
+        print(f"Previews written: {changed} changed, 400 total.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,35 @@
+Records :: #import, file "controls.zi";
+completed: [5]u8;
+loaded: bool;
+
+Load :: () {
+    if loaded { return }
+    loaded = true
+    bytes: [6]u8
+    if Records.ReadRecord("journey.dat", bytes[:]) != 5 { return }
+    for stage: 0..4 { if bytes[stage] > 40 { return } }
+    for stage: 0..4 { completed[stage] = bytes[stage] }
+}
+Unlocked :: (stage: s32) -> bool {
+    Load()
+    if stage < 0 || stage >= 5 { return false }
+    for before: 0..stage - 1 { if completed[before] < 40 { return false } }
+    return true
+}
+Cleared :: (stage: s32) -> s32 { Load(); return cast(s32)completed[stage] }
+LevelUnlocked :: (level: s32) -> bool {
+    if level < 0 || level >= 200 { return false }
+    return Unlocked(level / 40) && level % 40 <= Cleared(level / 40)
+}
+Win :: (level: s32) -> bool {
+    Load()
+    if !LevelUnlocked(level) { return false }
+    stage := level / 40
+    number := level % 40 + 1
+    if number <= cast(s32)completed[stage] { return true }
+    previous := completed[stage]
+    completed[stage] = cast(u8)number
+    if Records.WriteRecord("journey.dat", completed[:]) { return true }
+    completed[stage] = previous
+    return false
+}

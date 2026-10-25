@@ -1,4 +1,12 @@
 #import, file "../src/game.zi";
+// campaign-cases:begin
+// Generated from campaign_cases.json by tools/design_levels.py.
+CampaignSeeds: [400]u32 = .[1, 1, 65538, 65538, 131075, 131075, 196612, 196612, 262149, 262149, 327686, 327686, 393223, 401142, 466679, 458760, 532216, 540135, 589834, 597753, 655371, 679128, 728827, 720908, 786445, 786445, 867820, 851982, 917519, 917519, 1014732, 983056, 1064431, 1064431, 1114130, 1114130, 1195505, 1211343, 1245204, 1261042, 1318660, 1326579, 1384197, 1392116, 1441815, 1544762, 1586542, 1546947, 1596646, 1572889, 1638426, 1638426, 1703963, 1703963, 2070422, 1824933, 1898389, 1850875, 1932250, 1900574, 1966111, 1974030, 2039567, 2047486, 2303079, 2105104, 2202317, 2210236, 2252016, 2236178, 2293796, 2301715, 2367252, 2391009, 2440708, 2456546, 4525590, 3155603, 2595539, 2650972, 2637319, 2621481, 2726613, 2900831, 2752555, 2752555, 2857687, 2826011, 2891548, 2891548, 3178817, 2996680, 3014703, 3244354, 3080240, 3088159, 3201210, 3145777, 3401370, 3211314, 3292689, 3276851, 3342388, 3350307, 3439601, 3423763, 3473462, 3631842, 3538999, 3538999, 3612455, 3762916, 3773020, 3677992, 3751448, 3751448, 3848661, 5677950, 3874603, 3866684, 5975323, 4051006, 4005677, 4013596, 4118728, 4205837, 4279293, 4366402, 4194369, 4233964, 6350522, 4378691, 4420471, 4388795, 4390980, 4438494, 4464436, 4496112, 4577487, 4545811, 4619267, 4643024, 4668966, 4661047, 4766179, 4750341, 4879230, 4807959, 5895047, 4857658, 6966297, 6950459, 5004570, 5099598, 5062188, 5101783, 5135644, 5230672, 5391237, 5185343, 5290475, 5290475, 5356012, 5332255, 5389873, 5405711, 5534600, 5447491, 5600137, 5766436, 5934920, 6623873, 5652021, 5644102, 5883857, 5780910, 5870204, 6060260, 6189149, 10441652, 6056711, 6032954, 5971787, 6019301, 6061081, 6037324, 6316674, 6213727, 6231750, 6215912, 6233935, 6249773, 6331148, 8516792, 7299451, 8479382, 15513639, 59852120, 9006406, 7691852, 7084274, 6846704, 6666752, 6761780, 7128239, 7452918, 6845340, 6766150, 6831687, 6895039, 6889305, 8916569, 7129060, 6970680, 11177854, 8358690, 7648165, 7426433, 7484051, 8022543, 7470398, 8230622, 7551773, 8098184, 8203316, 7474768, 13146957, 8070878, 7494976, 7502895, 7766407, 8882986, 7784430, 7697321, 7675749, 7699506, 7772962, 7780881, 18988451, 9778654, 7872360, 7959469, 7929978, 8032925, 8066786, 8415222, 8076890, 8061052, 8142427, 8134508, 8809808, 8390101, 8265582, 8257663, 8505337, 8766664, 20655268, 10012132, 8470112, 8517626, 8575244, 8551487, 8585348, 8617024, 8650885, 8650885, 8763936, 8756017, 8797797, 8924501, 8918767, 8990038, 8913033, 9055575, 9802146, 16176941, 19924813, 9059945, 9212591, 9117563, 9183100, 9191019, 9280313, 9248637, 9322093, 9314174, 9561848, 9443063, 9524438, 9453167, 9613732, 9518704, 9576322, 9568403, 9689373, 10132837, 9739072, 9723234, 9907556, 9883799, 9830551, 9838470, 9911926, 9927764, 9977463, 9969544, 10027162, 10074676, 10092699, 10092699, 10166155, 10229507, 10295044, 10247530, 10471447, 10368500, 11685239, 10925015, 10436222, 10523331, 10485921, 10565111, 11034517, 10630648, 10616995, 10807051, 10682532, 10682532, 11056910, 10779745, 10813606, 10837363, 11417635, 11385959, 10960518, 10960518, 11224030, 11026055, 11535056, 11297486, 11204643, 11165048, 11761158, 11222666, 11367393, 11454502, 11345821, 11432930, 11870660, 11949850, 11849088, 11540247, 11582027, 11621622, 12486978, 12629520, 11673506, 11689344, 11739043, 11739043, 13261676, 11796661, 12004740, 11917631, 11951492, 11935654, 12143733, 12207085, 12122161, 12082566, 12298564, 13399305, 12237397, 12189883, 12255420, 12271258, 12352633, 12368471, 13518911, 16258885, 12483707, 12491626, 12541325, 13087736, 12614781, 12844432, 12672399, 12648642, 17323037, 76295830, 12779716, 12827230, 12900686, 12861091, 13924422, 13781880, 135023955, 87216952, 17452747, 13984225];
+CampaignRoutes: [400]s32 = .[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 52, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 4, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 5, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 11, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 4, 62, 0, 0, 0, 0, 1, 0, 120, 73, 4, 0];
+CampaignReverse: [400]s32 = .[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1];
+// campaign-cases:end
+libc :: #system_library "libc";
+ParseNumber :: (text: *u8) -> s32 #foreign libc "atoi";
 File :: #import "std/file_linux";
 #import "std/number_text"
 #import "std/text_buffer"
@@ -8,10 +16,15 @@ AppendName :: (at: s32, text: string) -> s32 {
     for i: 0..text.count - 1 { route_name[at + i] = text[i] }
     return at + cast(s32)text.count
 }
-CyclePath :: (level: s32) -> string {
+CyclePath :: (level: s32, variant: s32 = 0, portrait: bool = false) -> string {
     digits: [20]u8
     at := AppendName(0, "build/designed/cycle")
     at = AppendName(at, FormatInteger(cast(s64)(level + 1), digits[:]))
+    if variant > 0 {
+        at = AppendName(at, "-")
+        at = AppendName(at, FormatInteger(cast(s64)variant, digits[:]))
+    }
+    if portrait && HasPortraitDesign(level) { at = AppendName(at,"-portrait") }
     at = AppendName(at, ".dat")
     route_name[at] = 0
     return TextUntilNul(route_name[:])
@@ -19,19 +32,20 @@ CyclePath :: (level: s32) -> string {
 U16 :: (bytes: []u8, at: s32) -> s32 {
     return cast(s32)bytes[at] | (cast(s32)bytes[at + 1] << 8)
 }
-ReadCycle :: (level: s32, route: []Point) -> s32 {
-    file := File.OpenRead(CyclePath(level))
+ReadCycle :: (level: s32, route: []Point, variant: s32 = 0, portrait: bool = false) -> s32 {
+    file := File.OpenRead(CyclePath(level, variant, portrait))
     if !file.valid { return 0 }
     bytes: [2402]u8
     count := File.ReadAt(file, bytes[:], 0)
     File.CloseFile(file)
     if count < 2 { return 0 }
     size := U16(bytes[:], 0)
-    if size < 600 || size > 1200 || count != size * 2 + 2 { return 0 }
+    if size < 320 || size > 1200 || count != size * 2 + 2 { return 0 }
     for i: 0..size - 1 {
         cell := U16(bytes[:], 2 + cast(s32)i * 2)
         if cell >= 1200 { return 0 }
-        route[i] = Point.{cell % 40, cell / 40}
+        columns: s32 = ifx portrait && HasPortraitDesign(level) then 30 else 40
+        route[i] = Point.{cell % columns,cell / columns}
     }
     return size
 }
@@ -43,9 +57,111 @@ DirectionKey :: (a: Point, b: Point) -> s32 {
 }
 SafeTick :: (game: *Game) -> bool {
     Tick(game)
-    return game.death_ticks == 0 && game.lives == 3 && game.mode != MODE_DIED
+    return game.death_ticks == 0 && game.lives > 0 && game.mode != MODE_DIED
 }
+route_indices: [1200]s32;
+RouteGap :: (from: s32, to: s32, count: s32) -> s32 {
+    return (to - from + count) % count
+}
+SafeCell :: (game: *Game, direction: s32) -> bool {
+    trial := game.*
+    trial.next_direction = direction
+    for tick: 0..3 {
+        Tick(*trial)
+        if trial.death_ticks > 0 || trial.mode == MODE_DIED { return false }
+    }
+    return true
+}
+Detour :: (game: *Game, route: []Point, at: s32) -> s32 {
+    distances: [1200]s32
+    queue: [1200]Point
+    for i: 0..1199 { distances[i] = -1 }
+    target := ifx game.apples > 0 then Point.{game.apple.x / 16, game.apple.y / 16} else Point.{board_columns / 2, 1}
+    distances[Index(target.x, target.y)] = 0
+    queue[0] = target
+    head: s32 = 0
+    tail: s32 = 1
+    while head < tail {
+        p := queue[head]; head += 1
+        for d: 0..3 {
+            q := p
+            if d == 0 { q.x -= 1 } else if d == 1 { q.y -= 1 } else if d == 2 { q.x += 1 } else { q.y += 1 }
+            if !Inside(q.x,q.y) || distances[Index(q.x,q.y)] >= 0 { continue }
+            pixel := Point.{q.x * 16 + 8,q.y * 16 + 8}
+            if WallAt(game,pixel) || WormNear(game,pixel,8,10) { continue }
+            distances[Index(q.x,q.y)] = distances[Index(p.x,p.y)] + 1
+            queue[tail] = q; tail += 1
+        }
+    }
+    best: s32 = -1
+    score: s32 = -1000000
+    p := route[at]
+    for d: 0..3 {
+        if d == (game.direction + 2) % 4 || !SafeCell(game,cast(s32)d) { continue }
+        q := p
+        if d == 0 { q.x -= 1 } else if d == 1 { q.y -= 1 } else if d == 2 { q.x += 1 } else { q.y += 1 }
+        if !Inside(q.x,q.y) { continue }
+        index := route_indices[Index(q.x,q.y)]
+        if index < 0 { continue }
+        distance := distances[Index(q.x,q.y)]
+        value := ifx distance >= 0 then 10000 - distance else -Abs(q.x-target.x)-Abs(q.y-target.y)
+        value -= visits[Index(q.x,q.y)] * 8
+        if best < 0 || value > score { best = index; score = value }
+    }
+    return best
+}
+visits: [1200]s32;
+
+ChooseNext :: (game: *Game, route: []Point, at: s32) -> s32 {
+    count := cast(s32)route.count
+    tail := game.worm[game.length - 1]
+    tail_at: s32 = -1
+    if Inside(tail.x / 16, tail.y / 16) { tail_at = route_indices[Index(tail.x / 16, tail.y / 16)] }
+    free := ifx tail_at < 0 then count else RouteGap(at, tail_at, count)
+    if free == 0 { free = count }
+    growth := ((game.target_length + game.apples * 4) * 16 - game.length + 3) / 4 + 3
+    if growth < 3 { growth = 3 }
+    apple_at: s32 = route_indices[Index(board_columns / 2, 1)]
+    if game.apples > 0 { apple_at = route_indices[Index(game.apple.x / 16, game.apple.y / 16)] }
+    target := ifx apple_at < 0 then count - 1 else RouteGap(at, apple_at, count)
+    here := route[at]
+    best: s32 = -1
+    score: s32 = -1000000
+    for direction: 0..3 {
+        if direction == (game.direction + 2) % 4 { continue }
+        next := here
+        if direction == DIR_LEFT { next.x -= 1 }
+        else if direction == DIR_UP { next.y -= 1 }
+        else if direction == DIR_RIGHT { next.x += 1 }
+        else { next.y += 1 }
+        if !Inside(next.x, next.y) { continue }
+        index := route_indices[Index(next.x, next.y)]
+        if index < 0 { continue }
+        gap := RouteGap(at, index, count)
+        if gap < 1 || gap >= free - growth { continue }
+        if gap > target && gap != 1 { continue }
+        if !SafeCell(game, cast(s32)direction) { continue }
+        value := gap
+        // Keep a wide berth around moving hazards when a similarly useful
+        // route exists. All moves still use the unchanged engine collisions.
+        point := Point.{next.x * 16 + 8, next.y * 16 + 8}
+        for enemy: 0..game.monster_count - 1 {
+            distance := Abs(point.x - game.monsters[enemy].position.x) + Abs(point.y - game.monsters[enemy].position.y)
+            if distance < 40 { value -= (40 - distance) * 6 }
+        }
+        if best < 0 || value > score { best = index; score = value }
+    }
+    // If a patrol blocks the ordered loop, use an exact-collision-tested
+    // detour. Flood distances avoid the current body rather than assuming
+    // that a two-wide corridor is still free.
+    if best < 0 { best = Detour(game, route, at) }
+    return best
+}
+
+replay_reason: s32;
+replay_apples: s32;
 Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
+    replay_reason = 0
     canonical: [CELLS]u8
     board: [CELLS]u8
     objects: [CELLS]u8
@@ -54,11 +170,13 @@ Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
     }
     columns: s32 = ifx portrait then 30 else 40
     rows: s32 = ifx portrait then 40 else 30
-    if portrait { TurnForward(canonical[:], board[:]) }
+    if portrait { PortraitBoard(level,canonical[:],board[:]) }
     else { board = canonical }
+    for i: 0..1199 { route_indices[i] = -1; visits[i] = 0 }
+    BoardSize(columns, rows)
+    for i: 0..route.count - 1 { route_indices[Index(route[i].x, route[i].y)] = cast(s32)i }
     game: Game
     StartGameData(*game, level, 0, seed, board[:], BaseApples(level), columns, rows, objects[:])
-    if game.monster_count != 0 { return false }
     // Enter naturally from outside the bottom gate; no teleports or skips.
     while game.worm[0].y > (rows - 2) * 16 + 8 {
         if !SafeTick(*game) { return false }
@@ -69,54 +187,96 @@ Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
     }
     if cycle_at < 0 { return false }
     edge: s32 = 0
-    budget := cast(s32)route.count * (BaseApples(level) + 2)
+    budget := cast(s32)route.count * (BaseApples(level) * 4 + 8)
     while edge < budget {
         here := route[cycle_at]
+        visits[Index(here.x,here.y)] += 1
         if game.apples == 0 && here.x == columns / 2 && here.y == 1 {
             if !ApplyInput(*game, 265) { return false }
             while game.transition_ticks == 0 {
                 if !SafeTick(*game) { return false }
             }
             for tick: 0..49 { Tick(*game) }
-            return game.lives == 3 && game.apples == 0 &&
+            replay_deaths = 3 - game.lives
+            return game.lives > 0 && game.apples == 0 &&
                 (game.mode == MODE_FINISHED || game.mode == MODE_VICTORY)
         }
-        next_at := (cycle_at + 1) % cast(s32)route.count
+        next_at := ChooseNext(*game, route, cycle_at)
+        if next_at < 0 { replay_reason = 1; replay_apples = game.apples; return false }
         next := route[next_at]
-        if !ApplyInput(*game, DirectionKey(here, next)) { return false }
-        for step: 0..3 { if !SafeTick(*game) { return false } }
-        if game.worm[0].x != next.x * 16 + 8 || game.worm[0].y != next.y * 16 + 8 { return false }
+        if !ApplyInput(*game, DirectionKey(here, next)) { replay_reason = 2; return false }
+        hit := false
+        for step: 0..3 {
+            Tick(*game)
+            if game.death_ticks > 0 { hit = true; break }
+        }
+        if hit {
+            while game.death_ticks > 0 && game.mode == MODE_PLAYING { Tick(*game) }
+            if game.mode != MODE_PLAYING { replay_reason = 3; return false }
+            while game.worm[0].y > (rows - 2) * 16 + 8 {
+                if !SafeTick(*game) { return false }
+            }
+            for i: 0..route.count - 1 {
+                if route[i].x == columns / 2 && route[i].y == rows - 2 { cycle_at = cast(s32)i }
+            }
+            edge += 1
+            continue
+        }
+        if game.worm[0].x != next.x * 16 + 8 || game.worm[0].y != next.y * 16 + 8 { replay_reason = 4; return false }
         if game.apple.x >= 0 && (game.apple.x < 16 || game.apple.y < 16 ||
             game.apple.x >= (columns - 1) * 16 || game.apple.y >= (rows - 1) * 16) { return false }
         cycle_at = next_at
         edge += 1
     }
+    replay_reason = 5
     return false
 }
 
+replay_deaths: s32;
 #program_export
-main :: () -> s32 {
+main :: (argc: s32, argv: **u8) -> s32 {
+    search := argc > 1
+    first: s32 = ifx argc > 2 then ParseNumber(argv[2]) - 1 else 0
+    last: s32 = ifx argc > 3 then ParseNumber(argv[3]) - 1 else LEVEL_COUNT - 1
     canonical: [1200]Point
     route: [1200]Point
-    seeds: [3]u32 = .[1, 42, 7331]
     wins: s32 = 0
-    for level: 0..LEVEL_COUNT - 1 {
+    deaths: s32 = 0
+    for level: first..last {
         count := ReadCycle(cast(s32)level, canonical[:])
         if count == 0 { print("Invalid cycle for level %\n", level + 1); return 1 }
         for orientation: 0..1 {
-            for i: 0..count - 1 {
-                point := canonical[i]
-                route[i] = ifx orientation == 0 then point else Point.{29 - point.y, point.x}
-            }
-            for sample: 0..2 {
-                if !Replay(cast(s32)level, orientation == 1, seeds[sample], route[0:count]) {
-                    print("Replay failed: level %, portrait %, seed %\n", level + 1, orientation, seeds[sample])
-                    return 2
+            if orientation == 1 && HasPortraitDesign(cast(s32)level) { count = ReadCycle(cast(s32)level,canonical[:],0,true) }
+            attempts: s32 = ifx search then 16384 else 1
+            won := false
+            reasons: [6]s32
+            for attempt: 0..attempts - 1 {
+                variant := ifx search then cast(s32)(attempt / 128) else CampaignRoutes[level * 2 + orientation]
+                reverse := ifx search then cast(s32)(attempt / 64) % 2 else CampaignReverse[level * 2 + orientation]
+                if attempt % 128 == 0 {
+                    if ReadCycle(cast(s32)level, canonical[:], variant,orientation == 1) != count { return 1 }
                 }
-                wins += 1
+                for i: 0..count - 1 {
+                    point := canonical[ifx reverse == 0 then i else count - 1 - i]
+                    route[i] = ifx orientation == 0 || HasPortraitDesign(cast(s32)level) then point else Point.{29 - point.y, point.x}
+                }
+                seed := CampaignSeeds[level * 2 + orientation]
+                if search { seed = cast(u32)(1 + attempt * 7919 + level * 65537) }
+                if Replay(cast(s32)level, orientation == 1, seed, route[0:count]) {
+                    print("WIN level % portrait % seed % deaths % reverse % route %\n", level + 1, orientation, seed, replay_deaths, reverse, variant)
+                    wins += 1
+                    deaths += replay_deaths
+                    won = true
+                    break
+                }
+                reasons[replay_reason] += 1
+            }
+            if !won {
+                print("Replay failed: level %, portrait %, % attempts; reasons % % % % % % apples %\n", level + 1, orientation, attempts, reasons[0], reasons[1], reasons[2], reasons[3], reasons[4], reasons[5], replay_apples)
+                return 2
             }
         }
     }
-    print("Campaign engine local test: % complete wins, zero deaths; every level, both orientations, three apple seeds.\n", wins)
+    print("Campaign engine local test: % complete wins with active enemies; % lives used.\n", wins, deaths)
     return 0
 }

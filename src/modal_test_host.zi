@@ -124,6 +124,17 @@ main :: () -> s32 {
         for segment: 0..31 { state.worm[segment] = Point.{head.x, head.y + cast(s32)segment * 4} }
         state.next_step = Timer.MonotonicMilliseconds() + TICK_MS
     }
+    layout := Number("WURM_PROBE_EDITOR_LAYOUT",-1)
+    if layout >= 0 {
+        App.EditorAtStartup(Number("WURM_PROBE_LEVEL",1))
+        App.editor.browsing = false
+        if layout == 1 { App.EditorTurn() }
+        App.EditorPlaytest(Timer.MonotonicMilliseconds())
+        if board_columns != (ifx layout == 1 then 30 else 40) || board_rows != (ifx layout == 1 then 40 else 30) { return 20 }
+        state.next_step = Timer.MonotonicMilliseconds() + 600000
+    }
+    previous_columns: s32 = -1
+    previous_rows: s32 = -1
     previous: s32 = -1
     previous_direction: s32 = -1
     while PollDesktop() {
@@ -135,6 +146,11 @@ main :: () -> s32 {
         if cast(s32)BeginFrame(session, 1, viewport) != 0 { return 3 }
         if App.Frame(session, viewport) != 0 { return 4 }
         if cast(s32)EndFrame(session) != 0 || !EndDesktopFrame() { return 5 }
+        if previous_columns != board_columns || previous_rows != board_rows {
+            previous_columns = board_columns; previous_rows = board_rows
+            print("board=%x% lives=% score=% mode=%\n",board_columns,board_rows,state.lives,state.score,state.mode)
+            unused Flush(null)
+        }
         if previous != state.mode {
             previous = state.mode
             print("mode=% lives=%\n", previous, state.lives)

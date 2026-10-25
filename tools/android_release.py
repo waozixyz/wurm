@@ -50,8 +50,13 @@ def verify(apk):
                 assert loads and all(int(parts[-1], 16) >= 16384 for parts in loads), 'Native libraries require 16 KB load alignment'
         for name in ('garden.png', 'forest.png', 'forest-canopy.png', 'forest-canopy-portrait.png',
                      'meadow.png', 'leafwood.png', 'pinewood.png', 'lake.png', 'mountains.png',
+                     'campaign-meadow.png', 'campaign-leafwood.png', 'campaign-pinewood.png',
+                     'campaign-lake.png', 'campaign-mountains.png', 'stage-covers.png',
                      'title.png', 'title-portrait.png'):
             assert archive.read('assets/assets/art/' + name) == (ROOT / 'assets/art' / name).read_bytes(), name
+        for preview in (ROOT / 'assets/art/campaign-previews').glob('*.png'):
+            assert archive.read('assets/' + str(preview.relative_to(ROOT))) == preview.read_bytes(), preview.name
+        assert not any(name.startswith('assets/assets/campaign-levels/') for name in archive.namelist()), 'Personal campaign edits must stay private'
         for number in (1, 2, 3):
             name = f'assets/levels/level{number}.dat'
             assert archive.read('assets/' + name) == (ROOT / name).read_bytes(), name

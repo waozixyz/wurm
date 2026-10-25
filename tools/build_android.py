@@ -48,6 +48,8 @@ def main():
         'android:targetActivity="xyz.waozi.wurm.MainActivity"')
     manifest.write_text(text)
     destination = ROOT / 'droid/app/src/main/assets'
+    # Personal edits never become release assets. The base campaign is compiled.
+    shutil.rmtree(destination / 'assets/campaign-levels', ignore_errors=True)
     for folder, pattern in [('art', '*.png'), ('sounds', '*.pcm'), ('levels', '*.dat')]:
         for source in (ROOT / 'assets' / folder).rglob(pattern):
             target = destination / source.relative_to(ROOT)

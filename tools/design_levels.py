@@ -1,168 +1,38 @@
 #!/usr/bin/env python3
-"""Author the 66 clean tile challenges and certify a safe loop on every floor.
+"""Adapt the recovered Worm designs into five distinct 40-level chapters.
 
-Layouts use deliberately placed obstacles on a two-tile grid. A spanning tree
-of connected 2x2 floor blocks is expanded into one Hamiltonian cycle through
-EVERY floor tile. This gives the real engine replay test a route that can
-collect apples anywhere without dead ends, in either orientation. The route
-is validation data, never an on-screen hint or an autoplayer in the game.
-
---check verifies the checked-in level source; both modes refresh derived
-boards, route certificates and the design manifest under build/designed.
+Every board cites two original design references. Their walls, chambers,
+shorelines and patrol arenas are adapted to a two-tile-wide mobile grid;
+minimal doors join enclosed floor and the four orientation-safe landings.
+A floor-covering loop certifies the static geometry. The real engine replay
+separately verifies winning with the original moving enemies still active.
 """
 import argparse
-from collections import deque
-import hashlib
+from collections import Counter, deque
+import heapq
 import json
 from pathlib import Path
 import random
 import struct
 
-ROOT = Path(__file__).resolve().parents[1]
-COLUMNS, ROWS = 40, 30
-MW, MH = 19, 14
-STAGES = (("meadow", 0, 14), ("leafwood", 14, 27), ("pinewood", 27, 40),
-          ("lake", 40, 53), ("mountains", 53, 66))
-# name, obstacle family, challenge tier, apples. Breathers are intentional.
-BLUEPRINTS = [
- ('First Bite','orchard',1,5), ('Gentle Turn','orchard',1,5),
- ('Four Corners','islands',1,5), ('Wide Passage','bars',1,5),
- ('Pondside','ponds',1,5), ('Easy Weave','slalom',1,5),
- ('Meadow Lanes','lanes',2,5), ('Stepping Stones','steps',2,5),
- ('Open Courtyard','courtyard',2,6), ('Crossroads','crosses',2,5),
- ('Apple Islands','islands',2,6), ('Sunny Clearing','orchard',2,5),
- ('Meadow Rooms','rooms',2,6), ('Woodland Edge','bars',3,6),
- ('First Leaves','orchard',2,5), ('Oak Walk','slalom',3,6),
- ('Leaf Pools','ponds',3,5), ('Beech Aisles','lanes',3,6),
- ('Root Steps','steps',3,6), ('Canopy Doors','courtyard',3,7),
- ('Sunlit Glade','orchard',2,5), ('Leafy Rooms','rooms',3,6),
- ('Branching Paths','crosses',3,6), ('Brook Crossings','bridges',3,7),
- ('Long Branches','bars',4,6), ('Moss Islands','islands',3,6),
- ('Last Oaks','slalom',4,7),
- ('First Pines','orchard',3,5), ('Pine Pools','ponds',4,6),
- ('Fir Clearing','orchard',3,5), ('Needle Steps','steps',4,6),
- ('Evergreen Rooms','rooms',4,7), ('Pine Courtyard','courtyard',4,7),
- ('Quiet Needles','slalom',3,5), ('Forest Stream','ponds',3,6),
- ('Granite Islands','islands',4,6), ('Fir Bridges','bridges',4,7),
- ('Tall Pines','lanes',4,6), ('Deep Woods','rooms',4,7),
- ('Lakeside Light','crosses',3,5),
- ('First Shore','ponds',3,5), ('Reed Banks','bridges',4,6),
- ('Pebble Beach','islands',4,6), ('Lake Windows','bars',5,7),
- ('Still Water','ponds',4,5), ('Reed Channels','lanes',5,7),
- ('Shore Stones','islands',5,7), ('Island Crossing','bridges',5,8),
- ('Sandy Rest','orchard',4,5), ('Split Banks','crosses',5,7),
- ('Reed Walk','slalom',5,7), ('Upper Shore','steps',5,8),
- ('Mountain Foot','courtyard',5,7),
- ('First Climb','steps',4,6), ('Rock Windows','bars',5,7),
- ('Alpine Pools','ponds',5,6), ('Cliff Rooms','rooms',5,8),
- ('High Pass','bridges',5,8), ('Alpine Meadow','orchard',4,5),
- ('Ridge Lanes','lanes',5,7), ('Stone Slalom','slalom',5,7),
- ('Summit Paths','crosses',5,8), ('High Courtyard','courtyard',5,8),
- ('Last Terraces','steps',5,7), ('Summit Stones','islands',5,8),
- ('The Mountain','bridges',5,8),
-]
-
+ROOT=Path(__file__).resolve().parents[1]
+COLUMNS,ROWS=40,30
+MW,MH=19,14
+STAGES=(("meadow",0,40),("leafwood",40,80),("pinewood",80,120),("lake",120,160),("mountains",160,200))
+# Start with the recognisable first-game landmarks, then draw from all three
+# original chapters. No source board is merely recoloured into a new stage.
+REFERENCES=(1,2,3,4,5,6,8,9,12,13,15,19,25,26,7,10,14,21,22,23,27,28,30,32,35,37,41,39,43,44,45,46,48,49,51,52,53,54,55,56,
+            16,20,24,31,33,36,40,42,47,50,58,60,62,63,64,65,66,68,71,72,73,74,76,77,78,79,80,81,82,83,84,85,87,88,89,90,91,92,94,95,96,97,98,99)
+NAMES=("First Bite","Hedge Line","Crossing Paths","Four Gateways","Orchard Stones","Corner Gardens","Ember Hollow","Long Walk","Firefly Clearing","Tall Aisles",
+       "Broad Canopy","Sheltered Corners","Stone Crosses","Open Windows","Walled Garden","Narrow Escape","Moss Courtyard","Forest Rooms","Winding Passage","Forked Trail",
+       "Hidden Doorways","Linked Courts","Roundabout","Old Walls","Broken Ridge","Twin Paths","Branching Rooms","Quiet Clearing","Needle Crossing","Reed Channels",
+       "Pebble Islands","Winding Shore","Double Crossing","High Terraces","Cliff Galleries","Rock Corridors","Alpine Refuge","Summit Spiral","Last Ascent","Beyond the Gate")
+ALL={(x,y) for x in range(MW) for y in range(MH)}
+GATES={(9,0),(9,1),(9,12),(9,13),(0,6),(0,7),(1,6),(1,7),(17,6),(17,7),(18,6),(18,7)}
 
 def neighbours(point):
     x,y=point
     return ((x-1,y),(x+1,y),(x,y-1),(x,y+1))
-
-
-def protected(x,y):
-    # The outside ring and six-tile landing pads at all FOUR potential gates.
-    return (x in (0,MW-1) or y in (0,MH-1) or
-            (8<=x<=10 and (y<=2 or y>=11)) or
-            (5<=y<=7 and (x<=2 or x>=16)))
-
-
-def obstacles(number, family, tier, attempt):
-    rng=random.Random(104729*number+7919*attempt)
-    walls={}
-    def rect(x,y,w,h,tile=20):
-        for xx in range(x,x+w):
-            for yy in range(y,y+h):
-                if 0<=xx<MW and 0<=yy<MH and not protected(xx,yy):
-                    walls[xx,yy]=tile
-    shift=rng.choice((-1,0,1))
-    if number==1:
-        rect(4,5,2,2)
-    elif number==2:
-        rect(4,4,2,1);rect(13,8,2,1)
-    elif family=='orchard':
-        positions=[(4,3),(13,9),(4,9),(13,3),(8,6),(11,8)]
-        rng.shuffle(positions)
-        for i,(x,y) in enumerate(positions[:tier+1]):
-            rect(x+shift,y,1+(i+tier)%2,1+(i+number)%2,21 if i%2 else 20)
-    elif family=='islands':
-        positions=[(4,3),(12,3),(4,9),(12,9),(8,6)]
-        rng.shuffle(positions)
-        for i,(x,y) in enumerate(positions[:min(5,2+tier)]):
-            rect(x+shift,y+rng.choice((-1,0,1)),2+(tier>=4),1+(tier>=2),21)
-    elif family=='bars':
-        ys=[3,7,10] if tier<4 else [3,6,9,11]
-        for i,y in enumerate(ys[:1+tier]):
-            start=3+(i+number)%3
-            rect(start,y,9+tier,1)
-            gap=6+(i*3+number)%7
-            for xx in range(gap,gap+max(2,4-tier//2)):
-                walls.pop((xx,y),None)
-    elif family=='lanes':
-        xs=[3+rng.randrange(2),8+rng.randrange(2),13+rng.randrange(2)] if tier<5 else [3+rng.randrange(2),7+rng.randrange(2),11+rng.randrange(2),15+rng.randrange(2)]
-        for i,x in enumerate(xs):
-            rect(x,3,1,7+(tier>=3))
-            gap=rng.randrange(4,8)
-            for yy in range(gap,gap+2):walls.pop((x,yy),None)
-    elif family=='ponds':
-        positions=[(4,3),(12,4),(6,9),(12,9)]
-        rng.shuffle(positions)
-        for i,(x,y) in enumerate(positions[:min(4,1+tier)]):
-            rect(x+shift,y,2+(tier>=4),1+(i+tier)%2,22)
-    elif family=='courtyard':
-        x,y=4+shift,2+rng.randrange(2)
-        w,h=10+(tier>=4),7+(tier>=3)
-        rect(x,y,w,1);rect(x,y+h-1,w,1)
-        rect(x,y,1,h);rect(x+w-1,y,1,h)
-        door=rng.randrange(2,w-3)
-        for d in range(2):
-            walls.pop((x+door+d,y),None)
-            walls.pop((x+w-door-2+d,y+h-1),None)
-            walls.pop((x,y+2+d),None)
-            walls.pop((x+w-1,y+h-4+d),None)
-    elif family=='crosses':
-        cross_y=rng.choice((-1,0,1))
-        rect(3+shift,5+cross_y,3+rng.randrange(3),1+(tier>=4));rect(12,7-cross_y,3+rng.randrange(2),1+(tier>=4))
-        rect(8,3,1+(tier>=3),2);rect(10,9,1+(tier>=3),2)
-        if tier>=4:rect(4,10,2,1,21);rect(14,3,1,2,21)
-    elif family=='slalom':
-        for i,x in enumerate((4,8,12,16)[:min(4,2+tier)]):
-            y=3 if (i+number)%2 else 7
-            rect(x+shift,y+rng.randrange(2),1,2+tier,20)
-    elif family=='rooms':
-        for i,(x,y) in enumerate(((3,3),(11,3),(4,9),(12,9))):
-            length=3+(tier>=4)
-            rect(x+shift,y,length,1,21 if i%2 else 20)
-            rect(x+shift+(length-1 if (i+number)%2 else 0),y,1,2+(tier>=5))
-    elif family=='steps':
-        step_y=rng.choice((-1,0,1))
-        for i in range(min(4,2+tier)):
-            x=3+i*3+shift;y=2+i*2+(number%2)+step_y
-            rect(x,y,2+(tier>=3),1+(tier>=4),21)
-    elif family=='bridges':
-        for i,y in enumerate((4,9)):
-            gap=7+(number+i*3)%5
-            rect(3+shift,y,gap-3,1+(tier>=4),22)
-            rect(gap+3,y,16-gap-2,1+(tier>=3),22)
-        if tier>=5:rect(7,7,2,1,21)
-    else:raise ValueError(family)
-    return walls
-
-
-def connected(points):
-    start=min(points);seen={start};queue=deque([start])
-    while queue:
-        for p in neighbours(queue.popleft()):
-            if p in points and p not in seen:seen.add(p);queue.append(p)
-    return seen==points
 
 
 def safe_cycle(allowed, seed):
@@ -205,44 +75,138 @@ def safe_cycle(allowed, seed):
     return cycle
 
 
-def geometry_key(walls):
-    # Width/height swap is retained: rotation/reflection copies do not count
-    # as another unique challenge.
-    points={(x,y) for x,y in walls}
-    images=[]
+
+def original(number):
+    raw=(ROOT/f"assets/original/level{number}.dat").read_bytes()
+    return [[raw[1+x*30+y] for y in range(30)] for x in range(40)]
+
+
+def original_walls(number):
+    source=original(number);walls={}
+    for mx,my in sorted(ALL):
+        solid=[]
+        for dx in range(2):
+            for dy in range(2):
+                tile=source[1+mx*2+dx][1+my*2+dy]
+                if 20<=tile<128 and not 40<=tile<=45:solid.append(tile)
+        if solid:
+            raw=Counter(solid).most_common(1)[0][0]
+            walls[mx,my]=22 if raw==22 or 53<=raw<=58 else 21 if raw in (21,23,24,25) else 20
+    return walls
+
+
+def reachable(allowed,start):
+    seen={start};todo=[start]
+    while todo:
+        for p in neighbours(todo.pop()):
+            if p in allowed and p not in seen:seen.add(p);todo.append(p)
+    return seen
+
+
+def join_floor(walls):
+    for p in GATES:walls.pop(p,None)
+    # Keep original rooms recognisable: carve the least costly door between
+    # disconnected components instead of blanking the walls into an open field.
+    while True:
+        allowed=ALL-set(walls);seen=reachable(allowed,(9,13))
+        if seen==allowed:return walls
+        costs={p:0 for p in seen};previous={};queue=[(0,p) for p in sorted(seen)];heapq.heapify(queue)
+        target=None
+        while queue:
+            cost,p=heapq.heappop(queue)
+            if cost!=costs[p]:continue
+            if p in allowed and p not in seen:target=p;break
+            for q in neighbours(p):
+                if q not in ALL:continue
+                new=cost+(4 if q in walls else 1)
+                if new<costs.get(q,99999):costs[q]=new;previous[q]=p;heapq.heappush(queue,(new,q))
+        assert target is not None
+        while target not in seen:
+            walls.pop(target,None);target=previous[target]
+
+
+def signature(walls):
+    # A rotated or reflected chapter is still the same layout.
+    variants=[]
     for rotation in range(4):
-        for reflected in (False,True):
-            image=[]
-            for x,y in points:
-                a,b=x,y;w,h=MW,MH
-                for _ in range(rotation):a,b,w,h=h-1-b,a,h,w
-                if reflected:a=w-1-a
-                image.append((a,b))
-            images.append((w,h,tuple(sorted(image))))
-    return min(images)
+        for flip in (False,True):
+            shape=[]
+            w,h=(MW,MH) if rotation%2==0 else (MH,MW)
+            for a,b in walls:
+                x,y=a,b;w,h=MW,MH
+                for _ in range(rotation):x,y,w,h=h-1-y,x,h,w
+                if flip:x=w-1-x
+                shape.append((x,y))
+            variants.append((w,h,tuple(sorted(shape))))
+    return min(variants)
+
+
+def layout(stage,within,attempt):
+    index=(within+stage*17+attempt*7)%len(REFERENCES)
+    source=REFERENCES[index]
+    accent=REFERENCES[(within*11+stage*23+attempt*13+7)%len(REFERENCES)]
+    primary=original_walls(source);secondary=original_walls(accent)
+    walls=dict(primary)
+    if stage>0 or within>=6 or attempt:
+        variant=(within+stage+attempt)%5
+        for x,y in sorted(ALL):
+            use=(x>=12 if variant==0 else y>=8 if variant==1 else
+                 x<7 and y<8 if variant==2 else x+y>=20 if variant==3 else 5<=x<=12 and 3<=y<=10)
+            if use:
+                walls.pop((x,y),None)
+                if (x,y) in secondary:walls[x,y]=secondary[x,y]
+        # The later stage's terrain affects what its original obstacles
+        # become, not whether the same layout is repeated.
+        if stage==3:walls={p:(21 if v==21 else 22) for p,v in walls.items()}
+        elif stage==4:walls={p:(22 if v==22 and (p[0]+p[1])%3==0 else 21 if v==21 else 20) for p,v in walls.items()}
+    walls=join_floor(walls)
+    if stage==0 and within<6 and attempt==0:return source,accent,walls
+    return source,accent,walls
 
 
 def campaign():
-    assert len(BLUEPRINTS)==66
     levels=[];known=set()
-    all_macros={(x,y) for x in range(MW) for y in range(MH)}
-    for number,(name,family,tier,apples) in enumerate(BLUEPRINTS,1):
-        apples = max(5, apples)
-        for attempt in range(128):
-            walls=obstacles(number,family,tier,attempt)
-            allowed=all_macros-set(walls)
-            key=geometry_key(walls)
-            if key in known or not connected(allowed) or len(allowed)<150:continue
-            known.add(key);break
-        else:raise RuntimeError(f'No unique connected layout for {number} {name}')
-        grid=[[20 if x in (0,39) or y in (0,29) else 0 for y in range(ROWS)] for x in range(COLUMNS)]
-        for (mx,my),tile in walls.items():
-            for dx in range(2):
-                for dy in range(2):grid[1+mx*2+dx][1+my*2+dy]=tile
-        cycle=safe_cycle(allowed,number*4099)
-        blob=bytes([apples])+bytes(grid[x][y] for x in range(COLUMNS) for y in range(ROWS))+bytes(1200)
-        levels.append(dict(number=number,name=name,family=family,tier=tier,apples=apples,
-                           grid=grid,cycle=cycle,blob=blob,floors=len(cycle),walls=len(walls)*4))
+    for stage,(stage_name,first,end) in enumerate(STAGES):
+        for within in range(40):
+            number=first+within+1
+            for attempt in range(512):
+                source,accent,walls=layout(stage,within,attempt)
+                floors=ALL-set(walls);key=signature(walls)
+                if key in known or len(floors)<88 or (within>=6 and len(walls)<8):continue
+                known.add(key);break
+            else:raise RuntimeError(f"Could not adapt a unique level {number}")
+            grid=[[20 if x in (0,39) or y in (0,29) else 0 for y in range(ROWS)] for x in range(COLUMNS)]
+            for (mx,my),tile in walls.items():
+                for dx in range(2):
+                    for dy in range(2):grid[1+mx*2+dx][1+my*2+dy]=tile
+            cycle=safe_cycle(floors,number*4099)
+            count=0 if stage==0 and within<6 else min(8,1+stage+within//16)
+            candidates=[p for p in cycle if 3<=p[0]<=36 and 3<=p[1]<=23 and
+                        abs(p[0]-20)+abs(p[1]-27)>=14 and abs(p[0]-37)+abs(p[1]-14)>=10]
+            rng=random.Random(number*65537);rng.shuffle(candidates);placed=[];kinds=[]
+            for x,y in candidates:
+                if len(placed)>=count:break
+                if any(abs(x-a)+abs(y-b)<5 for a,b in placed):continue
+                index=len(placed)
+                kind=40 if (within+index)%3==0 and (stage>0 or within>=8) else 45 if stage>=1 and (within+index)%5==0 else 41+(within+index)%4
+                grid[x][y]=kind;placed.append((x,y));kinds.append(kind-39)
+            assert len(placed)==count
+            apples=5+stage+(1 if within%10 in (7,8,9) else 0)
+            portrait_grid=None;portrait_cycle=None
+            if number==2:
+                # Keep this introductory divider across the narrow display;
+                # a quarter-turn would put it along the worm's approach.
+                allowed={(x,y) for x in range(14) for y in range(19)}-{(x,9) for x in range(10)}
+                portrait_grid=[[20 if x in (0,29) or y in (0,39) else 0 for y in range(40)] for x in range(30)]
+                for mx in range(10):
+                    for dx in range(2):
+                        for dy in range(2):portrait_grid[1+mx*2+dx][19+dy]=20
+                portrait_cycle=safe_cycle(allowed,number*4099)
+            blob=bytes([apples])+bytes(grid[x][y] for x in range(COLUMNS) for y in range(ROWS))+bytes(1200)
+            levels.append(dict(number=number,name=stage_name.title()+" — "+NAMES[within],family="original-"+str(source),tier=stage+1,
+                apples=apples,original=source,accent=accent,enemies=count,enemy_kinds=kinds,grid=grid,cycle=cycle,blob=blob,
+                floors=len(cycle),walls=len(walls)*4,portrait_grid=portrait_grid,portrait_cycle=portrait_cycle))
+    assert len(levels)==200 and len(known)==200
     return levels
 
 
@@ -250,16 +214,21 @@ def encode(levels):
     values=sorted({tile for l in levels for col in l['grid'] for tile in col})
     alphabet='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
     table={value:alphabet[i] for i,value in enumerate(values)}
-    lines=['// Generated by tools/design_levels.py. 66 authored, certified tile challenges.',
-           'DESIGNED_LEVEL_COUNT :: 66;',
+    lines=['// Generated by tools/design_levels.py. 200 original-inspired challenges with active enemies.',
+           'DESIGNED_LEVEL_COUNT :: 200;',
            f'DesignedStageStarts: [{len(STAGES)+1}]s32 = .[' + ', '.join(str(first) for _,first,_ in STAGES) + f', {len(levels)}];',
            f'DesignedCodebook: [{len(values)}]u8 = .['+', '.join(map(str,values))+'];',
            'DesignedAlphabet :: "'+alphabet[:len(values)]+'";',
-           'DesignedApples: [66]s32 = .['+', '.join(str(l['apples']) for l in levels)+'];','',
+           'DesignedApples: [200]s32 = .['+', '.join(str(l['apples']) for l in levels)+'];','',
            'DesignedLevelText :: (level: s32) -> string {']
     for i,level in enumerate(levels):
         text=''.join(table[level['grid'][x][y]] for x in range(COLUMNS) for y in range(ROWS))
         lines.append(f'    if level == {i} {{ return "{text}" }}')
+    lines += ['    return ""','}','','DesignedPortraitText :: (level: s32) -> string {']
+    for i,level in enumerate(levels):
+        if level['portrait_grid'] is not None:
+            text=''.join(table[level['portrait_grid'][x][y]] for x in range(30) for y in range(40))
+            lines.append(f'    if level == {i} {{ return "{text}" }}')
     lines += ['    return ""','}','','DesignedTile :: (level: s32, x: s32, y: s32) -> u8 {',
               '    text := DesignedLevelText(level)','    code := text[x * 30 + y]',
               '    for index: 0..DesignedAlphabet.count - 1 {',
@@ -271,6 +240,17 @@ def encode(levels):
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--check',action='store_true');args=parser.parse_args()
     levels=campaign();source=encode(levels);path=ROOT/'src/designed_levels.zi'
+    cases=json.loads((ROOT/'tests/campaign_cases.json').read_text())
+    assert len(cases)==200 and all(len(pair)==2 for pair in cases)
+    fixture='// Generated from campaign_cases.json by tools/design_levels.py.\n'
+    for name,key,kind in (('CampaignSeeds','seed','u32'),('CampaignRoutes','route','s32'),('CampaignReverse','reverse','s32')):
+        fixture+=name+': [400]'+kind+' = .['+', '.join(str(c[key]) for pair in cases for c in pair)+'];\n'
+    fixture_path=ROOT/'tests/campaign_replay.zi'
+    text=fixture_path.read_text()
+    first=text.index('// campaign-cases:begin')+len('// campaign-cases:begin')+1
+    last=text.index('// campaign-cases:end')
+    if args.check:assert text[first:last]==fixture, 'campaign case fixture is stale'
+    else:fixture_path.write_text(text[:first]+fixture+text[last:])
     if args.check:
         assert path.read_text()==source, 'src/designed_levels.zi differs from the authored campaign'
     else:path.write_text(source)
@@ -280,11 +260,22 @@ def main():
         (out/f"level{l['number']}.dat").write_bytes(l['blob'])
         indices=[y*COLUMNS+x for x,y in l['cycle']]
         (out/f"cycle{l['number']}.dat").write_bytes(struct.pack('<H'+'H'*len(indices),len(indices),*indices))
-        entry={k:l[k] for k in ('number','name','family','tier','apples','floors','walls')}
+        for variant in sorted({case['route'] for case in cases[l['number']-1]}-{0}):
+            floor={(x,y) for x in range(40) for y in range(30) if l['grid'][x][y]<20 or 40<=l['grid'][x][y]<=45}
+            allowed={((x-1)//2,(y-1)//2) for x,y in floor}
+            route=safe_cycle(allowed,l['number']*4099+variant*65537)
+            cells=[y*COLUMNS+x for x,y in route]
+            (out/f"cycle{l['number']}-{variant}.dat").write_bytes(struct.pack('<H'+'H'*len(cells),len(cells),*cells))
+        if l['portrait_cycle'] is not None:
+            cells=[y*30+x for x,y in l['portrait_cycle']]
+            (out/f"cycle{l['number']}-portrait.dat").write_bytes(struct.pack('<H'+'H'*len(cells),len(cells),*cells))
+            blob=bytes([l['apples']])+bytes(l['portrait_grid'][x][y] for x in range(30) for y in range(40))+bytes(1200)
+            (out/f"level{l['number']}-portrait.dat").write_bytes(blob)
+        entry={k:l[k] for k in ('number','name','family','tier','apples','floors','walls','original','accent','enemies','enemy_kinds')}
         entry['stage']=next(name for name, first, end in STAGES if first <= l['number']-1 < end)
         manifest.append(entry)
     (out/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-    print('66 distinct tile challenges '+('verified' if args.check else 'written')+'; every floor has a complete safe-loop certificate.')
+    print('200 distinct original-inspired challenges '+('verified' if args.check else 'written')+'; every floor has a complete safe-loop certificate.')
 
 
 if __name__=='__main__':main()

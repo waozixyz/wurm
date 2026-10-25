@@ -1,14 +1,12 @@
-// Owner edits of the recovered levels. Each edited level is one file beside
-// the originals, in the archive's own LEVELn.DAT layout plus an object
-// plane: the apple count, the 40x30 tiles, then the 40x30 object ids, all
-// in the original column order. Old files without objects load with none.
-// A missing file leaves the recovered original in play, so deleting a
-// saved file restores it.
+// Landscape records use 40 columns of 30 rows; the independent portrait
+// records use 30 columns of 40 rows and a -portrait filename suffix.
+// Both contain an apple count and tile/object planes. Missing portrait
+// records use an authored variant or a best guess from the landscape.
 #import, file "game.zi";
 #if #defined(WURM_PORTABLE) {
     Storage :: #import "portable_runtime";
     #import "portable_levels"
-    LevelDirectory :: () -> string { return "" }
+    LevelDirectory :: () -> string { return "campaign-" }
 } else {
     #import, file "level_directory.zi";
     File :: #import "std/file_linux";
@@ -28,15 +26,18 @@ LEVEL_FILE_V2_BYTES :: 2401;
 
 // The archive and editor layout is always the canonical 40x30 grid,
 // independent of the orientation the engine is playing.
-At :: (x: s64, y: s64) -> s32 { return cast(s32)(y * COLUMNS + x) }
+At :: (x: s64, y: s64, portrait: bool = false) -> s32 {
+    return cast(s32)(y * (ifx portrait then ROWS else COLUMNS) + x)
+}
+Slot :: (level: s32, portrait: bool) -> s32 { return level + (ifx portrait then LEVEL_COUNT else 0) }
 
 custom_root: [96]u8;
 custom_root_length: s32;
 custom_loaded: bool;
-custom_present: [LEVEL_COUNT]bool;
-custom_apples: [LEVEL_COUNT]s32;
-custom_boards: [LEVEL_COUNT][CELLS]u8;
-custom_objects: [LEVEL_COUNT][CELLS]u8;
+custom_present: [LEVEL_COUNT * 2]bool;
+custom_apples: [LEVEL_COUNT * 2]s32;
+custom_boards: [LEVEL_COUNT * 2][CELLS]u8;
+custom_objects: [LEVEL_COUNT * 2][CELLS]u8;
 
 CopyText :: (buffer: []u8, at: s32, text: string) -> s32 {
     for index: 0..text.count - 1 { buffer[at + index] = text[index] }
@@ -86,11 +87,12 @@ ApplyEnvironmentRoot :: () {
 
 custom_path: [160]u8;
 custom_temp: [160]u8;
-LevelPath :: (level: s32, suffix: string) -> string {
+LevelPath :: (level: s32, suffix: string, portrait: bool = false) -> string {
     at := CopyText(custom_path[:], 0, RootText())
     at = CopyText(custom_path[:], at, "level")
     digits: [16]u8
     at = CopyText(custom_path[:], at, FormatInteger(cast(s64)(level + 1), digits[:]))
+    if portrait { at = CopyText(custom_path[:], at, "-portrait") }
     at = CopyText(custom_path[:], at, suffix)
     return BufferText(custom_path[:], at)
 }
@@ -105,15 +107,19 @@ EnsureLoaded :: () {
         ApplyEnvironmentRoot()
     }
     bytes: [LEVEL_FILE_V2_BYTES]u8
-    for level: 0..LEVEL_COUNT - 1 {
+    for slot: 0..LEVEL_COUNT * 2 - 1 {
+        level := cast(s32)slot % LEVEL_COUNT
+        portrait := slot >= LEVEL_COUNT
+        columns := ifx portrait then ROWS else COLUMNS
+        rows := ifx portrait then COLUMNS else ROWS
         size: s64
         read: s64
         #if #defined(WURM_PORTABLE) {
-            size = Storage.ReadLevel(LevelPath(cast(s32)level, ".dat"), bytes[:])
-            if size < 0 { size = BundledLevel(cast(s32)level, bytes[:]) }
+            size = Storage.ReadLevel(LevelPath(level, ".dat", portrait), bytes[:])
+            if size < 0 && !portrait { size = BundledLevel(level, bytes[:]) }
             read = size
         } else {
-        file := File.OpenRead(LevelPath(cast(s32)level, ".dat"))
+        file := File.OpenRead(LevelPath(level, ".dat", portrait))
         if file.valid {
             size = File.FileSize(file)
             if size != LEVEL_FILE_BYTES && size != LEVEL_FILE_V2_BYTES {
@@ -123,101 +129,104 @@ EnsureLoaded :: () {
             read = File.ReadAt(file, bytes[0:cast(s64)size], 0)
             File.CloseFile(file)
         } else {
-            size = ReadBundledLevel(cast(s32)level, bytes[:])
+            size = ifx portrait then -1 else ReadBundledLevel(level, bytes[:])
             read = size
         }
         }
         if size != LEVEL_FILE_BYTES && size != LEVEL_FILE_V2_BYTES { continue }
         if read != size { continue }
-        custom_present[level] = true
-        custom_apples[level] = cast(s32)bytes[0]
-        for column: 0..COLUMNS - 1 {
-            for row: 0..ROWS - 1 {
-                custom_boards[level][At(column, row)] =
-                    bytes[1 + column * ROWS + row]
+        custom_present[slot] = true
+        custom_apples[slot] = cast(s32)bytes[0]
+        for column: 0..columns - 1 {
+            for row: 0..rows - 1 {
+                custom_boards[slot][At(column, row, portrait)] =
+                    bytes[1 + column * rows + row]
                 if size == LEVEL_FILE_V2_BYTES {
-                    custom_objects[level][At(column, row)] =
-                        bytes[1 + CELLS + column * ROWS + row]
+                    custom_objects[slot][At(column, row, portrait)] =
+                        bytes[1 + CELLS + column * rows + row]
                 }
             }
         }
     }
 }
 
-HasCustomLevel :: (level: s32) -> bool {
+HasCustomLevel :: (level: s32, portrait: bool = false) -> bool {
     EnsureLoaded()
     if level < 0 || level >= LEVEL_COUNT { return false }
-    return custom_present[level]
+    return custom_present[Slot(level, portrait)]
 }
-
-EffectiveTile :: (level: s32, x: s32, y: s32) -> u8 {
+EffectiveApples :: (level: s32, portrait: bool = false) -> s32 {
     EnsureLoaded()
-    if level >= 0 && level < LEVEL_COUNT && custom_present[level] {
-        return custom_boards[level][At(x, y)]
-    }
-    return BaseTile(level, x, y)
-}
-
-EffectiveApples :: (level: s32) -> s32 {
-    EnsureLoaded()
-    if level >= 0 && level < LEVEL_COUNT && custom_present[level] {
-        return custom_apples[level]
-    }
+    if HasCustomLevel(level, portrait) { return custom_apples[Slot(level, portrait)] }
+    if portrait && HasCustomLevel(level) { return custom_apples[level] }
     return BaseApples(level)
 }
-
-EffectiveObjects :: (level: s32, objects: []u8) {
-    EnsureLoaded()
-    for y: 0..ROWS - 1 {
-        for x: 0..COLUMNS - 1 {
-            objects[At(x, y)] = BaseObject(level, cast(s32)x, cast(s32)y)
-        }
-    }
-    if level < 0 || level >= LEVEL_COUNT { return }
-    if custom_present[level] {
-        for at: 0..CELLS - 1 { objects[at] = custom_objects[level][at] }
-    }
-}
-
-// The raw tiles a level starts from: the saved override when one exists,
-// otherwise the recovered original.
-EffectiveBoard :: (level: s32, board: []u8) {
+EffectiveBoard :: (level: s32, board: []u8, portrait: bool = false) {
     EnsureLoaded()
     if level < 0 || level >= LEVEL_COUNT {
         for at: 0..CELLS - 1 { board[at] = 20 }
         return
     }
-    if custom_present[level] {
-        for at: 0..CELLS - 1 { board[at] = custom_boards[level][at] }
+    slot := Slot(level, portrait)
+    if custom_present[slot] {
+        for at: 0..CELLS - 1 { board[at] = custom_boards[slot][at] }
         return
     }
-    for y: 0..ROWS - 1 {
-        for x: 0..COLUMNS - 1 {
-            board[At(x, y)] = BaseTile(level, cast(s32)x, cast(s32)y)
+    if portrait {
+        landscape: [CELLS]u8
+        EffectiveBoard(level, landscape[:])
+        if HasCustomLevel(level) { GuessPortrait(landscape[:], board) }
+        else { PortraitBoard(level,landscape[:],board) }
+    } else {
+        for y: 0..ROWS - 1 {
+            for x: 0..COLUMNS - 1 { board[At(x,y)] = BaseTile(level, cast(s32)x, cast(s32)y) }
+        }
+    }
+}
+EffectiveTile :: (level: s32, x: s32, y: s32, portrait: bool = false) -> u8 {
+    board: [CELLS]u8
+    EffectiveBoard(level,board[:],portrait)
+    return board[At(x,y,portrait)]
+}
+EffectiveObjects :: (level: s32, objects: []u8, portrait: bool = false) {
+    EnsureLoaded()
+    if HasCustomLevel(level, portrait) {
+        slot := Slot(level,portrait)
+        for at: 0..CELLS - 1 { objects[at] = custom_objects[slot][at] }
+    } else if portrait {
+        landscape: [CELLS]u8
+        EffectiveObjects(level,landscape[:])
+        TurnForward(landscape[:],objects)
+    } else {
+        for y: 0..ROWS - 1 {
+            for x: 0..COLUMNS - 1 { objects[At(x,y)] = BaseObject(level,cast(s32)x,cast(s32)y) }
         }
     }
 }
 
 // Writes the override, tiles and objects, through a temporary file so a
 // failed save never replaces a good one, then refreshes the cache.
-SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32) -> bool {
+SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32, portrait: bool = false) -> bool {
     EnsureLoaded()
     if level < 0 || level >= LEVEL_COUNT { return false }
+    columns := ifx portrait then ROWS else COLUMNS
+    rows := ifx portrait then COLUMNS else ROWS
+    slot := Slot(level,portrait)
     bytes: [LEVEL_FILE_V2_BYTES]u8
     bytes[0] = cast(u8)apples
-    for column: 0..COLUMNS - 1 {
-        for row: 0..ROWS - 1 {
-            bytes[1 + column * ROWS + row] = board[At(column, row)]
-            bytes[1 + CELLS + column * ROWS + row] = objects[At(column, row)]
+    for column: 0..columns - 1 {
+        for row: 0..rows - 1 {
+            bytes[1 + column * rows + row] = board[At(column, row, portrait)]
+            bytes[1 + CELLS + column * rows + row] = objects[At(column, row, portrait)]
         }
     }
     #if #defined(WURM_PORTABLE) {
-        if !Storage.WriteLevel(LevelPath(level, ".dat"), bytes[:]) { return false }
+        if !Storage.WriteLevel(LevelPath(level, ".dat", portrait), bytes[:]) { return false }
     } else {
     unused File.CreateDirectory(RootText())
     // LevelPath borrows one buffer, so the temporary name is copied aside
     // before the final name is built.
-    temporary := LevelPath(level, ".tmp")
+    temporary := LevelPath(level, ".tmp", portrait)
     for index: 0..temporary.count - 1 { custom_temp[index] = temporary[index] }
     temporary_text := BufferText(custom_temp[:], cast(s32)temporary.count)
     file := File.OpenReplace(temporary_text)
@@ -228,30 +237,31 @@ SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32) -> bool
         unused File.RemoveFile(temporary_text)
         return false
     }
-    if !File.RenamePath(temporary_text, LevelPath(level, ".dat")) {
+    if !File.RenamePath(temporary_text, LevelPath(level, ".dat", portrait)) {
         unused File.RemoveFile(temporary_text)
         return false
     }
     }
-    custom_present[level] = true
-    custom_apples[level] = apples
+    custom_present[slot] = true
+    custom_apples[slot] = apples
     for at: 0..CELLS - 1 {
-        custom_boards[level][at] = board[at]
-        custom_objects[level][at] = objects[at]
+        custom_boards[slot][at] = board[at]
+        custom_objects[slot][at] = objects[at]
     }
     return true
 }
 
 // Deleting the override restores the recovered original.
-ClearCustomLevel :: (level: s32) -> bool {
+ClearCustomLevel :: (level: s32, portrait: bool = false) -> bool {
     EnsureLoaded()
     if level < 0 || level >= LEVEL_COUNT { return false }
-    if !custom_present[level] { return true }
+    slot := Slot(level,portrait)
+    if !custom_present[slot] { return true }
     #if #defined(WURM_PORTABLE) {
-        if !Storage.RemoveLevel(LevelPath(level, ".dat")) { return false }
+        if !Storage.RemoveLevel(LevelPath(level, ".dat", portrait)) { return false }
     } else {
-        if !File.RemoveFile(LevelPath(level, ".dat")) { return false }
+        if !File.RemoveFile(LevelPath(level, ".dat", portrait)) { return false }
     }
-    custom_present[level] = false
+    custom_present[slot] = false
     return true
 }

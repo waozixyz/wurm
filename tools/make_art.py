@@ -135,6 +135,18 @@ def main():
     base = build('garden', terrain, sprites, details)
     for row, (stage, _, _) in enumerate(STAGES):
         save(journey_sheet(base, journey[row * 4:row * 4 + 4]), ART / (stage + '.png'), args.check)
+    # New campaign sheets use distinct paths: the owner's open editor can
+    # keep the previous campaign and its cached art while development runs.
+    fire = cells(SOURCE / 'fire.png', 2, 2)
+    assert Image.open(SOURCE / 'fire.png').getchannel('A').getextrema()[0] == 0
+    for row, (stage, _, _) in enumerate(STAGES):
+        sheet = journey_sheet(base, journey[row * 4:row * 4 + 4])
+        sheet.paste(fire[0], (0, 2 * CELL))
+        for frame, image in enumerate(fire):
+            sheet.paste(image, ((6 + frame) * CELL, 2 * CELL))
+        save(sheet, ART / ('campaign-' + stage + '.png'), args.check)
+    covers = Image.open(SOURCE / 'stage-covers.png').convert('RGBA').resize((960, 1600), Image.Resampling.LANCZOS)
+    save(covers, ART / 'stage-covers.png', args.check)
     canopy = Image.open(SOURCE / 'forest-canopy.png').convert('RGBA').resize((40 * CELL, 30 * CELL), Image.Resampling.LANCZOS)
     save(canopy, ART / 'forest-canopy.png', args.check)
     save(canopy.transpose(Image.Transpose.ROTATE_270), ART / 'forest-canopy-portrait.png', args.check)

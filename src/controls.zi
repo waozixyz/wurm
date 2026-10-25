@@ -1,0 +1,62 @@
+// Each edition keeps its choice with its private level records.
+Custom :: #import, file "custom_levels.zi";
+#if #defined(WURM_PORTABLE) {
+    Storage :: #import "portable_runtime";
+} else {
+    File :: #import "std/file_linux";
+    #import "std/text_buffer"
+    path_buffer: [192]u8;
+    Path :: (name: string) -> string {
+        Custom.EnsureLoaded()
+        root := Custom.RootText()
+        at: s32 = 0
+        for byte: root { path_buffer[at] = byte; at += 1 }
+        for byte: name { path_buffer[at] = byte; at += 1 }
+        path_buffer[at] = 0
+        return TextUntilNul(path_buffer[:])
+    }
+}
+
+ReadRecord :: (name: string, output: []u8) -> s64 {
+    #if #defined(WURM_PORTABLE) {
+        return Storage.ReadLevel(name, output)
+    } else {
+        file := File.OpenRead(Path(name))
+        if !file.valid { return -1 }
+        defer File.CloseFile(file)
+        return File.ReadAt(file, output, 0)
+    }
+}
+WriteRecord :: (name: string, bytes: []u8) -> bool {
+    #if #defined(WURM_PORTABLE) {
+        return Storage.WriteLevel(name, bytes)
+    } else {
+        Custom.EnsureLoaded()
+        unused File.CreateDirectory(Custom.RootText())
+        file := File.OpenReplace(Path("record.tmp"))
+        if !file.valid { return false }
+        written := File.WriteAt(file, bytes, 0)
+        File.CloseFile(file)
+        if written != bytes.count { return false }
+        temporary: [192]u8
+        text := Path("record.tmp")
+        for byte, at: text { temporary[at] = byte }
+        temporary[text.count] = 0
+        return File.RenamePath(TextUntilNul(temporary[:]), Path(name))
+    }
+}
+mode: s32 = -2;
+Load :: () {
+    if mode != -2 { return }
+    mode = -1
+    bytes: [2]u8
+    count := ReadRecord("controls.dat", bytes[:])
+    if count == 1 && bytes[0] <= 1 { mode = cast(s32)bytes[0] }
+}
+Chosen :: () -> bool { Load(); return mode >= 0 }
+Pad :: () -> bool { Load(); return mode == 1 }
+SetPad :: (pad: bool) -> bool {
+    mode = ifx pad then 1 else 0
+    bytes: [1]u8 = .[cast(u8)mode]
+    return WriteRecord("controls.dat", bytes[:])
+}

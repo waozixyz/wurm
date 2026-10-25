@@ -8,23 +8,22 @@ import struct
 
 ROOT=Path(__file__).resolve().parents[1]
 manifest=json.loads((ROOT/'build/designed/manifest.json').read_text())
-assert len(manifest)==66
-assert [e['stage'] for e in manifest] == (['meadow']*14+['leafwood']*13+
-    ['pinewood']*13+['lake']*13+['mountains']*13), 'complete five-landscape journey'
-assert len({entry['name'] for entry in manifest})==66
+assert len(manifest)==200
+assert [e['stage'] for e in manifest] == [stage for stage in ('meadow','leafwood','pinewood','lake','mountains') for _ in range(40)], 'complete five-landscape journey'
+assert len({entry['name'] for entry in manifest})==200
 assert len({entry['family'] for entry in manifest})>=10
-assert manifest[0]['apples']==manifest[1]['apples']==5 and manifest[1]['walls']<=24, 'five apples and a gentle, open level 2'
-assert all(5<=entry['apples']<=8 for entry in manifest)
+assert manifest[0]['apples']==manifest[1]['apples']==5 and manifest[0]['enemies']==manifest[1]['enemies']==0, 'five apples and a gentle, open level 2'
+assert all(5<=entry['apples']<=10 for entry in manifest)
 assert sum(e['apples'] for e in manifest[:8])/8 < sum(e['apples'] for e in manifest[-8:])/8
-assert sum(b['apples']<a['apples'] for a,b in zip(manifest,manifest[1:]))>=8, 'retain natural breathing room'
+assert sum(b['apples']<a['apples'] for a,b in zip(manifest,manifest[1:]))>=15, 'retain natural breathing room'
 seen_shapes=set()
 for entry in manifest:
     n=entry['number'];raw=(ROOT/f'build/designed/level{n}.dat').read_bytes()
     assert len(raw)==2401 and raw[0]==entry['apples'] and not any(raw[1201:]), n
     board={(x,y):raw[1+x*30+y] for x in range(40) for y in range(30)}
-    assert set(board.values())<={0,20,21,22}, (n,'only clear floor and solid tile hazards')
-    floor={p for p,v in board.items() if v==0}
-    assert len(floor)==entry['floors'] and len(floor)>=600
+    assert set(board.values())<={0,20,21,22,40,41,42,43,44,45}, (n,'only clear floor and solid tile hazards')
+    floor={p for p,v in board.items() if v<20 or 40<=v<=45}
+    assert len(floor)==entry['floors'] and len(floor)>=352
     variants=[]
     for rotation in range(4):
         for reflection in (False,True):
@@ -48,7 +47,7 @@ for entry in manifest:
     for mx in range(19):
         for my in range(14):
             values=[board[1+mx*2+dx,1+my*2+dy] for dx in range(2) for dy in range(2)]
-            assert all(v==0 for v in values) or all(v>=20 for v in values)
+            assert all(v<20 or 40<=v<=45 for v in values) or all(20<=v<40 for v in values)
     for portrait in (False,True):
         transformed={(29-y,x) for x,y in floor} if portrait else floor
         columns,rows=(30,40) if portrait else (40,30)
@@ -59,4 +58,7 @@ for entry in manifest:
             for p in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
                 if p in transformed and p not in reached:reached.add(p);todo.append(p)
         assert reached==transformed, (n,portrait,'unreachable apple floor')
-print('Campaign local test: 66 unique layouts, no rotated copies, complete reachability and wide routes in both orientations; gentle level 2 and natural difficulty breaks.')
+assert len({e['original'] for e in manifest}) >= 80
+assert {kind for e in manifest for kind in e['enemy_kinds']} == set(range(1,7))
+assert all(sum(e['enemies'] for e in manifest[s*40:(s+1)*40]) < sum(e['enemies'] for e in manifest[(s+1)*40:(s+2)*40]) for s in range(4))
+print('Campaign local test: 200 unique layouts, no rotated copies, complete reachability and wide routes in both orientations; original references, all six enemy types and increasing stage difficulty.')
