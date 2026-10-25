@@ -71,7 +71,11 @@ def main():
         evidence.update(app_pid=app.pid, app_executable=str(Path(f"/proc/{app.pid}/exe").resolve()), window=window)
 
         def key(*keys):
-            subprocess.run(["xdotool", "key", "--window", window, "--clearmodifiers", *keys], env=env, check=True)
+            # One key per call: a burst inside one frame drops presses.
+            for name in keys:
+                subprocess.run(["xdotool", "key", "--window", window, "--clearmodifiers", name],
+                               env=env, check=True)
+                time.sleep(0.12)
 
         def capture(name):
             # Recheck the actual server before any pixel capture; never inherit a desktop.

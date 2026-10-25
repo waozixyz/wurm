@@ -41,7 +41,9 @@ StageClear :: (stage: s32) -> string {
 }
 
 // Each stage's tiles, character, monsters, pickup and effects share one
-// 320x200 sheet of 16-pixel cells; floors and walls are opaque.
+// sheet in the original 20x12 layout of 16-unit cells, drawn at 2x (32-pixel
+// cells) so the sprites keep their detail; floors and walls are opaque.
+SHEET_SCALE :: 2.0;
 Sheet :: (stage: s32) -> string {
     if stage == 1 { return "assets/art/space.png" }
     if stage == 2 { return "assets/art/factory.png" }
@@ -55,7 +57,9 @@ Cover :: (stage: s32) -> string {
 
 Picture :: (session: Session, key: u64, asset: string, bounds: Rectangle, source: Rectangle) {
     unused Image(session, ImageProps.{.key = key, .asset_path = asset, .bounds = bounds,
-        .source = source, .smooth = false, .alt_text = "Worm artwork"})
+        .source = Rectangle.{source.x * SHEET_SCALE, source.y * SHEET_SCALE,
+            source.width * SHEET_SCALE, source.height * SHEET_SCALE},
+        .smooth = false, .alt_text = "Worm artwork"})
 }
 
 TextLine :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32) {

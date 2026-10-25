@@ -46,10 +46,10 @@ test uses SDL's dummy drivers and verifies that all effects and scores mix.
 ## Art and sound
 
 Stage covers and the character, monster and pickup sprites were drawn with
-Codex image generation and fitted to 16-pixel cells; floors, walls and effect
-frames are drawn pixel by pixel. Each stage sheet keeps the original 320x200
-cell layout, so tile values in the recovered levels still mean the same floor
-or wall. `assets/sounds/sounds.json` records the OpenRouter model and prompt
+Codex image generation and fitted to 32-pixel cells; floors, walls and effect
+frames are drawn pixel by pixel at 16 pixels and doubled. Each 640x400 stage
+sheet keeps the original 20x12 cell layout, so tile values in the recovered
+levels still mean the same floor or wall. `assets/sounds/sounds.json` records the OpenRouter model and prompt
 of every sound; the scores are trimmed and crossfaded into seamless loops.
 
 ## Recover the assets again
