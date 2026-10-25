@@ -5,15 +5,23 @@
 // A missing file leaves the recovered original in play, so deleting a
 // saved file restores it.
 #import, file "game.zi";
-#import, file "level_directory.zi";
+#if #defined(WURM_PORTABLE) {
+    Storage :: #import "portable_runtime";
+    #import "portable_levels"
+    LevelDirectory :: () -> string { return "" }
+} else {
+    #import, file "level_directory.zi";
+    File :: #import "std/file_linux";
+}
 Originals :: #import, file "original_levels.zi";
-File :: #import "std/file_linux";
 #import "std/c_string"
 #import "std/number_text"
 #import "std/text_buffer"
 
-libc :: #system_library "libc";
-GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
+#if !#defined(WURM_PORTABLE) {
+    libc :: #system_library "libc";
+    GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
+}
 
 LEVEL_FILE_BYTES :: 1201;
 LEVEL_FILE_V2_BYTES :: 2401;
@@ -58,6 +66,7 @@ CustomSetRoot :: (path: string) -> bool {
 }
 
 ApplyEnvironmentRoot :: () {
+    #if !#defined(WURM_PORTABLE) {
     name: [32]u8
     if !CopyCString("WURM_LEVEL_DIR", name[:]) { return }
     value := GetEnvironment(*name[0])
@@ -72,6 +81,7 @@ ApplyEnvironmentRoot :: () {
         length += 1
     }
     custom_root_length = length
+    }
 }
 
 custom_path: [160]u8;
@@ -96,9 +106,14 @@ EnsureLoaded :: () {
     }
     bytes: [LEVEL_FILE_V2_BYTES]u8
     for level: 0..LEVEL_COUNT - 1 {
-        file := File.OpenRead(LevelPath(cast(s32)level, ".dat"))
         size: s64
         read: s64
+        #if #defined(WURM_PORTABLE) {
+            size = Storage.ReadLevel(LevelPath(cast(s32)level, ".dat"), bytes[:])
+            if size < 0 { size = BundledLevel(cast(s32)level, bytes[:]) }
+            read = size
+        } else {
+        file := File.OpenRead(LevelPath(cast(s32)level, ".dat"))
         if file.valid {
             size = File.FileSize(file)
             if size != LEVEL_FILE_BYTES && size != LEVEL_FILE_V2_BYTES {
@@ -110,6 +125,7 @@ EnsureLoaded :: () {
         } else {
             size = ReadBundledLevel(cast(s32)level, bytes[:])
             read = size
+        }
         }
         if size != LEVEL_FILE_BYTES && size != LEVEL_FILE_V2_BYTES { continue }
         if read != size { continue }
@@ -187,7 +203,6 @@ EffectiveBoard :: (level: s32, board: []u8) {
 SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32) -> bool {
     EnsureLoaded()
     if level < 0 || level >= LEVEL_COUNT { return false }
-    unused File.CreateDirectory(RootText())
     bytes: [LEVEL_FILE_V2_BYTES]u8
     bytes[0] = cast(u8)apples
     for column: 0..COLUMNS - 1 {
@@ -196,6 +211,10 @@ SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32) -> bool
             bytes[1 + CELLS + column * ROWS + row] = objects[At(column, row)]
         }
     }
+    #if #defined(WURM_PORTABLE) {
+        if !Storage.WriteLevel(LevelPath(level, ".dat"), bytes[:]) { return false }
+    } else {
+    unused File.CreateDirectory(RootText())
     // LevelPath borrows one buffer, so the temporary name is copied aside
     // before the final name is built.
     temporary := LevelPath(level, ".tmp")
@@ -213,6 +232,7 @@ SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32) -> bool
         unused File.RemoveFile(temporary_text)
         return false
     }
+    }
     custom_present[level] = true
     custom_apples[level] = apples
     for at: 0..CELLS - 1 {
@@ -227,7 +247,11 @@ ClearCustomLevel :: (level: s32) -> bool {
     EnsureLoaded()
     if level < 0 || level >= LEVEL_COUNT { return false }
     if !custom_present[level] { return true }
-    if !File.RemoveFile(LevelPath(level, ".dat")) { return false }
+    #if #defined(WURM_PORTABLE) {
+        if !Storage.RemoveLevel(LevelPath(level, ".dat")) { return false }
+    } else {
+        if !File.RemoveFile(LevelPath(level, ".dat")) { return false }
+    }
     custom_present[level] = false
     return true
 }

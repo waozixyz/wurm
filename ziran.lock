@@ -2,12 +2,20 @@
   "format": 1,
   "packages": [
     {
-      "commit": "3a536faa9435c54cc91965c3c0efb67ea53c81eb",
+      "commit": "f0be5a97246ad7872b7dd40c459421faa577955c",
       "dependencies": {"raylib": "p5a77c9c35110e925"},
-      "id": "p3d441dbe68a54187",
+      "id": "p0ec8982e71df3e2b",
       "name": "kryon",
       "ref": "master",
       "url": "https://github.com/kryonlabs/kryon.git"
+    },
+    {
+      "commit": "21e252093368138d837a057ba4dcd0cebe605711",
+      "dependencies": {"crypto": "pc23fbf455e97614d", "kryon": "p0ec8982e71df3e2b"},
+      "id": "p357e14d814c2850c",
+      "name": "Apps",
+      "ref": "master",
+      "url": "https://github.com/waozixyz/apps.git"
     },
     {
       "commit": "fafa2cea97d0cb379d832086ba45a989fa6f9c8e",
@@ -19,6 +27,14 @@
       "url": "https://github.com/raysan5/raylib.git"
     },
     {
+      "commit": "944826f70779a6b6cd53f6b06a75b36f4d8a2558",
+      "dependencies": {},
+      "id": "pc23fbf455e97614d",
+      "name": "crypto",
+      "ref": "master",
+      "url": "https://github.com/ziranlang/crypto.git"
+    },
+    {
       "commit": "9cc6872f75447c3a24c16764f9829d0f58751cb0",
       "dependencies": {},
       "id": "pe1027b9d16704793",
@@ -28,11 +44,11 @@
     }
   ],
   "root": {
-    "dependencies": {"kryon": "p3d441dbe68a54187", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "p357e14d814c2850c", "kryon": "p0ec8982e71df3e2b", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {
-    "commit": "786f6249ec6a1d8de530e709980d85916281e526",
+    "commit": "21c6a681c9ba684bbe069004fd971748cc5c7dc0",
     "ref": "master",
     "url": "https://github.com/ziranlang/ziran.git"
   }

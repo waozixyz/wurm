@@ -90,6 +90,12 @@ redirects where overrides are read and written.
 
 ## Build
 
+Arcade builds `catalog.json`'s portable entry from this repository and offers
+`wurm.zx` as an individual download. It uses the same campaign, artwork,
+controls and editor; private editor records belong to `xyz.waozi.wurm`.
+The portable host plays packed sound effects. The native editions keep the
+streaming soundtrack and secondary-pointer editor controls.
+
 ```sh
 ziran run --locked desktop
 python3 tools/build_android.py --abi arm64-v8a

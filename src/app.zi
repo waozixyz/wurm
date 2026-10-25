@@ -1,4 +1,25 @@
-using UI :: #import "kryon/Widgets";
+#if #defined(WURM_PORTABLE) {
+    #import "kryon/session"
+    #import "kryon/geometry"
+    #import "kryon/drawing_props"
+    #import "kryon/control_props"
+    #import "kryon/box_widget"
+    #import "kryon/box_props"
+    #import "kryon/button_widget"
+    #import "kryon/button_props"
+    #import "kryon/text_widget"
+    #import "kryon/text_props"
+    #import "kryon/text_align"
+    #import "kryon/image_widget"
+    #import "kryon/image_props"
+    #import "kryon/scroll_widget"
+    #import "kryon/scroll_props"
+    #import "kryon/pointer_input"
+    #import "kryon/input_protocol"
+    #import "kryon/tree"
+} else {
+    using UI :: #import "kryon/Widgets";
+}
 #import "kryon/joystick";
 #import "kryon/svg_icon_props"
 #import "kryon/svg_icon_widget"
@@ -6,13 +27,37 @@ HeartIcon :: #import "mingcute/mingcute_filled_heart";
 AppleIcon :: #import "mingcute/mingcute_filled_apple_fruit";
 StarIcon :: #import "mingcute/mingcute_filled_star";
 Input :: #import "kryon/input_protocol";
-Timer :: #import "std/timer_linux";
+#if #defined(WURM_PORTABLE) {
+    Timer :: #import "portable_runtime";
+    Audio :: #import "portable_audio";
+    #import "kryon/widget_palette"
+} else {
+    Timer :: #import "std/timer_linux";
+    Audio :: #import, file "audio.zi";
+}
 #import "std/number_text"
 #import "std/text_buffer"
 #import, file "game.zi";
 #import, file "original_levels.zi";
 Custom :: #import, file "custom_levels.zi";
-Audio :: #import, file "audio.zi";
+
+#if #defined(WURM_PORTABLE) {
+    ART_GARDEN :: "assets/wurm/art/garden.png";
+    ART_FOREST :: "assets/wurm/art/forest.png";
+    ART_CANOPY :: "assets/wurm/art/forest-canopy.png";
+    ART_CANOPY_PORTRAIT :: "assets/wurm/art/forest-canopy-portrait.png";
+    ART_TITLE :: "assets/wurm/art/title.png";
+    ART_TITLE_PORTRAIT :: "assets/wurm/art/title-portrait.png";
+    ART_PREVIEWS :: "assets/wurm/art/previews/";
+} else {
+    ART_GARDEN :: "assets/art/garden.png";
+    ART_FOREST :: "assets/art/forest.png";
+    ART_CANOPY :: "assets/art/forest-canopy.png";
+    ART_CANOPY_PORTRAIT :: "assets/art/forest-canopy-portrait.png";
+    ART_TITLE :: "assets/art/title.png";
+    ART_TITLE_PORTRAIT :: "assets/art/title-portrait.png";
+    ART_PREVIEWS :: "assets/art/previews/";
+}
 
 PLAY_STEERING_KEY :: 100000;
 WORM_BODY_SIZE :: 16.5;
@@ -65,15 +110,15 @@ StageClear :: (stage: s32) -> string {
 // cells) so the sprites keep their detail; floors and walls are opaque.
 SHEET_SCALE :: 2.0;
 Sheet :: (stage: s32) -> string {
-    if stage == 1 { return "assets/art/forest.png" }
-    return "assets/art/garden.png"
+    if stage == 1 { return ART_FOREST }
+    return ART_GARDEN
 }
 preview_path: [64]u8;
 PreviewPath :: (stage: s32, number: s32) -> string {
     prefix := "garden-"
     if stage == 1 { prefix = "forest-" }
     digits: [16]u8
-    at := CopyInto(preview_path[:], 0, "assets/art/previews/")
+    at := CopyInto(preview_path[:], 0, ART_PREVIEWS)
     at = CopyInto(preview_path[:], at, prefix)
     at = CopyInto(preview_path[:], at, FormatInteger(cast(s64)number, digits[:]))
     at = CopyInto(preview_path[:], at, ".png")
@@ -101,6 +146,7 @@ CentreText :: (session: Session, key: u64, text: string, bounds: Rectangle, size
         .font = size, .align = TextAlign.TextAlignCenter})
 }
 
+#if !#defined(WURM_PORTABLE) {
 // A single visual language for the title, HUD and every dialog. These are
 // ordinary Kryon style rules, shared by desktop and Android.
 styles_ready: bool;
@@ -131,6 +177,31 @@ GameStyles :: () {
             .border = 0xD8AE4BFF, .border_width = 2.0, .radius = 30.0, .font_size = 22.0}}
     rules.count = at + 6
     styles_ready = InstallStyleRules(rules)
+}
+}
+
+GamePointer :: (session: Session) -> Input.PointerFrame {
+    #if #defined(WURM_PORTABLE) {
+        unused session
+        return SamplePointer()
+    } else {
+        return PointerSample(session)
+    }
+}
+GameSecondaryPointer :: (session: Session) -> Input.SecondaryPointerFrame {
+    #if #defined(WURM_PORTABLE) {
+        unused session
+        return Input.SecondaryPointerFrame.{}
+    } else {
+        return SecondaryPointerSample(session)
+    }
+}
+
+AtTitle :: () -> bool { return game.mode == MODE_STAGES }
+NavigateBack :: (now: s64) -> bool {
+    if game.mode == MODE_STAGES { return false }
+    HandleInput(Input.KeyEscape, now)
+    return true
 }
 GameText :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32, muted: bool = false,
              centre: bool = false) {
@@ -292,7 +363,7 @@ Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32
     if WallMaterial(tile) == 20 && sheet == Sheet(1) {
         // Sample one continuous forest field in board coordinates. Turning
         // the board also turns the field, so every shared tile edge matches.
-        canopy := ifx board_columns == ROWS then "assets/art/forest-canopy-portrait.png" else "assets/art/forest-canopy.png"
+        canopy := ifx board_columns == ROWS then ART_CANOPY_PORTRAIT else ART_CANOPY
         unused Image(session, ImageProps.{.key = key, .asset_path = canopy, .bounds = bounds,
             .source = Rectangle.{cast(float32)x * 16.0 * SHEET_SCALE, cast(float32)y * 16.0 * SHEET_SCALE,
                 16.0 * SHEET_SCALE, 16.0 * SHEET_SCALE},
@@ -564,10 +635,15 @@ EditorSetApples :: (delta: s32) {
 
 // One palette swatch: the brush value it selects and its sheet art.
 PaletteEntry :: struct { brush: s32; source_x: float32; source_y: float32 }
-floor_entries: [3]PaletteEntry = .[
-    .{0, 0.0, 0.0}, .{1, 16.0, 0.0}, .{2, 32.0, 0.0}];
-wall_entries: [4]PaletteEntry = .[
-    .{BRUSH_SMART_WALL, 160.0, 32.0}, .{20, 0.0, 16.0}, .{21, 16.0, 16.0}, .{22, 32.0, 16.0}];
+floor_entries: [3]PaletteEntry = PaletteEntry.[
+    PaletteEntry.{.brush = 0, .source_x = 0.0, .source_y = 0.0},
+    PaletteEntry.{.brush = 1, .source_x = 16.0, .source_y = 0.0},
+    PaletteEntry.{.brush = 2, .source_x = 32.0, .source_y = 0.0}];
+wall_entries: [4]PaletteEntry = PaletteEntry.[
+    PaletteEntry.{.brush = BRUSH_SMART_WALL, .source_x = 160.0, .source_y = 32.0},
+    PaletteEntry.{.brush = 20, .source_x = 0.0, .source_y = 16.0},
+    PaletteEntry.{.brush = 21, .source_x = 16.0, .source_y = 16.0},
+    PaletteEntry.{.brush = 22, .source_x = 32.0, .source_y = 16.0}];
 // One titled run of palette swatches. Returns the content cursor below it.
 DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32, label: string,
                     entries: []PaletteEntry, tiles: string,
@@ -614,7 +690,7 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
     rows := (STAGE_LEVELS + columns - 1) / columns
     item_width := (area.width - 16.0 - cast(float32)(columns - 1) * 8.0) / cast(float32)columns
     item_height := item_width * 0.75 + 30.0
-    pointer := PointerSample(session)
+    pointer := GamePointer(session)
     for index: 0..STAGE_LEVELS - 1 {
         column := index % columns
         row := index / columns
@@ -659,8 +735,8 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     // The board keeps whatever orientation EditorLoad or EditorTurn last set.
     stage := BoardIn(canvas)
 
-    pointer := PointerSample(session)
-    secondary := SecondaryPointerSample(session)
+    pointer := GamePointer(session)
+    secondary := GameSecondaryPointer(session)
     scale := stage.width / (cast(float32)board_columns * 16.0)
     if (pointer.down || secondary.down) && Input.PointInBounds(pointer.x, pointer.y, stage) {
         cell_x := cast(s32)((pointer.x - stage.x) / (16.0 * scale))
@@ -810,7 +886,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
 // stage and level selection do not stand between the player and the game.
 DrawTitle :: (session: Session, area: Rectangle, key: s32) -> bool {
     portrait := area.height > area.width
-    artwork := ifx portrait then "assets/art/title-portrait.png" else "assets/art/title.png"
+    artwork := ifx portrait then ART_TITLE_PORTRAIT else ART_TITLE
     art_bounds := area
     source: Rectangle
     // Wide landscape crops the lower grass first, preserving the logo.
@@ -967,13 +1043,24 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
 
 #program_export
 Frame :: (session: Session, viewport: Rectangle) -> s32 {
-    GameStyles()
+    #if #defined(WURM_PORTABLE) {
+        unused WidgetPaletteUse(session, WidgetPalette.{.background = 0xe5edd2ff, .base = 0xfffaeaff,
+            .text = 0x244734ff, .selected = 0x326a45ff, .selected_text = 0xfff9e9ff,
+            .border = 0xd5dfc4ff, .danger = 0xd55f59ff, .warning = 0xf5ce64ff, .success = 0x326a45ff})
+    } else {
+        GameStyles()
+    }
     now := Timer.MonotonicMilliseconds()
     // The game opens on the stages.
     if !game.started { game.started = true; OpenStages() }
     game_portrait = viewport.height > viewport.width
     water_frame = cast(s32)((now / 130) % 3)
-    key := KeyboardTake(session)
+    key: s32
+    #if #defined(WURM_PORTABLE) {
+        key = Timer.PressedKey()
+    } else {
+        key = KeyboardTake(session)
+    }
     // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
     HandleInput(key, now)

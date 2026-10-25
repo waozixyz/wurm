@@ -61,3 +61,7 @@ abis = "arm64-v8a,armeabi-v7a"
 [dependencies.mingcute]
 git = "https://github.com/kryonlabs/mingcute.git"
 ref = "master"
+
+[dependencies.apps]
+git = "https://github.com/waozixyz/apps.git"
+ref = "master"

@@ -1,0 +1,12 @@
+{
+  "id": "xyz.waozi.wurm-player",
+  "title": "Apfelwurm",
+  "apps": [{
+    "manifest": "catalog.json",
+    "cover": {
+      "portrait": "assets/art/title-portrait.png",
+      "landscape": "assets/art/title.png",
+      "action": "play"
+    }
+  }]
+}

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.1] - 2026-10-25
+
+- Download Apfelwurm separately from Arcade and play the same Garden and Forest campaign.
+- Keep portable level-editor changes in the game's private saves and return to Arcade from the title.
+
 ## [0.1.0] - 2026-10-25
 
 - Play 66 distinct Garden and Forest challenges, with five apples in the opening levels and a gentler level 2.

@@ -1,0 +1,37 @@
+// The same game uses only the collection's bounded services when hosted.
+#import "apps/node_types"
+#import "std/text_buffer"
+host_api :: #system_library "host_api";
+AppKeyHost :: () -> s32 #foreign host_api;
+AppRecordHost :: (name: string) -> string #foreign host_api;
+SaveAppRecordHost :: (name: string, text: string) -> bool #foreign host_api;
+AppServiceHost :: (name: string, request: string) -> string #foreign host_api;
+
+frame_time: s64;
+FrameTime :: (now: float64) { frame_time = cast(s64)(now * 1000.0) }
+MonotonicMilliseconds :: () -> s64 { return frame_time }
+PressedKey :: () -> s32 { return AppKeyHost() }
+ReadLevel :: (name: string, output: []u8) -> s64 {
+    text := AppRecordHost(name)
+    if text.count == 0 || text.count % 2 != 0 || text.count / 2 > output.count { return -1 }
+    for at: cast(s64)0..text.count / 2 - 1 {
+        high := Hex(text[at * 2]); low := Hex(text[at * 2 + 1])
+        if high < 0 || low < 0 { return -1 }
+        output[at] = cast(u8)(high * 16 + low)
+    }
+    return text.count / 2
+}
+Hex :: (byte: u8) -> s32 {
+    if byte >= 48 && byte <= 57 { return cast(s32)byte - 48 }
+    if byte >= 97 && byte <= 102 { return cast(s32)byte - 87 }
+    return -1
+}
+WriteLevel :: (name: string, bytes: []u8) -> bool {
+    if bytes.count > 2401 { return false }
+    text: [4802]u8
+    digits := "0123456789abcdef"
+    for byte, at: bytes { text[at * 2] = digits[byte / 16]; text[at * 2 + 1] = digits[byte % 16] }
+    return SaveAppRecordHost(name, TextView(text[:bytes.count * 2]))
+}
+RemoveLevel :: (name: string) -> bool { return SaveAppRecordHost(name, "") }
+Leave :: () { unused AppServiceHost("arcade.navigation", "back") }

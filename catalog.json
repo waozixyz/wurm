@@ -1,0 +1,19 @@
+{
+  "id": "xyz.waozi.wurm",
+  "name": "wurm",
+  "title": "Apfelwurm",
+  "kind": "game",
+  "contract_version": 1,
+  "module_api": 2,
+  "host_api": 12,
+  "save_schema": 1,
+  "build_defines": ["WURM_PORTABLE"],
+  "prepare_assets": "tools/portable_assets.py",
+  "harnesses": ["arcade"],
+  "entry": "portable:Main",
+  "source": "src/portable.zi",
+  "assets": "assets",
+  "locales": "src/locales",
+  "locale_prefix": "wurm_",
+  "preview": "assets/art/title.png"
+}

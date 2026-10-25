@@ -1,0 +1,23 @@
+// Packed effects use the host's sound device; the guest never opens SDL.
+host_api :: #system_library "host_api";
+AppSoundHost :: (path: string) -> bool #foreign host_api;
+muted: bool;
+previous_level: s32 = -1;
+previous_apples: s32;
+previous_death: s32;
+previous_transition: s32;
+was_playing: bool;
+ToggleMute :: () { muted = !muted }
+UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: s32) {
+    path := ""
+    if playing && (!was_playing || previous_level != level) { path = "assets/wurm/sounds/start.wav" }
+    else if playing && apples < previous_apples { path = "assets/wurm/sounds/pickup.wav" }
+    else if death > previous_death { path = "assets/wurm/sounds/lose.wav" }
+    else if transition > previous_transition { path = "assets/wurm/sounds/exit.wav" }
+    if !muted && path != "" { unused AppSoundHost(path) }
+    was_playing = playing
+    previous_level = level
+    previous_apples = apples
+    previous_death = death
+    previous_transition = transition
+}
