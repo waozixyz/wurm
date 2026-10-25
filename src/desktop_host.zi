@@ -35,6 +35,27 @@ WindowSize :: () {
     window_height = height
 }
 
+// WURM_START=editor opens straight into the level editor, optionally at
+// WURM_LEVEL=n (1-based), instead of the stage screen.
+StartScreen :: () {
+    name: [32]u8
+    if !CopyCString("WURM_START", name[:]) { return }
+    value := GetEnvironment(*name[0])
+    if value == null { return }
+    editor: bool
+    for index: 0..5 {
+        editor = value[index] == #char "e" || value[index] == #char "E"
+        if editor { break }
+    }
+    if !editor { return }
+    level: s32 = 0
+    if CopyCString("WURM_LEVEL", name[:]) {
+        number := GetEnvironment(*name[0])
+        if number != null && ParseNumber(number) > 1 { level = ParseNumber(number) - 1 }
+    }
+    App.EditorAtStartup(level)
+}
+
 DrawFrame :: (session: Session) -> bool {
     BeginDesktopFrame()
     viewport := DesktopViewport()
@@ -64,6 +85,7 @@ main :: () -> s32 {
     session := SessionOpen()
     if !SessionValid(session) { return 1 }
     defer { CloseSession(session) }
+    StartScreen()
     ok := true
     while ok && PollDesktop() {
         KeyboardModifiersSend(session, DesktopModifiers())

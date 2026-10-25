@@ -224,53 +224,10 @@ DrawBoard :: (session: Session, stage: Rectangle) {
     }
 }
 
-// A level as it starts: open entrance, monsters at home, and the stage's
-// character arriving from below.
-DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
-    BoardSize(COLUMNS, ROWS)
-    stage := BoardIn(area)
-    tiles := Sheet(StageOf(level))
-    sprites := tiles
-    for row: 0..ROWS - 1 {
-        for column: 0..COLUMNS - 1 {
-            x := cast(s32)column
-            y := cast(s32)row
-            entrance := y == ROWS - 1 && x == 20
-            tile := cast(s32)(Custom.EffectiveTile(level, x, ifx entrance then ROWS - 2 else y) & 127)
-            kind := tile - 39
-            if kind >= 1 && kind <= 6 { tile = 0 }
-            Tile(session, key + cast(u64)Index(x, y), stage, x, y, tile, tiles)
-            if kind >= 1 && kind <= 6 && !entrance {
-                Sprite(session, key + 1200 + cast(u64)Index(x, y), stage, Point.{x * 16 + 8, y * 16 + 8},
-                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites)
-            }
-        }
-    }
-    // Head, body, then the two narrowing tail pieces, as DrawBoard orders them.
-    for segment: cast(s32)0..4 {
-        column := segment + 2
-        if segment == 0 { column = DIR_UP }
-        else if segment < 3 { column = 4 }
-        Sprite(session, key + 2400 + cast(u64)segment, stage, Point.{328, 408 + segment * 16},
-            Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites)
-    }
-}
-
-// A stage page: its cover filling the page, and the chosen level framed on it.
+// A stage page: its cover filling the page.
 DrawStagePage :: (session: Session, page: Rectangle, stage: s32) {
     unused Image(session, ImageProps.{.key = 9000 + cast(u64)stage, .asset_path = Cover(stage), .bounds = page,
         .fit = ImageFit.ImageFitCover, .smooth = true, .alt_text = StageName(stage)})
-    top := page.y + 106.0
-    bottom := page.y + page.height - 124.0
-    height := bottom - top
-    width := height * 4.0 / 3.0
-    if width > page.width - 160.0 { width = page.width - 160.0; height = width * 3.0 / 4.0 }
-    if width < 40.0 || height < 30.0 { return }
-    board := Rectangle.{page.x + (page.width - width) / 2.0, top + (bottom - top - height) / 2.0, width, height}
-    unused Box(session, BoxProps.{.key = 9100 + cast(u64)stage,
-        .bounds = Rectangle.{board.x - 6.0, board.y - 6.0, board.width + 12.0, board.height + 12.0},
-        .fill = Color.{24, 28, 36, 220}, .radius = 10.0})
-    DrawPreview(session, board, stage * STAGE_LEVELS + stage_levels[stage], 10000 + cast(u64)stage * 3000)
 }
 
 OpenStages :: () {
@@ -315,6 +272,12 @@ ReloadLevel :: (level: s32, now: s64) { PlayBoard(level, now, 1, true) }
 LeavePlay :: () {
     if editor.playtest { OpenEditor(editor.level) }
     else { OpenStages() }
+}
+
+// The desktop host's WURM_START=editor entry: straight into the editor.
+EditorAtStartup :: (level: s32) {
+    game.started = true
+    OpenEditor(level)
 }
 
 OpenEditor :: (level: s32) {
