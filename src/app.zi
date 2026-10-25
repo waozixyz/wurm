@@ -159,6 +159,13 @@ Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source
     Picture(session, key, sheet, bounds, source)
 }
 
+// Garden-only dressage: animated water frames and grass floor variants,
+// both chosen per frame and per cell so boards feel alive without any
+// change to the level data.
+water_frame: s32;
+fancy_garden: bool;
+GRASS_TILES :: 9;
+
 Snap :: (value: float32) -> float32 { return cast(float32)cast(s32)(value + 0.5) }
 
 // Tile edges land on whole pixels, so scaled neighbours meet without seams.
@@ -170,6 +177,15 @@ Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32
         Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale) - top}
     source := Rectangle.{cast(float32)(tile % 20) * 16.0,
         cast(float32)(tile / 20) * 16.0, 16.0, 16.0}
+    if fancy_garden {
+        if tile == 22 {
+            source = Rectangle.{cast(float32)(water_frame % 3) * 16.0, 176.0, 16.0, 16.0}
+        } else if tile == 0 || tile == 3 || tile == 4 || tile == 5 ||
+            tile == 6 || tile == 15 || tile == 16 || tile == 17 || tile == 19 {
+            variant := (x * 7 + y * 13) % 4
+            source = Rectangle.{cast(float32)(4 + variant) * 16.0, 176.0, 16.0, 16.0}
+        }
+    }
     Picture(session, key, sheet, bounds, source)
 }
 
@@ -203,6 +219,7 @@ AppleFlash :: (session: Session, stage: Rectangle) {
 }
 
 DrawBoard :: (session: Session, stage: Rectangle) {
+    fancy_garden = StageOf(game.level) == 0
     tiles := Sheet(StageOf(game.level))
     sprites := tiles
     for y: 0..board_rows - 1 {
@@ -493,6 +510,7 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
 DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     if editor.browsing { DrawLevelBrowser(session, area); return }
     stage_of_level := StageOf(editor.level)
+    fancy_garden = stage_of_level == 0
     tiles := Sheet(stage_of_level)
     panel := Rectangle.{area.x + area.width - EDITOR_PANEL_WIDTH, area.y, EDITOR_PANEL_WIDTH, area.height}
     canvas := Rectangle.{area.x, area.y, area.width - EDITOR_PANEL_WIDTH, area.height}
@@ -845,6 +863,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // The game opens on the stages.
     if !game.started { game.started = true; OpenStages() }
     game_portrait = viewport.height > viewport.width
+    water_frame = cast(s32)((now / 130) % 3)
     key := KeyboardTake(session)
     // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
