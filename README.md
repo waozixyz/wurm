@@ -4,17 +4,22 @@ Application id `xyz.waozi.wurm`.
 
 
 A native Ziran and Kryon game using all **99 original levels** recovered
-from the owner's `The-Worm_Win_EN/ONLY.ONE` archive. The game shows new art and
-sound: each stage has its own cover, tiles, character, monsters, pickup and
-effects (`assets/art`), and new sound effects and stage music
-(`assets/sounds`). The recovered tilesets, title artwork, sounds and scores
-stay in `assets/original` as the reference for the level data.
+from the owner's `The-Worm_Win_EN/ONLY.ONE` archive, reshaped for mobile:
+each level plays on a **20x15 grid** derived from the recovered 40x30 data
+by merging 2x2 cell blocks, so cells read twice as large on a phone while
+the levels keep their shape (a merged block becomes a wall only when three
+or four of its cells were solid; monster markers survive the merge). The
+recovered 40x30 files stay in `assets/original` as the reference, and
+`tools/make_mobile_levels.py` regenerates `src/levels.zi` from them. The
+game shows new art and sound: each stage has its own cover, tiles,
+character, monsters, pickup and effects (`assets/art`), and new sound
+effects and stage music (`assets/sounds`).
 
 The executable was disassembled to recover the single-player rules: movement
-by four pixels every 25 ms, sequential apples, progressive growth, passable
+by four pixels every 25 Ms, sequential apples, progressive growth, passable
 decorative tiles, six monster types, lives, scoring, and the bottom entrance
 and top exit. Collect the level's apples, then guide the worm through the
-opening at the top center. An extra life is awarded every 33 points.
+opening at the top centre. An extra life is awarded every 33 points.
 
 ## Controls
 
@@ -23,11 +28,19 @@ opening at the top center. An extra life is awarded every 33 points.
   Left/Right, A/D, a swipe or the side buttons change stage
 - Up/Down or the - and + buttons choose a level; Home/End pick the first/last
 - Enter or Space: start or retry
-- Arrows or WASD: steer
+- Arrows, WASD or a swipe over the board: steer
 - Escape, Space or P: pause and resume
 - Q while paused: back to the stages
 - R: restart the current level
 - M: mute and unmute
+
+## Mobile-first layout
+
+The green icon bar across the top carries hearts for lives, the apple goal,
+the star score and the level; the board letterboxes into the remaining
+space, so landscape and portrait both keep the game's proportions. The
+desktop window opens from `WURM_WINDOW=WxH` (default 960x600), which is how
+the portrait layout is exercised on the desktop.
 
 ## Level editor
 
@@ -41,11 +54,11 @@ Saving is automatic on switch, exit and playtest, plus the Save button; Reset
 (deleting the override) restores the recovered original level.
 
 Edits live in `assets/levels/level<N>.dat`, one file per edited level in the
-original archive layout (apple count, then the 40x30 tiles in column order).
-A level without a file plays its recovered original, so removing a file
-restores it. The entrance (bottom centre, green marker) and exit (top centre,
-red marker) are carved at runtime from the tiles above and below the edges;
-the editor warns when a level could not be entered or left. `WURM_LEVEL_DIR`
+mobile layout (apple count, then the 20x15 tiles in column order). A level
+without a file plays its derived mobile level, so removing a file restores
+it. The entrance (bottom centre, green marker) and exit (top centre, red
+marker) are carved at runtime from the tiles above and below the edges; the
+editor warns when a level could not be entered or left. `WURM_LEVEL_DIR`
 redirects where overrides are read and written.
 
 ## Build
@@ -75,6 +88,7 @@ of every sound; the scores are trimmed and crossfaded into seamless loops.
 
 ```sh
 python3 tools/extract_original.py /mnt/storage/Games/The-Worm_Win_EN
+python3 tools/make_mobile_levels.py
 python3 tools/render_music.py
 ```
 

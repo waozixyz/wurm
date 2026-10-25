@@ -111,23 +111,23 @@ def main():
         # The editor: E opens it for the chosen level, the pointer picks the
         # first floor swatch and paints it over the top-left wall, and Save
         # writes the override. Pointer targets mirror the layout in app.zi:
-        # a 960x600 window with a 42px bottom HUD, a 248px right panel whose
-        # palette starts at y 136 in 38px columns, and the board scaled to
-        # 712x534 at (0, 12), so cell (0, 0) centres near (9, 21).
+        # a 960x600 window with a 42px top bar, a 248px right panel whose
+        # palette starts at y 178 in 38px columns, and the 20x15 board scaled
+        # to 712x534 at (0, 54), so cell (0, 0) centres near (17, 71).
         key("q")
         key("e")
         time.sleep(0.4)
         capture("editor-open")
-        pointer(737, 153)  # first FLOOR swatch: brush 0
-        pointer(9, 21)     # canvas cell (0, 0), a wall in every level
+        pointer(737, 195)  # first FLOOR swatch: brush 0
+        pointer(17, 71)    # canvas cell (0, 0), a wall in every level
         time.sleep(0.2)
         capture("editor-painted")
-        pointer(775, 476)  # Save
+        pointer(775, 518)  # Save
         time.sleep(0.3)
         edited = ROOT / "build/research/ui/levels/level33.dat"
         original = (ROOT / "assets/original/level33.dat").read_bytes()
         painted = edited.read_bytes()
-        assert len(painted) == 1201, f"override size {len(painted)}"
+        assert len(painted) == 301, f"override size {len(painted)}"
         assert painted[0] == original[0], "apple count unchanged"
         assert painted[1] == 0 and original[1] == 20, "cell (0, 0) painted from wall to floor"
         key("e")
@@ -135,6 +135,47 @@ def main():
         capture("editor-exit")
         (OUT / "receipt.json").write_text(json.dumps(evidence, indent=2) + "\n")
         print("Private UI local test rendered the Garden stage, levels 1, 11, 33 and an edited override.")
+
+        # A portrait window proves the mobile-first layout: WURM_WINDOW sizes
+        # the second launch, the green icon bar stays on top and the board
+        # letterboxes below it.
+        stop(app)
+        env.update(WURM_WINDOW="480x700")
+        app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT, env=env,
+                               stdout=open(OUT / "app-portrait.log", "wb"), stderr=subprocess.STDOUT,
+                               start_new_session=True)
+        portrait = None
+        for attempt in range(100):
+            if app.poll() is not None:
+                raise RuntimeError(f"Portrait app exited with {app.returncode}")
+            result = subprocess.run(["xdotool", "search", "--onlyvisible", "--pid", str(app.pid)],
+                                    env=env, capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout.strip():
+                portrait = result.stdout.splitlines()[0]
+                break
+            time.sleep(0.1)
+        if portrait is None:
+            raise RuntimeError("No owned portrait Apfelwurm window appeared")
+        evidence.update(portrait_window=portrait)
+        window = portrait
+        time.sleep(0.5)
+        capture("portrait-stages")
+        key("Return")
+        time.sleep(0.5)
+        capture("portrait-level")
+        from PIL import Image
+        picture = Image.open(OUT / "portrait-level.png").convert("RGB")
+        assert picture.size == (480, 700), picture.size
+        top = picture.crop((0, 0, 480, 42))
+        top_green = sum(channel * count for channel, count in enumerate(top.histogram()[256:512]))
+        assert top_green > 480 * 42 * 90, "the icon bar is not green across the top"
+        board = picture.crop((0, 42, 480, 698))
+        # The 480-wide board scales fewer pixels than landscape, so the
+        # check is structural: a green field centred below the bar.
+        assert len(board.getcolors(480 * 656) or []) > 40, "the board area did not render"
+        board_green = sum(channel * count for channel, count in enumerate(board.histogram()[256:512]))
+        assert board_green > 480 * 656 * 40, "the board is not a green field"
+        print("Private UI local test rendered the portrait layout with the top icon bar.")
     finally:
         os.close(read_fd)
         stop(app)

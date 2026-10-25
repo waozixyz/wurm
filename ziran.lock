@@ -2,9 +2,9 @@
   "format": 1,
   "packages": [
     {
-      "commit": "ce510505c384fb2b0c4b47e216b80cae53576b77",
+      "commit": "3a536faa9435c54cc91965c3c0efb67ea53c81eb",
       "dependencies": {"raylib": "p5a77c9c35110e925"},
-      "id": "p28a106e741584b2c",
+      "id": "p3d441dbe68a54187",
       "name": "kryon",
       "ref": "master",
       "url": "https://github.com/kryonlabs/kryon.git"
@@ -17,10 +17,18 @@
       "ref": "fafa2cea97d0cb379d832086ba45a989fa6f9c8e",
       "source": true,
       "url": "https://github.com/raysan5/raylib.git"
+    },
+    {
+      "commit": "9cc6872f75447c3a24c16764f9829d0f58751cb0",
+      "dependencies": {},
+      "id": "pe1027b9d16704793",
+      "name": "mingcute",
+      "ref": "master",
+      "url": "https://github.com/kryonlabs/mingcute.git"
     }
   ],
   "root": {
-    "dependencies": {"kryon": "p28a106e741584b2c"},
+    "dependencies": {"kryon": "p3d441dbe68a54187", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {

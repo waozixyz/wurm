@@ -23,6 +23,9 @@ entry = "src/app.zi"
 [tool.kryon.profiles.desktop]
 backend = "desktop"
 library = "SDL2"
+# Sizes the window from WURM_WINDOW so landscape and portrait layouts can
+# be exercised on the desktop.
+host = "src/desktop_host.zi"
 
 [tool.kryon.profiles.portable]
 backend = "desktop"
@@ -44,3 +47,7 @@ working_directory = "."
 # The application id.
 [tool.kryon.android]
 package = "xyz.waozi.wurm"
+
+[dependencies.mingcute]
+git = "https://github.com/kryonlabs/mingcute.git"
+ref = "master"
