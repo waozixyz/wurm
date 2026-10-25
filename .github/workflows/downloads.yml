@@ -48,7 +48,14 @@ jobs:
       - name: Install native and private-display test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config python3-pil python3-numpy libssl-dev libsdl2-dev libcairo2-dev libfreetype-dev libfontconfig-dev libpango1.0-dev libx11-dev libxcursor-dev libxinerama-dev libxrandr-dev libxi-dev libgl1-mesa-dev xvfb xauth xdotool imagemagick
+          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config python3-pil python3-numpy ffmpeg libssl-dev libsdl2-dev libcairo2-dev libfreetype-dev libfontconfig-dev libpango1.0-dev libx11-dev libxcursor-dev libxinerama-dev libxrandr-dev libxi-dev libgl1-mesa-dev xvfb xauth xdotool imagemagick
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '6.0.6'
+          actions-cache-folder: emsdk-cache
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -71,6 +78,25 @@ jobs:
         run: sh tests/run_local.sh
       - name: Exercise the app on its own private display
         run: python3 tests/private_ui_test.py
+      - name: Build and play the browser edition
+        run: |
+          python3 tools/build_web.py
+          CHROMIUM="$(command -v google-chrome || command -v chromium)" node tests/web_test.mjs
+      - name: Package the verified browser edition
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os, zipfile
+          from pathlib import Path
+          root = Path('build/web')
+          output = Path('build/downloads')
+          output.mkdir(parents=True, exist_ok=True)
+          with zipfile.ZipFile(output / ('wurm-web-v' + os.environ['VERSION'] + '.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file():
+                      archive.write(path, path.relative_to(root))
+          PY
       - name: Build both ARM architectures in one production APK
         run: python3 tools/build_android.py --release --abi universal
       - name: Sign and verify the standard and F-Droid-style downloads
@@ -94,6 +120,7 @@ jobs:
         run: |
           test -f "build/downloads/wurm-v$VERSION.apk"
           test -f "build/downloads/wurm-$VERSION-fdroid.apk"
+          test -f "build/downloads/wurm-web-v$VERSION.zip"
           cmp "build/downloads/wurm-v$VERSION.apk" "build/downloads/wurm-$VERSION-fdroid.apk"
           python3 - <<'PY' > build/release-notes.md
           import os, re
@@ -119,5 +146,5 @@ jobs:
           if [ "$state" = missing ]; then
             gh release create "$tag" --draft --target "$GITHUB_SHA" --title "Apfelwurm $VERSION" --notes-file build/release-notes.md
           fi
-          gh release upload "$tag" "build/downloads/wurm-v$VERSION.apk" "build/downloads/wurm-$VERSION-fdroid.apk" --clobber
+          gh release upload "$tag" "build/downloads/wurm-v$VERSION.apk" "build/downloads/wurm-$VERSION-fdroid.apk" "build/downloads/wurm-web-v$VERSION.zip" --clobber
           gh release edit "$tag" --draft=false --latest

@@ -1,222 +1,86 @@
+<p align="center">
+  <img src="assets/art/title.png" alt="Apfelwurm — a little orange worm, an apple meadow and a mountain to climb" width="100%">
+</p>
+
+<p align="center">
+  <strong>A little worm. A long journey.</strong><br>
+  <a href="https://wurm.waozi.xyz/"><strong>Play free in your browser</strong></a>
+  · <a href="https://github.com/waozixyz/wurm/releases/latest"><strong>Download for Android</strong></a>
+  · <a href="CHANGELOG.md">What's new</a>
+</p>
+
 # Apfelwurm
 
-Application id `xyz.waozi.wurm`.
+Collect the apples. Find the gate. Keep growing.
 
+Guide a little orange worm from sunny apple meadows through woodland and
+lakeshores to the mountains. Apfelwurm brings the spirit of the original
+Worm game to **200 distinct levels**, with illustrated landscapes, a gentle
+acoustic soundtrack and controls that respond while your finger stays down.
 
-A native Ziran and Kryon game. The illustrated Apfelwurm title has one
-**Play** button. Choose swipe steering or a direction pad on first play,
-then select your stage in **Your journey**. Follow the little orange worm
-through **200 unique original-inspired levels**, with 40 each in Meadow,
-deciduous Leafwood, coniferous Pinewood, Lake and Mountains.
-Rooms, spirals, crossings, islands and narrow passes draw from 83 recovered
-layouts. The six original enemy types include wandering fire, bouncing
-patrols and chasing creatures. Enemy counts and apple goals increase across
-stages, while the first six levels introduce movement without enemies.
-Opening Meadow levels move more slowly before reaching the original pace.
-Complete all 40 levels to unlock the next landscape. Unlocked stages and
-cleared levels remain selectable; progress and the control choice persist.
-`tools/design_levels.py` regenerates the boards and static route certificates.
-The local engine replay wins all 200 levels in both orientations with enemies
-active, using recorded seeds and routes from `tests/campaign_cases.json`.
-This is separate from device and Android input verification.
-The **99 recovered levels** from the owner's `The-Worm_Win_EN/ONLY.ONE`
-archive stay the byte-exact reference in `assets/original`.
-The game uses new art and sound with the same worm and apples throughout.
-Recovered tilesets, title artwork, sounds and scores remain in
-`assets/original` as reference material.
+Free to play. No account, no ads and no in-game purchases.
 
-The executable was disassembled to recover the single-player rules: movement
-by four pixels every 25 Ms, sequential apples, progressive growth, passable
-decorative tiles, six monster types, lives, scoring, and the bottom entrance
-and top exit. Collect the level's apples, then guide the worm through the
-opening at the top centre. An extra life is awarded every 33 points. You start with three lives;
-losing the last one ends the game at zero.
+## Five landscapes. Forty levels each.
 
-## Controls
+- **Meadow:** find your rhythm among grass, hedges and orchard paths, with a slower opening pace.
+- **Leafwood:** weave through leafy rooms, mossy courtyards and branching trails.
+- **Pinewood:** follow fir-lined passages and watch the patrols around the next corner.
+- **Lake:** cross the shores, channels and islands without running out of room.
+- **Mountains:** wind through rock corridors, terraces and the final ascent.
 
-- Click Play, Enter or Space: choose controls, then a stage and level; Enter or Space also retries
-- Arrows, WASD, a held finger moving over the board, or the direction pad: steer immediately
-- Pause > Controls: change between swipe steering and the direction pad
-- Pause > Stages: select an unlocked stage and level
-- Escape, Space or P: pause and resume
-- Q while paused: back to the title
-- R: restart the current level
-- M: mute and unmute
-- E on the title: open the level editor
+Layouts take inspiration from the recovered original game's rooms, spirals
+and crossings. Wandering fire, bouncing patrols and chasing enemies make the
+journey more demanding as you climb.
 
-Collect the apples, then leave through the top opening. Levels within each landscape
-connect automatically, keeping lives and score. A completed landscape returns
-to Your journey with the next stage unlocked.
+Finish a landscape to unlock the next. Return to any unlocked stage or
+cleared level from **Your journey**.
 
-## Mobile-first layout
+<p align="center"><img src="assets/marketing/journey.png" alt="Your journey: five illustrated landscapes with progress and stage unlocks" width="85%"></p>
 
-In play, a cream status bar shows the chapter, level, hearts, apples and score.
-Its status chips move onto a second row on narrow phones, keeping the 48-unit
-Pause button clear. Pause, game-over and completion dialogs use large stacked
-touch buttons and a compact composition for short landscape screens; the title artwork fills the
-whole screen with a composition for each orientation. Landscape letterboxes
-the 640x480 board. In portrait
-the game loads its separate 30x40 portrait board, filling the screen edge
-to edge. A missing portrait design starts from a best guess: rotate the
-landscape rooms and connect both gates to the largest playable region.
-Portrait level 2 has its own horizontal divider and a clear approach.
-The worm enters from the bottom and exits at the top in both layouts.
-Rotating during play reloads the current level in the other layout, keeping
-lives and score. Steering keys and finger movements stay
-natural, so Up is always visually up. The gates carve only their own hole;
-the neighbouring walls keep their tiles. Open entrance and exit gates show
-stone posts on both sides, in either orientation. The worm follows its full
-long path with slightly spaced orange segments and a top-down head whose
-mouth faces the direction of travel. The desktop window opens from
-`WURM_WINDOW=WxH` (default 1280x760); `WURM_WINDOW=480x700` shows the
-portrait phone layout.
+## Play your way
 
-Touching hedge, stone and water tiles have borders only on exposed edges.
-Leafwood walls sample one continuous overhead woodland image; the portrait
-version rotates that same field so neighbouring tiles keep matching.
+Choose **swipe steering** or a **direction pad** on first play. With swipe
+steering, move your finger in the direction you want to turn and keep it on
+the screen for the next corner. Change your choice from Pause at any time.
 
-## Level editor
+On a keyboard, use the arrow keys or WASD. Space or Escape pauses; M mutes.
+Collect every apple, then leave through the opening at the top of the board.
 
-Press E from the title, or launch with `WURM_START=editor`;
-the editor opens facing its level selector: use its landscape arrows to browse all five chapters, then
-choose a card with the
-level's rendered board as its picture, a green frame on saved edits, and
-one click to edit that level. Tab or Enter playtests. The held left button paints the selected brush across the canvas, the
-right button restores the current layout's base tile, and the palette offers the
-stage's floors, solid obstacles and six enemies. The apple goal
-is set with the - and + buttons or keys. Up/Down switches through all 200 levels (saving
-first), Enter playtests from the entrance, and E returns to the title.
-Saving is automatic on switch, exit and playtest, plus the Save button; Reset
-(deleting the override) restores the selected layout's base board. The
-**Landscape** and **Portrait** buttons select the layout; T switches between them.
-Each mode has its own tiles, objects and apple goal, and saves without changing
-the other. A missing portrait version is labelled **Best guess**; Save keeps
-it as an independent layout. Playtest uses the selected mode even when the
-editor window has the other shape.
+Portrait and landscape use their own board layouts. Your stage progress and
+control choice stay on your device. Android plays offline; the browser edition
+keeps its saves in this browser.
 
-Landscape edits live in `assets/campaign-levels/level<N>.dat`; portrait edits
-use `level<N>-portrait.dat`. Each file contains an apple count, 1,200 tiles,
-and 1,200 object ids in column order: 40 columns of 30 rows for landscape,
-or 30 columns of 40 rows for portrait. Reset changes only the selected mode. The palette paints floors (grass, dirt, sand), a smart hedge that
-fits its own edge and corner pieces, plain hedges, stone and solid water.
-Existing object data remains readable, but passive props are not rendered.
-A level without a file plays its designed campaign board, so removing a file
-restores it. Earlier 66-level edits remain untouched in `assets/levels/`
-(and the earlier Android/portable record names); the new campaign uses separate
-records. The entrance (bottom centre, green marker) and exit (top centre, red
-marker) are carved at runtime from the tiles above and below the edges; the
-editor warns when a level could not be entered or left. `WURM_LEVEL_DIR`
-redirects where overrides are read and written.
+## Make a path of your own
 
-## Build
+Open the level editor with **E** from the title. Browse all 200 boards,
+paint terrain and enemies, adjust the apple goal, then playtest from the entrance.
 
-Arcade builds `catalog.json`'s portable entry from this repository and offers
-`wurm.zx` as an individual download. It uses the same campaign, artwork,
-controls and editor; private editor records belong to `xyz.waozi.wurm`.
-The portable host plays packed sound effects. The native editions keep the
-streaming soundtrack and secondary-pointer editor controls.
+**Landscape** and **Portrait** are independent editor modes. Start a missing
+portrait layout from a best guess, refine it, and save without changing the
+other version. Playtest always uses the selected layout.
+
+<p align="center"><img src="assets/marketing/editor.png" alt="The portrait level editor with separate Landscape and Portrait modes, terrain brushes and six enemies" width="85%"></p>
+
+## Keep the journey yours
+
+Progress, control choices and personal levels are stored locally. There is no
+account or tracking. The Android edition needs no network permission, and
+personal editor records are kept out of the published game packages.
+
+[Play Apfelwurm](https://wurm.waozi.xyz/)
+· [Android downloads](https://github.com/waozixyz/wurm/releases/latest)
+· [Browser privacy](https://wurm.waozi.xyz/privacy.html)
+
+## Build and contribute
+
+Built with [Ziran](https://ziran-lang.org) and [Kryon](https://kryonlabs.com).
+The desktop, Android and browser editions share the same game rules.
 
 ```sh
-ziran run --locked desktop
-python3 tools/build_android.py --abi arm64-v8a
-ziran run --locked shot > build/stages.ppm
-WORM_SHOT_LEVEL=200 ziran run --locked shot > build/forest-finale.ppm
-ziran check --locked
+ziran run desktop
 sh tests/run_local.sh
 ```
 
-`tests/private_ui_test.py` additionally exercises the real desktop build on
-its own verified Xvfb server. It checks all three dialogs in 320x568 portrait
-and 640x360 landscape, including their primary and Back to title actions.
-It never uses the owner's desktop. The audio
-test uses SDL's dummy drivers and verifies that all effects and scores mix.
-
-The Android debug APK is written to `build/android/`. Use `--abi armeabi-v7a`
-for the development Moto. `tests/android_controls_test.py APK` verifies touch
-start, pause, resume, steering and return to the title on that USB device.
-Use `--verification` on both commands for the separate
-`xyz.waozi.wurm.verification` install, preserving the normal game and data.
-The device test leaves its own game open on the title. To win every level
-with the unchanged game engine on the physical USB Moto, run
-`python3 tests/android_campaign_test.py`. It builds an ARMv7 test executable,
-replays all 400 level/orientation cases with normal steering and collisions,
-and saves per-level results under `build/android-campaign/`. It uses its own
-`/data/local/tmp` directory and preserves the normal game process and saves.
-`--build-only` prepares the runner without claiming any device test result.
-On phones, keep your finger down and move it in the direction you want to
-turn. You can make successive corners without lifting or returning to the
-press position; a small movement is enough, and lifting makes no extra turn.
-Use the top pause button, and tap
-the pause or game-over card's buttons to continue or return to the title.
-
-## Signed Android downloads
-
-Start each numeric release in `CHANGELOG.md`, then run `sh update_version.sh`.
-The generated `version.json` supplies the Android version and increasing
-version code. Build and sign both ARM architectures with:
-
-```sh
-python3 tools/build_android.py --release --abi universal
-python3 tools/android_release.py sign build/android/Apfelwurm-universal-release-unsigned.apk
-```
-
-Signing uses the preserved private key in ignored `backup/android-signing/`.
-Only its public certificate is tracked in `packaging/android/certificate.pem`.
-The signing tool verifies the package, version, certificate, both ARM native
-libraries, 16 KB ZIP alignment and current game assets. It produces identical
-signed `wurm-v<VERSION>.apk` and `wurm-<VERSION>-fdroid.apk` downloads, following
-Shovey's naming format. The F-Droid filename is a source-build distribution
-artifact; it does not imply a listing or approval in the F-Droid catalog.
-
-On every push to master, the Downloads workflow runs the game and private
-display tests, builds a production APK and signs both names using repository
-secrets `WURM_ANDROID_KEYSTORE` and `WURM_ANDROID_KEYSTORE_PASSWORD`. A new
-changelog version is published only after those jobs succeed. Tags are created
-by that workflow. Publishing uploads directly from the verified build to
-GitHub Releases, without using the shared Actions artifact quota. An already
-published version is kept; a new download requires a new changelog version.
-
-## Art and sound
-
-The landscape and portrait title illustrations were generated with the built-in
-image tool; `assets/art/title.json` records their prompts. The title assets
-live at `assets/art/title.png` and `assets/art/title-portrait.png`. Direct
-launches resolve their assets relative to the executable, including when
-launched from `build/`.
-
-The title uses detailed sunlit storybook art, and the tiles and creatures use clean cartoon
-art generated with the built-in image tool. Source atlases live in
-`assets/art-source`; their prompts are recorded in `assets/art/title.json`.
-`tools/make_art.py` crops and packs those cells into the landscape
-sheets without changing gameplay tile IDs or collision rules. It also writes
-the display-free `.argb` mirrors. Run it with `--check` to verify the packed
-art matches its sources. `assets/art-source/journey-terrain.png` supplies
-the five landscape materials; its built-in image-generation prompt is recorded
-in `assets/art/title.json`. The same golden orange worm and red apples appear
-throughout the journey. `assets/sounds/sounds.json` records the OpenRouter model and prompt
-of every sound. The current acoustic garden score was AI-generated with
-Lyria; it is not the recovered original MIDI. It plays continuously through
-level and landscape transitions. Loop reads wrap without padding silence,
-and the native mixer buffers enough audio to tolerate slower phone frames.
-The soundtrack itself is preserved; this update repairs playback.
-
-## Recover the assets again
-
-```sh
-python3 tools/extract_original.py /mnt/storage/Games/The-Worm_Win_EN
-python3 tools/render_music.py
-```
-
-The extractor validates the complete archive, preserves every packed file,
-decodes the original PIX run-length encoding and VGA palettes, and generates
-`src/original_levels.zi` without changing tile values or column order.
-`assets/original/manifest.json` records the archive and extracted file hashes.
-The original executable remains outside this repository and is never modified.
-
-Recovery uses Python/Pillow and FFmpeg. Offline music rendering additionally
-uses libfluidsynth and a General MIDI soundfont (TimGM6mb by default). MIDI
-events and timing are preserved; instrument timbre depends on the soundfont,
-as the original depended on the Windows MIDI synthesizer.
-
-The maintained game is single-player, with desktop and Android builds. The
-original Windows dialogs and DirectPlay multiplayer have not been ported.
+See the [build and development guide](docs/building.md) for the editor's
+save files, Android and portable builds, asset recovery and verification.
+[Report a bug or suggest a level](https://github.com/waozixyz/wurm/issues).

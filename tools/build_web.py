@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Build the same native Wurm game for wurm.waozi.xyz with Canvas2D/Wasm."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import wave
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / 'build/web'
+
+
+def main():
+    env = dict(os.environ)
+    for key in ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'DBUS_SESSION_BUS_ADDRESS'):
+        env.pop(key, None)
+    env.update(MAKEFLAGS='-j1', ZIRAN_PAR_THREADS='1', OMP_NUM_THREADS='1', EMCC_CORES='1',
+               YUE_DESKTOP_RECOVERY='0')
+    lock = [] if (ROOT / 'ziran.local.toml').exists() else ['--locked']
+
+    def package(name):
+        return Path(subprocess.check_output(['ziran', 'pkg', 'path', name, *lock], cwd=ROOT, env=env, text=True).strip())
+
+    kryon, compiler = package('kryon'), package('ziran')
+    generated = ROOT / 'build/web-native'
+    ir, code = generated / 'ir', generated / 'c'
+    for folder in (OUT, ir, code):
+        folder.mkdir(parents=True, exist_ok=True)
+    host = kryon / 'src/backend/canvas_run.zi'
+    raster = kryon / 'src/backend/canvas_raster.zi'
+    subprocess.run(['ziran', 'ir', *lock, '--project', '--define', 'PLATFORM_WEB',
+                    '-o', str(ir), str(host), str(raster)], cwd=ROOT, env=env, check=True)
+    subprocess.run([str(compiler / 'build/bin/zi2c'), '--define', 'PLATFORM_WEB', '--root', str(ir),
+                    '-o', str(code), *map(str, ir.glob('*.zir'))], cwd=ROOT, env=env, check=True)
+    art = OUT / 'assets/art'
+    shutil.copytree(ROOT / 'assets/art', art, dirs_exist_ok=True, ignore=shutil.ignore_patterns('*.argb'))
+    emcc = env.get('EMCC', str(Path.home() / 'emsdk/upstream/emscripten/emcc'))
+    subprocess.run([emcc, '-O2', '-Wno-parentheses-equality', '-I' + str(compiler / 'include'),
+                    '-iquote', str(code), *map(str, code.glob('*.c')),
+                    '--js-library', str(compiler / 'web/ziran_web.js'),
+                    '-sEXPORTED_RUNTIME_METHODS=FS', '-sFORCE_FILESYSTEM=1', '-lidbfs.js',
+                    '-sALLOW_MEMORY_GROWTH=1', '-sASYNCIFY', '-sENVIRONMENT=web',
+                    '-sSTACK_SIZE=8388608', '-sASYNCIFY_STACK_SIZE=1048576',
+                    '--preload-file', str(kryon / 'assets/fonts/LiberationSans-Regular.ttf') + '@/kryon-font.ttf',
+                    '--preload-file', str(art) + '@/assets/art',
+                    '-o', str(OUT / 'game.js')], cwd=ROOT, env=env, check=True)
+    sounds = OUT / 'assets/sounds'
+    sounds.mkdir(parents=True, exist_ok=True)
+    for name in ('start', 'pickup', 'lose', 'exit'):
+        with wave.open(str(sounds / (name + '.wav')), 'wb') as output:
+            output.setnchannels(1); output.setsampwidth(2); output.setframerate(22050)
+            output.writeframes((ROOT / 'assets/sounds' / (name + '.pcm')).read_bytes())
+    subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 's16le', '-ar', '22050',
+                    '-ac', '1', '-i', str(ROOT / 'assets/sounds/garden.pcm'), '-c:a', 'libvorbis', '-q:a', '4',
+                    str(sounds / 'garden.ogg')], env=env, check=True)
+    for source in (ROOT / 'src/web').iterdir():
+        if source.is_file():
+            shutil.copy2(source, OUT / source.name)
+    version = json.loads((ROOT / 'version.json').read_text())['version']
+    revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    (OUT / 'version.json').write_text(json.dumps({'version': version, 'revision': revision,
+                                                 'game_sha256': hashlib.sha256((ROOT / 'src/game.zi').read_bytes()).hexdigest()}) + '\n')
+    print('Built playable Wurm browser edition in build/web; deployment remains separate.')
+
+
+if __name__ == '__main__':
+    main()

@@ -3,6 +3,9 @@
 // Both contain an apple count and tile/object planes. Missing portrait
 // records use an authored variant or a best guess from the landscape.
 #import, file "game.zi";
+#if #defined(PLATFORM_WEB) {
+    BrowserStorage :: #import "kryon/bundle_storage_web";
+}
 #if #defined(WURM_PORTABLE) {
     Storage :: #import "portable_runtime";
     #import "portable_levels"
@@ -241,6 +244,9 @@ SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32, portrai
         unused File.RemoveFile(temporary_text)
         return false
     }
+    #if #defined(PLATFORM_WEB) {
+        if !BrowserStorage.BundleStorageFlush() { return false }
+    }
     }
     custom_present[slot] = true
     custom_apples[slot] = apples
@@ -263,5 +269,8 @@ ClearCustomLevel :: (level: s32, portrait: bool = false) -> bool {
         if !File.RemoveFile(LevelPath(level, ".dat", portrait)) { return false }
     }
     custom_present[slot] = false
+    #if #defined(PLATFORM_WEB) {
+        return BrowserStorage.BundleStorageFlush()
+    }
     return true
 }

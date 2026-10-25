@@ -38,6 +38,7 @@ def main():
     lock = [] if (ROOT / 'ziran.local.toml').exists() else ['--locked']
     subprocess.run(['python3', 'tools/design_levels.py', '--check'], cwd=ROOT, env=env, check=True)
     subprocess.run(['ziran', 'build', *lock, '--project', '--root', 'tests', '--target=c',
+                    '--define', 'ANDROID_BUILD', '--define', '__arm__',
                     '--entry', 'campaign_replay:main', '--exe', '-o', str(OUT),
                     'tests/campaign_replay.zi'], cwd=ROOT, env=env, check=True)
     binary = OUT / 'campaign_replay'
@@ -65,9 +66,19 @@ def main():
                       for case in pair if case['route'])
     routes.update((ROOT/'build/designed').glob('cycle*-portrait.dat'))
     archive = OUT / 'campaign-inputs.tar'
+    device_uid = int(shell('id', '-u').stdout.strip())
+    device_gid = int(shell('id', '-g').stdout.strip())
+
+    def device_owner(info):
+        # Older Android tar restores ownership even for shell users. Match
+        # the extracting account instead of copying the desktop owner's ID.
+        info.uid, info.gid = device_uid, device_gid
+        info.uname = info.gname = ''
+        return info
+
     with tarfile.open(archive, 'w') as tar:
         for path in sorted(routes):
-            tar.add(path, arcname=str(path.relative_to(ROOT)))
+            tar.add(path, arcname=str(path.relative_to(ROOT)), filter=device_owner)
     receipt = {'serial': SERIAL, 'model': 'moto e6 play', 'started_at': time.time(),
                'runner_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
                'game_sha256': hashlib.sha256((ROOT / 'src/game.zi').read_bytes()).hexdigest(),

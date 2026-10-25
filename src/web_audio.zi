@@ -1,0 +1,61 @@
+// The browser plays this game's fixed score/effects as ordinary HTML audio.
+#import "std/web"
+ready: bool;
+muted: bool;
+sounds: [5]s32;
+ignore_play_failure: s32;
+previous_level: s32 = -1;
+previous_apples: s32;
+previous_death: s32;
+previous_transition: s32;
+was_playing: bool;
+IgnorePlayFailure :: (context: s32, first: s32, second: s32, third: s32) {
+    unused context; unused first; unused second; unused third
+}
+Ensure :: () {
+    if ready { return }
+    ready = true
+    mark := WebScope()
+    constructor := WebGetObject(WebGlobal,WebName("Audio"))
+    paths: [5]string = .["assets/sounds/start.wav","assets/sounds/pickup.wav","assets/sounds/lose.wav","assets/sounds/exit.wav","assets/sounds/garden.ogg"]
+    for index: 0..4 {
+        args: [1]WebValue = .[WebText(paths[index])]
+        sounds[index] = WebKeep(WebNew(constructor,*args[0],1))
+    }
+    WebSet(sounds[4],WebName("loop"),WebBool(true))
+    WebSet(sounds[4],WebName("volume"),WebNumber(0.4))
+    ignore_play_failure = WebFunction(IgnorePlayFailure,0)
+    WebEnd(mark)
+}
+Play :: (index: s32) {
+    promise := WebAsObject(WebCall0(sounds[index],WebName("play")))
+    if promise != 0 { unused WebCall1(promise,WebName("catch"),WebObject(ignore_play_failure)) }
+}
+ToggleMute :: () {
+    Ensure()
+    muted = !muted
+    mark := WebScope()
+    for index: 0..4 { WebSet(sounds[index],WebName("muted"),WebBool(muted)) }
+    WebEnd(mark)
+}
+UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: s32) {
+    Ensure()
+    mark := WebScope()
+    effect: s32 = -1
+    if playing && !was_playing { Play(4) }
+    if !playing && was_playing { unused WebCall0(sounds[4],WebName("pause")) }
+    if playing && (!was_playing || previous_level != level) { effect = 0 }
+    else if playing && apples < previous_apples { effect = 1 }
+    else if death > previous_death { effect = 2 }
+    else if transition > previous_transition { effect = 3 }
+    if effect >= 0 && !muted {
+        WebSet(sounds[effect],WebName("currentTime"),WebNumber(0.0))
+        Play(effect)
+    }
+    was_playing = playing
+    previous_level = level
+    previous_apples = apples
+    previous_death = death
+    previous_transition = transition
+    WebEnd(mark)
+}

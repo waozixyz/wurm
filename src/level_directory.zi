@@ -1,5 +1,8 @@
 // Android edits belong to private files; the APK assets are read-only.
-#if #defined(ANDROID_BUILD) {
+#if #defined(PLATFORM_WEB) {
+    LevelDirectory :: () -> string { return "/kryon-apps/wurm/" }
+    ReadBundledLevel :: (level: s32, output: []u8) -> s64 { unused level; unused output; return -1 }
+} else #if #defined(ANDROID_BUILD) {
     #import "kryon/android_jni"
     Assets :: #import "kryon/app_asset";
     #import "std/text_buffer"

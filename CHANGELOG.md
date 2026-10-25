@@ -2,6 +2,8 @@
 
 ## [0.1.3] - 2026-10-25
 
+- Play the complete game in your browser at wurm.waozi.xyz, with progress and personal levels saved on your device.
+
 - Explore 200 distinct levels inspired by the original Worm game, with 40 challenges in each landscape and more demanding encounters as the journey climbs.
 - Meet wandering fire, bouncing patrols and chasing enemies among original-inspired rooms, spirals, islands and mountain passes.
 - Unlock each landscape by completing its 40 levels, then return to any unlocked stage or level from Your journey.

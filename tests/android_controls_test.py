@@ -128,6 +128,17 @@ def main():
         assert sum(n.get('kind') == 'button' and n.get('interactive') and n.get('visible') for n in tree['nodes']) == 1
         return play, root
 
+    def return_to_title():
+        for attempt in range(5):
+            if command('find', label='Play', role='button', visible=1).get('nodes'):
+                return
+            back = command('find', label='Back to title', role='button', visible=1)
+            if back.get('nodes'):
+                command('press', label='Back to title', role='button')
+            else:
+                command('key', code=256)
+        wait('Play', 'button')
+
     def start_level():
         command('press', label='Play', role='button')
         # A new profile asks once; a retained profile keeps its choice.
@@ -149,7 +160,7 @@ def main():
         assert b'Status: ok' in launch.stdout, launch.stdout
         launched_pid = shell('pidof', package).stdout.strip()
         assert launched_pid, 'Android game process did not start'
-        wait('Play', 'button')
+        return_to_title()
         orient(1)
         title('title-landscape')
         start_level()
@@ -207,32 +218,56 @@ def main():
         capture('control-choice')
         command('press', label='Direction pad', role='button')
         command('press', label='Resume', role='button')
+        # Restart this test's level so time spent inspecting the first
+        # gesture does not leave the worm beside a wall before the pad test.
+        command('key', code=82)
         pad = wait('Direction pad')
         before = command('find', key=2000)['nodes'][0]
-        # A physical OS tap on the up arm follows Android's native input
-        # path. The remaining head moves must already be upward.
+        # A physical OS tap on the right arm follows Android's native input
+        # path and changes the freshly spawned worm's upward direction.
         command('pointer', real=1)
-        x = round((pad['x'] + pad['width'] * .5) * scale)
-        y = round((pad['y'] + pad['height'] * .16) * scale)
+        x = round((pad['x'] + pad['width'] * .84) * scale)
+        y = round((pad['y'] + pad['height'] * .5) * scale)
         shell('input', 'tap', str(x), str(y))
         deadline = time.monotonic() + 1.2
         while time.monotonic() < deadline:
-            after = command('find', key=2000)['nodes'][0]
-            if after['y'] < before['y'] - before['height']:
+            nodes = command('find', key=2000)['nodes']
+            if not nodes:
+                continue
+            after = nodes[0]
+            if after['x'] > before['x'] + before['width']:
                 break
         else:
-            raise AssertionError(('Direction pad did not steer up', before, after))
+            raise AssertionError(('Direction pad did not steer right', before, after))
         command('press', label='Pause', role='button')
         capture('direction-pad')
         wait('Back to title', 'button')
         command('press', label='Back to title', role='button')
         wait('Play', 'button')
         capture('title-returned')
+        # The editor's explicit portrait layout must be the board the phone
+        # actually plays, including the separately authored level 2 approach.
+        command('key', code=69)
+        wait('Levels', 'button')
+        command('key', code=256)
+        command('key', code=264)
+        command('press', label='Portrait', role='button')
+        command('press', label='Playtest', role='button')
+        wait('Pause', 'button')
+        time.sleep(2.0)
+        command('press', label='Pause', role='button')
+        wait('Paused')
+        assert command('find', key=2000).get('nodes'), 'Portrait level 2 lost the worm during its approach'
+        assert not command('find', label='Game over', visible=1).get('nodes')
+        capture('level-2-portrait-approach')
+        command('press', label='Back to title', role='button')
+        command('key', code=69)
+        wait('Play', 'button')
         if args.verification and owner_pid:
             assert shell('pidof', PACKAGE, check=False).stdout.strip() == owner_pid, 'Normal owner game process changed'
         receipt.update(passed=True, preserved_normal_process=bool(owner_pid),
                        behaviors=['portrait and landscape title', '60-unit Play button', 'OS touch start',
-                                  'pause in both orientations', 'resume', 'OS steering before touch release', 'stage selector', 'control choice', 'OS direction-pad steering', 'return to title'])
+                                  'pause in both orientations', 'resume', 'OS steering before touch release', 'stage selector', 'control choice', 'OS direction-pad steering', 'portrait level 2 editor playtest and safe approach', 'return to title'])
     finally:
         # This directory was absent before the test and contains only its protocol files.
         shell('run-as', package, 'rm', '-rf', DRIVER)

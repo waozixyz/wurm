@@ -1,5 +1,8 @@
 // Each edition keeps its choice with its private level records.
 Custom :: #import, file "custom_levels.zi";
+#if #defined(PLATFORM_WEB) {
+    BrowserStorage :: #import "kryon/bundle_storage_web";
+}
 #if #defined(WURM_PORTABLE) {
     Storage :: #import "portable_runtime";
 } else {
@@ -42,7 +45,11 @@ WriteRecord :: (name: string, bytes: []u8) -> bool {
         text := Path("record.tmp")
         for byte, at: text { temporary[at] = byte }
         temporary[text.count] = 0
-        return File.RenamePath(TextUntilNul(temporary[:]), Path(name))
+        renamed := File.RenamePath(TextUntilNul(temporary[:]), Path(name))
+        #if #defined(PLATFORM_WEB) {
+            return renamed && BrowserStorage.BundleStorageFlush()
+        }
+        return renamed
     }
 }
 mode: s32 = -2;
