@@ -1,5 +1,5 @@
 #import, file "../src/game.zi";
-#import, file "../src/levels.zi";
+#import, file "../src/original_levels.zi";
 Custom :: #import, file "../src/custom_levels.zi";
 File :: #import "std/file_linux";
 
@@ -15,22 +15,22 @@ main :: () -> s32 {
     Custom.EnsureLoaded()
     unused Custom.ClearCustomLevel(2)
     Expect(!Custom.HasCustomLevel(0), "no override before any save")
-    Expect(Custom.EffectiveApples(0) == MobileApples[0], "no override keeps original apples")
-    Expect(Custom.EffectiveTile(0, 5, 7) == MobileTile(0, 5, 7), "no override keeps original tiles")
+    Expect(Custom.EffectiveApples(0) == OriginalApples[0], "no override keeps original apples")
+    Expect(Custom.EffectiveTile(0, 5, 7) == OriginalTile(0, 5, 7), "no override keeps original tiles")
 
     board: [CELLS]u8
     for at: 0..CELLS - 1 { board[at] = 0 }
     Expect(LevelBlockages(board[:]) == 0, "open board plays")
-    board[Index(10, 13)] = 20
+    board[Index(20, 27)] = 20
     Expect(LevelBlockages(board[:]) == 1, "solid tile above the entrance blocks the start")
-    board[Index(10, 13)] = 0
-    board[Index(10, 1)] = 21
+    board[Index(20, 27)] = 0
+    board[Index(20, 1)] = 21
     Expect(LevelBlockages(board[:]) == 2, "solid exit floor blocks the exit")
-    board[Index(10, 1)] = 0
-    board[Index(10, 13)] = 40
+    board[Index(20, 1)] = 0
+    board[Index(20, 27)] = 40
     Expect(LevelBlockages(board[:]) == 0, "a monster marker counts as open floor")
-    board[Index(10, 13)] = 20
-    board[Index(10, 1)] = 128
+    board[Index(20, 27)] = 20
+    board[Index(20, 1)] = 128
     Expect(LevelBlockages(board[:]) == 1, "false wall keeps the exit passable")
 
     for level: 0..98 {
@@ -50,24 +50,24 @@ main :: () -> s32 {
     Expect(Custom.EffectiveTile(2, 10, 10) == 0, "override floor applies")
     Expect(Custom.EffectiveTile(2, 11, 10) == 42, "monster marker round-trips")
     Expect(Custom.EffectiveTile(2, 12, 10) == 130, "false wall round-trips")
-    Expect(Custom.EffectiveTile(2, 0, 0) == MobileTile(2, 0, 0), "untouched cells keep their tiles")
+    Expect(Custom.EffectiveTile(2, 0, 0) == OriginalTile(2, 0, 0), "untouched cells keep their tiles")
     file := File.OpenRead("build/test-levels/level3.dat")
     Expect(file.valid, "override file exists")
     if file.valid {
-        bytes: [301]u8
+        bytes: [1201]u8
         read := File.ReadAt(file, bytes[:], 0)
         File.CloseFile(file)
-        Expect(read == 301, "override file size")
+        Expect(read == 1201, "override file size")
         Expect(cast(s32)bytes[0] == 7, "apple count leads the file")
-        Expect(bytes[1 + 10 * 15 + 10] == 0, "floor in column order")
-        Expect(bytes[1 + 11 * 15 + 10] == 42, "marker in column order")
-        Expect(bytes[1 + 12 * 15 + 10] == 130, "false wall in column order")
+        Expect(bytes[1 + 10 * 30 + 10] == 0, "floor in column order")
+        Expect(bytes[1 + 11 * 30 + 10] == 42, "marker in column order")
+        Expect(bytes[1 + 12 * 30 + 10] == 130, "false wall in column order")
     }
 
     Expect(Custom.ClearCustomLevel(2), "override clears")
     Expect(!Custom.HasCustomLevel(2), "cleared override is gone")
-    Expect(Custom.EffectiveApples(2) == MobileApples[2], "clear restores the original")
-    Expect(Custom.EffectiveTile(2, 10, 10) == MobileTile(2, 10, 10), "clear restores original tiles")
+    Expect(Custom.EffectiveApples(2) == OriginalApples[2], "clear restores the original")
+    Expect(Custom.EffectiveTile(2, 10, 10) == OriginalTile(2, 10, 10), "clear restores original tiles")
 
     // An edited board drives play through the same loader as the originals.
     for at: 0..CELLS - 1 { board[at] = 0 }

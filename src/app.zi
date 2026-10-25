@@ -13,10 +13,9 @@ Timer :: #import "std/timer_linux";
 Custom :: #import, file "custom_levels.zi";
 Audio :: #import, file "audio.zi";
 
-// The playable board is the mobile grid: COLUMNS x ROWS cells of 16 pixels,
-// so cells read twice as large as the recovered 40x30 originals.
-BOARD_WIDTH :: 320.0;
-BOARD_HEIGHT :: 240.0;
+// The playable board: the recovered 40x30 grid of 16-pixel cells.
+BOARD_WIDTH :: 640.0;
+BOARD_HEIGHT :: 480.0;
 
 game: Game;
 level_digits: [21]u8;
@@ -210,11 +209,11 @@ DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
         for column: 0..COLUMNS - 1 {
             x := cast(s32)column
             y := cast(s32)row
-            entrance := y == ROWS - 1 && x == 10
+            entrance := y == ROWS - 1 && x == 20
             tile := cast(s32)(Custom.EffectiveTile(level, x, ifx entrance then ROWS - 2 else y) & 127)
             kind := tile - 39
             if kind >= 1 && kind <= 6 { tile = 0 }
-            if y == ROWS - 1 && (x == 9 || x == 11) { tile = 21 }
+            if y == ROWS - 1 && (x == 19 || x == 21) { tile = 21 }
             Tile(session, key + cast(u64)Index(x, y), stage, x, y, tile, tiles)
             if kind >= 1 && kind <= 6 && !entrance {
                 Sprite(session, key + 1200 + cast(u64)Index(x, y), stage, Point.{x * 16 + 8, y * 16 + 8},
@@ -227,7 +226,7 @@ DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
         column := segment + 2
         if segment == 0 { column = DIR_UP }
         else if segment < 3 { column = 4 }
-        Sprite(session, key + 2400 + cast(u64)segment, stage, Point.{168, 160 + segment * 16},
+        Sprite(session, key + 2400 + cast(u64)segment, stage, Point.{328, 408 + segment * 16},
             Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites)
     }
 }
@@ -417,9 +416,9 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     // The fixed entrance and exit the game carves at runtime, marked so a
     // level is never drawn without its way in and out. These keys sit below
     // the canvas tile range, which starts at 5000.
-    unused Box(session, BoxProps.{.key = 4998, .bounds = Rectangle.{stage.x + 144.0 * scale,
-        stage.y + 224.0 * scale, 48.0 * scale, 16.0 * scale}, .fill = Color.{90, 220, 120, 70}})
-    unused Box(session, BoxProps.{.key = 4999, .bounds = Rectangle.{stage.x + 144.0 * scale,
+    unused Box(session, BoxProps.{.key = 4998, .bounds = Rectangle.{stage.x + 304.0 * scale,
+        stage.y + 464.0 * scale, 48.0 * scale, 16.0 * scale}, .fill = Color.{90, 220, 120, 70}})
+    unused Box(session, BoxProps.{.key = 4999, .bounds = Rectangle.{stage.x + 304.0 * scale,
         stage.y, 48.0 * scale, 16.0 * scale}, .fill = Color.{240, 90, 90, 70}})
     if !pointer.down && !secondary.down && Input.PointInBounds(pointer.x, pointer.y, stage) {
         hover_x := cast(s32)((pointer.x - stage.x) / (16.0 * scale))
@@ -664,11 +663,7 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
     TextLine(session, 13, "/33", Rectangle.{hud.x + hud.width - 110.0, hud.y + 12.0, 30.0, 18.0}, 12)
     Badge(session, 14, stage_name, Rectangle.{hud.x + hud.width - 78.0, hud.y + 10.0, 66.0, 22.0})
 
-    if game.mode == MODE_STAGES {
-        hint := "Up/Down: level · Enter plays · E edits"
-        if OPEN_STAGES > 1 { hint = "Left/Right: stage · Up/Down: level · Enter plays · E edits" }
-        Badge(session, 16, hint, Rectangle.{hud.x + 12.0, hud.y + 10.0, 340.0, 22.0})
-    } else if game.mode == MODE_EDITOR {
+    if game.mode == MODE_EDITOR {
         Badge(session, 16, "Drag paints · Right restores · Enter playtests · E returns",
             Rectangle.{hud.x + 12.0, hud.y + 10.0, 400.0, 22.0})
     } else {
@@ -712,23 +707,26 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,
         game.level, game.apples, game.death_ticks, game.transition_ticks)
     unused Box(session, BoxProps.{.key = 1, .bounds = viewport, .fill = Color.{0, 0, 0, 255}})
-    // The green icon bar spans the top in every mode; the board letterboxes
-    // into the rest, so portrait and landscape both keep their proportions.
-    hud := Rectangle.{viewport.x, viewport.y, viewport.width, 42.0}
-    available_height := viewport.height - 42.0
+    // The stages screen is one full-bleed cover; every other mode carries the
+    // green icon bar across the top with the board letterboxed below it, so
+    // portrait and landscape both keep their proportions.
+    showing_bar := game.mode != MODE_STAGES
+    bar_height: float32 = ifx showing_bar then 42.0 else 0.0
+    hud := Rectangle.{viewport.x, viewport.y, viewport.width, bar_height}
+    available_height := viewport.height - bar_height
     if available_height < 1.0 { available_height = 1.0 }
     scale := viewport.width / BOARD_WIDTH
     if available_height / BOARD_HEIGHT < scale { scale = available_height / BOARD_HEIGHT }
     stage := Rectangle.{viewport.x + (viewport.width - BOARD_WIDTH * scale) / 2.0,
-        viewport.y + 42.0 + (available_height - BOARD_HEIGHT * scale) / 2.0, BOARD_WIDTH * scale, BOARD_HEIGHT * scale}
+        viewport.y + bar_height + (available_height - BOARD_HEIGHT * scale) / 2.0, BOARD_WIDTH * scale, BOARD_HEIGHT * scale}
     if game.mode == MODE_STAGES {
-        area := Rectangle.{viewport.x, viewport.y + 42.0, viewport.width, available_height}
+        area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         if DrawStages(session, area, stage_key, cast(float64)now / 1000.0) {
             chosen := Wrap(pager.selected)
             StartLevel(chosen * STAGE_LEVELS + stage_levels[chosen], now, cast(u32)(now & 4294967295))
         }
     } else if game.mode == MODE_EDITOR {
-        area := Rectangle.{viewport.x, viewport.y + 42.0, viewport.width, available_height}
+        area := Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height}
         DrawEditor(session, area, now)
     } else {
         DrawBoard(session, stage)
@@ -742,7 +740,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
             else if gesture.swiped == 3 { Steer(DIR_DOWN) }
         }
     }
-    DrawTopBar(session, hud)
+    if showing_bar { DrawTopBar(session, hud) }
     if game.mode == MODE_PAUSED { Overlay(session, stage, "PAUSED", "Esc resumes   Q returns to the stages") }
     else if game.mode == MODE_DIED { Overlay(session, stage, "GAME OVER", "Enter retries   Esc returns to the stages") }
     else if game.mode == MODE_VICTORY { Overlay(session, stage, StageClear(StageOf(game.level)), "All 33 levels done   Enter returns to the stages") }

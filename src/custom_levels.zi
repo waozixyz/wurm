@@ -1,9 +1,9 @@
-// Owner edits of the playable levels. Each edited level is one file beside
-// the art, in the mobile layout: the apple count, then the 20x15 tiles in
-// column order. A missing file leaves the derived mobile level in play, so
-// deleting a saved file restores it.
+// Owner edits of the recovered levels. Each edited level is one file beside
+// the originals, in the archive's own LEVELn.DAT layout: the apple count,
+// then the 40x30 tiles in the original column order. A missing file leaves
+// the recovered original in play, so deleting a saved file restores it.
 #import, file "game.zi";
-Mobile :: #import, file "levels.zi";
+Originals :: #import, file "original_levels.zi";
 File :: #import "std/file_linux";
 #import "std/c_string"
 #import "std/number_text"
@@ -12,7 +12,7 @@ File :: #import "std/file_linux";
 libc :: #system_library "libc";
 GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
 
-LEVEL_FILE_BYTES :: 301;
+LEVEL_FILE_BYTES :: 1201;
 
 custom_root: [96]u8;
 custom_root_length: s32;
@@ -113,7 +113,7 @@ EffectiveTile :: (level: s32, x: s32, y: s32) -> u8 {
     if level >= 0 && level < LEVEL_COUNT && custom_present[level] {
         return custom_boards[level][Index(x, y)]
     }
-    return Mobile.MobileTile(level, x, y)
+    return Originals.OriginalTile(level, x, y)
 }
 
 EffectiveApples :: (level: s32) -> s32 {
@@ -121,7 +121,7 @@ EffectiveApples :: (level: s32) -> s32 {
     if level >= 0 && level < LEVEL_COUNT && custom_present[level] {
         return custom_apples[level]
     }
-    return Mobile.MobileApples[level]
+    return Originals.OriginalApples[level]
 }
 
 // The raw tiles a level starts from: the saved override when one exists,
@@ -138,7 +138,7 @@ EffectiveBoard :: (level: s32, board: []u8) {
     }
     for y: 0..ROWS - 1 {
         for x: 0..COLUMNS - 1 {
-            board[Index(x, y)] = Mobile.MobileTile(level, cast(s32)x, cast(s32)y)
+            board[Index(x, y)] = Originals.OriginalTile(level, cast(s32)x, cast(s32)y)
         }
     }
 }

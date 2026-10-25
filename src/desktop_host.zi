@@ -1,5 +1,5 @@
 // The desktop entry. Kryon's default host opens a fixed 960x600 window;
-// this one sizes the window from WURM_WINDOW=WxH (default 960x600) so the
+// this one sizes the window from WURM_WINDOW=WxH (default 1280x760) so the
 // mobile-first layout can be checked in landscape and portrait. The frame
 // loop mirrors the default host: poll, feed the session, draw one frame.
 #import "std/c_string"
@@ -18,8 +18,8 @@ window_width: s32;
 window_height: s32;
 
 WindowSize :: () {
-    window_width = 960
-    window_height = 600
+    window_width = 1280
+    window_height = 760
     name: [32]u8
     if !CopyCString("WURM_WINDOW", name[:]) { return }
     value := GetEnvironment(*name[0])

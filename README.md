@@ -4,16 +4,12 @@ Application id `xyz.waozi.wurm`.
 
 
 A native Ziran and Kryon game using all **99 original levels** recovered
-from the owner's `The-Worm_Win_EN/ONLY.ONE` archive, reshaped for mobile:
-each level plays on a **20x15 grid** derived from the recovered 40x30 data
-by merging 2x2 cell blocks, so cells read twice as large on a phone while
-the levels keep their shape (a merged block becomes a wall only when three
-or four of its cells were solid; monster markers survive the merge). The
-recovered 40x30 files stay in `assets/original` as the reference, and
-`tools/make_mobile_levels.py` regenerates `src/levels.zi` from them. The
-game shows new art and sound: each stage has its own cover, tiles,
-character, monsters, pickup and effects (`assets/art`), and new sound
-effects and stage music (`assets/sounds`).
+from the owner's `The-Worm_Win_EN/ONLY.ONE` archive, each played exactly as
+recovered on its original 40x30 grid. The game shows new art and sound: each
+stage has its own cover, tiles, character, monsters, pickup and effects
+(`assets/art`), and new sound effects and stage music (`assets/sounds`). The
+recovered tilesets, title artwork, sounds and scores stay in
+`assets/original` as the reference for the level data.
 
 The executable was disassembled to recover the single-player rules: movement
 by four pixels every 25 Ms, sequential apples, progressive growth, passable
@@ -36,11 +32,12 @@ opening at the top centre. An extra life is awarded every 33 points.
 
 ## Mobile-first layout
 
-The green icon bar across the top carries hearts for lives, the apple goal,
-the star score and the level; the board letterboxes into the remaining
-space, so landscape and portrait both keep the game's proportions. The
-desktop window opens from `WURM_WINDOW=WxH` (default 960x600), which is how
-the portrait layout is exercised on the desktop.
+In play, the green icon bar across the top carries hearts for lives, the
+apple goal, the star score and the level; the stage-select cover fills the
+whole screen instead. The board letterboxes into the remaining space, so
+landscape and portrait both keep the game's proportions. The desktop window
+opens from `WURM_WINDOW=WxH` (default 1280x760); `WURM_WINDOW=480x700`
+shows the portrait phone layout.
 
 ## Level editor
 
@@ -54,9 +51,9 @@ Saving is automatic on switch, exit and playtest, plus the Save button; Reset
 (deleting the override) restores the recovered original level.
 
 Edits live in `assets/levels/level<N>.dat`, one file per edited level in the
-mobile layout (apple count, then the 20x15 tiles in column order). A level
-without a file plays its derived mobile level, so removing a file restores
-it. The entrance (bottom centre, green marker) and exit (top centre, red
+original archive layout (apple count, then the 40x30 tiles in column order).
+A level without a file plays its recovered original, so removing a file
+restores it. The entrance (bottom centre, green marker) and exit (top centre, red
 marker) are carved at runtime from the tiles above and below the edges; the
 editor warns when a level could not be entered or left. `WURM_LEVEL_DIR`
 redirects where overrides are read and written.
@@ -88,7 +85,6 @@ of every sound; the scores are trimmed and crossfaded into seamless loops.
 
 ```sh
 python3 tools/extract_original.py /mnt/storage/Games/The-Worm_Win_EN
-python3 tools/make_mobile_levels.py
 python3 tools/render_music.py
 ```
 
