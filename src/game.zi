@@ -14,11 +14,10 @@ BoardSize :: (columns: s32, rows: s32) {
     board_columns = columns
     board_rows = rows
 }
-// Two connected chapters, played as the same worm. The complete recovered
+// Five connected landscapes, played as the same worm. The complete recovered
 // 99-level archive remains untouched as reference data.
-STAGE_COUNT :: 2;
-STAGE_LEVELS :: 33;
-LEVEL_COUNT :: STAGE_COUNT * STAGE_LEVELS;
+STAGE_COUNT :: 5;
+LEVEL_COUNT :: 66;
 WORM_LIMIT :: 1000;
 MONSTER_LIMIT :: 100;
 TICK_MS :: 25;
@@ -63,7 +62,15 @@ Game :: struct {
 }
 
 Index :: (x: s64, y: s64) -> s32 { return cast(s32)(y * board_columns + x) }
-StageOf :: (level: s32) -> s32 { return level / STAGE_LEVELS }
+StageOf :: (level: s32) -> s32 {
+    for stage: 0..STAGE_COUNT - 2 {
+        if level < DesignedStageStarts[stage + 1] { return cast(s32)stage }
+    }
+    return STAGE_COUNT - 1
+}
+StageFirst :: (stage: s32) -> s32 { return DesignedStageStarts[stage] }
+StageLevels :: (stage: s32) -> s32 { return DesignedStageStarts[stage + 1] - DesignedStageStarts[stage] }
+StageNumber :: (level: s32) -> s32 { return level - StageFirst(StageOf(level)) + 1 }
 Inside :: (x: s64, y: s64) -> bool { return x >= 0 && x < board_columns && y >= 0 && y < board_rows }
 Abs :: (v: s32) -> s32 { if v < 0 { return -v }; return v }
 Near :: (a: Point, b: Point, distance: s32) -> bool {

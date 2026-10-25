@@ -1,4 +1,5 @@
-// The mixer submits 1024 mono 16-bit samples at 22050 Hz on both hosts.
+// Two 2048-frame blocks tolerate slower phone rendering without gaps.
+// The mixer submits mono 16-bit samples at 22050 Hz on both hosts.
 #if #defined(ANDROID_BUILD) {
     raylib :: #system_library "raylib";
     AudioStream :: struct {
@@ -24,7 +25,7 @@
     Open :: () -> u32 {
         if !AudioReady() { InitAudio() }
         if !AudioReady() { return 0 }
-        BufferSize(1024)
+        BufferSize(2048)
         stream = LoadStream(22050, 16, 1)
         if !StreamValid(stream) { return 0 }
         PlayStream(stream)
@@ -36,8 +37,8 @@
     }
 
     Submit :: (device: u32, samples: []s16) -> bool {
-        if device == 0 || samples.count != 1024 { return false }
-        UpdateStream(stream, cast(*void)*samples[0], 1024)
+        if device == 0 || samples.count != 2048 { return false }
+        UpdateStream(stream, cast(*void)*samples[0], 2048)
         return true
     }
 
@@ -71,13 +72,13 @@
 
     Open :: () -> u32 {
         if AudioInit(16) != 0 { return 0 }
-        spec := AudioSpec.{.rate = 22050, .format = 32784, .channels = 1, .samples = 1024}
+        spec := AudioSpec.{.rate = 22050, .format = 32784, .channels = 1, .samples = 2048}
         device := AudioOpenDevice(null, 0, *spec, null, 0)
         if device != 0 { AudioPauseDevice(device, 0) }
         return device
     }
 
-    Ready :: (device: u32) -> bool { return device != 0 && AudioQueued(device) < 4096 }
+    Ready :: (device: u32) -> bool { return device != 0 && AudioQueued(device) < 8192 }
 
     Submit :: (device: u32, samples: []s16) -> bool {
         return AudioQueue(device, cast(*u8)*samples[0], cast(u32)(samples.count * 2)) == 0

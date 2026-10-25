@@ -6,10 +6,10 @@ import argparse
 from pathlib import Path
 
 from PIL import Image
+from design_levels import STAGES
 
 ROOT = Path(__file__).resolve().parents[1]
 WIDTH, HEIGHT = 200, 150
-STAGES = ("garden", "forest")
 
 
 def main():
@@ -22,11 +22,11 @@ def main():
     destination = ROOT / "assets/art/previews"
     if not arguments.check:
         destination.mkdir(parents=True, exist_ok=True)
-    for stage_index, stage in enumerate(STAGES):
+    for stage, first, end in STAGES:
         sheet = Image.open(ROOT / f"assets/art/{stage}.png").convert("RGBA")
-        canopy = Image.open(ROOT / 'assets/art/forest-canopy.png').convert('RGBA') if stage == 'forest' else None
-        for number in range(1, 34):
-            designed = ROOT / "build/designed" / f"level{stage_index * 33 + number}.dat"
+        canopy = Image.open(ROOT / 'assets/art/forest-canopy.png').convert('RGBA') if stage == 'leafwood' else None
+        for number in range(1, end - first + 1):
+            designed = ROOT / "build/designed" / f"level{first + number}.dat"
             raw_path = designed
             raw = raw_path.read_bytes()
             tiles = raw[1:1201] if len(raw) > 1201 else raw[1:]

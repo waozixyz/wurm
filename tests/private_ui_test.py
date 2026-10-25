@@ -131,15 +131,21 @@ def main():
         pale = float(((browser[:, :, 0] > 210) & (browser[:, :, 1] > 220)).mean())
         assert pale > 0.5, f"browser surface is only {pale:.0%} pale"
 
-        # Card 33 of the browser, laid out with the same column search as
+        # All five landscapes are reachable from the same editor browser.
+        for chapter in ('leafwood', 'pinewood', 'lake', 'mountains', 'meadow'):
+            pointer(930, 68)
+            time.sleep(.15)
+            capture('browser-' + chapter)
+
+        # Card 14 of the Meadow browser, laid out with the same column search as
         # DrawLevelBrowser for the 960x600 window.
         area_w, area_h = 960, 558
         columns = next(c for c in range(4, 12)
-                       if -(-33 // c) * (((area_w - 16 - (c - 1) * 8) / c) * 0.75 + 30)
-                       + ((-(-33 // c)) - 1) * 8 + 56 <= area_h)
+                       if -(-14 // c) * (((area_w - 16 - (c - 1) * 8) / c) * 0.75 + 30)
+                       + ((-(-14 // c)) - 1) * 8 + 56 <= area_h)
         item_w = (area_w - 16 - (columns - 1) * 8) / columns
         item_h = item_w * 0.75 + 30
-        index = 32
+        index = 13
         card_x = 8 + (index % columns) * (item_w + 8) + item_w / 2
         card_y = 42 + 56 + (index // columns) * (item_h + 8) + item_h / 2
         pointer(int(card_x), int(card_y))
@@ -158,8 +164,8 @@ def main():
         capture("editor-painted")
         pointer(775, 518)  # Save
         time.sleep(0.3)
-        edited = level_directory / "level33.dat"
-        original = (ROOT / "build/designed/level33.dat").read_bytes()
+        edited = level_directory / "level14.dat"
+        original = (ROOT / "build/designed/level14.dat").read_bytes()
         painted = edited.read_bytes()
         assert len(painted) == 2401, f"override size {len(painted)}"
         assert painted[0] == original[0], "apple count unchanged"
@@ -179,7 +185,7 @@ def main():
         time.sleep(0.3)
         capture("editor-exit")
         (OUT / "receipt.json").write_text(json.dumps(evidence, indent=2) + "\n")
-        print("Private UI local test played the standing level, opened the editor with E, browsed every Garden level and edited one.")
+        print("Private UI local test played the standing level, opened the editor with E, browsed the Meadow levels and edited one.")
 
         # A portrait window proves the mobile-first layout: WURM_WINDOW sizes
         # the second launch, the cream status bar stays on top and the board
@@ -307,6 +313,71 @@ def main():
             capture(f"play-{width}x{height}")
         print("Private UI local test: title and Play worked on small/tall portraits and wide landscape.")
 
+        # Real held pointer input: turns must take effect before mouseup,
+        # including subsequent corners during that very same contact.
+        for width, height in ((640, 480), (320, 568)):
+            stop(app)
+            log = OUT / f"steering-{width}x{height}.log"
+            env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height),
+                       WURM_PROBE_SCENE="1", WURM_PROBE_STEERING="1", WURM_PROBE_MODE="1")
+            app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
+                                   stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
+            for attempt in range(100):
+                if app.poll() is not None:
+                    raise RuntimeError(log.read_text()[-1000:])
+                result = subprocess.run(["xdotool", "search", "--onlyvisible", "--pid", str(app.pid)],
+                                        env=env, capture_output=True, text=True)
+                if result.returncode == 0 and result.stdout.strip():
+                    window = result.stdout.splitlines()[0]
+                    break
+                time.sleep(.05)
+            else:
+                raise RuntimeError("No owned steering probe")
+            time.sleep(.15)
+            x, y = width // 2, height // 2
+            subprocess.run(["xdotool", "mousemove", "--window", window, "--sync", str(x), str(y),
+                            "mousedown", "1"], env=env, check=True)
+            time.sleep(.08)
+            try:
+                for direction, dx, dy in ((2, 14, 0), (3, 14, 14), (0, 0, 14)):
+                    subprocess.run(["xdotool", "mousemove", "--window", window, "--sync",
+                                    str(x + dx), str(y + dy)], env=env, check=True)
+                    deadline = time.monotonic() + 1
+                    while time.monotonic() < deadline:
+                        if f"steering={direction} touch=1" in log.read_text():
+                            break
+                        time.sleep(.02)
+                    else:
+                        raise AssertionError("Held-contact turn missing: " + log.read_text())
+                capture(f"held-steering-{width}x{height}")
+            finally:
+                subprocess.run(["xdotool", "mouseup", "1"], env=env, check=True)
+        env.pop("WURM_PROBE_STEERING", None)
+        print("Private UI local test: right, down and left turns took effect before release in both orientations.")
+
+        # Render an actual board from every landscape, without a modal.
+        for chapter, level in (("meadow", 0), ("leafwood", 14), ("pinewood", 27), ("lake", 40), ("mountains", 53)):
+            stop(app)
+            log = OUT / (chapter + ".log")
+            env.update(WURM_PROBE_WIDTH="640", WURM_PROBE_HEIGHT="480", WURM_PROBE_SCENE="7",
+                       WURM_PROBE_MODE="1", WURM_PROBE_LEVEL=str(level))
+            app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
+                                   stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
+            for attempt in range(100):
+                if app.poll() is not None:
+                    raise RuntimeError(log.read_text()[-1000:])
+                result = subprocess.run(["xdotool", "search", "--onlyvisible", "--pid", str(app.pid)],
+                                        env=env, capture_output=True, text=True)
+                if result.returncode == 0 and result.stdout.strip():
+                    window = result.stdout.splitlines()[0]
+                    break
+                time.sleep(.05)
+            else:
+                raise RuntimeError("No owned landscape probe")
+            time.sleep(.2)
+            capture("journey-" + chapter)
+        env["WURM_PROBE_LEVEL"] = "0"
+
         # Show the full, bent worm and both gates without a modal obscuring
         # them. These scenes use only the separate test host and no clock.
         for width, height in ((960, 600), (320, 568)):
@@ -317,7 +388,7 @@ def main():
                 log = OUT / (name + ".log")
                 env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height),
                            WURM_PROBE_SCENE=str(scene), WURM_PROBE_MODE="1",
-                           WURM_PROBE_LEVEL="33" if scene == 8 else "0")
+                           WURM_PROBE_LEVEL="14" if scene == 8 else "0")
                 app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
                                        stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
                 for attempt in range(100):

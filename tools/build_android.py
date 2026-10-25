@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def package(name):
-    return Path(subprocess.check_output(['ziran', 'pkg', 'path', name, '--locked'],
+    flags = [] if (ROOT / 'ziran.local.toml').exists() else ['--locked']
+    return Path(subprocess.check_output(['ziran', 'pkg', 'path', name, *flags],
                                         cwd=ROOT, text=True).strip())
 
 

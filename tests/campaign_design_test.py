@@ -9,6 +9,8 @@ import struct
 ROOT=Path(__file__).resolve().parents[1]
 manifest=json.loads((ROOT/'build/designed/manifest.json').read_text())
 assert len(manifest)==66
+assert [e['stage'] for e in manifest] == (['meadow']*14+['leafwood']*13+
+    ['pinewood']*13+['lake']*13+['mountains']*13), 'complete five-landscape journey'
 assert len({entry['name'] for entry in manifest})==66
 assert len({entry['family'] for entry in manifest})>=10
 assert manifest[0]['apples']==manifest[1]['apples']==5 and manifest[1]['walls']<=24, 'five apples and a gentle, open level 2'

@@ -48,7 +48,9 @@ def verify(apk):
                 headers = subprocess.check_output(['readelf', '-lW', str(library)], text=True)
                 loads = [line.split() for line in headers.splitlines() if line.strip().startswith('LOAD ')]
                 assert loads and all(int(parts[-1], 16) >= 16384 for parts in loads), 'Native libraries require 16 KB load alignment'
-        for name in ('garden.png', 'forest.png', 'forest-canopy.png', 'forest-canopy-portrait.png', 'title.png', 'title-portrait.png'):
+        for name in ('garden.png', 'forest.png', 'forest-canopy.png', 'forest-canopy-portrait.png',
+                     'meadow.png', 'leafwood.png', 'pinewood.png', 'lake.png', 'mountains.png',
+                     'title.png', 'title-portrait.png'):
             assert archive.read('assets/assets/art/' + name) == (ROOT / 'assets/art' / name).read_bytes(), name
         for number in (1, 2, 3):
             name = f'assets/levels/level{number}.dat'

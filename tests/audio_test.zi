@@ -1,4 +1,5 @@
 Audio :: #import, file "../src/audio.zi";
+File :: #import "std/file_linux";
 sdl :: #system_library "SDL2";
 CloseDevice :: (device: u32) #foreign sdl "SDL_CloseAudioDevice";
 Quit :: () #foreign sdl "SDL_Quit";
@@ -15,8 +16,8 @@ main :: () -> s32 {
     if Audio.device == 0 { return 2 }
     defer CloseDevice(Audio.device)
     for index: 0..3 { if Audio.effects[index].count <= 0 { return 3 } }
-    for track: 1..2 {
-        Audio.ChangeMusic(cast(s32)track)
+    for track: 1..1 {
+        Audio.ChangeMusic(1)
         if Audio.music_bytes < 44100 { return 4 }
         Audio.PlayEffect(3)
         Clear(Audio.device)
@@ -24,10 +25,24 @@ main :: () -> s32 {
         if Audio.music_position == 0 || Queued(Audio.device) == 0 { return 5 }
     }
     heard := false
-    for index: 0..1023 { if Audio.mixed[index] != 0 { heard = true } }
+    for index: 0..2047 { if Audio.mixed[index] != 0 { heard = true } }
     if !heard { return 6 }
+    // Force a loop seam in the middle of a block and compare every byte:
+    // no zero padding and no skipped or duplicated samples.
+    expected: [4096]u8
+    start := Audio.music_bytes - 14
+    if File.ReadAt(Audio.music_file, expected[0:14], start) != 14 { return 8 }
+    if File.ReadAt(Audio.music_file, expected[14:4096], 0) != 4082 { return 9 }
+    Audio.music_position = start
+    Audio.ReadMusicSamples()
+    for at: 0..4095 { if Audio.music_samples[at] != expected[at] { return 10 } }
+    if Audio.music_position != 4082 { return 11 }
+    Audio.was_playing = true
+    Audio.previous_level = 13
+    Audio.UpdateAudio(true, 14, 5, 0, 0)
+    if Audio.music_position < 4082 { return 12 }
     Audio.ToggleMute()
     if !Audio.muted { return 7 }
-    print("Audio local test: four effects and both nature chapters mixed.\n")
+    print("Audio local test: four effects, continuous acoustic score, exact loop seam and no chapter rewind.\n")
     return 0
 }

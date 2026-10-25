@@ -60,18 +60,25 @@ main :: () -> s32 {
     // Keep the owned image buffers in this scope while the raster host
     // borrows them. Full-size title pixels preserve desktop crop coordinates.
     garden, garden_w, garden_h := ReadPicture("assets/art/garden.argb")
-    forest, forest_w, forest_h := ReadPicture("assets/art/forest.argb")
+    meadow, meadow_w, meadow_h := ReadPicture("assets/art/meadow.argb")
+    leafwood, leafwood_w, leafwood_h := ReadPicture("assets/art/leafwood.argb")
+    pinewood, pinewood_w, pinewood_h := ReadPicture("assets/art/pinewood.argb")
+    lake, lake_w, lake_h := ReadPicture("assets/art/lake.argb")
+    mountains, mountains_w, mountains_h := ReadPicture("assets/art/mountains.argb")
     title, title_w, title_h := ReadPicture("assets/art/title.argb")
-    portrait, portrait_w, portrait_h := ReadPicture("assets/art/title-portrait.argb")
-    canopy, canopy_w, canopy_h := ReadPicture("assets/art/forest-canopy.argb")
-    canopy_turned, canopy_turned_w, canopy_turned_h := ReadPicture("assets/art/forest-canopy-portrait.argb")
+    title_portrait, title_portrait_w, title_portrait_h := ReadPicture("assets/art/title-portrait.argb")
+    forest_canopy, forest_canopy_w, forest_canopy_h := ReadPicture("assets/art/forest-canopy.argb")
+    forest_canopy_portrait, forest_canopy_portrait_w, forest_canopy_portrait_h := ReadPicture("assets/art/forest-canopy-portrait.argb")
     if !PixmapSetImage(0, "assets/art/garden.png", garden_w, garden_h, VecSlice(garden, 0, garden.count)) ||
-        !PixmapSetImage(1, "assets/art/forest.png", forest_w, forest_h, VecSlice(forest, 0, forest.count)) ||
-        !PixmapSetImage(2, "assets/art/title.png", title_w, title_h, VecSlice(title, 0, title.count)) ||
-        !PixmapSetImage(3, "assets/art/title-portrait.png", portrait_w, portrait_h, VecSlice(portrait, 0, portrait.count)) ||
-        !PixmapSetImage(4, "assets/art/forest-canopy.png", canopy_w, canopy_h, VecSlice(canopy, 0, canopy.count)) ||
-        !PixmapSetImage(5, "assets/art/forest-canopy-portrait.png", canopy_turned_w, canopy_turned_h,
-            VecSlice(canopy_turned, 0, canopy_turned.count)) { return 1 }
+        !PixmapSetImage(1, "assets/art/meadow.png", meadow_w, meadow_h, VecSlice(meadow, 0, meadow.count)) ||
+        !PixmapSetImage(2, "assets/art/leafwood.png", leafwood_w, leafwood_h, VecSlice(leafwood, 0, leafwood.count)) ||
+        !PixmapSetImage(3, "assets/art/pinewood.png", pinewood_w, pinewood_h, VecSlice(pinewood, 0, pinewood.count)) ||
+        !PixmapSetImage(4, "assets/art/lake.png", lake_w, lake_h, VecSlice(lake, 0, lake.count)) ||
+        !PixmapSetImage(5, "assets/art/mountains.png", mountains_w, mountains_h, VecSlice(mountains, 0, mountains.count)) ||
+        !PixmapSetImage(6, "assets/art/title.png", title_w, title_h, VecSlice(title, 0, title.count)) ||
+        !PixmapSetImage(7, "assets/art/title-portrait.png", title_portrait_w, title_portrait_h, VecSlice(title_portrait, 0, title_portrait.count)) ||
+        !PixmapSetImage(8, "assets/art/forest-canopy.png", forest_canopy_w, forest_canopy_h, VecSlice(forest_canopy, 0, forest_canopy.count)) ||
+        !PixmapSetImage(9, "assets/art/forest-canopy-portrait.png", forest_canopy_portrait_w, forest_canopy_portrait_h, VecSlice(forest_canopy_portrait, 0, forest_canopy_portrait.count)) { return 1 }
     name: [32]u8
     unused CopyCString("WORM_SHOT_LEVEL", name[:])
     level := GetEnvironment(*name[0])

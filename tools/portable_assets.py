@@ -18,11 +18,12 @@ def prepare(resources, generated):
             else:
                 child.unlink()
     keep = {'garden.png', 'forest.png', 'forest-canopy.png', 'forest-canopy-portrait.png',
+            'meadow.png', 'leafwood.png', 'pinewood.png', 'lake.png', 'mountains.png',
             'title.png', 'title-portrait.png'}
     for path in (resources / 'art').rglob('*'):
         if path.is_file() and not (path.name in keep or
                 (path.parent.name == 'previews' and path.suffix == '.png' and
-                 path.name.startswith(('garden-', 'forest-')))):
+                 path.name.startswith(('meadow-', 'leafwood-', 'pinewood-', 'lake-', 'mountains-')))):
             path.unlink()
     sounds = resources / 'sounds'
     sounds.mkdir(exist_ok=True)

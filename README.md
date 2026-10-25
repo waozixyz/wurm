@@ -4,20 +4,22 @@ Application id `xyz.waozi.wurm`.
 
 
 A native Ziran and Kryon game. The illustrated Apfelwurm title has one
-**Play** button: start in the Garden, then continue into the Forest as the
-same worm. There are **66 unique designed levels**, 33 per chapter, with
-wide paths, solid hedges, stone and ponds on the original 40x30 grid.
-The opening levels need five apples; later levels mix longer goals and
-more involved routes with gentler breaks. The campaign contains no passive
-decoration props or monsters. `tools/design_levels.py` regenerates the
-boards and complete route certificates. Local tests verify every layout
-and complete all 66 levels in both orientations with three apple seeds.
-The **99 recovered levels** from the owner's `The-Worm_Win_EN/
-ONLY.ONE` archive stay the byte-exact reference in `assets/original`. The game shows new art and sound: each
-chapter has its own terrain (`assets/art`), with the same worm, apples and
-woodland creatures throughout. Nature music and sound effects live in
-`assets/sounds`. The recovered tilesets, title artwork, sounds and scores stay in
-`assets/original` as the reference for the level data.
+**Play** button. Follow the little orange worm towards the mountain in the
+title picture through **66 unique designed levels**: Meadow (14), deciduous
+Leafwood (13), coniferous Pinewood (13), Lake (13), then Mountains (13).
+Every landscape has its own terrain, wide routes and solid obstacles on the
+original 40x30 grid. Lakes use shore paths, reed banks and water crossings;
+mountains lead through stone terraces and high passes. The opening levels
+need five apples, with longer goals and gentler breaks later on.
+The campaign contains no passive decoration props or monsters.
+`tools/design_levels.py` regenerates all boards and complete route
+certificates. Local tests complete every level in both orientations with
+three apple seeds. Existing editor overrides and level IDs are preserved.
+The **99 recovered levels** from the owner's `The-Worm_Win_EN/ONLY.ONE`
+archive stay the byte-exact reference in `assets/original`.
+The game uses new art and sound with the same worm and apples throughout.
+Recovered tilesets, title artwork, sounds and scores remain in
+`assets/original` as reference material.
 
 The executable was disassembled to recover the single-player rules: movement
 by four pixels every 25 Ms, sequential apples, progressive growth, passable
@@ -29,15 +31,15 @@ losing the last one ends the game at zero.
 ## Controls
 
 - Click Play, Enter or Space: start immediately; Enter or Space also retries
-- Arrows, WASD or a swipe over the board: steer
+- Arrows, WASD or move a held finger over the board: steer immediately
 - Escape, Space or P: pause and resume
 - Q while paused: back to the title
 - R: restart the current level
 - M: mute and unmute
 - E on the title: open the level editor
 
-Collect the apples, then leave through the top opening. Garden level 33
-continues directly into Forest level 1, keeping your lives and score.
+Collect the apples, then leave through the top opening. All five landscapes
+connect automatically, keeping your lives and score until the mountain finale.
 
 ## Mobile-first layout
 
@@ -49,7 +51,7 @@ whole screen with a composition for each orientation. Landscape letterboxes
 the 640x480 board. In portrait
 the same level data stands on its side as a 30x40 board that fills the
 screen edge to edge, and the gates follow the board: the worm still enters
-from the bottom edge and exits at the top. Steering keys and swipes stay
+from the bottom edge and exits at the top. Steering keys and finger movements stay
 natural, so Up is always visually up. The gates carve only their own hole;
 the neighbouring walls keep their tiles. Open entrance and exit gates show
 stone posts on both sides, in either orientation. The worm follows its full
@@ -59,18 +61,19 @@ mouth faces the direction of travel. The desktop window opens from
 portrait phone layout.
 
 Touching hedge, stone and water tiles have borders only on exposed edges.
-Forest walls sample one continuous overhead woodland image; the portrait
+Leafwood walls sample one continuous overhead woodland image; the portrait
 version rotates that same field so neighbouring tiles keep matching.
 
 ## Level editor
 
 Press E from the title, or launch with `WURM_START=editor`;
-the editor opens facing its level selector: one card per level with the
+the editor opens facing its level selector: use its landscape arrows to browse all five chapters, then
+choose a card with the
 level's rendered board as its picture, a green frame on saved edits, and
 one click to edit that level. Tab or Enter playtests. The held left button paints the selected brush across the canvas, the
 right button restores the recovered original tile, and the palette offers the
 stage's floors and solid obstacles. The apple goal
-is set with the - and + buttons or keys. Up/Down switches levels (saving
+is set with the - and + buttons or keys. Up/Down switches through all 66 levels (saving
 first), Enter playtests from the entrance, and E returns to the title.
 Saving is automatic on switch, exit and playtest, plus the Save button; Reset
 (deleting the override) restores the designed campaign level. T or the turn
@@ -117,7 +120,10 @@ start, pause, resume, steering and return to the title on that USB device.
 Use `--verification` on both commands for the separate
 `xyz.waozi.wurm.verification` install, preserving the normal game and data.
 The device test leaves its own game open on the title.
-On phones, swipe over the board to steer, use the top pause button, and tap
+On phones, keep your finger down and move it in the direction you want to
+turn. You can make successive corners without lifting or returning to the
+press position; a small movement is enough, and lifting makes no extra turn.
+Use the top pause button, and tap
 the pause or game-over card's buttons to continue or return to the title.
 
 ## Signed Android downloads
@@ -158,12 +164,18 @@ launched from `build/`.
 The title uses detailed sunlit storybook art, and the tiles and creatures use clean cartoon
 art generated with the built-in image tool. Source atlases live in
 `assets/art-source`; their prompts are recorded in `assets/art/title.json`.
-`tools/make_art.py` crops and packs those cells into the Garden and Forest
+`tools/make_art.py` crops and packs those cells into the landscape
 sheets without changing gameplay tile IDs or collision rules. It also writes
 the display-free `.argb` mirrors. Run it with `--check` to verify the packed
-art matches its sources. The same golden orange worm and red apples appear in both
-chapters. `assets/sounds/sounds.json` records the OpenRouter model and prompt
-of every sound; the scores are trimmed and crossfaded into seamless loops.
+art matches its sources. `assets/art-source/journey-terrain.png` supplies
+the five landscape materials; its built-in image-generation prompt is recorded
+in `assets/art/title.json`. The same golden orange worm and red apples appear
+throughout the journey. `assets/sounds/sounds.json` records the OpenRouter model and prompt
+of every sound. The current acoustic garden score was AI-generated with
+Lyria; it is not the recovered original MIDI. It plays continuously through
+level and landscape transitions. Loop reads wrap without padding silence,
+and the native mixer buffers enough audio to tolerate slower phone frames.
+The soundtrack itself is preserved; this update repairs playback.
 
 ## Recover the assets again
 

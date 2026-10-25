@@ -167,17 +167,23 @@ def main():
             scale = picture.width / board['width']
         x = round((board['x'] + board['width'] / 2) * scale)
         y = round((board['y'] + board['height'] / 2) * scale)
-        shell('input', 'swipe', str(x), str(y), str(x + round(60 * scale)), str(y), '250')
+        gesture = subprocess.Popen([*adb, 'shell', shlex.join(['input', 'swipe', str(x), str(y),
+            str(x + round(60 * scale)), str(y), '1500'])], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Inspect only the head while the clock runs. Transferring the full
         # 1,500-node tree can otherwise take long enough to reach a wall.
-        deadline = time.monotonic() + 1.5
-        while time.monotonic() < deadline:
-            after = command('find', key=2000)['nodes'][0]
-            if after['x'] > before['x'] + before['width']:
-                break
-        else:
-            raise AssertionError(('OS swipe did not steer right', before, after))
-        command('press', label='Pause', role='button')
+        try:
+            deadline = time.monotonic() + 1.4
+            while time.monotonic() < deadline:
+                after = command('find', key=2000)['nodes'][0]
+                if after['x'] > before['x'] + before['width']:
+                    assert gesture.poll() is None, 'Steering was observed only after touch release'
+                    break
+            else:
+                raise AssertionError(('Held OS touch did not steer right', before, after))
+            command('press', label='Pause', role='button')
+        finally:
+            gesture.communicate(timeout=10)
+        assert gesture.returncode == 0, 'OS touch command failed'
         capture('steered')
         wait('Back to title', 'button')
         command('press', label='Back to title', role='button')
@@ -187,7 +193,7 @@ def main():
             assert shell('pidof', PACKAGE, check=False).stdout.strip() == owner_pid, 'Normal owner game process changed'
         receipt.update(passed=True, preserved_normal_process=bool(owner_pid),
                        behaviors=['portrait and landscape title', '60-unit Play button', 'OS touch start',
-                                  'pause in both orientations', 'resume', 'OS swipe steering', 'return to title'])
+                                  'pause in both orientations', 'resume', 'OS steering before touch release', 'return to title'])
     finally:
         # This directory was absent before the test and contains only its protocol files.
         shell('run-as', package, 'rm', '-rf', DRIVER)
@@ -199,7 +205,7 @@ def main():
         # Leave the requested game open on its title for the owner. Never
         # stop another app or the pre-existing normal game to clean up a test.
         (OUTPUT / 'result.json').write_text(json.dumps(receipt, indent=2) + '\n')
-    print('USB Moto local test: portrait/landscape title, OS touch Play, pause, resume, swipe and title passed; normal game preserved.')
+    print('USB Moto local test: portrait/landscape title, OS touch Play, pause, resume, steering before release and title passed; normal game preserved.')
 
 
 if __name__ == '__main__':

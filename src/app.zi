@@ -21,6 +21,7 @@
     using UI :: #import "kryon/Widgets";
 }
 #import "kryon/joystick";
+Touch :: #import, file "steering.zi";
 #import "kryon/svg_icon_props"
 #import "kryon/svg_icon_widget"
 HeartIcon :: #import "mingcute/mingcute_filled_heart";
@@ -42,16 +43,22 @@ Input :: #import "kryon/input_protocol";
 Custom :: #import, file "custom_levels.zi";
 
 #if #defined(WURM_PORTABLE) {
-    ART_GARDEN :: "assets/wurm/art/garden.png";
-    ART_FOREST :: "assets/wurm/art/forest.png";
+    ART_MEADOW :: "assets/wurm/art/meadow.png";
+    ART_LEAFWOOD :: "assets/wurm/art/leafwood.png";
+    ART_PINEWOOD :: "assets/wurm/art/pinewood.png";
+    ART_LAKE :: "assets/wurm/art/lake.png";
+    ART_MOUNTAINS :: "assets/wurm/art/mountains.png";
     ART_CANOPY :: "assets/wurm/art/forest-canopy.png";
     ART_CANOPY_PORTRAIT :: "assets/wurm/art/forest-canopy-portrait.png";
     ART_TITLE :: "assets/wurm/art/title.png";
     ART_TITLE_PORTRAIT :: "assets/wurm/art/title-portrait.png";
     ART_PREVIEWS :: "assets/wurm/art/previews/";
 } else {
-    ART_GARDEN :: "assets/art/garden.png";
-    ART_FOREST :: "assets/art/forest.png";
+    ART_MEADOW :: "assets/art/meadow.png";
+    ART_LEAFWOOD :: "assets/art/leafwood.png";
+    ART_PINEWOOD :: "assets/art/pinewood.png";
+    ART_LAKE :: "assets/art/lake.png";
+    ART_MOUNTAINS :: "assets/art/mountains.png";
     ART_CANOPY :: "assets/art/forest-canopy.png";
     ART_CANOPY_PORTRAIT :: "assets/art/forest-canopy-portrait.png";
     ART_TITLE :: "assets/art/title.png";
@@ -97,29 +104,35 @@ editor_digits: [21]u8;
 brush_digits: [21]u8;
 
 StageName :: (stage: s32) -> string {
-    if stage == 1 { return "FOREST" }
-    return "GARDEN"
+    if stage == 1 { return "Leafwood" }
+    if stage == 2 { return "Pinewood" }
+    if stage == 3 { return "Lake" }
+    if stage == 4 { return "Mountains" }
+    return "Meadow"
 }
-StageClear :: (stage: s32) -> string {
-    if stage == 1 { return "FOREST CLEAR" }
-    return "GARDEN CLEAR"
+StageKey :: (stage: s32) -> string {
+    if stage == 1 { return "leafwood-" }
+    if stage == 2 { return "pinewood-" }
+    if stage == 3 { return "lake-" }
+    if stage == 4 { return "mountains-" }
+    return "meadow-"
 }
 
-// Each stage's tiles, character, monsters, pickup and effects share one
-// sheet in the original 20x12 layout of 16-unit cells, drawn at 2x (32-pixel
-// cells) so the sprites keep their detail; floors and walls are opaque.
+// Terrain keeps the stable 20-column tile coordinates; every landscape
+// shares the same orange worm and apples.
 SHEET_SCALE :: 2.0;
 Sheet :: (stage: s32) -> string {
-    if stage == 1 { return ART_FOREST }
-    return ART_GARDEN
+    if stage == 1 { return ART_LEAFWOOD }
+    if stage == 2 { return ART_PINEWOOD }
+    if stage == 3 { return ART_LAKE }
+    if stage == 4 { return ART_MOUNTAINS }
+    return ART_MEADOW
 }
 preview_path: [64]u8;
 PreviewPath :: (stage: s32, number: s32) -> string {
-    prefix := "garden-"
-    if stage == 1 { prefix = "forest-" }
     digits: [16]u8
     at := CopyInto(preview_path[:], 0, ART_PREVIEWS)
-    at = CopyInto(preview_path[:], at, prefix)
+    at = CopyInto(preview_path[:], at, StageKey(stage))
     at = CopyInto(preview_path[:], at, FormatInteger(cast(s64)number, digits[:]))
     at = CopyInto(preview_path[:], at, ".png")
     preview_path[at] = 0
@@ -407,7 +420,7 @@ AppleFlash :: (session: Session, stage: Rectangle) {
         .shape = StarIcon.Shape, .color = Color.{255, 227, 116, 220}})
 }
 
-// Stone posts mark each open gate in both chapters. Their tiles and the
+// Stone posts mark each open gate throughout the journey. Their tiles and the
 // centre opening keep their existing collision data and width.
 DrawGatePosts :: (session: Session, stage: Rectangle) {
     half := board_columns / 2
@@ -485,6 +498,7 @@ OpenStages :: () {
 // same level on its side (30x40), so the worm still enters from the bottom
 // and leaves at the top.
 PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, force_turn: bool = false) {
+    touch_steering.active = false
     board: [CELLS]u8
     turned: [CELLS]u8
     objects: [CELLS]u8
@@ -620,10 +634,8 @@ EditorPlaytest :: (now: s64) {
 
 EditorSwitch :: (delta: s32) {
     EditorSave()
-    within := editor.level % STAGE_LEVELS + delta
-    if within < 0 { within = STAGE_LEVELS - 1 }
-    if within >= STAGE_LEVELS { within = 0 }
-    OpenEditor(StageOf(editor.level) * STAGE_LEVELS + within)
+    level := (editor.level + delta + LEVEL_COUNT) % LEVEL_COUNT
+    OpenEditor(level)
 }
 
 EditorSetApples :: (delta: s32) {
@@ -677,21 +689,31 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
     unused Box(session, BoxProps.{.key = 8700, .bounds = area, .fill = Color.{229, 237, 210, 255}})
     if Button(session, ButtonProps.{.key = 8703, .bounds = Rectangle.{area.x + 10.0, area.y + 8.0, 88.0, 36.0},
             .label = "Back", .tone = ButtonTone.ButtonToneNeutral}) != 0 { editor.browsing = false; return }
-    CentreText(session, 8701, "Levels",
-        Rectangle.{area.x + 110.0, area.y + 10.0, area.width - 220.0, 28.0}, 20)
-    first := StageOf(editor.level) * STAGE_LEVELS
+    chapter := StageOf(editor.level)
+    if Button(session, ButtonProps.{.key = 8704, .bounds = Rectangle.{area.x + area.width - 94.0, area.y + 8.0, 38.0, 36.0},
+            .label = "Previous landscape", .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18"}) != 0 {
+        EditorSave(); OpenEditor(StageFirst((chapter + STAGE_COUNT - 1) % STAGE_COUNT)); editor.browsing = true; return
+    }
+    if Button(session, ButtonProps.{.key = 8705, .bounds = Rectangle.{area.x + area.width - 48.0, area.y + 8.0, 38.0, 36.0},
+            .label = "Next landscape", .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18"}) != 0 {
+        EditorSave(); OpenEditor(StageFirst((chapter + 1) % STAGE_COUNT)); editor.browsing = true; return
+    }
+    CentreText(session, 8701, StageName(chapter),
+        Rectangle.{area.x + 102.0, area.y + 10.0, area.width - 204.0, 28.0}, 18)
+    first := StageFirst(chapter)
+    count := StageLevels(chapter)
     columns: s32 = 8
     for candidate: 4..11 {
-        rows := (STAGE_LEVELS + candidate - 1) / candidate
+        rows := (count + candidate - 1) / candidate
         item_width := (area.width - 16.0 - cast(float32)(candidate - 1) * 8.0) / cast(float32)candidate
         total := cast(float32)rows * (item_width * 0.75 + 30.0) + cast(float32)(rows - 1) * 8.0 + 56.0
         if total <= area.height { columns = cast(s32)candidate; break }
     }
-    rows := (STAGE_LEVELS + columns - 1) / columns
+    rows := (count + columns - 1) / columns
     item_width := (area.width - 16.0 - cast(float32)(columns - 1) * 8.0) / cast(float32)columns
     item_height := item_width * 0.75 + 30.0
     pointer := GamePointer(session)
-    for index: 0..STAGE_LEVELS - 1 {
+    for index: 0..count - 1 {
         column := index % columns
         row := index / columns
         bounds := Rectangle.{area.x + 8.0 + cast(float32)column * (item_width + 8.0),
@@ -805,7 +827,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     }
 
     unused Box(session, BoxProps.{.key = 8200, .bounds = panel, .fill = Color.{251, 248, 231, 255}})
-    level_text := FormatInteger(cast(s64)(editor.level % STAGE_LEVELS + 1), editor_digits[:])
+    level_text := FormatInteger(cast(s64)(StageNumber(editor.level)), editor_digits[:])
     TextLine(session, 8202, "LEVEL", Rectangle.{panel.x + 8.0, panel.y + 8.0, 50.0, 20.0}, 14)
     TextLine(session, 8203, level_text, Rectangle.{panel.x + 60.0, panel.y + 8.0, 30.0, 20.0}, 14)
     TextLine(session, 8204, StageName(stage_of_level), Rectangle.{panel.x + 110.0, panel.y + 8.0, 90.0, 20.0}, 14)
@@ -953,8 +975,11 @@ HandleInput :: (key: s32, now: s64) {
 // True while the window stands portrait: the board turns sideways and the
 // steering keys turn with it, so Up always means visually up.
 game_portrait: bool;
+touch_steering: Touch.TouchSteering;
+stage_digits: [21]u8;
+stage_total: [24]u8;
 
-// A swipe steers like the arrow keys: never into the worm's own neck.
+// Finger movement steers like arrow keys, without waiting for release.
 Steer :: (direction: s32) {
     if game.length >= 8 && direction != (game.direction + 2) % 4 { game.next_direction = direction }
 }
@@ -1005,15 +1030,20 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
         return
     }
     narrow := hud.width < 520.0
-    chapter := ifx StageOf(game.level) == 0 then "Garden" else "Forest"
+    chapter := StageName(StageOf(game.level))
+    total := FormatInteger(cast(s64)StageLevels(StageOf(game.level)), stage_digits[:])
+    stage_total[0] = #char "/"; stage_total[1] = #char " "
+    total_end := CopyInto(stage_total[:], 2, total)
+    stage_total[total_end] = 0
+    total_label := TextUntilNul(stage_total[:])
     GameText(session, 11, chapter, Rectangle.{hud.x + 16.0, hud.y + 10.0, 100.0, 22.0}, 17)
-    level_text := FormatInteger(cast(s64)(game.level % STAGE_LEVELS + 1), level_digits[:])
+    level_text := FormatInteger(cast(s64)(StageNumber(game.level)), level_digits[:])
     if narrow {
         GameText(session, 12, level_text, Rectangle.{hud.x + 112.0, hud.y + 12.0, 26.0, 20.0}, 15)
-        GameText(session, 13, "/ 33", Rectangle.{hud.x + 138.0, hud.y + 12.0, 38.0, 20.0}, 14, true)
+        GameText(session, 13, total_label, Rectangle.{hud.x + 138.0, hud.y + 12.0, 38.0, 20.0}, 14, true)
     } else {
         GameText(session, 12, level_text, Rectangle.{hud.x + 16.0, hud.y + 36.0, 26.0, 20.0}, 15)
-        GameText(session, 13, "/ 33", Rectangle.{hud.x + 42.0, hud.y + 36.0, 38.0, 20.0}, 14, true)
+        GameText(session, 13, total_label, Rectangle.{hud.x + 42.0, hud.y + 36.0, 38.0, 20.0}, 14, true)
     }
     group_x := hud.x + 124.0
     group_width := hud.width - 200.0
@@ -1064,9 +1094,6 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
     HandleInput(key, now)
-    unused Step(*game, now)
-    Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,
-        game.level, game.apples, game.death_ticks, game.transition_ticks)
     unused Box(session, BoxProps.{.key = 1, .bounds = viewport, .fill = Color.{229, 237, 210, 255}})
     // The stages screen is one full-bleed cover; every other mode carries the
     // green icon bar across the top with the board letterboxed below it, so
@@ -1079,6 +1106,19 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     available_height := viewport.height - bar_height
     if available_height < 1.0 { available_height = 1.0 }
     stage := BoardIn(Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height})
+    // Read the held pointer before simulation, so the next 25 ms step can
+    // already use this frame's direction. SwipeArea supplies captured contact;
+    // its release-only swipe result is deliberately unused.
+    if game.mode == MODE_PLAYING && game.death_ticks == 0 && game.transition_ticks == 0 {
+        contact := SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
+            .label = "Steer the worm", .now = cast(float64)now / 1000.0,
+            .min_distance = 6.0})
+        direction := Touch.TouchDirection(*touch_steering, contact.down, contact.at_x, contact.at_y)
+        if direction >= 0 { Steer(direction) }
+    } else { touch_steering.active = false }
+    unused Step(*game, now)
+    Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,
+        game.level, game.apples, game.death_ticks, game.transition_ticks)
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         if DrawTitle(session, area, stage_key) {
@@ -1089,21 +1129,10 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         DrawEditor(session, area, now)
     } else {
         DrawBoard(session, stage)
-        // A swipe steers like the arrow keys, so touch plays in any orientation.
-        if game.mode == MODE_PLAYING {
-            // Tile keys cover 100..1299; the drag area needs its own stable
-            // identity so Press can retain a swipe across frames.
-            gesture := SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
-                .label = "Steer the worm", .now = cast(float64)now / 1000.0, .min_distance = 20.0})
-            if gesture.swiped == 0 { Steer(DIR_LEFT) }
-            else if gesture.swiped == 1 { Steer(DIR_UP) }
-            else if gesture.swiped == 2 { Steer(DIR_RIGHT) }
-            else if gesture.swiped == 3 { Steer(DIR_DOWN) }
-        }
     }
     if showing_bar { DrawTopBar(session, hud) }
     if game.mode == MODE_PAUSED { Overlay(session, viewport, "Paused", "Your worm is waiting.") }
     else if game.mode == MODE_DIED { Overlay(session, viewport, "Game over", "Another apple adventure?", game.score) }
-    else if game.mode == MODE_VICTORY { Overlay(session, viewport, "You did it!", "Garden and Forest complete.", game.score) }
+    else if game.mode == MODE_VICTORY { Overlay(session, viewport, "You did it!", "You reached the mountain!", game.score) }
     return 0
 }

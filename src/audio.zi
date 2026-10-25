@@ -15,8 +15,8 @@ music_file: File.FileHandle;
 music_bytes: s64;
 music_position: s64;
 music_track: s32;
-music_samples: [2048]u8;
-mixed: [1024]s16;
+music_samples: [4096]u8;
+mixed: [2048]s16;
 previous_level: s32 = -1;
 previous_apples: s32;
 previous_death: s32;
@@ -50,7 +50,7 @@ SignedSample :: (low: u8, high: u8) -> s32 {
 
     ReadMusicSamples :: () {
         if music_bytes <= 0 { return }
-        for at: 0..2047 {
+        for at: 0..4095 {
             music_samples[at] = music_data[music_position]
             music_position = (music_position + 1) % music_bytes
         }
@@ -81,9 +81,15 @@ SignedSample :: (low: u8, high: u8) -> s32 {
 
     ReadMusicSamples :: () {
         if !music_file.valid || music_bytes <= 0 { return }
-        count := File.ReadAt(music_file, music_samples[:], music_position)
-        if count > 0 { music_position += count }
-        if music_position >= music_bytes { music_position = 0 }
+        // Fill the entire block across the loop boundary. A short final
+        // read must not insert silence before the music starts again.
+        filled: s64 = 0
+        while filled < music_samples.count {
+            count := File.ReadAt(music_file, music_samples[filled:music_samples.count], music_position)
+            if count <= 0 { return }
+            filled += count
+            music_position = (music_position + count) % music_bytes
+        }
     }
 
     CloseMusic :: () {
@@ -118,9 +124,9 @@ ToggleMute :: () {
 PumpAudio :: () {
     if device == 0 || muted { return }
     while Output.Ready(device) {
-        for index: 0..2047 { music_samples[index] = 0 }
+        for index: 0..4095 { music_samples[index] = 0 }
         ReadMusicSamples()
-        for index: 0..1023 {
+        for index: 0..2047 {
             value := SignedSample(music_samples[index * 2], music_samples[index * 2 + 1]) / 2
             for effect: 0..3 {
                 sound := *effects[effect]
@@ -143,7 +149,9 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
     if device == 0 { return }
     if playing {
         if !was_playing || level != previous_level {
-            ChangeMusic(level / 33 + 1)
+            // One acoustic score accompanies the whole journey. New levels
+            // play their cue without rewinding the same recording.
+            ChangeMusic(1)
             PlayEffect(0)
         } else {
             if apples < previous_apples { PlayEffect(3) }

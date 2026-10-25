@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2] - 2026-10-25
+
+- Travel through all 66 levels from Meadow through deciduous Leafwood, coniferous Pinewood and Lake to the Mountains, with distinct terrain and challenges throughout.
+- Turn as your finger moves while touching the board, and make successive corners without lifting.
+- Browse and edit every landscape while keeping existing personal level edits.
+- Hear continuous acoustic music across landscape changes, with smoother looping and playback on slower phones.
+
 ## [0.1.1] - 2026-10-25
 
 - Download Apfelwurm separately from Arcade and play the same Garden and Forest campaign.

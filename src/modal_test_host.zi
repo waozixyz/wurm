@@ -115,7 +115,17 @@ main :: () -> s32 {
         }
     }
     if Number("WURM_PROBE_FREEZE", 0) != 0 { state.next_step = Timer.MonotonicMilliseconds() + 600000 }
+    steering := Number("WURM_PROBE_STEERING", 0) != 0
+    if steering {
+        state.length = 32
+        state.direction = 1
+        state.next_direction = 1
+        head := Point.{board_columns / 2 * 16 + 8, board_rows / 2 * 16 + 8}
+        for segment: 0..31 { state.worm[segment] = Point.{head.x, head.y + cast(s32)segment * 4} }
+        state.next_step = Timer.MonotonicMilliseconds() + TICK_MS
+    }
     previous: s32 = -1
+    previous_direction: s32 = -1
     while PollDesktop() {
         BeginDesktopFrame()
         TreePointerUpdate(session, PollPointer())
@@ -128,6 +138,13 @@ main :: () -> s32 {
         if previous != state.mode {
             previous = state.mode
             print("mode=% lives=%\n", previous, state.lives)
+            unused Flush(null)
+        }
+        if steering && previous_direction != state.direction {
+            previous_direction = state.direction
+            pointer := PointerSample(session)
+            print("steering=% touch=% x=% y=%\n", state.direction,
+                ifx pointer.down then 1 else 0, state.worm[0].x, state.worm[0].y)
             unused Flush(null)
         }
         PauseDesktop()

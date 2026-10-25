@@ -1,0 +1,20 @@
+Touch :: #import, file "../src/steering.zi";
+#import, file "../src/game.zi";
+
+#program_export
+main :: () -> s32 {
+    touch: Touch.TouchSteering
+    if Touch.TouchDirection(*touch, true, 100.0, 100.0) != -1 { return 1 }
+    if Touch.TouchDirection(*touch, true, 103.0, 102.0) != -1 { return 2 }
+    if Touch.TouchDirection(*touch, true, 108.0, 102.0) != DIR_RIGHT { return 3 }
+    // The same contact turns down, left and up without returning to its
+    // original press position. A fixed-origin swipe cannot follow this.
+    if Touch.TouchDirection(*touch, true, 108.0, 110.0) != DIR_DOWN { return 4 }
+    if Touch.TouchDirection(*touch, true, 100.0, 110.0) != DIR_LEFT { return 5 }
+    if Touch.TouchDirection(*touch, true, 100.0, 102.0) != DIR_UP { return 6 }
+    if Touch.TouchDirection(*touch, true, 100.0, 102.0) != -1 { return 7 }
+    if Touch.TouchDirection(*touch, false, 140.0, 102.0) != -1 || touch.active { return 8 }
+    if Touch.TouchDirection(*touch, true, 200.0, 200.0) != -1 { return 9 }
+    print("Touch local test: four turns during one contact, jitter ignored, release produces no extra turn.\n")
+    return 0
+}

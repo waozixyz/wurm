@@ -1,0 +1,27 @@
+// Relative finger movement, measured from the last accepted movement.
+// Re-anchoring lets one held finger make successive corners naturally.
+TouchSteering :: struct {
+    active: bool
+    x: float32
+    y: float32
+}
+
+TouchDirection :: (touch: *TouchSteering, down: bool, x: float32, y: float32) -> s32 {
+    if !down { touch.active = false; return -1 }
+    if !touch.active {
+        touch.active = true
+        touch.x = x
+        touch.y = y
+        return -1
+    }
+    dx := x - touch.x
+    dy := y - touch.y
+    across := ifx dx < 0.0 then -dx else dx
+    along := ifx dy < 0.0 then -dy else dy
+    // Logical screen units: responsive on phones, without following jitter.
+    if across < 6.0 && along < 6.0 { return -1 }
+    touch.x = x
+    touch.y = y
+    if across >= along { return ifx dx < 0.0 then 0 else 2 }
+    return ifx dy < 0.0 then 1 else 3
+}

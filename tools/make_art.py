@@ -10,6 +10,7 @@ from pathlib import Path
 import struct
 
 from PIL import Image
+from design_levels import STAGES
 
 ROOT = Path(__file__).resolve().parents[1]
 ART = ROOT / 'assets/art'
@@ -91,6 +92,23 @@ def save(image, path, check):
         path.with_suffix('.argb').write_bytes(mirror)
 
 
+def journey_sheet(base, textures):
+    """Pack generated terrain onto the existing collision/sprite coordinates."""
+    sheet = base.copy()
+    floor, wall, stone, water = textures
+    for tile in range(20):
+        sheet.paste(floor, (tile * CELL, 0))
+        sheet.paste(stone if tile == 1 else water if tile == 2 else wall,
+                    (tile * CELL, CELL))
+    for piece in range(9):
+        sheet.paste(wall, ((10 + piece) * CELL, 2 * CELL))
+    for frame in range(3):
+        sheet.paste(water, (frame * CELL, 11 * CELL))
+    for variant in range(4):
+        sheet.paste(floor, ((4 + variant) * CELL, 11 * CELL))
+    return sheet
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true')
@@ -113,6 +131,10 @@ def main():
     assert min(Image.open(SOURCE / 'sprites.png').getchannel('A').getextrema()) == 0, 'sprite alpha missing'
     for stage in ('garden', 'forest'):
         save(build(stage, terrain, sprites, details), ART / (stage + '.png'), args.check)
+    journey = cells(SOURCE / 'journey-terrain.png', 4, 5)
+    base = build('garden', terrain, sprites, details)
+    for row, (stage, _, _) in enumerate(STAGES):
+        save(journey_sheet(base, journey[row * 4:row * 4 + 4]), ART / (stage + '.png'), args.check)
     canopy = Image.open(SOURCE / 'forest-canopy.png').convert('RGBA').resize((40 * CELL, 30 * CELL), Image.Resampling.LANCZOS)
     save(canopy, ART / 'forest-canopy.png', args.check)
     save(canopy.transpose(Image.Transpose.ROTATE_270), ART / 'forest-canopy-portrait.png', args.check)
@@ -124,7 +146,7 @@ def main():
             assert path.read_bytes() == mirror, path
         else:
             path.write_bytes(mirror)
-    print('Cartoon Garden/Forest atlases and title mirrors ' + ('verified.' if args.check else 'packed.'))
+    print('Five journey atlases, reference art and title mirrors ' + ('verified.' if args.check else 'packed.'))
 
 
 if __name__ == '__main__':
