@@ -3,9 +3,13 @@
 Application id `xyz.waozi.wurm`.
 
 
-A native Ziran and Kryon game using all **99 original levels** recovered
-from the owner's `The-Worm_Win_EN/ONLY.ONE` archive, each played exactly as
-recovered on its original 40x30 grid. The game shows new art and sound: each
+A native Ziran and Kryon game. The Garden stage plays **33 designed
+levels** (`tools/design_levels.py`, regenerated and flood-fill verified in
+the local suite): each keeps its recovered original's apple goal, monster
+count and wall density while rebuilding a fresh layout with hedge mazes,
+animated water ponds and decoration objects, all on the original 40x30
+grid. The **99 recovered levels** from the owner's `The-Worm_Win_EN/
+ONLY.ONE` archive stay the byte-exact reference in `assets/original`. The game shows new art and sound: each
 stage has its own cover, tiles, character, monsters, pickup and effects
 (`assets/art`), and new sound effects and stage music (`assets/sounds`). The
 recovered tilesets, title artwork, sounds and scores stay in
@@ -45,10 +49,10 @@ portrait phone layout.
 
 ## Level editor
 
-E on the stages screen (or its pencil button) opens the editor for the chosen
-level, and L inside the editor (or its grid button) shows every level of the
-stage as a numbered card grid — a green dot marks saved edits, and one click
-jumps to that level. The held left button paints the selected brush across the canvas, the
+The title screen pages between the Garden cover and a Level Editor page;
+the editor opens facing its level selector: one card per level with the
+level's rendered board as its picture, a green frame on saved edits, and
+one click to edit that level. Tab or Enter playtests. The held left button paints the selected brush across the canvas, the
 right button restores the recovered original tile, and the palette offers the
 stage's floors, walls, false walls and the six monster kinds. The apple goal
 is set with the - and + buttons or keys. Up/Down switches levels (saving
@@ -58,8 +62,12 @@ Saving is automatic on switch, exit and playtest, plus the Save button; Reset
 button stands the working level up exactly as portrait plays it and back,
 so the sideways view can be edited and playtested directly.
 
-Edits live in `assets/levels/level<N>.dat`, one file per edited level in the
-original archive layout (apple count, then the 40x30 tiles in column order).
+Edits live in `assets/levels/level<N>.dat`, one file per edited level:
+apple count, the 40x30 tiles, then the 40x30 object ids, all in column
+order. The palette paints floors (grass, dirt, sand, animated water), a
+smart hedge that fits its own edge and corner pieces, plain and stone
+walls, and decoration objects (log, flowers, mushroom, rock, butterfly,
+snail, bird) that sit above any tile and never block the worm.
 A level without a file plays its recovered original, so removing a file
 restores it. The entrance (bottom centre, green marker) and exit (top centre, red
 marker) are carved at runtime from the tiles above and below the edges; the

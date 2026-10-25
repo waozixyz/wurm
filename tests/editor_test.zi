@@ -1,5 +1,6 @@
 #import, file "../src/game.zi";
 #import, file "../src/original_levels.zi";
+#import, file "../src/designed_levels.zi";
 Custom :: #import, file "../src/custom_levels.zi";
 File :: #import "std/file_linux";
 
@@ -15,8 +16,8 @@ main :: () -> s32 {
     Custom.EnsureLoaded()
     unused Custom.ClearCustomLevel(2)
     Expect(!Custom.HasCustomLevel(0), "no override before any save")
-    Expect(Custom.EffectiveApples(0) == OriginalApples[0], "no override keeps original apples")
-    Expect(Custom.EffectiveTile(0, 5, 7) == OriginalTile(0, 5, 7), "no override keeps original tiles")
+    Expect(Custom.EffectiveApples(0) == BaseApples(0), "no override keeps original apples")
+    Expect(Custom.EffectiveTile(0, 5, 7) == DesignedTile(0, 5, 7), "no override keeps original tiles")
 
     board: [CELLS]u8
     for at: 0..CELLS - 1 { board[at] = 0 }
@@ -54,7 +55,7 @@ main :: () -> s32 {
     Expect(Custom.EffectiveTile(2, 10, 10) == 0, "override floor applies")
     Expect(Custom.EffectiveTile(2, 11, 10) == 42, "monster marker round-trips")
     Expect(Custom.EffectiveTile(2, 12, 10) == 130, "false wall round-trips")
-    Expect(Custom.EffectiveTile(2, 0, 0) == OriginalTile(2, 0, 0), "untouched cells keep their tiles")
+    Expect(Custom.EffectiveTile(2, 0, 0) == DesignedTile(2, 0, 0), "untouched cells keep their tiles")
     file := File.OpenRead("build/test-levels/level3.dat")
     Expect(file.valid, "override file exists")
     if file.valid {
@@ -76,8 +77,8 @@ main :: () -> s32 {
 
     Expect(Custom.ClearCustomLevel(2), "override clears")
     Expect(!Custom.HasCustomLevel(2), "cleared override is gone")
-    Expect(Custom.EffectiveApples(2) == OriginalApples[2], "clear restores the original")
-    Expect(Custom.EffectiveTile(2, 10, 10) == OriginalTile(2, 10, 10), "clear restores original tiles")
+    Expect(Custom.EffectiveApples(2) == BaseApples(2), "clear restores the original")
+    Expect(Custom.EffectiveTile(2, 10, 10) == DesignedTile(2, 10, 10), "clear restores original tiles")
 
     // The smart hedge brush fits pieces to their open sides: a wall boxed in
     // from east, south and west wears grass only on its north side (51),

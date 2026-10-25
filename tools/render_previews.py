@@ -25,11 +25,14 @@ def main():
     for stage_index, stage in enumerate(STAGES):
         sheet = Image.open(ROOT / f"assets/art/{stage}.png").convert("RGBA")
         for number in range(1, 34):
-            raw = (ROOT / "assets/original" / f"level{stage_index * 33 + number}.dat").read_bytes()
+            designed = ROOT / "build/designed" / f"level{number}.dat"
+            raw_path = designed if stage_index == 0 and designed.exists() else ROOT / "assets/original" / f"level{stage_index * 33 + number}.dat"
+            raw = raw_path.read_bytes()
+            tiles = raw[1:1201] if len(raw) > 1201 else raw[1:]
             preview = Image.new("RGB", (WIDTH, HEIGHT))
             for y in range(30):
                 for x in range(40):
-                    tile = raw[1 + x * 30 + y] & 127
+                    tile = tiles[x * 30 + y] & 127
                     if 40 <= tile <= 45:
                         tile = 0
                     source = sheet.crop(((tile % 20) * 32, (tile // 20) * 32,

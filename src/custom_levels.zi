@@ -139,7 +139,7 @@ EffectiveTile :: (level: s32, x: s32, y: s32) -> u8 {
     if level >= 0 && level < LEVEL_COUNT && custom_present[level] {
         return custom_boards[level][At(x, y)]
     }
-    return Originals.OriginalTile(level, x, y)
+    return BaseTile(level, x, y)
 }
 
 EffectiveApples :: (level: s32) -> s32 {
@@ -147,12 +147,16 @@ EffectiveApples :: (level: s32) -> s32 {
     if level >= 0 && level < LEVEL_COUNT && custom_present[level] {
         return custom_apples[level]
     }
-    return Originals.OriginalApples[level]
+    return BaseApples(level)
 }
 
 EffectiveObjects :: (level: s32, objects: []u8) {
     EnsureLoaded()
-    for at: 0..CELLS - 1 { objects[at] = 0 }
+    for y: 0..ROWS - 1 {
+        for x: 0..COLUMNS - 1 {
+            objects[At(x, y)] = BaseObject(level, cast(s32)x, cast(s32)y)
+        }
+    }
     if level < 0 || level >= LEVEL_COUNT { return }
     if custom_present[level] {
         for at: 0..CELLS - 1 { objects[at] = custom_objects[level][at] }
@@ -173,7 +177,7 @@ EffectiveBoard :: (level: s32, board: []u8) {
     }
     for y: 0..ROWS - 1 {
         for x: 0..COLUMNS - 1 {
-            board[At(x, y)] = Originals.OriginalTile(level, cast(s32)x, cast(s32)y)
+            board[At(x, y)] = BaseTile(level, cast(s32)x, cast(s32)y)
         }
     }
 }

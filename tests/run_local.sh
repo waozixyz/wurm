@@ -6,6 +6,8 @@ unset DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS SESSION_MANAGE
 export YUE_DESKTOP_RECOVERY=0 MAKEFLAGS=-j1 ZIRAN_PAR_THREADS=1 OMP_NUM_THREADS=1
 mkdir -p build/research
 python3 tests/recovery_test.py "${1:-/mnt/storage/Games/The-Worm_Win_EN}"
+python3 tools/design_levels.py
+git diff --quiet src/designed_levels.zi || { echo 'src/designed_levels.zi does not match regeneration'; exit 1; }
 python3 tools/render_previews.py --check
 ziran check --locked
 ziran build --locked --project --root tests --target=c --entry game_test:main --exe -o build/game-test tests/game_test.zi

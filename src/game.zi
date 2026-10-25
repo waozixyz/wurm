@@ -1,4 +1,5 @@
 #import, file "original_levels.zi";
+#import, file "designed_levels.zi";
 
 // Rules recovered from the owner's WURM.EXE. Coordinates are original pixels.
 // COLUMNS x ROWS is the recovered canonical grid, also the archive and
@@ -166,15 +167,32 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     Respawn(game)
     SpawnApple(game)
 }
+// The playable base: the designed Garden levels, the recovered originals
+// beyond them.
+BaseTile :: (level: s32, x: s32, y: s32) -> u8 {
+    if level >= 0 && level < 33 { return DesignedTile(level, x, y) }
+    return OriginalTile(level, x, y)
+}
+BaseApples :: (level: s32) -> s32 {
+    if level >= 0 && level < 33 { return DesignedApples[level] }
+    return OriginalApples[level]
+}
+BaseObject :: (level: s32, x: s32, y: s32) -> u8 {
+    if level >= 0 && level < 33 { return DesignedObject(level, x, y) }
+    return 0
+}
+
 LoadLevel :: (game: *Game, level: s32, now: s64) {
     BoardSize(COLUMNS, ROWS)
     tiles: [CELLS]u8
     objects: [CELLS]u8
-    for at: 0..CELLS - 1 { objects[at] = 0 }
     for y: 0..ROWS - 1 {
-        for x: 0..COLUMNS - 1 { tiles[y * COLUMNS + x] = OriginalTile(level, cast(s32)x, cast(s32)y) }
+        for x: 0..COLUMNS - 1 {
+            tiles[y * COLUMNS + x] = BaseTile(level, cast(s32)x, cast(s32)y)
+            objects[y * COLUMNS + x] = BaseObject(level, cast(s32)x, cast(s32)y)
+        }
     }
-    LoadLevelData(game, level, now, tiles[:], OriginalApples[level], COLUMNS, ROWS, objects[:])
+    LoadLevelData(game, level, now, tiles[:], BaseApples(level), COLUMNS, ROWS, objects[:])
 }
 StartGameData :: (game: *Game, level: s32, now: s64, seed: u32, board: []u8, apples: s32, columns: s32, rows: s32, objects: []u8) {
     game.random = seed
