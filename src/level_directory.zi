@@ -1,0 +1,51 @@
+// Android edits belong to private files; the APK assets are read-only.
+#if #defined(ANDROID_BUILD) {
+    #import "kryon/android_jni"
+    Assets :: #import "kryon/app_asset";
+    #import "std/text_buffer"
+    #import "std/number_text"
+    directory: [4096]u8;
+    private_directory: [4096]u8;
+    asset_path: [96]u8;
+
+    ReadBundledLevel :: (level: s32, output: []u8) -> s64 {
+        digits: [16]u8
+        parts: [3]string = .["assets/levels/level", FormatInteger(cast(s64)(level + 1), digits[:]), ".dat"]
+        at: s64 = 0
+        for part: parts {
+            for byte: part {
+                asset_path[at] = byte
+                at += 1
+            }
+        }
+        asset_path[at] = 0
+        data := Assets.ReadAppAsset(TextUntilNul(asset_path[:]))
+        defer Assets.FreeAppAsset(data)
+        if data.count == 0 || data.count > output.count { return -1 }
+        for index: 0..data.count - 1 { output[index] = data[index] }
+        return data.count
+    }
+
+    LevelDirectory :: () -> string {
+        private := AndroidPrivateDataPath(private_directory[:])
+        if private.count == 0 || private.count + 8 >= directory.count { return "" }
+        at: s64 = 0
+        for byte: private {
+            directory[at] = byte
+            at += 1
+        }
+        for byte: "/levels/" {
+            directory[at] = byte
+            at += 1
+        }
+        directory[at] = 0
+        return TextUntilNul(directory[:])
+    }
+} else {
+    LevelDirectory :: () -> string { return "assets/levels/" }
+    ReadBundledLevel :: (level: s32, output: []u8) -> s64 {
+        unused level
+        unused output
+        return -1
+    }
+}

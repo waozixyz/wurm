@@ -1,0 +1,87 @@
+// The mixer submits 1024 mono 16-bit samples at 22050 Hz on both hosts.
+#if #defined(ANDROID_BUILD) {
+    raylib :: #system_library "raylib";
+    AudioStream :: struct {
+        buffer: *void
+        processor: *void
+        sample_rate: u32
+        sample_size: u32
+        channels: u32
+    }
+    InitAudio :: () #foreign raylib "InitAudioDevice";
+    AudioReady :: () -> bool #foreign raylib "IsAudioDeviceReady";
+    BufferSize :: (frames: s32) #foreign raylib "SetAudioStreamBufferSizeDefault";
+    LoadStream :: (rate: u32, bits: u32, channels: u32) -> AudioStream #foreign raylib "LoadAudioStream";
+    StreamValid :: (stream: AudioStream) -> bool #foreign raylib "IsAudioStreamValid";
+    PlayStream :: (stream: AudioStream) #foreign raylib "PlayAudioStream";
+    StopStream :: (stream: AudioStream) #foreign raylib "StopAudioStream";
+    StreamProcessed :: (stream: AudioStream) -> bool #foreign raylib "IsAudioStreamProcessed";
+    UpdateStream :: (stream: AudioStream, data: *void, frames: s32) #foreign raylib "UpdateAudioStream";
+    stream: AudioStream;
+
+    Available :: () -> bool { return true }
+
+    Open :: () -> u32 {
+        if !AudioReady() { InitAudio() }
+        if !AudioReady() { return 0 }
+        BufferSize(1024)
+        stream = LoadStream(22050, 16, 1)
+        if !StreamValid(stream) { return 0 }
+        PlayStream(stream)
+        return 1
+    }
+
+    Ready :: (device: u32) -> bool {
+        return device != 0 && StreamProcessed(stream)
+    }
+
+    Submit :: (device: u32, samples: []s16) -> bool {
+        if device == 0 || samples.count != 1024 { return false }
+        UpdateStream(stream, cast(*void)*samples[0], 1024)
+        return true
+    }
+
+    Clear :: (device: u32) {
+        if device == 0 { return }
+        StopStream(stream)
+        PlayStream(stream)
+    }
+} else {
+    sdl :: #system_library "SDL2";
+    AudioInit :: (flags: u32) -> s32 #foreign sdl "SDL_InitSubSystem";
+    VideoDriver :: () -> *u8 #foreign sdl "SDL_GetCurrentVideoDriver";
+    AudioOpenDevice :: (name: *u8, capture: s32, desired: *AudioSpec, obtained: *AudioSpec, changes: s32) -> u32 #foreign sdl "SDL_OpenAudioDevice";
+    AudioPauseDevice :: (device: u32, pause: s32) #foreign sdl "SDL_PauseAudioDevice";
+    AudioQueue :: (device: u32, data: *u8, count: u32) -> s32 #foreign sdl "SDL_QueueAudio";
+    AudioQueued :: (device: u32) -> u32 #foreign sdl "SDL_GetQueuedAudioSize";
+    AudioClear :: (device: u32) #foreign sdl "SDL_ClearQueuedAudio";
+    AudioSpec :: struct {
+        rate: s32
+        format: u16
+        channels: u8
+        silence: u8
+        samples: u16
+        padding: u16
+        size: u32
+        callback: *void
+        userdata: *void
+    }
+
+    Available :: () -> bool { return VideoDriver() != null }
+
+    Open :: () -> u32 {
+        if AudioInit(16) != 0 { return 0 }
+        spec := AudioSpec.{.rate = 22050, .format = 32784, .channels = 1, .samples = 1024}
+        device := AudioOpenDevice(null, 0, *spec, null, 0)
+        if device != 0 { AudioPauseDevice(device, 0) }
+        return device
+    }
+
+    Ready :: (device: u32) -> bool { return device != 0 && AudioQueued(device) < 4096 }
+
+    Submit :: (device: u32, samples: []s16) -> bool {
+        return AudioQueue(device, cast(*u8)*samples[0], cast(u32)(samples.count * 2)) == 0
+    }
+
+    Clear :: (device: u32) { AudioClear(device) }
+}
