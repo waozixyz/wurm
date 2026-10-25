@@ -80,9 +80,11 @@ Overlay :: (session: Session, stage: Rectangle, title: string, message: string) 
 Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source: Rectangle,
     sheet: string) {
     scale := stage.width / 640.0
-    bounds := Rectangle.{stage.x + cast(float32)(position.x - 8) * scale,
-        stage.y + cast(float32)(position.y - 8) * scale, 16.0 * scale, 16.0 * scale}
-    if bounds.y < stage.y || bounds.y + bounds.height > stage.y + stage.height { return }
+    left := Snap(stage.x + cast(float32)(position.x - 8) * scale)
+    top := Snap(stage.y + cast(float32)(position.y - 8) * scale)
+    bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(position.x + 8) * scale) - left,
+        Snap(stage.y + cast(float32)(position.y + 8) * scale) - top}
+    if bounds.y < Snap(stage.y) || bounds.y + bounds.height > Snap(stage.y + stage.height) { return }
     Picture(session, key, sheet, bounds, source)
 }
 
