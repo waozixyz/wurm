@@ -36,7 +36,8 @@ def main():
                     '-o', str(code), *map(str, ir.glob('*.zir'))], cwd=ROOT, env=env, check=True)
     art = OUT / 'assets/art'
     shutil.copytree(ROOT / 'assets/art', art, dirs_exist_ok=True, ignore=shutil.ignore_patterns('*.argb'))
-    emcc = env.get('EMCC', str(Path.home() / 'emsdk/upstream/emscripten/emcc'))
+    emcc = (env.get('EMCC') or shutil.which('emcc', path=env.get('PATH'))
+            or str(Path.home() / 'emsdk/upstream/emscripten/emcc'))
     subprocess.run([emcc, '-O2', '-Wno-parentheses-equality', '-I' + str(compiler / 'include'),
                     '-iquote', str(code), *map(str, code.glob('*.c')),
                     '--js-library', str(compiler / 'web/ziran_web.js'),
