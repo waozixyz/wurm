@@ -65,6 +65,14 @@ main :: () -> s32 {
         App.game.started = true
         App.OpenStages()
     }
+    unused CopyCString("WORM_SHOT_EDITOR", name[:])
+    if GetEnvironment(*name[0]) != null {
+        // WORM_SHOT_LEVEL picks which level the editor frame shows; the
+        // started flag keeps Frame's first-run OpenStages from overriding it.
+        App.game.started = true
+        if level != null { App.OpenEditor(ParseNumber(level) - 1) }
+        else { App.OpenEditor(0) }
+    }
     session := SessionOpen()
     if !SessionValid(session) { return 2 }
     defer { PixmapCloseWorkers(); CloseSession(session) }

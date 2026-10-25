@@ -5,6 +5,7 @@ Timer :: #import "std/timer_linux";
 #import "std/number_text"
 #import, file "game.zi";
 #import, file "original_levels.zi";
+Custom :: #import, file "custom_levels.zi";
 Audio :: #import, file "audio.zi";
 
 game: Game;
@@ -21,6 +22,24 @@ stage_levels: [STAGE_COUNT]s32;
 // Only Garden is open for now. Space and Factory keep their levels and art,
 // and come back by raising this.
 OPEN_STAGES :: 1;
+
+// The level editor paints one level's raw tiles and apple count, and saves
+// them as an override beside the recovered originals (custom_levels.zi).
+EDITOR_PANEL_WIDTH :: 248.0;
+EditorState :: struct {
+    level: s32
+    board: [CELLS]u8
+    apples: s32
+    brush: s32
+    dirty: bool
+    save_failed: bool
+    reset_armed: bool
+    palette_scroll: s32
+    playtest: bool
+}
+editor: EditorState;
+editor_digits: [21]u8;
+brush_digits: [21]u8;
 
 Wrap :: (page: s32) -> s32 { return ((page % OPEN_STAGES) + OPEN_STAGES) % OPEN_STAGES }
 
@@ -182,7 +201,7 @@ DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
             x := cast(s32)column
             y := cast(s32)row
             entrance := y == 29 && x == 20
-            tile := cast(s32)(OriginalTile(level, x, ifx entrance then 28 else y) & 127)
+            tile := cast(s32)(Custom.EffectiveTile(level, x, ifx entrance then 28 else y) & 127)
             kind := tile - 39
             if kind >= 1 && kind <= 6 { tile = 0 }
             if y == 29 && (x == 19 || x == 21) { tile = 21 }
@@ -229,6 +248,258 @@ OpenStages :: () {
     pager.position = cast(float32)stage
 }
 
+// Levels play from the effective source: the owner's saved override when one
+// exists, otherwise the recovered original.
+StartLevel :: (level: s32, now: s64, seed: u32) {
+    board: [CELLS]u8
+    Custom.EnsureLoaded()
+    Custom.EffectiveBoard(level, board[:])
+    StartGameData(*game, level, now, seed, board[:], Custom.EffectiveApples(level))
+}
+ReloadLevel :: (level: s32, now: s64) {
+    board: [CELLS]u8
+    Custom.EnsureLoaded()
+    Custom.EffectiveBoard(level, board[:])
+    LoadLevelData(*game, level, now, board[:], Custom.EffectiveApples(level))
+}
+
+// Leaving a paused or finished playtest returns to the editor; a normal game
+// returns to the stages.
+LeavePlay :: () {
+    if editor.playtest { OpenEditor(editor.level) }
+    else { OpenStages() }
+}
+
+OpenEditor :: (level: s32) {
+    if level < 0 { level = 0 }
+    if level >= LEVEL_COUNT { level = LEVEL_COUNT - 1 }
+    if game.mode != MODE_EDITOR || editor.level != level {
+        Custom.EnsureLoaded()
+        Custom.EffectiveBoard(level, editor.board[:])
+        editor.apples = Custom.EffectiveApples(level)
+        editor.dirty = false
+    }
+    editor.level = level
+    editor.reset_armed = false
+    editor.save_failed = false
+    game.mode = MODE_EDITOR
+}
+
+EditorSave :: () {
+    if !editor.dirty { return }
+    if Custom.SaveCustomLevel(editor.level, editor.board[:], editor.apples) {
+        editor.dirty = false
+        editor.save_failed = false
+    } else { editor.save_failed = true }
+}
+
+// Deleting the override restores the recovered original in the working copy.
+EditorReset :: () {
+    unused Custom.ClearCustomLevel(editor.level)
+    Custom.EffectiveBoard(editor.level, editor.board[:])
+    editor.apples = Custom.EffectiveApples(editor.level)
+    editor.dirty = false
+    editor.reset_armed = false
+}
+
+// R throws the working copy away and takes the saved level back in.
+EditorReloadSaved :: () {
+    Custom.EffectiveBoard(editor.level, editor.board[:])
+    editor.apples = Custom.EffectiveApples(editor.level)
+    editor.dirty = false
+}
+
+EditorExit :: () {
+    EditorSave()
+    editor.playtest = false
+    OpenStages()
+}
+
+EditorPlaytest :: (now: s64) {
+    EditorSave()
+    editor.playtest = true
+    StartLevel(editor.level, now, cast(u32)(now & 4294967295))
+}
+
+EditorSwitch :: (delta: s32) {
+    EditorSave()
+    within := editor.level % STAGE_LEVELS + delta
+    if within < 0 { within = STAGE_LEVELS - 1 }
+    if within >= STAGE_LEVELS { within = 0 }
+    OpenEditor(StageOf(editor.level) * STAGE_LEVELS + within)
+}
+
+EditorSetApples :: (delta: s32) {
+    editor.apples += delta
+    if editor.apples < 1 { editor.apples = 1 }
+    if editor.apples > 12 { editor.apples = 12 }
+    editor.dirty = true
+}
+
+// One titled run of palette swatches. Returns the content cursor below it.
+DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32, label: string,
+                    first: s32, count: s32, tiles: string,
+                    pointer_x: float32, pointer_y: float32, pointer_pressed: bool) -> s32 {
+    TextLine(session, key, label, Rectangle.{content.x, content.y + cast(float32)cursor, content.width, 22.0}, 13)
+    for index: 0..count - 1 {
+        column := index % 6
+        row := index / 6
+        bounds := Rectangle.{content.x + cast(float32)(column * 38),
+            content.y + cast(float32)(cursor + 26 + row * 38), 34.0, 34.0}
+        value := first + index
+        if pointer_pressed && Input.PointInBounds(pointer_x, pointer_y, bounds) { editor.brush = value }
+        selected := editor.brush == value
+        unused Box(session, BoxProps.{.key = key + 10 + cast(u64)index, .bounds = bounds,
+            .fill = ifx selected then Color.{46, 125, 74, 235} else Color.{255, 255, 255, 30}, .radius = 6.0})
+        Picture(session, key + 80 + cast(u64)index, tiles, Rectangle.{bounds.x + 1.0, bounds.y + 1.0, 32.0, 32.0},
+            Rectangle.{cast(float32)(value % 20) * 16.0, cast(float32)(value / 20) * 16.0, 16.0, 16.0})
+    }
+    rows := (count + 5) / 6
+    return cursor + 26 + rows * 38 + 10
+}
+
+// The editor screen: the level as raw tiles on the left, brush palette and
+// actions on the right. The held left button paints, the right button
+// restores the recovered original tile under it.
+DrawEditor :: (session: Session, area: Rectangle, now: s64) {
+    stage_of_level := StageOf(editor.level)
+    tiles := Sheet(stage_of_level)
+    panel := Rectangle.{area.x + area.width - EDITOR_PANEL_WIDTH, area.y, EDITOR_PANEL_WIDTH, area.height}
+    canvas := Rectangle.{area.x, area.y, area.width - EDITOR_PANEL_WIDTH, area.height}
+    stage := BoardIn(canvas)
+
+    pointer := PointerSample(session)
+    secondary := SecondaryPointerSample(session)
+    scale := stage.width / 640.0
+    if (pointer.down || secondary.down) && Input.PointInBounds(pointer.x, pointer.y, stage) {
+        cell_x := cast(s32)((pointer.x - stage.x) / (16.0 * scale))
+        cell_y := cast(s32)((pointer.y - stage.y) / (16.0 * scale))
+        if Inside(cell_x, cell_y) {
+            at := Index(cell_x, cell_y)
+            if pointer.down && editor.board[at] != cast(u8)editor.brush {
+                editor.board[at] = cast(u8)editor.brush
+                editor.dirty = true
+            }
+            if secondary.down {
+                original := OriginalTile(editor.level, cell_x, cell_y)
+                if editor.board[at] != original {
+                    editor.board[at] = original
+                    editor.dirty = true
+                }
+            }
+        }
+    }
+
+    for y: 0..ROWS - 1 {
+        for x: 0..COLUMNS - 1 {
+            at := Index(x, y)
+            raw := cast(s32)editor.board[at]
+            kind := (raw & 127) - 39
+            tile := raw & 127
+            if kind >= 1 && kind <= 6 { tile = 0 }
+            Tile(session, 5000 + cast(u64)at, stage, cast(s32)x, cast(s32)y, tile, tiles)
+            if kind >= 1 && kind <= 6 {
+                Sprite(session, 6200 + cast(u64)at, stage, Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8},
+                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, tiles)
+            }
+        }
+    }
+    // The fixed entrance and exit the game carves at runtime, marked so a
+    // level is never drawn without its way in and out. These keys sit below
+    // the canvas tile range, which starts at 5000.
+    unused Box(session, BoxProps.{.key = 4998, .bounds = Rectangle.{stage.x + 304.0 * scale,
+        stage.y + 464.0 * scale, 48.0 * scale, 16.0 * scale}, .fill = Color.{90, 220, 120, 70}})
+    unused Box(session, BoxProps.{.key = 4999, .bounds = Rectangle.{stage.x + 304.0 * scale,
+        stage.y, 48.0 * scale, 16.0 * scale}, .fill = Color.{240, 90, 90, 70}})
+    if !pointer.down && !secondary.down && Input.PointInBounds(pointer.x, pointer.y, stage) {
+        hover_x := cast(s32)((pointer.x - stage.x) / (16.0 * scale))
+        hover_y := cast(s32)((pointer.y - stage.y) / (16.0 * scale))
+        if Inside(hover_x, hover_y) {
+            left := Snap(stage.x + cast(float32)hover_x * 16.0 * scale)
+            top := Snap(stage.y + cast(float32)hover_y * 16.0 * scale)
+            unused Box(session, BoxProps.{.key = 4997,
+                .bounds = Rectangle.{left, top, Snap(stage.x + cast(float32)(hover_x + 1) * 16.0 * scale) - left,
+                    Snap(stage.y + cast(float32)(hover_y + 1) * 16.0 * scale) - top},
+                .fill = Color.{255, 255, 255, 60}})
+        }
+    }
+
+    unused Box(session, BoxProps.{.key = 8200, .bounds = panel, .fill = Color.{24, 28, 36, 235}})
+    level_text := FormatInteger(cast(s64)(editor.level % STAGE_LEVELS + 1), editor_digits[:])
+    TextLine(session, 8202, "LEVEL", Rectangle.{panel.x + 8.0, panel.y + 8.0, 50.0, 20.0}, 14)
+    TextLine(session, 8203, level_text, Rectangle.{panel.x + 60.0, panel.y + 8.0, 30.0, 20.0}, 14)
+    TextLine(session, 8204, StageName(stage_of_level), Rectangle.{panel.x + 110.0, panel.y + 8.0, 90.0, 20.0}, 14)
+    if editor.dirty {
+        TextLine(session, 8205, "unsaved", Rectangle.{panel.x + 170.0, panel.y + 8.0, 70.0, 20.0}, 13)
+    } else if editor.save_failed {
+        unused Box(session, BoxProps.{.key = 8206, .bounds = Rectangle.{panel.x + 168.0, panel.y + 6.0, 74.0, 22.0},
+            .fill = Color.{170, 40, 40, 235}, .radius = 6.0})
+        TextLine(session, 8207, "SAVE FAILED", Rectangle.{panel.x + 170.0, panel.y + 8.0, 72.0, 18.0}, 12)
+    }
+    unused Box(session, BoxProps.{.key = 8208, .bounds = Rectangle.{panel.x + 8.0, panel.y + 34.0, 40.0, 40.0},
+        .fill = Color.{255, 255, 255, 30}, .radius = 8.0})
+    Picture(session, 8209, tiles, Rectangle.{panel.x + 9.0, panel.y + 35.0, 38.0, 38.0},
+        Rectangle.{cast(float32)(editor.brush % 20) * 16.0, cast(float32)(editor.brush / 20) * 16.0, 16.0, 16.0})
+    TextLine(session, 8210, "BRUSH", Rectangle.{panel.x + 56.0, panel.y + 34.0, 70.0, 18.0}, 13)
+    brush_text := FormatInteger(cast(s64)editor.brush, brush_digits[:])
+    TextLine(session, 8211, brush_text, Rectangle.{panel.x + 56.0, panel.y + 54.0, 40.0, 18.0}, 13)
+    blocked := LevelBlockages(editor.board[:])
+    if blocked != 0 {
+        note := "entrance blocked"
+        if blocked == 2 { note = "exit blocked" }
+        else if blocked == 3 { note = "entry and exit blocked" }
+        unused Box(session, BoxProps.{.key = 8212, .bounds = Rectangle.{panel.x + 8.0, panel.y + 80.0, 232.0, 20.0},
+            .fill = Color.{170, 40, 40, 235}, .radius = 6.0})
+        TextLine(session, 8213, note, Rectangle.{panel.x + 14.0, panel.y + 82.0, 220.0, 16.0}, 12)
+    }
+
+    inner := Rectangle.{panel.x + 8.0, panel.y + 104.0, panel.width - 16.0, panel.height - 254.0}
+    palette := Scroll(session, ScrollProps.{.key = 8214, .bounds = inner, .content_height = 530,
+        .scroll_offset = editor.palette_scroll})
+    editor.palette_scroll = palette.scroll_offset
+    if palette.opened {
+        cursor := DrawPalettePart(session, 8300, palette.content, 6, "FLOOR", 0, 19, tiles,
+            pointer.x, pointer.y, pointer.pressed)
+        cursor = DrawPalettePart(session, 8400, palette.content, cursor, "WALL", 20, 17, tiles,
+            pointer.x, pointer.y, pointer.pressed)
+        cursor = DrawPalettePart(session, 8500, palette.content, cursor, "FALSE WALL", 128, 12, tiles,
+            pointer.x, pointer.y, pointer.pressed)
+        unused DrawPalettePart(session, 8600, palette.content, cursor, "MONSTERS", 40, 6, tiles,
+            pointer.x, pointer.y, pointer.pressed)
+        unused End(session)
+    }
+
+    bottom := panel.y + panel.height - 142.0
+    TextLine(session, 8215, "APPLES", Rectangle.{panel.x + 8.0, bottom + 8.0, 64.0, 20.0}, 14)
+    if Button(session, ButtonProps.{.key = 8216, .bounds = Rectangle.{panel.x + 76.0, bottom, 36.0, 32.0},
+            .label = "Fewer apples", .icon_shape = "S2rr:M5 12L19 12", .icon_only = true,
+            .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
+        EditorSetApples(-1)
+    }
+    apple_text := FormatInteger(cast(s64)editor.apples, apple_digits[:])
+    TextLine(session, 8217, apple_text, Rectangle.{panel.x + 120.0, bottom + 8.0, 28.0, 20.0}, 14)
+    if Button(session, ButtonProps.{.key = 8218, .bounds = Rectangle.{panel.x + 152.0, bottom, 36.0, 32.0},
+            .label = "More apples", .icon_shape = "S2rr:M12 5L12 19", .icon_only = true,
+            .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
+        EditorSetApples(1)
+    }
+    if Button(session, ButtonProps.{.key = 8219, .bounds = Rectangle.{panel.x + 8.0, bottom + 40.0, 110.0, 40.0},
+            .label = "Save", .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorSave() }
+    reset_label := ifx editor.reset_armed then "Sure?" else "Reset"
+    if Button(session, ButtonProps.{.key = 8220, .bounds = Rectangle.{panel.x + 130.0, bottom + 40.0, 110.0, 40.0},
+            .label = reset_label, .tone = ButtonTone.ButtonToneNeutral,
+            .emphasis = ifx editor.reset_armed then ButtonEmphasis.ButtonEmphasisFilled
+                else ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
+        if editor.reset_armed { EditorReset() }
+        else { editor.reset_armed = true }
+    }
+    if Button(session, ButtonProps.{.key = 8221, .bounds = Rectangle.{panel.x + 8.0, bottom + 88.0, 110.0, 40.0},
+            .label = "Playtest", .tone = ButtonTone.ButtonToneSuccess,
+            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { EditorPlaytest(now) }
+    if Button(session, ButtonProps.{.key = 8222, .bounds = Rectangle.{panel.x + 130.0, bottom + 88.0, 110.0, 40.0},
+            .label = "Stages", .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorExit() }
+}
+
 // Swipes, drags, arrows and the side buttons page between open stages;
 // Up/Down and the level buttons choose a level. Returns true to start that level.
 DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> bool {
@@ -243,6 +514,11 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
     if paging && (gesture.swiped == 2 || key == 263 || key == 65 || key == 97) { delta = -1 }
     stage := Wrap(pager.selected)
     level := stage_levels[stage]
+    // E opens the editor for the chosen level.
+    if key == 69 || key == 101 {
+        OpenEditor(stage * STAGE_LEVELS + level)
+        return false
+    }
     if key == 264 || key == 83 || key == 115 { level += 1 }
     else if key == 265 || key == 87 || key == 119 { level -= 1 }
     else if key == 268 { level = 0 }
@@ -307,6 +583,12 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
     if Button(session, ButtonProps.{.key = 808, .bounds = Rectangle.{centre - 96.0, row, 192.0, 52.0},
             .label = "Play level", .detail = play_text, .tone = ButtonTone.ButtonToneSuccess,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { start = true }
+    if Button(session, ButtonProps.{.key = 809, .bounds = Rectangle.{area.x + area.width - 66.0, area.y + 18.0, 52.0, 52.0},
+            .label = "Edit level", .icon_shape = "S2rr:M4 20L4 16L16 4L20 8L8 20L4 20", .icon_only = true,
+            .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
+        OpenEditor(stage * STAGE_LEVELS + stage_levels[stage])
+        return false
+    }
     for page: cast(s32)0..OPEN_STAGES - 1 {
         if !paging { break }
         unused Box(session, BoxProps.{.key = 810 + cast(u64)page,
@@ -319,19 +601,27 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
 HandleInput :: (key: s32, now: s64) {
     if key == 77 || key == 109 { Audio.ToggleMute(); return }
     if game.mode == MODE_PLAYING {
-        if key == 82 || key == 114 { LoadLevel(*game, game.level, now) }
+        if key == 82 || key == 114 { ReloadLevel(game.level, now) }
         else { unused ApplyInput(*game, key) }
     } else if game.mode == MODE_PAUSED {
         unused ApplyInput(*game, key)
         if game.mode == MODE_PLAYING { game.next_step = now + TICK_MS }
-        if game.mode == MODE_STAGES { OpenStages() }
+        if game.mode == MODE_STAGES { LeavePlay() }
     } else if game.mode == MODE_FINISHED {
-        LoadLevel(*game, game.level + 1, now)
+        ReloadLevel(game.level + 1, now)
     } else if game.mode == MODE_DIED {
-        if key == Input.KeyEnter || key == 32 { StartGame(*game, game.level, now) }
-        else if key == Input.KeyEscape { OpenStages() }
+        if key == Input.KeyEnter || key == 32 { StartLevel(game.level, now, 1) }
+        else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_VICTORY {
-        if key == Input.KeyEnter || key == 32 || key == Input.KeyEscape { OpenStages() }
+        if key == Input.KeyEnter || key == 32 || key == Input.KeyEscape { LeavePlay() }
+    } else if game.mode == MODE_EDITOR {
+        if key == Input.KeyEscape || key == 69 || key == 101 { EditorExit() }
+        else if key == 265 || key == 87 || key == 119 { EditorSwitch(-1) }
+        else if key == 264 || key == 83 || key == 115 { EditorSwitch(1) }
+        else if key == Input.KeyEnter || key == 32 { EditorPlaytest(now) }
+        else if key == 82 || key == 114 { EditorReloadSaved() }
+        else if key == 45 || key == 95 { EditorSetApples(-1) }
+        else if key == 61 || key == 43 { EditorSetApples(1) }
     }
 }
 
@@ -358,20 +648,27 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, available_height}
         if DrawStages(session, area, stage_key, cast(float64)now / 1000.0) {
             chosen := Wrap(pager.selected)
-            StartGame(*game, chosen * STAGE_LEVELS + stage_levels[chosen], now, cast(u32)(now & 4294967295))
+            StartLevel(chosen * STAGE_LEVELS + stage_levels[chosen], now, cast(u32)(now & 4294967295))
         }
+    } else if game.mode == MODE_EDITOR {
+        area := Rectangle.{viewport.x, viewport.y, viewport.width, available_height}
+        DrawEditor(session, area, now)
     } else { DrawBoard(session, stage) }
     hud := Rectangle.{viewport.x, viewport.y + viewport.height - 42.0, viewport.width, 42.0}
     unused Box(session, BoxProps.{.key = 10, .bounds = hud, .fill = Color.{229, 226, 214, 255}})
     level_number := game.level % STAGE_LEVELS
     if game.mode == MODE_STAGES { level_number = stage_levels[Wrap(pager.selected)] }
+    else if game.mode == MODE_EDITOR { level_number = editor.level % STAGE_LEVELS }
     level_text := FormatInteger(cast(s64)(level_number + 1), level_digits[:])
     TextLine(session, 11, "LEVEL", Rectangle.{hud.x + 10.0, hud.y + 11.0, 44.0, 20.0}, 14)
     TextLine(session, 12, level_text, Rectangle.{hud.x + 57.0, hud.y + 11.0, 30.0, 20.0}, 14)
     if game.mode == MODE_STAGES {
-        TextLine(session, 13, ifx OPEN_STAGES > 1 then "/ 33   Left/Right or swipe: stage   Up/Down: level   Enter plays"
-            else "/ 33   Up/Down: level   Enter plays",
-            Rectangle.{hud.x + 85.0, hud.y + 11.0, 600.0, 22.0}, 14)
+        TextLine(session, 13, ifx OPEN_STAGES > 1 then "/ 33   Left/Right or swipe: stage   Up/Down: level   Enter plays   E edits"
+            else "/ 33   Up/Down: level   Enter plays   E edits",
+            Rectangle.{hud.x + 85.0, hud.y + 11.0, 640.0, 22.0}, 14)
+    } else if game.mode == MODE_EDITOR {
+        TextLine(session, 13, "/ 33   Left-drag paints   Right restores   Up/Down: level   Enter playtests   E returns",
+            Rectangle.{hud.x + 85.0, hud.y + 11.0, 700.0, 22.0}, 14)
     } else {
         score_text := FormatInteger(cast(s64)game.score, score_digits[:])
         apple_text := FormatInteger(cast(s64)game.apples, apple_digits[:])

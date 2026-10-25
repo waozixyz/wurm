@@ -30,7 +30,10 @@ def main():
                  "SESSION_MANAGER", "DESKTOP_AUTOSTART_ID"):
         env.pop(name, None)
     env.update(YUE_DESKTOP_RECOVERY="0", SDL_RENDER_DRIVER="software",
-               SDL_FRAMEBUFFER_ACCELERATION="0", SDL_AUDIODRIVER="dummy", LP_NUM_THREADS="1", ZIRAN_PAR_THREADS="1")
+               SDL_FRAMEBUFFER_ACCELERATION="0", SDL_AUDIODRIVER="dummy", LP_NUM_THREADS="1", ZIRAN_PAR_THREADS="1",
+               # The editor writes level overrides into this private directory,
+               # never into the repository's assets.
+               WURM_LEVEL_DIR=str(ROOT / "build/research/ui/levels"))
     read_fd, write_fd = os.pipe()
     server = app = None
     try:
@@ -77,6 +80,13 @@ def main():
                                env=env, check=True)
                 time.sleep(0.12)
 
+        def pointer(x, y):
+            # Window-relative move, then a click at the rested position.
+            subprocess.run(["xdotool", "mousemove", "--window", window, "--sync", str(x), str(y)],
+                           env=env, check=True)
+            subprocess.run(["xdotool", "click", "1"], env=env, check=True)
+            time.sleep(0.15)
+
         def capture(name):
             # Recheck the actual server before any pixel capture; never inherit a desktop.
             if server.poll() is not None or Path(f"/proc/{server.pid}/exe").resolve() != executable:
@@ -97,8 +107,34 @@ def main():
             key("space")
             time.sleep(0.15)
             capture(f"level-{level:02}")
+
+        # The editor: E opens it for the chosen level, the pointer picks the
+        # first floor swatch and paints it over the top-left wall, and Save
+        # writes the override. Pointer targets mirror the layout in app.zi:
+        # a 960x600 window with a 42px bottom HUD, a 248px right panel whose
+        # palette starts at y 136 in 38px columns, and the board scaled to
+        # 712x534 at (0, 12), so cell (0, 0) centres near (9, 21).
+        key("q")
+        key("e")
+        time.sleep(0.4)
+        capture("editor-open")
+        pointer(737, 153)  # first FLOOR swatch: brush 0
+        pointer(9, 21)     # canvas cell (0, 0), a wall in every level
+        time.sleep(0.2)
+        capture("editor-painted")
+        pointer(775, 476)  # Save
+        time.sleep(0.3)
+        edited = ROOT / "build/research/ui/levels/level33.dat"
+        original = (ROOT / "assets/original/level33.dat").read_bytes()
+        painted = edited.read_bytes()
+        assert len(painted) == 1201, f"override size {len(painted)}"
+        assert painted[0] == original[0], "apple count unchanged"
+        assert painted[1] == 0 and original[1] == 20, "cell (0, 0) painted from wall to floor"
+        key("e")
+        time.sleep(0.3)
+        capture("editor-exit")
         (OUT / "receipt.json").write_text(json.dumps(evidence, indent=2) + "\n")
-        print("Private UI local test rendered the Garden stage and levels 1, 11, 33.")
+        print("Private UI local test rendered the Garden stage, levels 1, 11, 33 and an edited override.")
     finally:
         os.close(read_fd)
         stop(app)

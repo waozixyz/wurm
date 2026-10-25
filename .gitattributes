@@ -3,3 +3,5 @@ assets/original/** -text
 *.zi text eol=lf
 *.py text eol=lf
 *.sh text eol=lf
+# Edited level overrides keep the same binary layout.
+assets/levels/** -text

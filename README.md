@@ -18,8 +18,8 @@ opening at the top center. An extra life is awarded every 33 points.
 
 ## Controls
 
-- The game opens on the Garden stage (33 levels, playing the Worm). Space and
-  Factory are switched off for now (`OPEN_STAGES` in `src/app.zi`); when open,
+- The game opens on the Garden stage (33 levels, playing the Worm). Space
+  and Factory are switched off for now (`OPEN_STAGES` in `src/app.zi`); when open,
   Left/Right, A/D, a swipe or the side buttons change stage
 - Up/Down or the - and + buttons choose a level; Home/End pick the first/last
 - Enter or Space: start or retry
@@ -28,6 +28,25 @@ opening at the top center. An extra life is awarded every 33 points.
 - Q while paused: back to the stages
 - R: restart the current level
 - M: mute and unmute
+
+## Level editor
+
+E on the stages screen (or its pencil button) opens the editor for the chosen
+level. The held left button paints the selected brush across the canvas, the
+right button restores the recovered original tile, and the palette offers the
+stage's floors, walls, false walls and the six monster kinds. The apple goal
+is set with the - and + buttons or keys. Up/Down switches levels (saving
+first), Enter playtests from the entrance, and E returns to the stages.
+Saving is automatic on switch, exit and playtest, plus the Save button; Reset
+(deleting the override) restores the recovered original level.
+
+Edits live in `assets/levels/level<N>.dat`, one file per edited level in the
+original archive layout (apple count, then the 40x30 tiles in column order).
+A level without a file plays its recovered original, so removing a file
+restores it. The entrance (bottom centre, green marker) and exit (top centre,
+red marker) are carved at runtime from the tiles above and below the edges;
+the editor warns when a level could not be entered or left. `WURM_LEVEL_DIR`
+redirects where overrides are read and written.
 
 ## Build
 

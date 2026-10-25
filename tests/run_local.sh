@@ -9,6 +9,8 @@ python3 tests/recovery_test.py "${1:-/mnt/storage/Games/The-Worm_Win_EN}"
 ziran check --locked
 ziran build --locked --project --root tests --target=c --entry game_test:main --exe -o build/game-test tests/game_test.zi
 build/game-test/game_test
+ziran build --locked --project --root tests --target=c --entry editor_test:main --exe -o build/editor-test tests/editor_test.zi
+build/editor-test/editor_test
 ziran build --locked --project --root tests --target=c --entry level_probe:main --exe -o build/level-probe tests/level_probe.zi
 build/level-probe/level_probe > build/research/native-levels.txt
 python3 - <<'PY'
@@ -27,15 +29,16 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/audio-test/audio_test
 ziran run --locked shot > build/research/remake-start.ppm
 WORM_SHOT_LEVEL=99 ziran run --locked shot > build/research/remake-level-99.ppm
 WORM_SHOT_LEVEL=20 WORM_SHOT_STAGES=1 ziran run --locked shot > build/research/remake-stages.ppm
+WORM_SHOT_EDITOR=1 ziran run --locked shot > build/research/remake-editor.ppm
 python3 - <<'PY'
 from pathlib import Path
 from PIL import Image
-for name in ('remake-start', 'remake-level-99', 'remake-stages'):
+for name in ('remake-start', 'remake-level-99', 'remake-stages', 'remake-editor'):
     picture = Image.open(Path('build/research') / (name + '.ppm')).convert('RGB')
     assert picture.size == (960, 600)
     assert len(picture.getcolors(960 * 600)) > 100
     picture.save(Path('build/research') / (name + '.png'))
-print('Headless local tests: opening stages, final level and Garden page at level 20 rendered with the new art.')
+print('Headless local tests: opening stages, final level, Garden page at level 20 and the editor rendered with the new art.')
 PY
 ziran build --locked desktop
 printf '%s\n' 'Apfelwurm local tests passed; GitHub CI is separate.'

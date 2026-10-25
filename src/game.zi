@@ -21,6 +21,7 @@ MODE_PAUSED :: 2;
 MODE_DIED :: 3;
 MODE_FINISHED :: 4;
 MODE_VICTORY :: 5;
+MODE_EDITOR :: 6;
 
 Point :: struct { x: s32; y: s32; }
 Monster :: struct { position: Point; kind: s32; direction: s32; }
@@ -122,12 +123,12 @@ Respawn :: (game: *Game) {
     game.worm[0] = Point.{328, 496}
     OpenEntrance(game)
 }
-LoadLevel :: (game: *Game, level: s32, now: s64) {
+LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32) {
     if level < 0 { level = 0 }
     if level >= LEVEL_COUNT { level = LEVEL_COUNT - 1 }
     game.mode = MODE_PLAYING
     game.level = level
-    game.apples = OriginalApples[level]
+    game.apples = apples
     game.monster_count = 0
     game.transition_ticks = 0
     for index: 0..99 { game.particles[index].life = 0 }
@@ -135,7 +136,7 @@ LoadLevel :: (game: *Game, level: s32, now: s64) {
     game.started = true
     for y: 0..ROWS - 1 {
         for x: 0..COLUMNS - 1 {
-            tile := OriginalTile(level, cast(s32)x, cast(s32)y)
+            tile := board[Index(x, y)]
             game.board[Index(x, y)] = tile
             kind := cast(s32)(tile & 127) - 39
             if kind >= 1 && kind <= 6 && game.monster_count < MONSTER_LIMIT {
@@ -152,11 +153,43 @@ LoadLevel :: (game: *Game, level: s32, now: s64) {
     SpawnApple(game)
     Respawn(game)
 }
+LoadLevel :: (game: *Game, level: s32, now: s64) {
+    tiles: [CELLS]u8
+    for y: 0..ROWS - 1 {
+        for x: 0..COLUMNS - 1 { tiles[Index(x, y)] = OriginalTile(level, cast(s32)x, cast(s32)y) }
+    }
+    LoadLevelData(game, level, now, tiles[:], OriginalApples[level])
+}
+StartGameData :: (game: *Game, level: s32, now: s64, seed: u32, board: []u8, apples: s32) {
+    game.random = seed
+    game.lives = 3
+    game.score = 0
+    LoadLevelData(game, level, now, board, apples)
+}
 StartGame :: (game: *Game, level: s32, now: s64, seed: u32 = 1) {
     game.random = seed
     game.lives = 3
     game.score = 0
     LoadLevel(game, level, now)
+}
+// The value a tile has once LoadLevelData has turned monster markers into
+// monsters: markers leave nothing, or a false-wall flag, behind.
+LoadedTile :: (raw: u8) -> u8 {
+    kind := cast(s32)(raw & 127) - 39
+    if kind >= 1 && kind <= 6 { return raw & 128 }
+    return raw
+}
+// A level is impossible when the first tile the growing head must survive,
+// just above the entrance, is solid, or when the tile the top exit opens
+// from is solid. The head crosses the two bottom rows before collision
+// checks begin. Bit 1 marks the entrance, bit 2 the exit.
+LevelBlockages :: (board: []u8) -> s32 {
+    result: s32 = 0
+    entry := cast(s32)LoadedTile(board[Index(20, 27)])
+    leave := cast(s32)LoadedTile(board[Index(20, 1)])
+    if entry >= 20 && entry < 128 { result = result | 1 }
+    if leave >= 20 && leave < 128 { result = result | 2 }
+    return result
 }
 MonsterBlocked :: (game: *Game, index: s32, position: Point) -> bool {
     if WallAt(game, position) || WormNear(game, position, 0, 10) { return true }
