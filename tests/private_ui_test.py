@@ -133,6 +133,16 @@ def main():
         assert dark > 0.5, f"browser ground is only {dark:.0%} dark"
         key("Escape")
         time.sleep(0.2)
+        # T stands the level up as portrait plays it: the canvas board
+        # becomes tall, with dark bars beside it inside the canvas area.
+        key("t")
+        time.sleep(0.3)
+        capture("editor-turned")
+        turned = numpy.asarray(Image.open(OUT / "editor-turned.png").convert("RGB"), dtype=int)
+        columns = ((turned[100:500, 0:712] < 20).all(axis=2)).mean(axis=0)
+        assert (columns > 0.9).sum() > 100, "the canvas board did not stand up"
+        key("t")
+        time.sleep(0.2)
         pointer(737, 195)  # first FLOOR swatch: brush 0
         pointer(8, 62)     # canvas cell (0, 0), a wall in every level
         time.sleep(0.2)

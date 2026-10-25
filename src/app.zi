@@ -46,6 +46,7 @@ EditorState :: struct {
     palette_scroll: s32
     playtest: bool
     browsing: bool
+    turned: bool
 }
 editor: EditorState;
 editor_digits: [21]u8;
@@ -245,7 +246,7 @@ OpenStages :: () {
 // exists, otherwise the recovered original. A portrait window stands the
 // same level on its side (30x40), so the worm still enters from the bottom
 // and leaves at the top.
-PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool) {
+PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, force_turn: bool = false) {
     board: [CELLS]u8
     turned: [CELLS]u8
     Custom.EnsureLoaded()
@@ -254,10 +255,8 @@ PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool) {
     source := board[:]
     columns: s32 = COLUMNS
     rows: s32 = ROWS
-    if game_portrait {
-        for y: 0..ROWS - 1 {
-            for x: 0..COLUMNS - 1 { turned[x * ROWS + (ROWS - 1 - y)] = board[y * COLUMNS + x] }
-        }
+    if game_portrait || force_turn {
+        TurnForward(board[:], turned[:])
         source = turned[:]
         columns = ROWS
         rows = COLUMNS
@@ -281,23 +280,58 @@ EditorAtStartup :: (level: s32) {
     OpenEditor(level)
 }
 
+EditorLoad :: (level: s32) {
+    board: [CELLS]u8
+    Custom.EnsureLoaded()
+    Custom.EffectiveBoard(level, board[:])
+    if editor.turned {
+        TurnForward(board[:], editor.board[:])
+        BoardSize(ROWS, COLUMNS)
+    } else {
+        editor.board = board
+        BoardSize(COLUMNS, ROWS)
+    }
+    editor.apples = Custom.EffectiveApples(level)
+}
+
 OpenEditor :: (level: s32) {
     if level < 0 { level = 0 }
     if level >= LEVEL_COUNT { level = LEVEL_COUNT - 1 }
-    if game.mode != MODE_EDITOR || editor.level != level {
-        Custom.EnsureLoaded()
-        Custom.EffectiveBoard(level, editor.board[:])
-        editor.apples = Custom.EffectiveApples(level)
-        editor.dirty = false
-    }
+    if game.mode != MODE_EDITOR || editor.level != level { EditorLoad(level); editor.dirty = false }
     editor.level = level
     editor.reset_armed = false
     editor.save_failed = false
     game.mode = MODE_EDITOR
 }
 
+// T stands the working level up on its side, exactly as portrait plays it,
+// and back again; the working tiles and edits turn with it.
+EditorTurn :: () {
+    turned: [CELLS]u8
+    if editor.turned {
+        TurnBack(editor.board[:], turned[:])
+        editor.board = turned
+        editor.turned = false
+        BoardSize(COLUMNS, ROWS)
+    } else {
+        TurnForward(editor.board[:], turned[:])
+        editor.board = turned
+        editor.turned = true
+        BoardSize(ROWS, COLUMNS)
+    }
+}
+
 EditorSave :: () {
     if !editor.dirty { return }
+    if editor.turned {
+        canonical: [CELLS]u8
+        TurnBack(editor.board[:], canonical[:])
+        if Custom.SaveCustomLevel(editor.level, canonical[:], editor.apples) {
+            editor.dirty = false
+            editor.save_failed = false
+        } else { editor.save_failed = true }
+        return
+    }
     if Custom.SaveCustomLevel(editor.level, editor.board[:], editor.apples) {
         editor.dirty = false
         editor.save_failed = false
@@ -307,29 +341,28 @@ EditorSave :: () {
 // Deleting the override restores the recovered original in the working copy.
 EditorReset :: () {
     unused Custom.ClearCustomLevel(editor.level)
-    Custom.EffectiveBoard(editor.level, editor.board[:])
-    editor.apples = Custom.EffectiveApples(editor.level)
+    EditorLoad(editor.level)
     editor.dirty = false
     editor.reset_armed = false
 }
 
 // R throws the working copy away and takes the saved level back in.
 EditorReloadSaved :: () {
-    Custom.EffectiveBoard(editor.level, editor.board[:])
-    editor.apples = Custom.EffectiveApples(editor.level)
+    EditorLoad(editor.level)
     editor.dirty = false
 }
 
 EditorExit :: () {
     EditorSave()
     editor.playtest = false
+    editor.turned = false
     OpenStages()
 }
 
 EditorPlaytest :: (now: s64) {
     EditorSave()
     editor.playtest = true
-    StartLevel(editor.level, now, cast(u32)(now & 4294967295))
+    PlayBoard(editor.level, now, cast(u32)(now & 4294967295), false, editor.turned)
 }
 
 EditorSwitch :: (delta: s32) {
@@ -426,12 +459,12 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     tiles := Sheet(stage_of_level)
     panel := Rectangle.{area.x + area.width - EDITOR_PANEL_WIDTH, area.y, EDITOR_PANEL_WIDTH, area.height}
     canvas := Rectangle.{area.x, area.y, area.width - EDITOR_PANEL_WIDTH, area.height}
-    BoardSize(COLUMNS, ROWS)
+    // The board keeps whatever orientation EditorLoad or EditorTurn last set.
     stage := BoardIn(canvas)
 
     pointer := PointerSample(session)
     secondary := SecondaryPointerSample(session)
-    scale := stage.width / BOARD_WIDTH
+    scale := stage.width / (cast(float32)board_columns * 16.0)
     if (pointer.down || secondary.down) && Input.PointInBounds(pointer.x, pointer.y, stage) {
         cell_x := cast(s32)((pointer.x - stage.x) / (16.0 * scale))
         cell_y := cast(s32)((pointer.y - stage.y) / (16.0 * scale))
@@ -468,9 +501,11 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     // The fixed entrance and exit the game carves at runtime, marked so a
     // level is never drawn without its way in and out. These keys sit below
     // the canvas tile range, which starts at 5000.
-    unused Box(session, BoxProps.{.key = 4998, .bounds = Rectangle.{stage.x + 304.0 * scale,
-        stage.y + 464.0 * scale, 48.0 * scale, 16.0 * scale}, .fill = Color.{90, 220, 120, 70}})
-    unused Box(session, BoxProps.{.key = 4999, .bounds = Rectangle.{stage.x + 304.0 * scale,
+    gate_x := stage.x + cast(float32)(board_columns / 2 - 1) * 16.0 * scale
+    unused Box(session, BoxProps.{.key = 4998, .bounds = Rectangle.{gate_x,
+        stage.y + cast(float32)(board_rows - 1) * 16.0 * scale, 48.0 * scale, 16.0 * scale},
+        .fill = Color.{90, 220, 120, 70}})
+    unused Box(session, BoxProps.{.key = 4999, .bounds = Rectangle.{gate_x,
         stage.y, 48.0 * scale, 16.0 * scale}, .fill = Color.{240, 90, 90, 70}})
     if !pointer.down && !secondary.down && Input.PointInBounds(pointer.x, pointer.y, stage) {
         hover_x := cast(s32)((pointer.x - stage.x) / (16.0 * scale))
@@ -490,6 +525,12 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     TextLine(session, 8202, "LEVEL", Rectangle.{panel.x + 8.0, panel.y + 8.0, 50.0, 20.0}, 14)
     TextLine(session, 8203, level_text, Rectangle.{panel.x + 60.0, panel.y + 8.0, 30.0, 20.0}, 14)
     TextLine(session, 8204, StageName(stage_of_level), Rectangle.{panel.x + 110.0, panel.y + 8.0, 90.0, 20.0}, 14)
+    if Button(session, ButtonProps.{.key = 8224, .bounds = Rectangle.{panel.x + panel.width - 74.0, panel.y + 6.0, 30.0, 30.0},
+            .label = "Turn the level", .icon_shape = "S2rr:M20 12A8 8 0 1 1 12 4M12 4L16 4M12 4L12 8",
+            .icon_only = true, .tone = ifx editor.turned then ButtonTone.ButtonToneSuccess
+                else ButtonTone.ButtonToneNeutral,
+            .emphasis = ifx editor.turned then ButtonEmphasis.ButtonEmphasisFilled
+                else ButtonEmphasis.ButtonEmphasisSoft}) != 0 { EditorTurn() }
     if Button(session, ButtonProps.{.key = 8223, .bounds = Rectangle.{panel.x + panel.width - 38.0, panel.y + 6.0, 30.0, 30.0},
             .label = "All levels", .icon_shape = "S2rr:M4 4H10V10H4V4ZM14 4H20V10H14V4ZM4 14H10V20H4V14ZM14 14H20V20H14V14Z",
             .icon_only = true, .tone = ButtonTone.ButtonToneNeutral,
@@ -693,6 +734,7 @@ HandleInput :: (key: s32, now: s64) {
             }
         } else if key == Input.KeyEscape || key == 69 || key == 101 { EditorExit() }
         else if key == 76 || key == 108 { EditorSave(); editor.browsing = true }
+        else if key == 84 || key == 116 { EditorTurn() }
         else if key == 265 || key == 87 || key == 119 { EditorSwitch(-1) }
         else if key == 264 || key == 83 || key == 115 { EditorSwitch(1) }
         else if key == Input.KeyEnter || key == 32 { EditorPlaytest(now) }
@@ -736,7 +778,7 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
     Badge(session, 14, stage_name, Rectangle.{hud.x + hud.width - 78.0, hud.y + 10.0, 66.0, 22.0})
 
     if game.mode == MODE_EDITOR {
-        Badge(session, 16, "Drag paints · Right restores · Enter playtests · E returns",
+        Badge(session, 16, "Drag paints · Right restores · T turns · Enter playtests · E returns",
             Rectangle.{hud.x + 12.0, hud.y + 10.0, 400.0, 22.0})
     } else {
         lives := game.lives

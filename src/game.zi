@@ -184,6 +184,19 @@ StartGame :: (game: *Game, level: s32, now: s64, seed: u32 = 1) {
     game.score = 0
     LoadLevel(game, level, now)
 }
+// The portrait orientation: the canonical 40x30 level stands clockwise as
+// a 30x40 board. Canonical (x, y) lands at turned column ROWS-1-y, row x.
+TurnForward :: (canonical: []u8, turned: []u8) {
+    for y: 0..ROWS - 1 {
+        for x: 0..COLUMNS - 1 { turned[x * ROWS + (ROWS - 1 - y)] = canonical[y * COLUMNS + x] }
+    }
+}
+TurnBack :: (turned: []u8, canonical: []u8) {
+    for y: 0..ROWS - 1 {
+        for x: 0..COLUMNS - 1 { canonical[y * COLUMNS + x] = turned[x * ROWS + (ROWS - 1 - y)] }
+    }
+}
+
 // The value a tile has once LoadLevelData has turned monster markers into
 // monsters: markers leave nothing, or a false-wall flag, behind.
 LoadedTile :: (raw: u8) -> u8 {

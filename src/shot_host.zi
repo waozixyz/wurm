@@ -74,6 +74,8 @@ main :: () -> s32 {
         else { App.OpenEditor(0) }
         unused CopyCString("WORM_SHOT_BROWSER", name[:])
         if GetEnvironment(*name[0]) != null { App.editor.browsing = true }
+        unused CopyCString("WORM_SHOT_TURN", name[:])
+        if GetEnvironment(*name[0]) != null { App.EditorTurn() }
     }
     session := SessionOpen()
     if !SessionValid(session) { return 2 }

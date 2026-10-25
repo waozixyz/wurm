@@ -54,7 +54,9 @@ stage's floors, walls, false walls and the six monster kinds. The apple goal
 is set with the - and + buttons or keys. Up/Down switches levels (saving
 first), Enter playtests from the entrance, and E returns to the stages.
 Saving is automatic on switch, exit and playtest, plus the Save button; Reset
-(deleting the override) restores the recovered original level.
+(deleting the override) restores the recovered original level. T or the turn
+button stands the working level up exactly as portrait plays it and back,
+so the sideways view can be edited and playtested directly.
 
 Edits live in `assets/levels/level<N>.dat`, one file per edited level in the
 original archive layout (apple count, then the 40x30 tiles in column order).

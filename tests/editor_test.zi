@@ -69,6 +69,16 @@ main :: () -> s32 {
     Expect(Custom.EffectiveApples(2) == OriginalApples[2], "clear restores the original")
     Expect(Custom.EffectiveTile(2, 10, 10) == OriginalTile(2, 10, 10), "clear restores original tiles")
 
+    // Turning the level for portrait and back loses nothing.
+    turned: [CELLS]u8
+    again: [CELLS]u8
+    for at: 0..CELLS - 1 { board[at] = cast(u8)(at % 7) }
+    TurnForward(board[:], turned[:])
+    TurnBack(turned[:], again[:])
+    same: bool = true
+    for at: 0..CELLS - 1 { if board[at] != again[at] { same = false } }
+    Expect(same, "turn round-trip keeps every tile")
+
     // An edited board drives play through the same loader as the originals.
     for at: 0..CELLS - 1 { board[at] = 0 }
     board[Index(3, 3)] = 45
