@@ -171,12 +171,18 @@ def main():
         top_green = sum(channel * count for channel, count in enumerate(top.histogram()[256:512]))
         assert top_green > 480 * 42 * 90, "the icon bar is not green across the top"
         board = picture.crop((0, 42, 480, 698))
-        # The 480-wide board scales fewer pixels than landscape, so the
-        # check is structural: a green field centred below the bar.
+        # The turned board fills the portrait width edge to edge: a green
+        # field taller than wide with no black bars at the sides.
         assert len(board.getcolors(480 * 656) or []) > 40, "the board area did not render"
         board_green = sum(channel * count for channel, count in enumerate(board.histogram()[256:512]))
         assert board_green > 480 * 656 * 40, "the board is not a green field"
-        print("Private UI local test rendered the portrait layout with the top icon bar.")
+        black_columns = 0
+        for column in range(picture.width):
+            strip = picture.crop((column, 100, column + 1, 600))
+            if max(strip.histogram()[0:256]) + max(strip.histogram()[512:768]) > 4800:
+                black_columns += 1
+        assert black_columns == 0, f"{black_columns} black side columns; the board did not turn"
+        print("Private UI local test rendered the turned portrait board and the top icon bar.")
     finally:
         os.close(read_fd)
         stop(app)

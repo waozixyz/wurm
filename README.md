@@ -34,10 +34,12 @@ opening at the top centre. An extra life is awarded every 33 points.
 
 In play, the green icon bar across the top carries hearts for lives, the
 apple goal, the star score and the level; the stage-select cover fills the
-whole screen instead. The board letterboxes into the remaining space, so
-landscape and portrait both keep the game's proportions. The desktop window
-opens from `WURM_WINDOW=WxH` (default 1280x760); `WURM_WINDOW=480x700`
-shows the portrait phone layout.
+whole screen instead. Landscape letterboxes the 640x480 board. In portrait
+the same level turns 90 degrees: the board stands 480x640 and fills the
+screen edge to edge, the worm enters from the left edge and exits at the
+right, and the steering keys and swipes turn with the screen, so Up is
+always visually up. The desktop window opens from `WURM_WINDOW=WxH`
+(default 1280x760); `WURM_WINDOW=480x700` shows the portrait phone layout.
 
 ## Level editor
 

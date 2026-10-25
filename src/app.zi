@@ -105,40 +105,67 @@ Overlay :: (session: Session, stage: Rectangle, title: string, message: string) 
         stage.y + stage.height * 0.4 + 51.0, stage.width * 0.68, 26.0}, 15)
 }
 
+// A logical-pixel sprite square. In portrait the whole board turns 90
+// degrees clockwise: the bottom entrance faces the screen's left edge, the
+// top exit its right edge, and positions rotate with it.
 Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source: Rectangle,
-    sheet: string) {
-    scale := stage.width / BOARD_WIDTH
-    left := Snap(stage.x + cast(float32)(position.x - 8) * scale)
-    top := Snap(stage.y + cast(float32)(position.y - 8) * scale)
-    bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(position.x + 8) * scale) - left,
-        Snap(stage.y + cast(float32)(position.y + 8) * scale) - top}
-    if bounds.y < Snap(stage.y) || bounds.y + bounds.height > Snap(stage.y + stage.height) { return }
+    sheet: string, turn: bool) {
+    scale := stage.width / ifx turn then BOARD_HEIGHT else BOARD_WIDTH
+    px := cast(float32)position.x
+    py := cast(float32)position.y
+    if turn {
+        turned := px
+        px = BOARD_HEIGHT - py
+        py = turned
+    }
+    left := Snap(stage.x + (px - 8.0) * scale)
+    top := Snap(stage.y + (py - 8.0) * scale)
+    bounds := Rectangle.{left, top, Snap(stage.x + (px + 8.0) * scale) - left,
+        Snap(stage.y + (py + 8.0) * scale) - top}
+    if bounds.y < Snap(stage.y) || bounds.y + bounds.height > Snap(stage.y + stage.height) ||
+        bounds.x < Snap(stage.x) || bounds.x + bounds.width > Snap(stage.x + stage.width) { return }
     Picture(session, key, sheet, bounds, source)
 }
 
 Snap :: (value: float32) -> float32 { return cast(float32)cast(s32)(value + 0.5) }
 
 // Tile edges land on whole pixels, so scaled neighbours meet without seams.
-Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string) {
-    scale := stage.width / BOARD_WIDTH
-    left := Snap(stage.x + cast(float32)x * 16.0 * scale)
-    top := Snap(stage.y + cast(float32)y * 16.0 * scale)
-    bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale) - left,
-        Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale) - top}
+Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string,
+    turn: bool) {
+    scale := stage.width / ifx turn then BOARD_HEIGHT else BOARD_WIDTH
+    left: float32
+    top: float32
+    right: float32
+    bottom: float32
+    if turn {
+        left = Snap(stage.x + (BOARD_HEIGHT - cast(float32)(y + 1) * 16.0) * scale)
+        top = Snap(stage.y + cast(float32)x * 16.0 * scale)
+        right = Snap(stage.x + (BOARD_HEIGHT - cast(float32)y * 16.0) * scale)
+        bottom = Snap(stage.y + cast(float32)(x + 1) * 16.0 * scale)
+    } else {
+        left = Snap(stage.x + cast(float32)x * 16.0 * scale)
+        top = Snap(stage.y + cast(float32)y * 16.0 * scale)
+        right = Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale)
+        bottom = Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale)
+    }
+    bounds := Rectangle.{left, top, right - left, bottom - top}
     source := Rectangle.{cast(float32)(tile % 20) * 16.0,
         cast(float32)(tile / 20) * 16.0, 16.0, 16.0}
     Picture(session, key, sheet, bounds, source)
 }
 
-// The board scaled to fit inside an area.
-BoardIn :: (area: Rectangle) -> Rectangle {
-    scale := area.width / BOARD_WIDTH
-    if area.height / BOARD_HEIGHT < scale { scale = area.height / BOARD_HEIGHT }
-    return Rectangle.{area.x + (area.width - BOARD_WIDTH * scale) / 2.0,
-        area.y + (area.height - BOARD_HEIGHT * scale) / 2.0, BOARD_WIDTH * scale, BOARD_HEIGHT * scale}
+// The board scaled to fit inside an area. Portrait turns the 640x480 board
+// into a 480x640 one, so a phone screen fills edge to edge.
+BoardIn :: (area: Rectangle, turn: bool) -> Rectangle {
+    wide: float32 = ifx turn then BOARD_HEIGHT else BOARD_WIDTH
+    tall: float32 = ifx turn then BOARD_WIDTH else BOARD_HEIGHT
+    scale := area.width / wide
+    if area.height / tall < scale { scale = area.height / tall }
+    return Rectangle.{area.x + (area.width - wide * scale) / 2.0,
+        area.y + (area.height - tall * scale) / 2.0, wide * scale, tall * scale}
 }
 
-AppleFlash :: (session: Session, stage: Rectangle) {
+AppleFlash :: (session: Session, stage: Rectangle, turn: bool) {
     if game.apple_flash <= 0 { return }
     frame := (game.apple_flash / 4) % 6
     source := Rectangle.{112.0, 144.0, 30.0, 30.0}
@@ -148,53 +175,61 @@ AppleFlash :: (session: Session, stage: Rectangle) {
     else if frame == 3 { source = Rectangle.{198.0, 144.0, 26.0, 24.0}; offset = Vector2.{13.0, 12.0} }
     else if frame == 4 { source = Rectangle.{224.0, 144.0, 28.0, 26.0}; offset = Vector2.{14.0, 13.0} }
     else if frame == 5 { source = Rectangle.{252.0, 144.0, 28.0, 28.0}; offset = Vector2.{14.0, 14.0} }
-    scale := stage.width / BOARD_WIDTH
-    bounds := Rectangle.{stage.x + (cast(float32)game.apple.x - offset.x) * scale,
-        stage.y + (cast(float32)game.apple.y - offset.y) * scale,
+    scale := stage.width / ifx turn then BOARD_HEIGHT else BOARD_WIDTH
+    px := cast(float32)game.apple.x
+    py := cast(float32)game.apple.y
+    if turn {
+        turned := px
+        px = BOARD_HEIGHT - py
+        py = turned
+    }
+    bounds := Rectangle.{stage.x + (px - offset.x) * scale,
+        stage.y + (py - offset.y) * scale,
         source.width * scale, source.height * scale}
     Picture(session, 1401, Sheet(StageOf(game.level)), bounds, source)
 }
 
-DrawBoard :: (session: Session, stage: Rectangle) {
+DrawBoard :: (session: Session, stage: Rectangle, turn: bool) {
     tiles := Sheet(StageOf(game.level))
     sprites := tiles
     for y: 0..ROWS - 1 {
         for x: 0..COLUMNS - 1 {
             at := Index(x, y)
             Tile(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
-                cast(s32)(game.board[at] & 127), tiles)
+                cast(s32)(game.board[at] & 127), tiles, turn)
         }
     }
     if game.apples > 0 && game.apple.x >= 0 {
-        Sprite(session, 1400, stage, game.apple, Rectangle.{0.0, 112.0, 16.0, 16.0}, sprites)
-        AppleFlash(session, stage)
+        Sprite(session, 1400, stage, game.apple, Rectangle.{0.0, 112.0, 16.0, 16.0}, sprites, turn)
+        AppleFlash(session, stage, turn)
     }
     index: s32 = 0
     while index < game.length {
         column := 4
-        if index == 0 { column = game.direction }
+        // The head faces its visual direction; portrait turns it a quarter.
+        if index == 0 { column = ifx turn then (game.direction + 1) % 4 else game.direction }
         else if index >= game.length - 4 { column = -1 }
         else if index >= game.length - 8 { column = 6 }
         else if index >= game.length - 12 { column = 5 }
         if column >= 0 && (game.death_ticks == 0 || game.death_ticks / 2 > 2) {
             Sprite(session, 2000 + cast(u64)index, stage, game.worm[index],
-                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites)
+                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, turn)
         }
         if game.death_ticks > 0 && index < game.length - 4 {
             Sprite(session, 4000 + cast(u64)index, stage, game.worm[index],
-                Rectangle.{cast(float32)(5 - game.death_ticks / 4) * 16.0, 144.0, 16.0, 16.0}, sprites)
+                Rectangle.{cast(float32)(5 - game.death_ticks / 4) * 16.0, 144.0, 16.0, 16.0}, sprites, turn)
         }
         index += 4
     }
     for monster: 0..game.monster_count - 1 {
         Sprite(session, 6000 + cast(u64)monster, stage, game.monsters[monster].position,
-            Rectangle.{cast(float32)(game.monsters[monster].kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites)
+            Rectangle.{cast(float32)(game.monsters[monster].kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites, turn)
     }
     for particle: 0..99 {
         life := game.particles[particle].life
         if life > 1 && life <= 12 {
             Sprite(session, 7000 + cast(u64)particle, stage, game.particles[particle].position,
-                Rectangle.{cast(float32)(life / 2) * 16.0, 160.0, 16.0, 16.0}, sprites)
+                Rectangle.{cast(float32)(life / 2) * 16.0, 160.0, 16.0, 16.0}, sprites, turn)
         }
     }
 }
@@ -202,7 +237,7 @@ DrawBoard :: (session: Session, stage: Rectangle) {
 // A level as it starts: open entrance, monsters at home, and the stage's
 // character arriving from below.
 DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
-    stage := BoardIn(area)
+    stage := BoardIn(area, false)
     tiles := Sheet(StageOf(level))
     sprites := tiles
     for row: 0..ROWS - 1 {
@@ -214,10 +249,10 @@ DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
             kind := tile - 39
             if kind >= 1 && kind <= 6 { tile = 0 }
             if y == ROWS - 1 && (x == 19 || x == 21) { tile = 21 }
-            Tile(session, key + cast(u64)Index(x, y), stage, x, y, tile, tiles)
+            Tile(session, key + cast(u64)Index(x, y), stage, x, y, tile, tiles, false)
             if kind >= 1 && kind <= 6 && !entrance {
                 Sprite(session, key + 1200 + cast(u64)Index(x, y), stage, Point.{x * 16 + 8, y * 16 + 8},
-                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites)
+                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites, false)
             }
         }
     }
@@ -227,7 +262,7 @@ DrawPreview :: (session: Session, area: Rectangle, level: s32, key: u64) {
         if segment == 0 { column = DIR_UP }
         else if segment < 3 { column = 4 }
         Sprite(session, key + 2400 + cast(u64)segment, stage, Point.{328, 408 + segment * 16},
-            Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites)
+            Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, false)
     }
 }
 
@@ -375,7 +410,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     tiles := Sheet(stage_of_level)
     panel := Rectangle.{area.x + area.width - EDITOR_PANEL_WIDTH, area.y, EDITOR_PANEL_WIDTH, area.height}
     canvas := Rectangle.{area.x, area.y, area.width - EDITOR_PANEL_WIDTH, area.height}
-    stage := BoardIn(canvas)
+    stage := BoardIn(canvas, false)
 
     pointer := PointerSample(session)
     secondary := SecondaryPointerSample(session)
@@ -406,10 +441,10 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
             kind := (raw & 127) - 39
             tile := raw & 127
             if kind >= 1 && kind <= 6 { tile = 0 }
-            Tile(session, 5000 + cast(u64)at, stage, cast(s32)x, cast(s32)y, tile, tiles)
+            Tile(session, 5000 + cast(u64)at, stage, cast(s32)x, cast(s32)y, tile, tiles, false)
             if kind >= 1 && kind <= 6 {
                 Sprite(session, 6200 + cast(u64)at, stage, Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8},
-                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, tiles)
+                    Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, tiles, false)
             }
         }
     }
@@ -611,7 +646,7 @@ HandleInput :: (key: s32, now: s64) {
     if key == 77 || key == 109 { Audio.ToggleMute(); return }
     if game.mode == MODE_PLAYING {
         if key == 82 || key == 114 { ReloadLevel(game.level, now) }
-        else { unused ApplyInput(*game, key) }
+        else { unused ApplyInput(*game, TurnKey(key)) }
     } else if game.mode == MODE_PAUSED {
         unused ApplyInput(*game, key)
         if game.mode == MODE_PLAYING { game.next_step = now + TICK_MS }
@@ -632,6 +667,21 @@ HandleInput :: (key: s32, now: s64) {
         else if key == 45 || key == 95 { EditorSetApples(-1) }
         else if key == 61 || key == 43 { EditorSetApples(1) }
     }
+}
+
+// True while the window stands portrait: the board turns sideways and the
+// steering keys turn with it, so Up always means visually up.
+game_portrait: bool;
+
+// A visual direction becomes the worm's logical direction: portrait turns
+// the board a quarter clockwise, so the keys turn a quarter back.
+TurnKey :: (key: s32) -> s32 {
+    if !game_portrait { return key }
+    if key == 262 || key == 100 || key == 68 { return 265 }
+    if key == 265 || key == 119 || key == 87 { return 263 }
+    if key == 263 || key == 97 || key == 65 { return 264 }
+    if key == 264 || key == 115 || key == 83 { return 262 }
+    return key
 }
 
 // A swipe steers like the arrow keys: never into the worm's own neck.
@@ -699,6 +749,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     now := Timer.MonotonicMilliseconds()
     // The game opens on the stages.
     if !game.started { game.started = true; OpenStages() }
+    game_portrait = viewport.height > viewport.width
     key := KeyboardTake(session)
     // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
@@ -715,10 +766,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     hud := Rectangle.{viewport.x, viewport.y, viewport.width, bar_height}
     available_height := viewport.height - bar_height
     if available_height < 1.0 { available_height = 1.0 }
-    scale := viewport.width / BOARD_WIDTH
-    if available_height / BOARD_HEIGHT < scale { scale = available_height / BOARD_HEIGHT }
-    stage := Rectangle.{viewport.x + (viewport.width - BOARD_WIDTH * scale) / 2.0,
-        viewport.y + bar_height + (available_height - BOARD_HEIGHT * scale) / 2.0, BOARD_WIDTH * scale, BOARD_HEIGHT * scale}
+    stage := BoardIn(Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height},
+        game_portrait && game.mode != MODE_STAGES && game.mode != MODE_EDITOR)
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         if DrawStages(session, area, stage_key, cast(float64)now / 1000.0) {
@@ -729,15 +778,14 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         area := Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height}
         DrawEditor(session, area, now)
     } else {
-        DrawBoard(session, stage)
-        // A swipe steers like the arrow keys, so touch plays in any orientation.
+        DrawBoard(session, stage, game_portrait)
+        // A swipe steers like the arrow keys, so touch plays in any
+        // orientation; a portrait swipe turns a quarter back to the worm.
         if game.mode == MODE_PLAYING {
             gesture := SwipeArea(session, SwipeAreaProps.{.key = 820, .bounds = stage,
                 .label = "Steer the worm", .now = cast(float64)now / 1000.0, .min_distance = 20.0})
-            if gesture.swiped == 0 { Steer(DIR_LEFT) }
-            else if gesture.swiped == 1 { Steer(DIR_UP) }
-            else if gesture.swiped == 2 { Steer(DIR_RIGHT) }
-            else if gesture.swiped == 3 { Steer(DIR_DOWN) }
+            turn_back: s32 = ifx game_portrait then 3 else 0
+            if gesture.swiped >= 0 { Steer((gesture.swiped + turn_back) % 4) }
         }
     }
     if showing_bar { DrawTopBar(session, hud) }
