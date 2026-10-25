@@ -48,7 +48,7 @@
     "name": "Apfelwurm"
   },
   "toolchain": {
-    "commit": "21c6a681c9ba684bbe069004fd971748cc5c7dc0",
+    "commit": "2eafe31e2a0d0c30bb24c3ae70995c76de38f7ba",
     "ref": "master",
     "url": "https://github.com/ziranlang/ziran.git"
   }
