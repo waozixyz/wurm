@@ -42,6 +42,7 @@ def main():
     create = 'test ! -e ' + DRIVER + ' && mkdir -p ' + DRIVER
     shell('run-as', PACKAGE, 'sh', '-c', create)
     sequence = 0
+    launched_pid = None
 
     def command(verb, **fields):
         nonlocal sequence
@@ -86,6 +87,8 @@ def main():
         launch = shell('am', 'start', '-W', '-a', 'android.intent.action.MAIN',
                        '-c', 'android.intent.category.LAUNCHER', '-n', PACKAGE + '/.MainActivity')
         assert b'Status: ok' in launch.stdout, launch.stdout
+        launched_pid = shell('pidof', PACKAGE).stdout.strip()
+        assert launched_pid, 'Android game process did not start'
         wait('Play level', 'button')
         capture('stages')
         command('press', label='Play level', role='button')
@@ -118,6 +121,9 @@ def main():
     finally:
         # This directory was absent before the test and contains only its protocol files.
         shell('run-as', PACKAGE, 'rm', '-rf', DRIVER)
+        current_pid = shell('pidof', PACKAGE, check=False).stdout.strip()
+        if launched_pid and current_pid == launched_pid:
+            shell('am', 'force-stop', PACKAGE)
         (OUTPUT / 'result.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print('USB Moto local test: touch start, pause, resume, swipe steering and stages passed.')
 
