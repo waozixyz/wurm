@@ -484,8 +484,8 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
         }
     }
 
-    for y: 0..ROWS - 1 {
-        for x: 0..COLUMNS - 1 {
+    for y: 0..board_rows - 1 {
+        for x: 0..board_columns - 1 {
             at := Index(x, y)
             raw := cast(s32)editor.board[at]
             kind := (raw & 127) - 39
