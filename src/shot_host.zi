@@ -72,6 +72,8 @@ main :: () -> s32 {
         App.game.started = true
         if level != null { App.OpenEditor(ParseNumber(level) - 1) }
         else { App.OpenEditor(0) }
+        unused CopyCString("WORM_SHOT_BROWSER", name[:])
+        if GetEnvironment(*name[0]) != null { App.editor.browsing = true }
     }
     session := SessionOpen()
     if !SessionValid(session) { return 2 }

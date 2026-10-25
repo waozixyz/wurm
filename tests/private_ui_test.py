@@ -119,6 +119,20 @@ def main():
         key("e")
         time.sleep(0.4)
         capture("editor-open")
+        # L opens the level browser: 33 numbered cards on a dark ground,
+        # the current one green. Esc returns to the canvas.
+        key("l")
+        time.sleep(0.3)
+        capture("editor-browser")
+        from PIL import Image
+        import numpy
+        browser = numpy.asarray(Image.open(OUT / "editor-browser.png").convert("RGB"), dtype=int)
+        # The browser is a dark ground (every channel under 64) holding
+        # light numbered cards; the editor canvas or a cover is neither.
+        dark = float(((browser < 64).all(axis=2)).mean())
+        assert dark > 0.5, f"browser ground is only {dark:.0%} dark"
+        key("Escape")
+        time.sleep(0.2)
         pointer(737, 195)  # first FLOOR swatch: brush 0
         pointer(8, 62)     # canvas cell (0, 0), a wall in every level
         time.sleep(0.2)

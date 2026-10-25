@@ -46,7 +46,9 @@ portrait phone layout.
 ## Level editor
 
 E on the stages screen (or its pencil button) opens the editor for the chosen
-level. The held left button paints the selected brush across the canvas, the
+level, and L inside the editor (or its grid button) shows every level of the
+stage as a numbered card grid — a green dot marks saved edits, and one click
+jumps to that level. The held left button paints the selected brush across the canvas, the
 right button restores the recovered original tile, and the palette offers the
 stage's floors, walls, false walls and the six monster kinds. The apple goal
 is set with the - and + buttons or keys. Up/Down switches levels (saving

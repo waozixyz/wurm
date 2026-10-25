@@ -45,6 +45,7 @@ EditorState :: struct {
     reset_armed: bool
     palette_scroll: s32
     playtest: bool
+    browsing: bool
 }
 editor: EditorState;
 editor_digits: [21]u8;
@@ -371,7 +372,56 @@ DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32,
 // The editor screen: the level as raw tiles on the left, brush palette and
 // actions on the right. The held left button paints, the right button
 // restores the recovered original tile under it.
+// Every level of the stage on one screen: a numbered card each, a green
+// dot on saved edits, the current level highlighted, one click to edit.
+DrawLevelBrowser :: (session: Session, area: Rectangle) {
+    unused Box(session, BoxProps.{.key = 8700, .bounds = area, .fill = Color.{18, 26, 20, 255}})
+    CentreText(session, 8701, StageName(StageOf(editor.level)), Rectangle.{area.x, area.y + 10.0, area.width, 30.0}, 22)
+    CentreText(session, 8702, "click a level to edit it · Esc returns",
+        Rectangle.{area.x, area.y + 40.0, area.width, 20.0}, 13)
+    first := StageOf(editor.level) * STAGE_LEVELS
+    columns: s32 = 8
+    for candidate: 4..11 {
+        rows := (STAGE_LEVELS + candidate - 1) / candidate
+        item_width := (area.width - 16.0 - cast(float32)(candidate - 1) * 8.0) / cast(float32)candidate
+        total := cast(float32)rows * (item_width * 0.75 + 30.0) + cast(float32)(rows - 1) * 8.0 + 72.0
+        if total <= area.height { columns = cast(s32)candidate; break }
+    }
+    rows := (STAGE_LEVELS + columns - 1) / columns
+    item_width := (area.width - 16.0 - cast(float32)(columns - 1) * 8.0) / cast(float32)columns
+    item_height := item_width * 0.75 + 30.0
+    pointer := PointerSample(session)
+    for index: 0..STAGE_LEVELS - 1 {
+        column := index % columns
+        row := index / columns
+        bounds := Rectangle.{area.x + 8.0 + cast(float32)column * (item_width + 8.0),
+            area.y + 72.0 + cast(float32)row * (item_height + 8.0), item_width, item_height}
+        level := first + cast(s32)index
+        current := level == editor.level
+        edited := Custom.HasCustomLevel(level)
+        if pointer.pressed && Input.PointInBounds(pointer.x, pointer.y, bounds) {
+            EditorSave()
+            editor.browsing = false
+            OpenEditor(level)
+        }
+        unused Box(session, BoxProps.{.key = 8710 + cast(u64)index, .bounds = bounds,
+            .fill = ifx current then Color.{46, 125, 74, 250} else Color.{240, 242, 232, 24},
+            .border = ifx edited then Color.{120, 220, 150, 255} else Color.{240, 242, 232, 90},
+            .radius = 10.0})
+        number := FormatInteger(cast(s64)(index + 1), editor_digits[:])
+        CentreText(session, 8760 + cast(u64)index, number,
+            Rectangle.{bounds.x, bounds.y + bounds.height * 0.32, bounds.width, bounds.height * 0.4},
+            cast(s32)(item_width * 0.3))
+        if edited {
+            unused Box(session, BoxProps.{.key = 8800 + cast(u64)index,
+                .bounds = Rectangle.{bounds.x + bounds.width - 14.0, bounds.y + 6.0, 8.0, 8.0},
+                .fill = Color.{120, 220, 150, 255}, .radius = 4.0})
+        }
+    }
+}
+
 DrawEditor :: (session: Session, area: Rectangle, now: s64) {
+    if editor.browsing { DrawLevelBrowser(session, area); return }
     stage_of_level := StageOf(editor.level)
     tiles := Sheet(stage_of_level)
     panel := Rectangle.{area.x + area.width - EDITOR_PANEL_WIDTH, area.y, EDITOR_PANEL_WIDTH, area.height}
@@ -440,8 +490,12 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     TextLine(session, 8202, "LEVEL", Rectangle.{panel.x + 8.0, panel.y + 8.0, 50.0, 20.0}, 14)
     TextLine(session, 8203, level_text, Rectangle.{panel.x + 60.0, panel.y + 8.0, 30.0, 20.0}, 14)
     TextLine(session, 8204, StageName(stage_of_level), Rectangle.{panel.x + 110.0, panel.y + 8.0, 90.0, 20.0}, 14)
+    if Button(session, ButtonProps.{.key = 8223, .bounds = Rectangle.{panel.x + panel.width - 38.0, panel.y + 6.0, 30.0, 30.0},
+            .label = "All levels", .icon_shape = "S2rr:M4 4H10V10H4V4ZM14 4H20V10H14V4ZM4 14H10V20H4V14ZM14 14H20V20H14V14Z",
+            .icon_only = true, .tone = ButtonTone.ButtonToneNeutral,
+            .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 { EditorSave(); editor.browsing = true }
     if editor.dirty {
-        TextLine(session, 8205, "unsaved", Rectangle.{panel.x + 170.0, panel.y + 8.0, 70.0, 20.0}, 13)
+        TextLine(session, 8205, "unsaved", Rectangle.{panel.x + 140.0, panel.y + 8.0, 60.0, 20.0}, 13)
     } else if editor.save_failed {
         unused Box(session, BoxProps.{.key = 8206, .bounds = Rectangle.{panel.x + 168.0, panel.y + 6.0, 74.0, 22.0},
             .fill = Color.{170, 40, 40, 235}, .radius = 6.0})
@@ -633,7 +687,12 @@ HandleInput :: (key: s32, now: s64) {
     } else if game.mode == MODE_VICTORY {
         if key == Input.KeyEnter || key == 32 || key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_EDITOR {
-        if key == Input.KeyEscape || key == 69 || key == 101 { EditorExit() }
+        if editor.browsing {
+            if key == Input.KeyEscape || key == 76 || key == 108 || key == 69 || key == 101 {
+                editor.browsing = false
+            }
+        } else if key == Input.KeyEscape || key == 69 || key == 101 { EditorExit() }
+        else if key == 76 || key == 108 { EditorSave(); editor.browsing = true }
         else if key == 265 || key == 87 || key == 119 { EditorSwitch(-1) }
         else if key == 264 || key == 83 || key == 115 { EditorSwitch(1) }
         else if key == Input.KeyEnter || key == 32 { EditorPlaytest(now) }
