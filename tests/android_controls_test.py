@@ -8,6 +8,8 @@ import shlex
 import subprocess
 import time
 
+from PIL import Image
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = 'xyz.waozi.wurm'
@@ -95,14 +97,20 @@ def main():
         command('press', label='Resume', role='button')
         wait('Ⅱ', 'button')
         board = wait('Steer the worm')
-        x = board['x'] + board['width'] / 2
-        y = board['y'] + board['height'] / 2
-        command('pointer', x=x, y=y, down=1)
-        command('pointer', x=x + 60, y=y, down=1)
-        command('pointer', x=x + 60, y=y, down=0)
-        playing = capture('steered')
+        before = next(node for node in command('tree')['nodes'] if node.get('key') == 2000)
+        # Use the OS touch path for steering, then inspect actual worm motion.
+        command('pointer', real=1)
+        with Image.open(OUTPUT / 'paused.png') as picture:
+            scale = picture.width / board['width']
+        x = round((board['x'] + board['width'] / 2) * scale)
+        y = round((board['y'] + board['height'] / 2) * scale)
+        shell('input', 'swipe', str(x), str(y), str(x + round(60 * scale)), str(y), '250')
+        playing = command('tree')
         assert sum(node.get('kind') == 'image' for node in playing['nodes']) > 3
+        after = next(node for node in playing['nodes'] if node.get('key') == 2000)
+        assert after['x'] > before['x'] + before['width'], (before, after)
         command('press', label='Ⅱ', role='button')
+        capture('steered')
         wait('Stages', 'button')
         command('press', label='Stages', role='button')
         wait('Play level', 'button')

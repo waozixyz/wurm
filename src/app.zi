@@ -14,6 +14,8 @@ Timer :: #import "std/timer_linux";
 Custom :: #import, file "custom_levels.zi";
 Audio :: #import, file "audio.zi";
 
+PLAY_STEERING_KEY :: 100000;
+
 // The playable board: the recovered 40x30 grid of 16-pixel cells.
 BOARD_WIDTH :: 640.0;
 BOARD_HEIGHT :: 480.0;
@@ -988,7 +990,9 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         DrawBoard(session, stage)
         // A swipe steers like the arrow keys, so touch plays in any orientation.
         if game.mode == MODE_PLAYING {
-            gesture := SwipeArea(session, SwipeAreaProps.{.key = 820, .bounds = stage,
+            // Tile keys cover 100..1299; the drag area needs its own stable
+            // identity so Press can retain a swipe across frames.
+            gesture := SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
                 .label = "Steer the worm", .now = cast(float64)now / 1000.0, .min_distance = 20.0})
             if gesture.swiped == 0 { Steer(DIR_LEFT) }
             else if gesture.swiped == 1 { Steer(DIR_UP) }
