@@ -137,8 +137,9 @@ On every push to master, the Downloads workflow runs the game and private
 display tests, builds a production APK and signs both names using repository
 secrets `WURM_ANDROID_KEYSTORE` and `WURM_ANDROID_KEYSTORE_PASSWORD`. A new
 changelog version is published only after those jobs succeed. Tags are created
-by that workflow. An already published version is kept; newer push builds
-remain available as workflow artifacts.
+by that workflow. Publishing uploads directly from the verified build to
+GitHub Releases, without using the shared Actions artifact quota. An already
+published version is kept; a new download requires a new changelog version.
 
 ## Art and sound
 

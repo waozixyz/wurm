@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: wurm-downloads
@@ -25,8 +25,6 @@ jobs:
     defaults:
       run:
         working-directory: waozixyz/wurm
-    outputs:
-      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -88,42 +86,11 @@ jobs:
           printf '%s\n' "$PASSWORD" > "$RUNNER_TEMP/wurm-password"
           python3 tools/android_release.py sign build/android/Apfelwurm-universal-release-unsigned.apk \
             --keystore "$RUNNER_TEMP/wurm-release.p12" --password-file "$RUNNER_TEMP/wurm-password"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: wurm-android
-          path: waozixyz/wurm/build/downloads/*.apk
-          if-no-files-found: error
-          retention-days: 7
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: wurm-verification
-          path: |
-            waozixyz/wurm/build/research/ui/*.png
-            waozixyz/wurm/build/research/ui/*.log
-            waozixyz/wurm/backup/android-release/verification.json
-          retention-days: 7
-
-  release:
-    name: Publish the new changelog version
-    needs: build
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      VERSION: ${{ needs.build.outputs.version }}
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: wurm-android
-          path: build/downloads
+      # Publish from this verified workspace: GitHub Actions artifact storage
+      # is account-wide and must not block the owner's release downloads.
       - name: Require both download names and extract release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           test -f "build/downloads/wurm-v$VERSION.apk"
           test -f "build/downloads/wurm-$VERSION-fdroid.apk"
@@ -137,12 +104,16 @@ jobs:
           print(section[1].strip())
           PY
       - name: Publish this version only after its downloads are ready
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           tag="v$VERSION"
           state=$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null || echo missing)
           if [ "$state" = false ]; then
-            echo "Apfelwurm $VERSION is already published; downloads remain available as this run's artifacts."
+            echo "Apfelwurm $VERSION is already published; the signed production build was verified again."
             exit 0
           fi
           if [ "$state" = missing ]; then
