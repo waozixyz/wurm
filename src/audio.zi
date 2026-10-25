@@ -1,25 +1,11 @@
-// Native SDL audio adapter. Game/rendering behavior remains in Ziran/Kryon.
+// One game mixer, with SDL desktop and raylib Android output.
 File :: #import "std/file_linux";
-sdl :: #system_library "SDL2";
-AudioInit :: (flags: u32) -> s32 #foreign sdl "SDL_InitSubSystem";
-VideoDriver :: () -> *u8 #foreign sdl "SDL_GetCurrentVideoDriver";
-AudioOpenDevice :: (name: *u8, capture: s32, desired: *AudioSpec, obtained: *AudioSpec, changes: s32) -> u32 #foreign sdl "SDL_OpenAudioDevice";
-AudioPauseDevice :: (device: u32, pause: s32) #foreign sdl "SDL_PauseAudioDevice";
-AudioQueue :: (device: u32, data: *u8, count: u32) -> s32 #foreign sdl "SDL_QueueAudio";
-AudioQueued :: (device: u32) -> u32 #foreign sdl "SDL_GetQueuedAudioSize";
-AudioClear :: (device: u32) #foreign sdl "SDL_ClearQueuedAudio";
-
-AudioSpec :: struct {
-    rate: s32
-    format: u16
-    channels: u8
-    silence: u8
-    samples: u16
-    padding: u16
-    size: u32
-    callback: *void
-    userdata: *void
+Output :: #import, file "audio_output.zi";
+#if #defined(ANDROID_BUILD) {
+    Assets :: #import "kryon/app_asset";
+    music_data: string;
 }
+
 Effect :: struct { bytes: [65536]u8; count: s32; position: s32; playing: bool; }
 device: u32;
 attempted: bool;
@@ -43,27 +29,84 @@ SignedSample :: (low: u8, high: u8) -> s32 {
     return value
 }
 
-LoadEffect :: (index: s32, path: string) {
-    file := File.OpenRead(path)
-    if !file.valid { return }
-    defer File.CloseFile(file)
-    count := File.ReadAt(file, effects[index].bytes[:], 0)
-    if count > 0 && count <= 65536 { effects[index].count = cast(s32)count }
+#if #defined(ANDROID_BUILD) {
+    LoadEffect :: (index: s32, path: string) {
+        data := Assets.ReadAppAsset(path)
+        defer Assets.FreeAppAsset(data)
+        if data.count > 65536 { return }
+        for at: 0..data.count - 1 { effects[index].bytes[at] = data[at] }
+        effects[index].count = cast(s32)data.count
+    }
+
+    ChangeMusic :: (track: s32) {
+        if music_track == track && music_data.count > 0 { return }
+        Assets.FreeAppAsset(music_data)
+        path := "assets/sounds/garden.pcm"
+        if track == 2 { path = "assets/sounds/space.pcm" }
+        else if track == 3 { path = "assets/sounds/factory.pcm" }
+        music_data = Assets.ReadAppAsset(path)
+        music_bytes = music_data.count
+        music_track = track
+        music_position = 0
+    }
+
+    ReadMusicSamples :: () {
+        if music_bytes <= 0 { return }
+        for at: 0..2047 {
+            music_samples[at] = music_data[music_position]
+            music_position = (music_position + 1) % music_bytes
+        }
+    }
+
+    CloseMusic :: () {
+        Assets.FreeAppAsset(music_data)
+        music_data = ""
+        music_bytes = 0
+    }
+} else {
+    LoadEffect :: (index: s32, path: string) {
+        file := File.OpenRead(path)
+        if !file.valid { return }
+        defer File.CloseFile(file)
+        count := File.ReadAt(file, effects[index].bytes[:], 0)
+        if count > 0 && count <= 65536 { effects[index].count = cast(s32)count }
+    }
+
+    ChangeMusic :: (track: s32) {
+        if music_track == track && music_file.valid { return }
+        if music_file.valid { File.CloseFile(music_file) }
+        music_track = track
+        music_position = 0
+        if track == 1 { music_file = File.OpenRead("assets/sounds/garden.pcm") }
+        else if track == 2 { music_file = File.OpenRead("assets/sounds/space.pcm") }
+        else { music_file = File.OpenRead("assets/sounds/factory.pcm") }
+        music_bytes = ifx music_file.valid then File.FileSize(music_file) else 0
+    }
+
+    ReadMusicSamples :: () {
+        if !music_file.valid || music_bytes <= 0 { return }
+        count := File.ReadAt(music_file, music_samples[:], music_position)
+        if count > 0 { music_position += count }
+        if music_position >= music_bytes { music_position = 0 }
+    }
+
+    CloseMusic :: () {
+        if music_file.valid { File.CloseFile(music_file) }
+        music_file.valid = false
+        music_bytes = 0
+    }
 }
 
 EnsureAudio :: () {
     // Display-free pixmap verification never opens a real audio device.
-    if attempted || VideoDriver() == null { return }
+    if attempted || !Output.Available() { return }
     attempted = true
-    if AudioInit(16) != 0 { return }
-    spec := AudioSpec.{.rate = 22050, .format = 32784, .channels = 1, .samples = 1024}
-    device = AudioOpenDevice(null, 0, *spec, null, 0)
+    device = Output.Open()
     if device == 0 { return }
     LoadEffect(0, "assets/sounds/start.pcm")
     LoadEffect(1, "assets/sounds/exit.pcm")
     LoadEffect(2, "assets/sounds/lose.pcm")
     LoadEffect(3, "assets/sounds/pickup.pcm")
-    AudioPauseDevice(device, 0)
 }
 
 PlayEffect :: (index: s32) {
@@ -71,31 +114,16 @@ PlayEffect :: (index: s32) {
     effects[index].playing = true
 }
 
-ChangeMusic :: (track: s32) {
-    if music_track == track && music_file.valid { return }
-    if music_file.valid { File.CloseFile(music_file) }
-    music_track = track
-    music_position = 0
-    if track == 1 { music_file = File.OpenRead("assets/sounds/garden.pcm") }
-    else if track == 2 { music_file = File.OpenRead("assets/sounds/space.pcm") }
-    else { music_file = File.OpenRead("assets/sounds/factory.pcm") }
-    music_bytes = ifx music_file.valid then File.FileSize(music_file) else 0
-}
-
 ToggleMute :: () {
     muted = !muted
-    if device != 0 { AudioClear(device) }
+    if device != 0 { Output.Clear(device) }
 }
 
 PumpAudio :: () {
     if device == 0 || muted { return }
-    while AudioQueued(device) < 4096 {
+    while Output.Ready(device) {
         for index: 0..2047 { music_samples[index] = 0 }
-        if music_file.valid && music_bytes > 0 {
-            count := File.ReadAt(music_file, music_samples[:], music_position)
-            if count > 0 { music_position += count }
-            if music_position >= music_bytes { music_position = 0 }
-        }
+        ReadMusicSamples()
         for index: 0..1023 {
             value := SignedSample(music_samples[index * 2], music_samples[index * 2 + 1]) / 2
             for effect: 0..3 {
@@ -110,7 +138,7 @@ PumpAudio :: () {
             if value < -32768 { value = -32768 }
             mixed[index] = cast(s16)value
         }
-        if AudioQueue(device, cast(*u8)*mixed[0], 2048) != 0 { return }
+        if !Output.Submit(device, mixed[:]) { return }
     }
 }
 
@@ -129,9 +157,8 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
         }
         PumpAudio()
     } else if was_playing {
-        AudioClear(device)
-        if music_file.valid { File.CloseFile(music_file) }
-        music_file.valid = false
+        Output.Clear(device)
+        CloseMusic()
         for index: 0..3 { effects[index].playing = false }
     }
     was_playing = playing

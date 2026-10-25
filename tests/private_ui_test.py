@@ -153,7 +153,7 @@ def main():
         edited = ROOT / "build/research/ui/levels/level33.dat"
         original = (ROOT / "assets/original/level33.dat").read_bytes()
         painted = edited.read_bytes()
-        assert len(painted) == 1201, f"override size {len(painted)}"
+        assert len(painted) == 2401, f"override size {len(painted)}"
         assert painted[0] == original[0], "apple count unchanged"
         assert painted[1] == 0 and original[1] == 20, "cell (0, 0) painted from wall to floor"
 

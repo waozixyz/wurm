@@ -1,8 +1,11 @@
 // Owner edits of the recovered levels. Each edited level is one file beside
-// the originals, in the archive's own LEVELn.DAT layout: the apple count,
-// then the 40x30 tiles in the original column order. A missing file leaves
-// the recovered original in play, so deleting a saved file restores it.
+// the originals, in the archive's own LEVELn.DAT layout plus an object
+// plane: the apple count, the 40x30 tiles, then the 40x30 object ids, all
+// in the original column order. Old files without objects load with none.
+// A missing file leaves the recovered original in play, so deleting a
+// saved file restores it.
 #import, file "game.zi";
+#import, file "level_directory.zi";
 Originals :: #import, file "original_levels.zi";
 File :: #import "std/file_linux";
 #import "std/c_string"
@@ -13,6 +16,7 @@ libc :: #system_library "libc";
 GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
 
 LEVEL_FILE_BYTES :: 1201;
+LEVEL_FILE_V2_BYTES :: 2401;
 
 // The archive and editor layout is always the canonical 40x30 grid,
 // independent of the orientation the engine is playing.
@@ -24,6 +28,7 @@ custom_loaded: bool;
 custom_present: [LEVEL_COUNT]bool;
 custom_apples: [LEVEL_COUNT]s32;
 custom_boards: [LEVEL_COUNT][CELLS]u8;
+custom_objects: [LEVEL_COUNT][CELLS]u8;
 
 CopyText :: (buffer: []u8, at: s32, text: string) -> s32 {
     for index: 0..text.count - 1 { buffer[at + index] = text[index] }
@@ -84,23 +89,40 @@ EnsureLoaded :: () {
     if custom_loaded { return }
     custom_loaded = true
     if custom_root_length == 0 {
-        custom_root_length = CopyText(custom_root[:], 0, "assets/levels/")
+        root := LevelDirectory()
+        if root.count + 1 > custom_root.count { return }
+        custom_root_length = CopyText(custom_root[:], 0, root)
         ApplyEnvironmentRoot()
     }
-    bytes: [LEVEL_FILE_BYTES]u8
+    bytes: [LEVEL_FILE_V2_BYTES]u8
     for level: 0..LEVEL_COUNT - 1 {
         file := File.OpenRead(LevelPath(cast(s32)level, ".dat"))
-        if !file.valid { continue }
-        size := File.FileSize(file)
-        read := File.ReadAt(file, bytes[:], 0)
-        File.CloseFile(file)
-        if size != LEVEL_FILE_BYTES || read != LEVEL_FILE_BYTES { continue }
+        size: s64
+        read: s64
+        if file.valid {
+            size = File.FileSize(file)
+            if size != LEVEL_FILE_BYTES && size != LEVEL_FILE_V2_BYTES {
+                File.CloseFile(file)
+                continue
+            }
+            read = File.ReadAt(file, bytes[0:cast(s64)size], 0)
+            File.CloseFile(file)
+        } else {
+            size = ReadBundledLevel(cast(s32)level, bytes[:])
+            read = size
+        }
+        if size != LEVEL_FILE_BYTES && size != LEVEL_FILE_V2_BYTES { continue }
+        if read != size { continue }
         custom_present[level] = true
         custom_apples[level] = cast(s32)bytes[0]
         for column: 0..COLUMNS - 1 {
             for row: 0..ROWS - 1 {
                 custom_boards[level][At(column, row)] =
                     bytes[1 + column * ROWS + row]
+                if size == LEVEL_FILE_V2_BYTES {
+                    custom_objects[level][At(column, row)] =
+                        bytes[1 + CELLS + column * ROWS + row]
+                }
             }
         }
     }
@@ -128,6 +150,15 @@ EffectiveApples :: (level: s32) -> s32 {
     return Originals.OriginalApples[level]
 }
 
+EffectiveObjects :: (level: s32, objects: []u8) {
+    EnsureLoaded()
+    for at: 0..CELLS - 1 { objects[at] = 0 }
+    if level < 0 || level >= LEVEL_COUNT { return }
+    if custom_present[level] {
+        for at: 0..CELLS - 1 { objects[at] = custom_objects[level][at] }
+    }
+}
+
 // The raw tiles a level starts from: the saved override when one exists,
 // otherwise the recovered original.
 EffectiveBoard :: (level: s32, board: []u8) {
@@ -147,17 +178,18 @@ EffectiveBoard :: (level: s32, board: []u8) {
     }
 }
 
-// Writes the override through a temporary file so a failed save never
-// replaces a good one, then refreshes the cache.
-SaveCustomLevel :: (level: s32, board: []u8, apples: s32) -> bool {
+// Writes the override, tiles and objects, through a temporary file so a
+// failed save never replaces a good one, then refreshes the cache.
+SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32) -> bool {
     EnsureLoaded()
     if level < 0 || level >= LEVEL_COUNT { return false }
     unused File.CreateDirectory(RootText())
-    bytes: [LEVEL_FILE_BYTES]u8
+    bytes: [LEVEL_FILE_V2_BYTES]u8
     bytes[0] = cast(u8)apples
     for column: 0..COLUMNS - 1 {
         for row: 0..ROWS - 1 {
             bytes[1 + column * ROWS + row] = board[At(column, row)]
+            bytes[1 + CELLS + column * ROWS + row] = objects[At(column, row)]
         }
     }
     // LevelPath borrows one buffer, so the temporary name is copied aside
@@ -169,7 +201,7 @@ SaveCustomLevel :: (level: s32, board: []u8, apples: s32) -> bool {
     if !file.valid { return false }
     written := File.WriteAt(file, bytes[:], 0)
     File.CloseFile(file)
-    if written != LEVEL_FILE_BYTES {
+    if written != LEVEL_FILE_V2_BYTES {
         unused File.RemoveFile(temporary_text)
         return false
     }
@@ -179,7 +211,10 @@ SaveCustomLevel :: (level: s32, board: []u8, apples: s32) -> bool {
     }
     custom_present[level] = true
     custom_apples[level] = apples
-    for at: 0..CELLS - 1 { custom_boards[level][at] = board[at] }
+    for at: 0..CELLS - 1 {
+        custom_boards[level][at] = board[at]
+        custom_objects[level][at] = objects[at]
+    }
     return true
 }
 

@@ -32,6 +32,9 @@ backend = "desktop"
 codegen = "zib"
 assets = "assets"
 
+[tool.kryon.profiles.android]
+backend = "android"
+
 [tool.kryon.profiles.shot]
 backend = "pixmap"
 library = "SDL2"
@@ -47,6 +50,7 @@ working_directory = "."
 # The application id.
 [tool.kryon.android]
 package = "xyz.waozi.wurm"
+abis = "arm64-v8a,armeabi-v7a"
 
 [dependencies.mingcute]
 git = "https://github.com/kryonlabs/mingcute.git"

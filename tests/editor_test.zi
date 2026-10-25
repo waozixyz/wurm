@@ -44,7 +44,11 @@ main :: () -> s32 {
     board[Index(10, 10)] = 0
     board[Index(11, 10)] = 42
     board[Index(12, 10)] = 130
-    Expect(Custom.SaveCustomLevel(2, board[:], 7), "override saves")
+    objects: [CELLS]u8
+    for at: 0..CELLS - 1 { objects[at] = 0 }
+    objects[Index(10, 10)] = OBJECT_LOG
+    objects[Index(11, 10)] = OBJECT_BUTTERFLY
+    Expect(Custom.SaveCustomLevel(2, board[:], objects[:], 7), "override saves")
     Expect(Custom.HasCustomLevel(2), "saved override is present")
     Expect(Custom.EffectiveApples(2) == 7, "override apple count applies")
     Expect(Custom.EffectiveTile(2, 10, 10) == 0, "override floor applies")
@@ -54,20 +58,46 @@ main :: () -> s32 {
     file := File.OpenRead("build/test-levels/level3.dat")
     Expect(file.valid, "override file exists")
     if file.valid {
-        bytes: [1201]u8
+        bytes: [2401]u8
         read := File.ReadAt(file, bytes[:], 0)
         File.CloseFile(file)
-        Expect(read == 1201, "override file size")
+        Expect(read == 2401, "override file size")
         Expect(cast(s32)bytes[0] == 7, "apple count leads the file")
         Expect(bytes[1 + 10 * 30 + 10] == 0, "floor in column order")
         Expect(bytes[1 + 11 * 30 + 10] == 42, "marker in column order")
         Expect(bytes[1 + 12 * 30 + 10] == 130, "false wall in column order")
+        Expect(bytes[1 + 1200 + 10 * 30 + 10] == OBJECT_LOG, "log object in column order")
+        Expect(bytes[1 + 1200 + 11 * 30 + 10] == OBJECT_BUTTERFLY, "butterfly object in column order")
     }
+    loaded_objects: [CELLS]u8
+    Custom.EffectiveObjects(2, loaded_objects[:])
+    Expect(loaded_objects[Index(10, 10)] == OBJECT_LOG, "object override applies")
+    Expect(loaded_objects[Index(11, 10)] == OBJECT_BUTTERFLY, "second object applies")
 
     Expect(Custom.ClearCustomLevel(2), "override clears")
     Expect(!Custom.HasCustomLevel(2), "cleared override is gone")
     Expect(Custom.EffectiveApples(2) == OriginalApples[2], "clear restores the original")
     Expect(Custom.EffectiveTile(2, 10, 10) == OriginalTile(2, 10, 10), "clear restores original tiles")
+
+    // The smart hedge brush fits pieces to their open sides: a wall boxed in
+    // from east, south and west wears grass only on its north side (51),
+    // and a corner between two walls opens two sides (57).
+    for at: 0..CELLS - 1 { board[at] = 0 }
+    board[Index(6, 5)] = 20
+    board[Index(4, 5)] = 20
+    board[Index(5, 6)] = 20
+    ApplyWallBrush(board[:], 5, 5)
+    Expect(board[Index(5, 5)] == 51, "a wall boxed from three sides opens north only")
+    board[Index(6, 6)] = 20
+    ApplyWallBrush(board[:], 6, 6)
+    Expect(board[Index(6, 6)] == 57, "the outer corner of the block opens east and south")
+    for at: 0..CELLS - 1 { board[at] = 0 }
+    board[Index(5, 6)] = 20
+    board[Index(6, 5)] = 20
+    ApplyWallBrush(board[:], 6, 6)
+    Expect(board[Index(6, 6)] == 57, "a corner between walls opens east and south")
+    ApplyFloorBrush(board[:], 5, 6, 0)
+    Expect(board[Index(6, 6)] == 20, "three open sides fall back to the plain piece")
 
     // Turning the level for portrait and back loses nothing.
     turned: [CELLS]u8
@@ -83,7 +113,10 @@ main :: () -> s32 {
     for at: 0..CELLS - 1 { board[at] = 0 }
     board[Index(3, 3)] = 45
     game: Game
-    LoadLevelData(*game, 0, 0, board[:], 2, COLUMNS, ROWS)
+    for at: 0..CELLS - 1 { objects[at] = 0 }
+    objects[Index(5, 5)] = OBJECT_SNAIL
+    LoadLevelData(*game, 0, 0, board[:], 2, COLUMNS, ROWS, objects[:])
+    Expect(game.objects[Index(5, 5)] == OBJECT_SNAIL, "objects ride into play")
     Expect(game.monster_count == 1 && game.monsters[0].kind == 6, "editor board spawns its monster")
     Expect(game.board[Index(3, 3)] == 0, "marker cell becomes floor")
 

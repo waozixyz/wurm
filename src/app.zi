@@ -38,9 +38,14 @@ PAGE_COUNT :: OPEN_STAGES + 1;
 // The level editor paints one level's raw tiles and apple count, and saves
 // them as an override beside the recovered originals (custom_levels.zi).
 EDITOR_PANEL_WIDTH :: 248.0;
+// Brush values: 0..127 paint tiles, 128 is the smart hedge, 200+id paint
+// decoration objects.
+BRUSH_SMART_WALL :: 128;
+BRUSH_OBJECT :: 200;
 EditorState :: struct {
     level: s32
     board: [CELLS]u8
+    objects: [CELLS]u8
     apples: s32
     brush: s32
     dirty: bool
@@ -130,7 +135,7 @@ Overlay :: (session: Session, stage: Rectangle, title: string, message: string, 
     card_width := stage.width * 0.74
     if card_width > 400.0 { card_width = 400.0 }
     if card_width < 220.0 { card_width = 220.0 }
-    card_height: float32 = ifx score >= 0 then 138.0 else 104.0
+    card_height: float32 = ifx score >= 0 then 194.0 else 160.0
     card := Rectangle.{stage.x + (stage.width - card_width) / 2.0,
         stage.y + stage.height * 0.34, card_width, card_height}
     unused Box(session, BoxProps.{.key = 51, .bounds = card, .fill = Color.{240, 242, 232, 250}, .radius = 14.0})
@@ -144,6 +149,22 @@ Overlay :: (session: Session, stage: Rectangle, title: string, message: string, 
         CentreText(session, 56, message, Rectangle.{card.x + 10.0, card.y + 96.0, card.width - 20.0, 36.0}, 14)
     } else {
         CentreText(session, 53, message, Rectangle.{card.x + 10.0, card.y + 56.0, card.width - 20.0, 40.0}, 15)
+    }
+    button_y := card.y + card.height - 50.0
+    button_width := (card.width - 36.0) / 2.0
+    primary := ifx game.mode == MODE_PAUSED then "Resume" else "Retry"
+    if game.mode == MODE_VICTORY { primary = "Stages" }
+    if Button(session, ButtonProps.{.key = 57,
+            .bounds = Rectangle.{card.x + 12.0, button_y, button_width, 40.0},
+            .label = primary, .tone = ButtonTone.ButtonToneSuccess,
+            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
+        key: s32 = cast(s32)(ifx game.mode == MODE_PAUSED then Input.KeyEscape else Input.KeyEnter)
+        HandleInput(key, Timer.MonotonicMilliseconds())
+    }
+    if Button(session, ButtonProps.{.key = 58,
+            .bounds = Rectangle.{card.x + 24.0 + button_width, button_y, button_width, 40.0},
+            .label = "Stages", .tone = ButtonTone.ButtonToneSuccess}) != 0 {
+        LeavePlay()
     }
 }
 
@@ -254,6 +275,7 @@ DrawBoard :: (session: Session, stage: Rectangle) {
         Sprite(session, 6000 + cast(u64)monster, stage, game.monsters[monster].position,
             Rectangle.{cast(float32)(game.monsters[monster].kind - 1) * 16.0, 32.0, 16.0, 16.0}, sprites)
     }
+    DrawObjects(session, stage, game.objects[:], 9000, sprites, game_portrait)
     for particle: 0..99 {
         life := game.particles[particle].life
         if life > 1 && life <= 12 {
@@ -292,20 +314,26 @@ OpenStages :: () {
 PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, force_turn: bool = false) {
     board: [CELLS]u8
     turned: [CELLS]u8
+    objects: [CELLS]u8
+    turned_objects: [CELLS]u8
     Custom.EnsureLoaded()
     Custom.EffectiveBoard(level, board[:])
+    Custom.EffectiveObjects(level, objects[:])
     apples := Custom.EffectiveApples(level)
     source := board[:]
+    object_source := objects[:]
     columns: s32 = COLUMNS
     rows: s32 = ROWS
     if game_portrait || force_turn {
         TurnForward(board[:], turned[:])
+        TurnForward(objects[:], turned_objects[:])
         source = turned[:]
+        object_source = turned_objects[:]
         columns = ROWS
         rows = COLUMNS
     }
-    if restart { LoadLevelData(*game, level, now, source, apples, columns, rows) }
-    else { StartGameData(*game, level, now, seed, source, apples, columns, rows) }
+    if restart { LoadLevelData(*game, level, now, source, apples, columns, rows, object_source) }
+    else { StartGameData(*game, level, now, seed, source, apples, columns, rows, object_source) }
 }
 StartLevel :: (level: s32, now: s64, seed: u32) { PlayBoard(level, now, seed, false) }
 ReloadLevel :: (level: s32, now: s64) { PlayBoard(level, now, 1, true) }
@@ -327,13 +355,17 @@ EditorAtStartup :: (level: s32) {
 
 EditorLoad :: (level: s32) {
     board: [CELLS]u8
+    objects: [CELLS]u8
     Custom.EnsureLoaded()
     Custom.EffectiveBoard(level, board[:])
+    Custom.EffectiveObjects(level, objects[:])
     if editor.turned {
         TurnForward(board[:], editor.board[:])
+        TurnForward(objects[:], editor.objects[:])
         BoardSize(ROWS, COLUMNS)
     } else {
         editor.board = board
+        editor.objects = objects
         BoardSize(COLUMNS, ROWS)
     }
     editor.apples = Custom.EffectiveApples(level)
@@ -352,32 +384,35 @@ OpenEditor :: (level: s32) {
 // T stands the working level up on its side, exactly as portrait plays it,
 // and back again; the working tiles and edits turn with it.
 EditorTurn :: () {
-    turned: [CELLS]u8
+    tiles: [CELLS]u8
+    decorations: [CELLS]u8
     if editor.turned {
-        TurnBack(editor.board[:], turned[:])
-        editor.board = turned
+        TurnBack(editor.board[:], tiles[:])
+        TurnBack(editor.objects[:], decorations[:])
         editor.turned = false
         BoardSize(COLUMNS, ROWS)
     } else {
-        TurnForward(editor.board[:], turned[:])
-        editor.board = turned
+        TurnForward(editor.board[:], tiles[:])
+        TurnForward(editor.objects[:], decorations[:])
         editor.turned = true
         BoardSize(ROWS, COLUMNS)
     }
+    editor.board = tiles
+    editor.objects = decorations
 }
 
 EditorSave :: () {
     if !editor.dirty { return }
+    tiles: [CELLS]u8
+    objects: [CELLS]u8
     if editor.turned {
-        canonical: [CELLS]u8
-        TurnBack(editor.board[:], canonical[:])
-        if Custom.SaveCustomLevel(editor.level, canonical[:], editor.apples) {
-            editor.dirty = false
-            editor.save_failed = false
-        } else { editor.save_failed = true }
-        return
+        TurnBack(editor.board[:], tiles[:])
+        TurnBack(editor.objects[:], objects[:])
+    } else {
+        tiles = editor.board
+        objects = editor.objects
     }
-    if Custom.SaveCustomLevel(editor.level, editor.board[:], editor.apples) {
+    if Custom.SaveCustomLevel(editor.level, tiles[:], objects[:], editor.apples) {
         editor.dirty = false
         editor.save_failed = false
     } else { editor.save_failed = true }
@@ -427,23 +462,39 @@ EditorSetApples :: (delta: s32) {
     editor.dirty = true
 }
 
+// One palette swatch: the brush value it selects and its sheet art.
+PaletteEntry :: struct { brush: s32; source_x: float32; source_y: float32 }
+floor_entries: [4]PaletteEntry = .[
+    .{0, 0.0, 0.0}, .{1, 16.0, 0.0}, .{2, 32.0, 0.0}, .{22, 32.0, 16.0}];
+wall_entries: [3]PaletteEntry = .[
+    .{BRUSH_SMART_WALL, 160.0, 32.0}, .{20, 0.0, 16.0}, .{21, 16.0, 16.0}];
+object_entries: [7]PaletteEntry = .[
+    .{BRUSH_OBJECT + OBJECT_LOG, 0.0, 208.0},
+    .{BRUSH_OBJECT + OBJECT_FLOWERS, 16.0, 208.0},
+    .{BRUSH_OBJECT + OBJECT_MUSHROOM, 32.0, 208.0},
+    .{BRUSH_OBJECT + OBJECT_ROCK, 48.0, 208.0},
+    .{BRUSH_OBJECT + OBJECT_BUTTERFLY, 64.0, 208.0},
+    .{BRUSH_OBJECT + OBJECT_SNAIL, 96.0, 208.0},
+    .{BRUSH_OBJECT + OBJECT_BIRD, 112.0, 208.0}];
+
 // One titled run of palette swatches. Returns the content cursor below it.
 DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32, label: string,
-                    first: s32, count: s32, tiles: string,
+                    entries: []PaletteEntry, tiles: string,
                     pointer_x: float32, pointer_y: float32, pointer_pressed: bool) -> s32 {
     TextLine(session, key, label, Rectangle.{content.x, content.y + cast(float32)cursor, content.width, 22.0}, 13)
+    count := cast(s32)entries.count
     for index: 0..count - 1 {
         column := index % 6
         row := index / 6
         bounds := Rectangle.{content.x + cast(float32)(column * 38),
             content.y + cast(float32)(cursor + 26 + row * 38), 34.0, 34.0}
-        value := first + index
+        value := entries[index].brush
         if pointer_pressed && Input.PointInBounds(pointer_x, pointer_y, bounds) { editor.brush = value }
         selected := editor.brush == value
         unused Box(session, BoxProps.{.key = key + 10 + cast(u64)index, .bounds = bounds,
             .fill = ifx selected then Color.{46, 125, 74, 235} else Color.{255, 255, 255, 30}, .radius = 6.0})
         Picture(session, key + 80 + cast(u64)index, tiles, Rectangle.{bounds.x + 1.0, bounds.y + 1.0, 32.0, 32.0},
-            Rectangle.{cast(float32)(value % 20) * 16.0, cast(float32)(value / 20) * 16.0, 16.0, 16.0})
+            Rectangle.{entries[index].source_x, entries[index].source_y, 16.0, 16.0})
     }
     rows := (count + 5) / 6
     return cursor + 26 + rows * 38 + 10
@@ -525,15 +576,31 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
         cell_y := cast(s32)((pointer.y - stage.y) / (16.0 * scale))
         if Inside(cell_x, cell_y) {
             at := Index(cell_x, cell_y)
-            if pointer.down && editor.board[at] != cast(u8)editor.brush {
-                editor.board[at] = cast(u8)editor.brush
-                editor.dirty = true
+            if pointer.down {
+                if editor.brush == BRUSH_SMART_WALL {
+                    ApplyWallBrush(editor.board[:], cell_x, cell_y)
+                    editor.dirty = true
+                } else if editor.brush >= BRUSH_OBJECT {
+                    object := cast(u8)(editor.brush - BRUSH_OBJECT)
+                    if editor.objects[at] != object {
+                        editor.objects[at] = object
+                        editor.dirty = true
+                    }
+                } else if editor.board[at] != cast(u8)editor.brush {
+                    ApplyFloorBrush(editor.board[:], cell_x, cell_y, cast(u8)editor.brush)
+                    editor.dirty = true
+                }
             }
             if secondary.down {
-                original := OriginalTile(editor.level, cell_x, cell_y)
-                if editor.board[at] != original {
-                    editor.board[at] = original
+                if editor.objects[at] != 0 {
+                    editor.objects[at] = 0
                     editor.dirty = true
+                } else {
+                    original := OriginalTile(editor.level, cell_x, cell_y)
+                    if editor.board[at] != original {
+                        editor.board[at] = original
+                        editor.dirty = true
+                    }
                 }
             }
         }
@@ -553,6 +620,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
             }
         }
     }
+    DrawObjects(session, stage, editor.objects[:], 6400, tiles, false)
     // The fixed entrance and exit the game carves at runtime, marked so a
     // level is never drawn without its way in and out. These keys sit below
     // the canvas tile range, which starts at 5000.
@@ -611,17 +679,15 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     }
 
     inner := Rectangle.{panel.x + 8.0, panel.y + 104.0, panel.width - 16.0, panel.height - 254.0}
-    palette := Scroll(session, ScrollProps.{.key = 8214, .bounds = inner, .content_height = 530,
+    palette := Scroll(session, ScrollProps.{.key = 8214, .bounds = inner, .content_height = 300,
         .scroll_offset = editor.palette_scroll})
     editor.palette_scroll = palette.scroll_offset
     if palette.opened {
-        cursor := DrawPalettePart(session, 8300, palette.content, 6, "FLOOR", 0, 19, tiles,
+        cursor := DrawPalettePart(session, 8300, palette.content, 6, "FLOOR", floor_entries[:], tiles,
             pointer.x, pointer.y, pointer.pressed)
-        cursor = DrawPalettePart(session, 8400, palette.content, cursor, "WALL", 20, 17, tiles,
+        cursor = DrawPalettePart(session, 8400, palette.content, cursor, "WALL", wall_entries[:], tiles,
             pointer.x, pointer.y, pointer.pressed)
-        cursor = DrawPalettePart(session, 8500, palette.content, cursor, "FALSE WALL", 128, 12, tiles,
-            pointer.x, pointer.y, pointer.pressed)
-        unused DrawPalettePart(session, 8600, palette.content, cursor, "MONSTERS", 40, 6, tiles,
+        unused DrawPalettePart(session, 8600, palette.content, cursor, "OBJECTS", object_entries[:], tiles,
             pointer.x, pointer.y, pointer.pressed)
         unused End(session)
     }
@@ -791,6 +857,27 @@ HandleInput :: (key: s32, now: s64) {
 // steering keys turn with it, so Up always means visually up.
 game_portrait: bool;
 
+// Decoration objects above the tiles; the butterfly flaps on the water
+// clock. Object art sits in sheet row 208, one cell per object kind.
+DrawObjects :: (session: Session, stage: Rectangle, objects: []u8, key_base: u64, sheet: string, turn: bool) {
+    for y: 0..board_rows - 1 {
+        for x: 0..board_columns - 1 {
+            object := cast(s32)objects[Index(x, y)]
+            if object == 0 { continue }
+            column := object - 1
+            if object == OBJECT_BUTTERFLY { column += water_frame % 2 }
+            scale := stage.width / (cast(float32)board_columns * 16.0)
+            left := Snap(stage.x + cast(float32)x * 16.0 * scale)
+            top := Snap(stage.y + cast(float32)y * 16.0 * scale)
+            bounds := Rectangle.{left, top, Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale) - left,
+                Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale) - top}
+            Picture(session, key_base + cast(u64)Index(x, y), sheet, bounds,
+                Rectangle.{cast(float32)column * 16.0, 208.0, 16.0, 16.0})
+        }
+    }
+    unused turn
+}
+
 // A swipe steers like the arrow keys: never into the worm's own neck.
 Steer :: (direction: s32) {
     if game.length >= 8 && direction != (game.direction + 2) % 4 { game.next_direction = direction }
@@ -808,6 +895,13 @@ Badge :: (session: Session, key: u64, text: string, bounds: Rectangle) {
 // carry their hint instead of the play icons.
 DrawTopBar :: (session: Session, hud: Rectangle) {
     unused Box(session, BoxProps.{.key = 10, .bounds = hud, .fill = Color.{31, 78, 46, 255}})
+    if game.mode == MODE_PLAYING {
+        if Button(session, ButtonProps.{.key = 59,
+                .bounds = Rectangle.{hud.x + hud.width - 140.0, hud.y + 3.0, 44.0, 36.0},
+                .label = "Ⅱ", .tone = ButtonTone.ButtonToneSuccess}) != 0 {
+            HandleInput(Input.KeyEscape, Timer.MonotonicMilliseconds())
+        }
+    }
     icon: float32 = 20.0
     top := hud.y + (hud.height - icon) / 2.0
     at: float32 = hud.x + 12.0
