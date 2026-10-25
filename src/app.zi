@@ -29,8 +29,10 @@ StagePager :: struct { selected: s32; position: float32; time: float64; }
 pager: StagePager;
 stage_levels: [STAGE_COUNT]s32;
 // Only Garden is open for now. Space and Factory keep their levels and art,
-// and come back by raising this.
+// and come back by raising this. The title screen pages stage covers and,
+// after them, one Level Editor page you swipe to.
 OPEN_STAGES :: 1;
+PAGE_COUNT :: OPEN_STAGES + 1;
 
 // The level editor paints one level's raw tiles and apple count, and saves
 // them as an override beside the recovered originals (custom_levels.zi).
@@ -52,7 +54,7 @@ editor: EditorState;
 editor_digits: [21]u8;
 brush_digits: [21]u8;
 
-Wrap :: (page: s32) -> s32 { return ((page % OPEN_STAGES) + OPEN_STAGES) % OPEN_STAGES }
+Wrap :: (page: s32) -> s32 { return ((page % PAGE_COUNT) + PAGE_COUNT) % PAGE_COUNT }
 
 StageName :: (stage: s32) -> string {
     if stage == 1 { return "SPACE" }
@@ -226,10 +228,16 @@ DrawBoard :: (session: Session, stage: Rectangle) {
     }
 }
 
-// A stage page: its cover filling the page.
+// A stage page: its cover filling the page. The editor page shows the
+// garden cover under a working veil, so it reads as a place, not a stage.
 DrawStagePage :: (session: Session, page: Rectangle, stage: s32) {
-    unused Image(session, ImageProps.{.key = 9000 + cast(u64)stage, .asset_path = Cover(stage), .bounds = page,
+    cover := ifx stage >= OPEN_STAGES then Cover(0) else Cover(stage)
+    unused Image(session, ImageProps.{.key = 9000 + cast(u64)stage, .asset_path = cover, .bounds = page,
         .fit = ImageFit.ImageFitCover, .smooth = true, .alt_text = StageName(stage)})
+    if stage >= OPEN_STAGES {
+        unused Box(session, BoxProps.{.key = 9500 + cast(u64)stage, .bounds = page,
+            .fill = Color.{14, 34, 20, 190}})
+    }
 }
 
 OpenStages :: () {
@@ -274,9 +282,11 @@ LeavePlay :: () {
     else { OpenStages() }
 }
 
-// The desktop host's WURM_START=editor entry: straight into the editor.
+// The desktop host's WURM_START=editor entry: straight into the editor,
+// facing its all-levels view.
 EditorAtStartup :: (level: s32) {
     game.started = true
+    editor.browsing = true
     OpenEditor(level)
 }
 
@@ -357,6 +367,8 @@ EditorExit :: () {
     editor.playtest = false
     editor.turned = false
     OpenStages()
+    pager.selected = OPEN_STAGES
+    pager.position = cast(float32)OPEN_STAGES
 }
 
 EditorPlaytest :: (now: s64) {
@@ -405,19 +417,22 @@ DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32,
 // The editor screen: the level as raw tiles on the left, brush palette and
 // actions on the right. The held left button paints, the right button
 // restores the recovered original tile under it.
-// Every level of the stage on one screen: a numbered card each, a green
-// dot on saved edits, the current level highlighted, one click to edit.
+// The level selector, Shovey-style: one card per level with its board
+// sampled small as the picture, the number as the caption, a green frame on
+// saved edits, the current level filled, one click to edit. Back returns.
 DrawLevelBrowser :: (session: Session, area: Rectangle) {
     unused Box(session, BoxProps.{.key = 8700, .bounds = area, .fill = Color.{18, 26, 20, 255}})
-    CentreText(session, 8701, StageName(StageOf(editor.level)), Rectangle.{area.x, area.y + 10.0, area.width, 30.0}, 22)
-    CentreText(session, 8702, "click a level to edit it · Esc returns",
-        Rectangle.{area.x, area.y + 40.0, area.width, 20.0}, 13)
+    if Button(session, ButtonProps.{.key = 8703, .bounds = Rectangle.{area.x + 10.0, area.y + 8.0, 88.0, 36.0},
+            .label = "Back", .tone = ButtonTone.ButtonToneNeutral}) != 0 { editor.browsing = false; return }
+    CentreText(session, 8701, StageName(StageOf(editor.level)),
+        Rectangle.{area.x + 110.0, area.y + 10.0, area.width - 220.0, 28.0}, 20)
     first := StageOf(editor.level) * STAGE_LEVELS
+    sheet := Sheet(StageOf(editor.level))
     columns: s32 = 8
     for candidate: 4..11 {
         rows := (STAGE_LEVELS + candidate - 1) / candidate
         item_width := (area.width - 16.0 - cast(float32)(candidate - 1) * 8.0) / cast(float32)candidate
-        total := cast(float32)rows * (item_width * 0.75 + 30.0) + cast(float32)(rows - 1) * 8.0 + 72.0
+        total := cast(float32)rows * (item_width * 0.75 + 30.0) + cast(float32)(rows - 1) * 8.0 + 56.0
         if total <= area.height { columns = cast(s32)candidate; break }
     }
     rows := (STAGE_LEVELS + columns - 1) / columns
@@ -428,7 +443,7 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
         column := index % columns
         row := index / columns
         bounds := Rectangle.{area.x + 8.0 + cast(float32)column * (item_width + 8.0),
-            area.y + 72.0 + cast(float32)row * (item_height + 8.0), item_width, item_height}
+            area.y + 56.0 + cast(float32)row * (item_height + 8.0), item_width, item_height}
         level := first + cast(s32)index
         current := level == editor.level
         edited := Custom.HasCustomLevel(level)
@@ -436,17 +451,31 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
             EditorSave()
             editor.browsing = false
             OpenEditor(level)
+            return
         }
         unused Box(session, BoxProps.{.key = 8710 + cast(u64)index, .bounds = bounds,
-            .fill = ifx current then Color.{46, 125, 74, 250} else Color.{240, 242, 232, 24},
+            .fill = ifx current then Color.{46, 125, 74, 250} else Color.{240, 242, 232, 26},
             .border = ifx edited then Color.{120, 220, 150, 255} else Color.{240, 242, 232, 90},
             .radius = 10.0})
+        // The picture: the whole 40x30 board sampled every fourth cell.
+        thumb := Rectangle.{bounds.x + 6.0, bounds.y + 6.0, bounds.width - 12.0, (bounds.width - 12.0) * 0.75}
+        cell_width := thumb.width / 10.0
+        cell_height := thumb.height / 8.0
+        for sample_y: 0..7 {
+            for sample_x: 0..9 {
+                tile := cast(s32)(Custom.EffectiveTile(level, cast(s32)(sample_x * 4 + 1), cast(s32)(sample_y * 4 + 1)) & 127)
+                if tile >= 40 && tile <= 45 { tile = 0 }
+                Picture(session, 88000 + cast(u64)index * 80 + cast(u64)(sample_y * 10 + sample_x), sheet,
+                    Rectangle.{thumb.x + cast(float32)sample_x * cell_width, thumb.y + cast(float32)sample_y * cell_height,
+                        cell_width + 1.0, cell_height + 1.0},
+                    Rectangle.{cast(float32)(tile % 20) * 16.0, cast(float32)(tile / 20) * 16.0, 16.0, 16.0})
+            }
+        }
         number := FormatInteger(cast(s64)(index + 1), editor_digits[:])
         CentreText(session, 8760 + cast(u64)index, number,
-            Rectangle.{bounds.x, bounds.y + bounds.height * 0.32, bounds.width, bounds.height * 0.4},
-            cast(s32)(item_width * 0.3))
+            Rectangle.{bounds.x, bounds.y + bounds.height - 26.0, bounds.width, 22.0}, 15)
         if edited {
-            unused Box(session, BoxProps.{.key = 8800 + cast(u64)index,
+            unused Box(session, BoxProps.{.key = 8850 + cast(u64)index,
                 .bounds = Rectangle.{bounds.x + bounds.width - 14.0, bounds.y + 6.0, 8.0, 8.0},
                 .fill = Color.{120, 220, 150, 255}, .radius = 4.0})
         }
@@ -531,10 +560,6 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
                 else ButtonTone.ButtonToneNeutral,
             .emphasis = ifx editor.turned then ButtonEmphasis.ButtonEmphasisFilled
                 else ButtonEmphasis.ButtonEmphasisSoft}) != 0 { EditorTurn() }
-    if Button(session, ButtonProps.{.key = 8223, .bounds = Rectangle.{panel.x + panel.width - 38.0, panel.y + 6.0, 30.0, 30.0},
-            .label = "All levels", .icon_shape = "S2rr:M4 4H10V10H4V4ZM14 4H20V10H14V4ZM4 14H10V20H4V14ZM14 14H20V20H14V14Z",
-            .icon_only = true, .tone = ButtonTone.ButtonToneNeutral,
-            .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 { EditorSave(); editor.browsing = true }
     if editor.dirty {
         TextLine(session, 8205, "unsaved", Rectangle.{panel.x + 140.0, panel.y + 8.0, 60.0, 20.0}, 13)
     } else if editor.save_failed {
@@ -606,30 +631,20 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
             .label = "Stages", .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorExit() }
 }
 
-// Swipes, drags, arrows and the side buttons page between open stages;
-// Up/Down and the level buttons choose a level. Returns true to start that level.
+// The title screen: swipe, drag or arrow between the stage covers and the
+// Level Editor page behind them. The play button starts the game where the
+// run stands; picking a level is the editor's business, not the title's.
 DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> bool {
-    paging := OPEN_STAGES > 1
-    gesture: SwipeAreaResult
-    if paging {
-        gesture = SwipeArea(session, SwipeAreaProps.{.key = 800, .bounds = area,
-            .label = "Stages", .now = now, .min_distance = 48.0})
-    }
+    gesture := SwipeArea(session, SwipeAreaProps.{.key = 800, .bounds = area,
+        .label = "Pages", .now = now, .min_distance = 48.0})
     delta: s32 = 0
-    if paging && (gesture.swiped == 0 || key == 262 || key == 68 || key == 100) { delta = 1 }
-    if paging && (gesture.swiped == 2 || key == 263 || key == 65 || key == 97) { delta = -1 }
+    if gesture.swiped == 0 || key == 262 || key == 68 || key == 100 { delta = 1 }
+    if gesture.swiped == 2 || key == 263 || key == 65 || key == 97 { delta = -1 }
     stage := Wrap(pager.selected)
-    level := stage_levels[stage]
-    // E opens the editor for the chosen level.
-    if key == 69 || key == 101 {
-        OpenEditor(stage * STAGE_LEVELS + level)
-        return false
-    }
-    if key == 264 || key == 83 || key == 115 { level += 1 }
-    else if key == 265 || key == 87 || key == 119 { level -= 1 }
-    else if key == 268 { level = 0 }
-    else if key == 269 { level = STAGE_LEVELS - 1 }
-    start := key == Input.KeyEnter || key == 32
+    editor_page := stage == OPEN_STAGES
+    level := ifx editor_page then game.level % STAGE_LEVELS else stage_levels[stage]
+    start := (key == Input.KeyEnter || key == 32) && !editor_page
+    open_editor := (key == Input.KeyEnter || key == 32) && editor_page
 
     pager.selected += delta
     elapsed := cast(float32)(now - pager.time)
@@ -637,7 +652,7 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
     if elapsed < 0.0 || elapsed > 0.2 { elapsed = 0.016 }
     rate := elapsed * 10.0
     if rate > 1.0 { rate = 1.0 }
-    if paging && gesture.down {
+    if gesture.down {
         pager.position = cast(float32)pager.selected - (gesture.at_x - gesture.start_x) / area.width
     } else {
         pager.position += (cast(float32)pager.selected - pager.position) * rate
@@ -662,18 +677,24 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
     unused Box(session, BoxProps.{.key = 811,
         .bounds = Rectangle.{banner.x + 18.0, banner.y, banner.width - 36.0, 5.0},
         .fill = Color.{46, 125, 74, 255}, .radius = 2.0})
+    title := StageName(stage)
+    subtitle := StageHero(stage)
+    if editor_page {
+        title = "LEVEL EDITOR"
+        subtitle = "Remix the Garden's levels, then play them"
+    }
     unused Text(session, TextProps.{.key = 802, .bounds = Rectangle.{banner.x, banner.y + 14.0, banner.width, 40.0},
-        .text = StageName(stage), .font = 32, .align = TextAlign.TextAlignCenter})
+        .text = title, .font = 32, .align = TextAlign.TextAlignCenter})
     unused Text(session, TextProps.{.key = 803, .bounds = Rectangle.{banner.x, banner.y + 58.0, banner.width, 24.0},
-        .text = StageHero(stage), .font = 16, .align = TextAlign.TextAlignCenter})
+        .text = subtitle, .font = 16, .align = TextAlign.TextAlignCenter})
     middle := area.y + area.height / 2.0 - 26.0
-    if paging && Button(session, ButtonProps.{.key = 804, .bounds = Rectangle.{area.x + 14.0, middle, 52.0, 52.0},
-            .label = "Previous stage", .icon_shape = "S2rr:M15 5L8 12L15 19", .icon_only = true,
+    if Button(session, ButtonProps.{.key = 804, .bounds = Rectangle.{area.x + 14.0, middle, 52.0, 52.0},
+            .label = "Previous page", .icon_shape = "S2rr:M15 5L8 12L15 19", .icon_only = true,
             .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
         pager.selected -= 1
     }
-    if paging && Button(session, ButtonProps.{.key = 805, .bounds = Rectangle.{area.x + area.width - 66.0, middle, 52.0, 52.0},
-            .label = "Next stage", .icon_shape = "S2rr:M9 5L16 12L9 19", .icon_only = true,
+    if Button(session, ButtonProps.{.key = 805, .bounds = Rectangle.{area.x + area.width - 66.0, middle, 52.0, 52.0},
+            .label = "Next page", .icon_shape = "S2rr:M9 5L16 12L9 19", .icon_only = true,
             .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
         pager.selected += 1
     }
@@ -683,30 +704,26 @@ DrawStages :: (session: Session, area: Rectangle, key: s32, now: float64) -> boo
     unused Box(session, BoxProps.{.key = 812,
         .bounds = Rectangle.{area.x, row - 22.0, area.width, area.height - (row - 22.0 - area.y)},
         .fill = Color.{10, 18, 12, 130}})
-    if Button(session, ButtonProps.{.key = 806, .bounds = Rectangle.{centre - 194.0, row, 52.0, 52.0},
-            .label = "Previous level", .icon_shape = "S2rr:M5 12L19 12",
-            .icon_only = true, .tone = ButtonTone.ButtonToneNeutral,
-            .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 { level -= 1 }
-    if Button(session, ButtonProps.{.key = 807, .bounds = Rectangle.{centre + 142.0, row, 52.0, 52.0},
-            .label = "Next level", .icon_shape = "S2rr:M5 12L19 12M12 5L12 19",
-            .icon_only = true, .tone = ButtonTone.ButtonToneNeutral,
-            .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 { level += 1 }
-    stage_levels[stage] = (level + STAGE_LEVELS) % STAGE_LEVELS
-    play_text := FormatInteger(cast(s64)(stage_levels[stage] + 1), level_digits[:])
-    if Button(session, ButtonProps.{.key = 808, .bounds = Rectangle.{centre - 130.0, row, 260.0, 52.0},
-            .label = "Play level", .detail = play_text, .tone = ButtonTone.ButtonToneSuccess,
-            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { start = true }
-    if Button(session, ButtonProps.{.key = 809, .bounds = Rectangle.{area.x + area.width - 66.0, area.y + 18.0, 52.0, 52.0},
-            .label = "Edit level", .icon_shape = "S2rr:M4 20L4 16L16 4L20 8L8 20L4 20", .icon_only = true,
-            .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
-        OpenEditor(stage * STAGE_LEVELS + stage_levels[stage])
-        return false
+    if editor_page {
+        if Button(session, ButtonProps.{.key = 808, .bounds = Rectangle.{centre - 150.0, row, 300.0, 52.0},
+                .label = "Open the editor", .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { open_editor = true }
+    } else {
+        stage_levels[stage] = level
+        play_text := FormatInteger(cast(s64)(level + 1), level_digits[:])
+        if Button(session, ButtonProps.{.key = 808, .bounds = Rectangle.{centre - 150.0, row, 300.0, 52.0},
+                .label = "Play level", .detail = play_text, .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { start = true }
     }
-    for page: cast(s32)0..OPEN_STAGES - 1 {
-        if !paging { break }
+    for page: cast(s32)0..PAGE_COUNT - 1 {
         unused Box(session, BoxProps.{.key = 810 + cast(u64)page,
-            .bounds = Rectangle.{centre - 30.0 + cast(float32)page * 24.0, row - 26.0, 12.0, 12.0},
+            .bounds = Rectangle.{centre - cast(float32)(PAGE_COUNT - 1) * 12.0 + cast(float32)page * 24.0,
+                row - 26.0, 12.0, 12.0},
             .fill = ifx page == stage then Color.{46, 125, 74, 235} else Color.{255, 255, 255, 210}, .radius = 6.0})
+    }
+    if open_editor {
+        editor.browsing = true
+        OpenEditor(game.level)
     }
     return start
 }
@@ -773,13 +790,21 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
     else if game.mode == MODE_EDITOR { level_number = editor.level % STAGE_LEVELS }
     level_text := FormatInteger(cast(s64)(level_number + 1), level_digits[:])
     stage_name := StageName(StageOf(ifx game.mode == MODE_EDITOR then editor.level else game.level))
-    Badge(session, 11, level_text, Rectangle.{hud.x + hud.width - 148.0, hud.y + 10.0, 36.0, 22.0})
-    TextLine(session, 13, "/33", Rectangle.{hud.x + hud.width - 110.0, hud.y + 12.0, 30.0, 18.0}, 12)
+    // In play the level sits on the right; in the editor it is the left sign.
+    if game.mode != MODE_EDITOR {
+        Badge(session, 11, level_text, Rectangle.{hud.x + hud.width - 148.0, hud.y + 10.0, 36.0, 22.0})
+        TextLine(session, 13, "/33", Rectangle.{hud.x + hud.width - 110.0, hud.y + 12.0, 30.0, 18.0}, 12)
+    }
     Badge(session, 14, stage_name, Rectangle.{hud.x + hud.width - 78.0, hud.y + 10.0, 66.0, 22.0})
 
     if game.mode == MODE_EDITOR {
-        Badge(session, 16, "Drag paints · Right restores · T turns · Enter playtests · E returns",
-            Rectangle.{hud.x + 12.0, hud.y + 10.0, 400.0, 22.0})
+        // The level sign is the way into the level selector, Shovey-style.
+        if Button(session, ButtonProps.{.key = 8216, .bounds = Rectangle.{hud.x + 12.0, hud.y + 5.0, 124.0, 32.0},
+                .label = "Levels", .detail = level_text, .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
+            EditorSave()
+            editor.browsing = true
+        }
     } else {
         lives := game.lives
         if lives < 0 { lives = 0 }

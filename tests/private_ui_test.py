@@ -97,31 +97,22 @@ def main():
 
         time.sleep(0.35)
         capture("stages")
-        # The game opens on the stages; Q from a paused level returns to that level's stage.
-        # Only Garden is open, so Left/Right must keep it.
-        for level, keys in ((1, ["Home"]), (11, ["q", "Home"] + ["Down"] * 10),
-                            (33, ["q", "Right", "End"])):
-            key(*keys)
-            time.sleep(0.6)
-            key("Return")
-            time.sleep(0.3)
-            key("space")
-            time.sleep(0.15)
-            capture(f"level-{level:02}")
-
-        # The editor: E opens it for the chosen level, the pointer picks the
-        # first floor swatch and paints it over the top-left wall, and Save
-        # writes the override. Pointer targets mirror the layout in app.zi:
-        # the 960x600 window with a 42px top bar, a 248px right panel whose
-        # palette starts at y 178 in 38px columns, and the 40x30 board scaled
-        # to 712x534 at (0, 54), so cell (0, 0) centres near (8, 62).
-        key("q")
-        key("e")
+        # The title opens on the Garden page; the play button starts the
+        # run's standing level. Q from a paused level returns to the title.
+        key("Return")
         time.sleep(0.4)
-        capture("editor-open")
-        # L opens the level browser: 33 numbered cards on a dark ground,
-        # the current one green. Esc returns to the canvas.
-        key("l")
+        key("space")
+        time.sleep(0.15)
+        capture("level-01")
+        key("q")
+        time.sleep(0.4)
+
+        # The title pages: swipe or arrow to the Level Editor page and open
+        # the editor straight into its all-levels view.
+        key("Right")
+        time.sleep(0.4)
+        capture("title-editor")
+        pointer(480, 548)  # the Open the editor button
         time.sleep(0.3)
         capture("editor-browser")
         from PIL import Image
@@ -131,18 +122,28 @@ def main():
         # light numbered cards; the editor canvas or a cover is neither.
         dark = float(((browser < 64).all(axis=2)).mean())
         assert dark > 0.5, f"browser ground is only {dark:.0%} dark"
-        key("Escape")
-        time.sleep(0.2)
-        # T stands the level up as portrait plays it: the canvas board
-        # becomes tall, with dark bars beside it inside the canvas area.
-        key("t")
+
+        # Card 33 of the browser, laid out with the same column search as
+        # DrawLevelBrowser for the 960x600 window.
+        area_w, area_h = 960, 558
+        columns = next(c for c in range(4, 12)
+                       if -(-33 // c) * (((area_w - 16 - (c - 1) * 8) / c) * 0.75 + 30)
+                       + ((-(-33 // c)) - 1) * 8 + 56 <= area_h)
+        item_w = (area_w - 16 - (columns - 1) * 8) / columns
+        item_h = item_w * 0.75 + 30
+        index = 32
+        card_x = 8 + (index % columns) * (item_w + 8) + item_w / 2
+        card_y = 42 + 56 + (index // columns) * (item_h + 8) + item_h / 2
+        pointer(int(card_x), int(card_y))
         time.sleep(0.3)
-        capture("editor-turned")
-        turned = numpy.asarray(Image.open(OUT / "editor-turned.png").convert("RGB"), dtype=int)
-        columns = ((turned[100:500, 0:712] < 20).all(axis=2)).mean(axis=0)
-        assert (columns > 0.9).sum() > 100, "the canvas board did not stand up"
-        key("t")
-        time.sleep(0.2)
+        capture("editor-open")
+
+        # The editor canvas on the chosen level: the pointer picks the
+        # first floor swatch and paints it over the top-left wall, and Save
+        # writes the override. Targets mirror the layout in app.zi: the
+        # 960x600 window with a 42px top bar, a 248px right panel whose
+        # palette starts at y 178 in 38px columns, and the 40x30 board
+        # scaled to 712x534 at (0, 54), so cell (0, 0) centres near (8, 62).
         pointer(737, 195)  # first FLOOR swatch: brush 0
         pointer(8, 62)     # canvas cell (0, 0), a wall in every level
         time.sleep(0.2)
@@ -155,11 +156,22 @@ def main():
         assert len(painted) == 1201, f"override size {len(painted)}"
         assert painted[0] == original[0], "apple count unchanged"
         assert painted[1] == 0 and original[1] == 20, "cell (0, 0) painted from wall to floor"
+
+        # T stands the level up as portrait plays it: the canvas board
+        # becomes tall, with dark bars beside it inside the canvas area.
+        key("t")
+        time.sleep(0.3)
+        capture("editor-turned")
+        turned = numpy.asarray(Image.open(OUT / "editor-turned.png").convert("RGB"), dtype=int)
+        side_columns = ((turned[100:500, 0:712] < 20).all(axis=2)).mean(axis=0)
+        assert (side_columns > 0.9).sum() > 100, "the canvas board did not stand up"
+        key("t")
+        time.sleep(0.2)
         key("e")
         time.sleep(0.3)
         capture("editor-exit")
         (OUT / "receipt.json").write_text(json.dumps(evidence, indent=2) + "\n")
-        print("Private UI local test rendered the Garden stage, levels 1, 11, 33 and an edited override.")
+        print("Private UI local test played the standing level, browsed every level from the title's editor page and edited one.")
 
         # A portrait window proves the mobile-first layout: WURM_WINDOW sizes
         # the second launch, the green icon bar stays on top and the board
