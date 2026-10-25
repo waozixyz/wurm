@@ -8,6 +8,7 @@ StarIcon :: #import "mingcute/mingcute_filled_star";
 Input :: #import "kryon/input_protocol";
 Timer :: #import "std/timer_linux";
 #import "std/number_text"
+#import "std/text_buffer"
 #import, file "game.zi";
 #import, file "original_levels.zi";
 Custom :: #import, file "custom_levels.zi";
@@ -80,6 +81,23 @@ Sheet :: (stage: s32) -> string {
     if stage == 1 { return "assets/art/space.png" }
     if stage == 2 { return "assets/art/factory.png" }
     return "assets/art/garden.png"
+}
+preview_path: [64]u8;
+PreviewPath :: (stage: s32, number: s32) -> string {
+    prefix := "garden-"
+    if stage == 1 { prefix = "space-" }
+    else if stage == 2 { prefix = "factory-" }
+    digits: [16]u8
+    at := CopyInto(preview_path[:], 0, "assets/art/previews/")
+    at = CopyInto(preview_path[:], at, prefix)
+    at = CopyInto(preview_path[:], at, FormatInteger(cast(s64)number, digits[:]))
+    at = CopyInto(preview_path[:], at, ".png")
+    preview_path[at] = 0
+    return TextUntilNul(preview_path[:])
+}
+CopyInto :: (buffer: []u8, at: s32, text: string) -> s32 {
+    for index: 0..text.count - 1 { buffer[at + index] = text[index] }
+    return at + cast(s32)text.count
 }
 Cover :: (stage: s32) -> string {
     if stage == 1 { return "assets/art/space-cover.png" }
@@ -424,10 +442,9 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
     unused Box(session, BoxProps.{.key = 8700, .bounds = area, .fill = Color.{18, 26, 20, 255}})
     if Button(session, ButtonProps.{.key = 8703, .bounds = Rectangle.{area.x + 10.0, area.y + 8.0, 88.0, 36.0},
             .label = "Back", .tone = ButtonTone.ButtonToneNeutral}) != 0 { editor.browsing = false; return }
-    CentreText(session, 8701, StageName(StageOf(editor.level)),
+    CentreText(session, 8701, "Levels",
         Rectangle.{area.x + 110.0, area.y + 10.0, area.width - 220.0, 28.0}, 20)
     first := StageOf(editor.level) * STAGE_LEVELS
-    sheet := Sheet(StageOf(editor.level))
     columns: s32 = 8
     for candidate: 4..11 {
         rows := (STAGE_LEVELS + candidate - 1) / candidate
@@ -457,20 +474,11 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
             .fill = ifx current then Color.{46, 125, 74, 250} else Color.{240, 242, 232, 26},
             .border = ifx edited then Color.{120, 220, 150, 255} else Color.{240, 242, 232, 90},
             .radius = 10.0})
-        // The picture: the whole 40x30 board sampled every fourth cell.
+        // The picture: the level's rendered preview board.
         thumb := Rectangle.{bounds.x + 6.0, bounds.y + 6.0, bounds.width - 12.0, (bounds.width - 12.0) * 0.75}
-        cell_width := thumb.width / 10.0
-        cell_height := thumb.height / 8.0
-        for sample_y: 0..7 {
-            for sample_x: 0..9 {
-                tile := cast(s32)(Custom.EffectiveTile(level, cast(s32)(sample_x * 4 + 1), cast(s32)(sample_y * 4 + 1)) & 127)
-                if tile >= 40 && tile <= 45 { tile = 0 }
-                Picture(session, 88000 + cast(u64)index * 80 + cast(u64)(sample_y * 10 + sample_x), sheet,
-                    Rectangle.{thumb.x + cast(float32)sample_x * cell_width, thumb.y + cast(float32)sample_y * cell_height,
-                        cell_width + 1.0, cell_height + 1.0},
-                    Rectangle.{cast(float32)(tile % 20) * 16.0, cast(float32)(tile / 20) * 16.0, 16.0, 16.0})
-            }
-        }
+        unused Image(session, ImageProps.{.key = 88000 + cast(u64)index,
+            .asset_path = PreviewPath(StageOf(editor.level), cast(s32)index + 1),
+            .bounds = thumb, .fit = ImageFit.ImageFitStretch, .smooth = false, .alt_text = "Level board preview"})
         number := FormatInteger(cast(s64)(index + 1), editor_digits[:])
         CentreText(session, 8760 + cast(u64)index, number,
             Rectangle.{bounds.x, bounds.y + bounds.height - 26.0, bounds.width, 22.0}, 15)
@@ -754,7 +762,7 @@ HandleInput :: (key: s32, now: s64) {
         else if key == 84 || key == 116 { EditorTurn() }
         else if key == 265 || key == 87 || key == 119 { EditorSwitch(-1) }
         else if key == 264 || key == 83 || key == 115 { EditorSwitch(1) }
-        else if key == Input.KeyEnter || key == 32 { EditorPlaytest(now) }
+        else if key == Input.KeyEnter || key == 32 || key == Input.KeyTab { EditorPlaytest(now) }
         else if key == 82 || key == 114 { EditorReloadSaved() }
         else if key == 45 || key == 95 { EditorSetApples(-1) }
         else if key == 61 || key == 43 { EditorSetApples(1) }
@@ -789,17 +797,15 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
     if game.mode == MODE_STAGES { level_number = stage_levels[Wrap(pager.selected)] }
     else if game.mode == MODE_EDITOR { level_number = editor.level % STAGE_LEVELS }
     level_text := FormatInteger(cast(s64)(level_number + 1), level_digits[:])
-    stage_name := StageName(StageOf(ifx game.mode == MODE_EDITOR then editor.level else game.level))
     // In play the level sits on the right; in the editor it is the left sign.
     if game.mode != MODE_EDITOR {
-        Badge(session, 11, level_text, Rectangle.{hud.x + hud.width - 148.0, hud.y + 10.0, 36.0, 22.0})
-        TextLine(session, 13, "/33", Rectangle.{hud.x + hud.width - 110.0, hud.y + 12.0, 30.0, 18.0}, 12)
+        Badge(session, 11, level_text, Rectangle.{hud.x + hud.width - 92.0, hud.y + 10.0, 36.0, 22.0})
+        TextLine(session, 13, "/33", Rectangle.{hud.x + hud.width - 54.0, hud.y + 12.0, 30.0, 18.0}, 12)
     }
-    Badge(session, 14, stage_name, Rectangle.{hud.x + hud.width - 78.0, hud.y + 10.0, 66.0, 22.0})
 
     if game.mode == MODE_EDITOR {
         // The level sign is the way into the level selector, Shovey-style.
-        if Button(session, ButtonProps.{.key = 8216, .bounds = Rectangle.{hud.x + 12.0, hud.y + 5.0, 124.0, 32.0},
+        if Button(session, ButtonProps.{.key = 8225, .bounds = Rectangle.{hud.x + 12.0, hud.y + 5.0, 124.0, 32.0},
                 .label = "Levels", .detail = level_text, .tone = ButtonTone.ButtonToneSuccess,
                 .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
             EditorSave()
