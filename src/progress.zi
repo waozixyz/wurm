@@ -83,3 +83,8 @@ LoseLife :: () -> bool {
 
 Restart :: () -> bool { return Begin(0, START_LIVES, 0) }
 Continue :: () -> bool { Load(); return Begin(unlocked, START_LIVES, 0) }
+Select :: (at: s32) -> bool {
+    Load()
+    if at < 0 || at > unlocked { return false }
+    return Begin(at, START_LIVES, 0)
+}

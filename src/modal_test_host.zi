@@ -10,6 +10,7 @@ Timer :: #import "std/timer_linux";
 App :: #import "app";
 Progress :: #import, file "progress.zi";
 Controls :: #import, file "controls.zi";
+Input :: #import "kryon/input_protocol";
 #import, file "game.zi";
 libc :: #system_library "libc";
 GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
@@ -56,8 +57,22 @@ ProgressProbe :: (session: Session) -> s32 {
     App.game.death_ticks = 1
     App.game.next_step = 0
     if !ProbeFrame(session) || App.game.mode != MODE_DIED || Progress.level != 0 || Progress.unlocked != 40 { return 36 }
-    App.Play(now, true)
+    App.HandleInput(Input.KeyEnter, now)
     if App.game.level != 40 || App.game.lives != 3 || App.game.score != 0 { return 37 }
+    // Replaying an earlier level still retries at the highest unlocked one.
+    if !App.PlaySelected(2, now) || App.game.level != 2 || Progress.unlocked != 40 { return 41 }
+    App.game.mode = MODE_DIED
+    App.HandleInput(32, now)
+    if App.game.level != 40 || App.game.lives != 3 || App.game.score != 0 { return 42 }
+    App.OpenLevels()
+    if App.PlaySelected(41, now) || App.game.mode != MODE_LEVELS || Progress.unlocked != 40 { return 43 }
+    App.HandleInput(Input.KeyEscape, now)
+    if App.game.mode != MODE_STAGES { return 44 }
+    Controls.mode = -1
+    App.OpenLevels()
+    if !App.PlaySelected(3, now) || App.game.mode != MODE_CONTROLS { return 45 }
+    App.ChooseControls(false, now)
+    if App.game.level != 3 || App.game.lives != 3 || App.game.score != 0 || Progress.unlocked != 40 { return 46 }
     App.Play(now)
     if App.game.level != 0 || Progress.unlocked != 40 { return 38 }
     if !Progress.Begin(199, 7, 220) { return 39 }
@@ -65,7 +80,7 @@ ProgressProbe :: (session: Session) -> s32 {
     App.game.transition_ticks = 1
     App.game.next_step = 0
     if !ProbeFrame(session) || App.game.mode != MODE_VICTORY || Progress.level != 0 || Progress.unlocked != 199 { return 40 }
-    print("Application progress local test: level completion, carried stats, restart, editor isolation, game over, Continue, Play and victory passed.\n")
+    print("Application progress local test: completion, carried stats, restart, editor isolation, game-over retry, locked levels, selected controls, Continue, Play and victory passed.\n")
     return 0
 }
 
@@ -205,7 +220,7 @@ main :: () -> s32 {
         }
         if previous != state.mode {
             previous = state.mode
-            print("mode=% lives=%\n", previous, state.lives)
+            print("mode=% lives=% level=% score=%\n", previous, state.lives, state.level, state.score)
             unused Flush(null)
         }
         if steering && previous_direction != state.direction {

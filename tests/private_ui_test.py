@@ -12,6 +12,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/research/ui"
+DESKTOP = Path(os.environ.get("WURM_TEST_BINARY", ROOT / "build/Apfelwurm-desktop"))
 
 
 def stop(process):
@@ -57,7 +58,7 @@ def main():
         env["DISPLAY"] = ":" + number
         evidence = {"server_pid": server.pid, "server_executable": str(executable),
                     "server_command": [x.decode() for x in command if x], "display": env["DISPLAY"]}
-        app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT / "build", env=env,
+        app = subprocess.Popen([str(DESKTOP)], cwd=ROOT / "build", env=env,
                                stdout=open(OUT / "app.log", "wb"), stderr=subprocess.STDOUT, start_new_session=True)
         window = None
         for attempt in range(100):
@@ -208,7 +209,7 @@ def main():
         # letterboxes below it.
         stop(app)
         env.update(WURM_WINDOW="480x700")
-        app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT / "build", env=env,
+        app = subprocess.Popen([str(DESKTOP)], cwd=ROOT / "build", env=env,
                                stdout=open(OUT / "app-portrait.log", "wb"), stderr=subprocess.STDOUT,
                                start_new_session=True)
         portrait = None
@@ -268,6 +269,9 @@ def main():
                 stop(app)
                 name = f"{width}x{height}-{label}"
                 log = OUT / (name + ".log")
+                if mode == 3:
+                    (level_directory / "run.dat").write_bytes(bytes([0, 3, 0, 0, 0, 0]))
+                    (level_directory / "unlocked.dat").write_bytes(bytes([57]))
                 env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height), WURM_PROBE_MODE=str(mode))
                 app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
                                        stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
@@ -303,6 +307,8 @@ def main():
                     time.sleep(.05)
                 else:
                     raise AssertionError(name + " primary action did not start/resume play")
+                if mode == 3:
+                    assert "mode=1 lives=3 level=57 score=0" in log.read_text(), "Try again did not use the furthest unlocked level"
                 key("space")
                 time.sleep(.15)
                 # Reopened pause uses the pause card, including after game over.
@@ -321,7 +327,7 @@ def main():
             (level_directory / "run.dat").write_bytes(bytes([57, 6, 120, 0, 0, 0]))
             (level_directory / "unlocked.dat").unlink(missing_ok=True)
             env.update(WURM_WINDOW=f"{width}x{height}")
-            app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT / "build", env=env,
+            app = subprocess.Popen([str(DESKTOP)], cwd=ROOT / "build", env=env,
                                    stdout=open(OUT / f"title-{width}x{height}.log", "wb"),
                                    stderr=subprocess.STDOUT, start_new_session=True)
             for attempt in range(100):
@@ -344,10 +350,37 @@ def main():
             pointer(width // 2, height - 70)
             assert (level_directory / "run.dat").read_bytes() == bytes([0, 3, 0, 0, 0, 0]), "Play did not start from level one"
             assert (level_directory / "unlocked.dat").read_bytes() == bytes([57]), "Play erased unlocked progress"
+            key("space", "q")
+            pointer(width - 82, 40)  # Choose level.
+            capture(f"levels-{width}x{height}")
+            # Leafwood is the latest unlocked landscape. Future Pinewood
+            # cards are visible but disabled, including their picture area.
+            pointer(width - 36, 96)
+            columns = min(8, max(2, int((width - 24) / 112)))
+            card_width = (width - 40 - (columns - 1) * 10) / columns
+            card_height = max(148, (card_width - 16) * .75 + 58)
+            pointer(round(12 + card_width / 2), round(132 + card_height / 2))
+            assert (level_directory / "run.dat").read_bytes()[0] == 0, "a locked level started"
+            capture(f"levels-locked-{width}x{height}")
+            pointer(36, 96)  # Back to Leafwood.
+            # Scrolling moves the grid while keeping chapter controls fixed.
+            capture(f"levels-scroll-before-{width}x{height}")
+            subprocess.run(["xdotool", "mousemove", "--window", window, "--sync", str(width // 2), str(height - 40),
+                            "click", "--repeat", "10", "--delay", "35", "5"], env=env, check=True)
+            time.sleep(.2)
+            capture(f"levels-scroll-after-{width}x{height}")
+            before = numpy.asarray(Image.open(OUT / f"levels-scroll-before-{width}x{height}.png"))
+            after = numpy.asarray(Image.open(OUT / f"levels-scroll-after-{width}x{height}.png"))
+            assert not numpy.array_equal(before[132:], after[132:]), "level cards did not scroll"
+            pointer(36, 96)  # Meadow, resets the scroll position.
+            pointer(width - 36, 96)  # Leafwood again.
+            pointer(round(12 + card_width / 2), round(132 + card_height / 2))
+            assert (level_directory / "run.dat").read_bytes() == bytes([40, 3, 0, 0, 0, 0]), "an unlocked level did not start fresh"
+            assert (level_directory / "unlocked.dat").read_bytes() == bytes([57]), "selecting an earlier level reduced progress"
             time.sleep(.15)
             key("space")
             capture(f"play-{width}x{height}")
-        print("Private UI local test: Continue and Play preserved progress on small/tall portraits and wide landscape.")
+        print("Private UI local test: Try again, Continue, Play and the scrollable unlocked-level selector worked in portrait and landscape.")
 
         # Real held pointer input: turns must take effect before mouseup,
         # including subsequent corners during that very same contact.

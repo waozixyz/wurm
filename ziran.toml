@@ -29,7 +29,7 @@ host = "src/desktop_host.zi"
 
 [tool.kryon.profiles.portable]
 backend = "desktop"
-codegen = "zib"
+codegen = "zx"
 assets = "assets"
 
 [tool.kryon.profiles.android]

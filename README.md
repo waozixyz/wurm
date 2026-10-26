@@ -32,13 +32,18 @@ Layouts take inspiration from the recovered original game's rooms, spirals
 and crossings. Wandering fire, bouncing patrols and chasing enemies make the
 journey more demanding as you climb.
 
-Press **Play** and you are straight in the game. There is no level select:
-the levels follow one after another through all five landscapes. You start
+Press **Play** and you are straight in the game. The levels follow one after
+another through all five landscapes. You start
 with three lives and earn more as your score grows. Score and lives carry
 between levels throughout your run. **Continue** starts the furthest level
 unlocked on this device with three lives and a fresh score, even after a game
 over or closing the game. **Play from start** begins a new run at level 1
 without erasing your unlocked progress.
+
+**Choose level** lets you browse all five landscapes with board previews and
+replay any unlocked level. Future levels stay locked until you reach them.
+After a game over, **Try again** starts the furthest unlocked level with
+three lives and a fresh score.
 
 ## Play your way
 

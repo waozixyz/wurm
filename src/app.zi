@@ -41,10 +41,15 @@ Input :: #import "kryon/input_protocol";
     #if #defined(PLATFORM_WEB) {
         Audio :: #import, file "web_audio.zi";
         BrowserStorage :: #import "kryon/bundle_storage_web";
+        BrowserCanvas :: #import "kryon/Canvas";
         browser_storage_started: bool;
     } else {
         Audio :: #import, file "audio.zi";
     }
+}
+#if !#defined(WURM_PORTABLE) {
+    ScrollDevice :: #import "kryon/scroll_device";
+    TreeInput :: #import "kryon/tree_input";
 }
 #import "std/number_text"
 #import "std/text_buffer"
@@ -199,7 +204,11 @@ GameStyles :: () {
     rules.items[at + 5] = StyleRule.{.selector = GameSelector(StyleKindButton(), 13),
         .style = StyleData.{.fields = 1079, .background = 0xF5CE64FF, .foreground = 0x274734FF,
             .border = 0xD8AE4BFF, .border_width = 2.0, .radius = 30.0, .font_size = 22.0}}
-    rules.count = at + 6
+    rules.items[at + 6] = StyleRule.{.selector = GameSelector(StyleKindButton(), 14),
+        .style = StyleData.{.fields = 3639,
+            .background = 0xFFFAEAFF, .foreground = 0x244734FF, .border = 0x508658FF,
+            .border_width = 1.0, .radius = 12.0, .font_size = 17.0, .icon_size = 80.0, .gap = 6.0}}
+    rules.count = at + 7
     styles_ready = InstallStyleRules(rules)
 }
 }
@@ -916,7 +925,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
 }
 
 // Play starts a full run; Continue replays the furthest unlocked level.
-// Return 1 for Play and 2 for Continue, keeping both touch and keyboard paths.
+// Return 1 for Play, 2 for Continue and 3 for the level selector.
 continue_label: [48]u8;
 DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = true) -> s32 {
     portrait := area.height > area.width
@@ -937,6 +946,10 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
         .fill = Color.{20, 47, 22, 0}, .fill_bottom = Color.{20, 47, 22, 170}, .has_fill_bottom = true})
     if !play_button { return 0 }
     Progress.Load()
+    if Button(session, ButtonProps.{.key = 810,
+            .bounds = Rectangle.{area.x + area.width - 148.0, area.y + 16.0, 132.0, 48.0},
+            .label = "Choose level", .pill = true, .tone = ButtonTone.ButtonToneNeutral,
+            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 76 || key == 108 { return 3 }
     width := area.width - 48.0
     if width > 280.0 { width = 280.0 }
     if Progress.unlocked > 0 {
@@ -967,16 +980,95 @@ StartRun :: (now: s64) {
     game.lives = Progress.lives
     game.score = Progress.score
 }
-continue_requested: bool;
+requested_level: s32;
 StartChosenRun :: (now: s64) {
-    if continue_requested { unused Progress.Continue() }
-    else { unused Progress.Restart() }
+    unused Progress.Select(requested_level)
     StartRun(now)
 }
-Play :: (now: s64, from_unlocked: bool = false) {
-    continue_requested = from_unlocked
+PlaySelected :: (level: s32, now: s64) -> bool {
+    Progress.Load()
+    if level < 0 || level > Progress.unlocked || level >= LEVEL_COUNT { return false }
+    requested_level = level
     if Controls.Chosen() { StartChosenRun(now) }
     else { AskControls() }
+    return true
+}
+Play :: (now: s64, from_unlocked: bool = false) {
+    Progress.Load()
+    unused PlaySelected(ifx from_unlocked then Progress.unlocked else 0, now)
+}
+
+level_chapter: s32;
+level_scroll: s32;
+level_label: [32]u8;
+LevelLabel :: (level: s32) -> string {
+    digits: [21]u8
+    at := CopyInto(level_label[:], 0, "Level ")
+    at = CopyInto(level_label[:], at, FormatInteger(cast(s64)(level + 1), digits[:]))
+    level_label[at] = 0
+    return TextUntilNul(level_label[:])
+}
+OpenLevels :: () {
+    Progress.Load()
+    level_chapter = StageOf(Progress.unlocked)
+    level_scroll = 0
+    game.mode = MODE_LEVELS
+    touch_steering.active = false
+}
+DrawLevels :: (session: Session, area: Rectangle, now: s64) {
+    #if !#defined(WURM_PORTABLE) {
+        // This game supplies its own frame loop on desktop. Feed Scroll's
+        // standard device from the same pointer and wheel as the board.
+        pointer := GamePointer(session)
+        ScrollDevice.BeginScrollFrame(session, Vector2.{pointer.x, pointer.y}, pointer.pressed,
+            pointer.down, pointer.released, TreeInput.PointerWheelTake(session, area), cast(float64)now / 1000.0)
+    }
+    if Button(session, ButtonProps.{.key = 26001,
+            .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 88.0, 48.0},
+            .label = "Back", .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenStages(); return }
+    GameText(session, 26002, "Choose level", Rectangle.{area.x + 112.0, area.y + 20.0, area.width - 124.0, 32.0}, 24)
+    if Button(session, ButtonProps.{.key = 26003,
+            .bounds = Rectangle.{area.x + 12.0, area.y + 72.0, 48.0, 48.0},
+            .label = "Previous landscape", .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18",
+            .disabled = level_chapter == 0}) != 0 { level_chapter -= 1; level_scroll = 0 }
+    if Button(session, ButtonProps.{.key = 26004,
+            .bounds = Rectangle.{area.x + area.width - 60.0, area.y + 72.0, 48.0, 48.0},
+            .label = "Next landscape", .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18",
+            .disabled = level_chapter == STAGE_COUNT - 1}) != 0 { level_chapter += 1; level_scroll = 0 }
+    GameText(session, 26005, StageName(level_chapter), Rectangle.{area.x + 68.0, area.y + 72.0, area.width - 136.0, 26.0}, 20, false, true)
+    GameText(session, 26006, "Finish levels to unlock more", Rectangle.{area.x + 64.0, area.y + 100.0, area.width - 128.0, 20.0}, 12, true, true)
+    grid := Rectangle.{area.x + 12.0, area.y + 132.0, area.width - 24.0, area.height - 144.0}
+    columns := cast(s32)(grid.width / 112.0)
+    if columns < 2 { columns = 2 }
+    if columns > 8 { columns = 8 }
+    // Reserve room for the scrollbar before sizing the touch cards.
+    width := (grid.width - 16.0 - cast(float32)(columns - 1) * 10.0) / cast(float32)columns
+    height := (width - 16.0) * 0.75 + 58.0
+    if height < 148.0 { height = 148.0 }
+    count := StageLevels(level_chapter)
+    rows := (count + columns - 1) / columns
+    scroller := Scroll(session, ScrollProps.{.key = 26007, .bounds = grid,
+        .content_height = cast(s32)(cast(float32)rows * (height + 10.0)), .scroll_offset = level_scroll})
+    level_scroll = scroller.scroll_offset
+    if !scroller.opened { return }
+    chosen: s32 = -1
+    for index: 0..count - 1 {
+        level := StageFirst(level_chapter) + cast(s32)index
+        bounds := Rectangle.{scroller.content.x + cast(float32)(index % columns) * (width + 10.0),
+            scroller.content.y + cast(float32)(index / columns) * (height + 10.0), width, height}
+        locked := level > Progress.unlocked
+        current := level == Progress.unlocked
+        label := LevelLabel(level)
+        status := ifx locked then "Locked" else ifx current then "Latest unlocked" else "Completed"
+        if Button(session, ButtonProps.{.key = 27004 + cast(u64)level * 5, .bounds = bounds,
+                .label = label, .detail = status, .class_name = 14, .disabled = locked, .selected = current,
+                .image = ImageProps.{.asset_path = PreviewPath(level_chapter, cast(s32)index + 1, game_portrait),
+                    .fit = ImageFit.ImageFitContain, .smooth = true, .alt_text = "Level board preview"},
+                .icon_placement = IconPlacement.IconPlacementAbove,
+                .tone = ButtonTone.ButtonToneSuccess}) != 0 { chosen = level }
+    }
+    unused End(session)
+    if chosen >= 0 { unused PlaySelected(chosen, now) }
 }
 
 controls_previous_mode: s32 = MODE_STAGES;
@@ -988,7 +1080,7 @@ AskControls :: () {
 ChooseControls :: (pad: bool, now: s64) {
     unused Controls.SetPad(pad)
     touch_steering.active = false
-    if controls_previous_mode == MODE_STAGES { StartChosenRun(now) }
+    if controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS { StartChosenRun(now) }
     else { game.mode = controls_previous_mode; game.next_step = now + TickInterval(game.level) }
 }
 DrawControls :: (session: Session, area: Rectangle, now: s64) {
@@ -1040,6 +1132,10 @@ HandleInput :: (key: s32, now: s64) {
         OpenEditor(game.level)
         return
     }
+    if game.mode == MODE_LEVELS {
+        if key == Input.KeyEscape { OpenStages() }
+        return
+    }
     if game.mode == MODE_PLAYING {
         // R restarts the level as the run entered it.
         if key == 82 || key == 114 {
@@ -1058,7 +1154,7 @@ HandleInput :: (key: s32, now: s64) {
     } else if game.mode == MODE_DIED {
         if key == Input.KeyEnter || key == 32 {
             if editor.playtest { StartLevel(game.level, now, 1) }
-            else { StartRun(now) }
+            else { Play(now, true) }
         } else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_VICTORY {
         if key == Input.KeyEnter || key == 32 {
@@ -1197,6 +1293,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     #if #defined(PLATFORM_WEB) {
         if !browser_storage_started {
             browser_storage_started = true
+            // Escape belongs to pause/back navigation, including the selector.
+            BrowserCanvas.CanvasSetExitKey(0)
             unused BrowserStorage.BundleStorageOpen()
         }
         if !BrowserStorage.BundleStorageReady() && !BrowserStorage.BundleStorageFailed() {
@@ -1235,7 +1333,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // The stages screen is one full-bleed cover; every other mode carries the
     // green icon bar across the top with the board letterboxed below it, so
     // portrait and landscape both keep their proportions.
-    showing_bar := game.mode != MODE_STAGES && !(game.mode == MODE_CONTROLS && controls_previous_mode == MODE_STAGES)
+    showing_bar := game.mode != MODE_STAGES && game.mode != MODE_LEVELS &&
+        !(game.mode == MODE_CONTROLS && (controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS))
     bar_height: float32 = 0.0
     if showing_bar { bar_height = ifx viewport.width < 520.0 then 104.0 else 72.0 }
     if game.mode == MODE_EDITOR { bar_height = 42.0 }
@@ -1273,9 +1372,12 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         action := DrawTitle(session, area, stage_key)
-        if action != 0 { Play(now, action == 2) }
+        if action == 3 { OpenLevels() }
+        else if action != 0 { Play(now, action == 2) }
+    } else if game.mode == MODE_LEVELS {
+        DrawLevels(session, viewport, now)
     } else if game.mode == MODE_CONTROLS {
-        if controls_previous_mode == MODE_STAGES { unused DrawTitle(session, viewport, 0, false) }
+        if controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS { unused DrawTitle(session, viewport, 0, false) }
         else { DrawBoard(session, stage) }
         DrawControls(session, viewport, now)
     } else if game.mode == MODE_EDITOR {

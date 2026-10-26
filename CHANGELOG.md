@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.6] - 2026-10-26
+
+- Try again after game over starts the furthest unlocked level with three lives and a fresh score.
+- Choose level from the title to browse all five landscapes, preview each board and replay any unlocked level. Future levels remain locked until you reach them.
+- Use Escape to pause or go back in the browser without stopping the game.
+
 ## [0.1.5] - 2026-10-26
 
 - Continue from the furthest level unlocked on this device with three lives and a fresh score. Progress saves after every completed level and survives closing the game or a game over.

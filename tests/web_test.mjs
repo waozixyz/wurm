@@ -38,7 +38,23 @@ try{
  await key(' ',32);await key('q',81);await click(195,774);await until("JSON.stringify(Array.from(Module.FS.readFile('/kryon-apps/wurm/run.dat')))==='[0,3,0,0,0,0]'");
  if(!await evaluate("Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57"))throw new Error('Play erased unlocked progress');
  await delay(500);await command('Page.reload');await until("typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden");await delay(1500);await key('c',67);await until("JSON.stringify(Array.from(Module.FS.readFile('/kryon-apps/wurm/run.dat')))==='[57,3,0,0,0,0]'");
+ await key(' ',32);await key('q',81);await click(308,82);await capture('level-selector');
+ const gridFingerprint=()=>evaluate("(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,132,c.width,c.height-132).data;let h=0;for(let i=0;i<p.length;i+=20)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()");
+ const beforeScroll=await gridFingerprint();
+ await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:195,y:700}]});
+ for(const y of [650,600,550,500,450]){await command('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:195,y}]});await delay(70);}
+ await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await delay(350);
+ if(await gridFingerprint()===beforeScroll)throw new Error('Browser selector did not scroll under touch drag');
+ if(!await evaluate("Module.FS.readFile('/kryon-apps/wurm/run.dat')[0]===57"))throw new Error('Dragging the selector started a level');
+ await capture('level-selector-scrolled');
+ await click(354,138);await click(67,238); // Pinewood is still locked.
+ if(!await evaluate("Module.FS.readFile('/kryon-apps/wurm/run.dat')[0]===57"))throw new Error('A locked browser level started');
+ await capture('level-selector-locked');await click(36,138);await click(67,238);
+ await until("JSON.stringify(Array.from(Module.FS.readFile('/kryon-apps/wurm/run.dat')))==='[40,3,0,0,0,0]'");
+ if(!await evaluate("Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57"))throw new Error('Level selection erased progress');
+ await key(' ',32);await key('q',81);await key('l',76);await key('Escape',27);await key('c',67);
+ await until("Module.FS.readFile('/kryon-apps/wurm/run.dat')[0]===57");
  if(errors.length)throw new Error(JSON.stringify(errors));
- await writeFile(join(out,'result.json'),JSON.stringify({passed:true,url,behaviors:['rendered title artwork','control choice','straight into level 1','keyboard steering','pause','portrait resize','durable saves after reload','old run migration','Continue highest level with fresh stats','Play from start preserves unlocks','Continue after browser reload'],colorful,errors},null,2)+'\n');
- console.log('Browser local test: title, controls, play, portrait, old save migration, Continue, Play from start and durable progress after reload passed.');
+ await writeFile(join(out,'result.json'),JSON.stringify({passed:true,url,behaviors:['rendered title artwork','control choice','straight into level 1','keyboard steering','pause','portrait resize','durable saves after reload','old run migration','Continue highest level with fresh stats','Play from start preserves unlocks','Continue after browser reload','landscape level selector','touch scrolling without starting a level','locked levels cannot start','unlocked level selection starts fresh','selector keyboard back'],colorful,errors},null,2)+'\n');
+ console.log('Browser local test: controls, play, portrait, save migration, Continue, Play from start, durable progress and unlocked-level selection passed.');
 }catch(error){await writeFile(join(out,'failure.txt'),String(error)+'\n'+stderr);throw error;}finally{socket?.close();stop(browser);stop(server);await delay(300);await rm(profile,{recursive:true,force:true});}
