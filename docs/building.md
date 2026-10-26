@@ -231,6 +231,7 @@ control selection, the direct start, portrait resizing and persistent saves.
 The browser stores records through Kryon's IndexedDB provider.
 
 The Downloads workflow packages the verified web build beside the signed APKs.
-The website repository pins that release in `site/data/wurm-release.json` and
-deploys its verified browser archive to the `wurm` Cloudflare Pages project at
-https://wurm.waozi.xyz using the website's existing deployment credentials.
+The website repository's Apfelwurm site workflow checks for a newer published
+release every ten minutes and deploys its verified browser archive to the
+`wurm` Cloudflare Pages project at https://wurm.waozi.xyz automatically, using
+the website's existing deployment credentials. Nothing needs updating by hand.
