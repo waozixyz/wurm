@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.8] - 2026-10-26
+
+- Level previews now appear only after you unlock them.
+
 ## [0.1.7] - 2026-10-26
 
 - See a glowing touch guide follow your finger while swipe steering.

@@ -14,8 +14,8 @@ patrols and chasing creatures. Enemy counts and apple goals increase across
 stages, while the first six levels introduce movement without enemies.
 Opening Meadow levels move more slowly before reaching the original pace.
 Levels follow in order through every landscape. Choose level offers a
-scrollable grid of board previews for each landscape; only unlocked levels
-can be played. The run (level, lives and score carried into that level) and the
+scrollable grid for each landscape; only unlocked levels show board previews
+and can be played. The run (level, lives and score carried into that level) and the
 control choice persist. Unlocked progress is saved after every completed
 level and survives game over, closing the game and starting a new run.
 Continue starts the highest unlocked level with three lives and a fresh

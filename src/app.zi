@@ -1062,7 +1062,7 @@ DrawLevels :: (session: Session, area: Rectangle, now: s64) {
         status := ifx locked then "Locked" else ifx current then "Latest unlocked" else "Completed"
         if Button(session, ButtonProps.{.key = 27004 + cast(u64)level * 5, .bounds = bounds,
                 .label = label, .detail = status, .class_name = 14, .disabled = locked, .selected = current,
-                .image = ImageProps.{.asset_path = PreviewPath(level_chapter, cast(s32)index + 1, game_portrait),
+                .image = ImageProps.{.asset_path = ifx locked then "" else PreviewPath(level_chapter, cast(s32)index + 1, game_portrait),
                     .fit = ImageFit.ImageFitContain, .smooth = true, .alt_text = "Level board preview"},
                 .icon_placement = IconPlacement.IconPlacementAbove,
                 .tone = ButtonTone.ButtonToneSuccess}) != 0 { chosen = level }

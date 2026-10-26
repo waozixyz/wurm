@@ -40,8 +40,9 @@ unlocked on this device with three lives and a fresh score, even after a game
 over or closing the game. **Play from start** begins a new run at level 1
 without erasing your unlocked progress.
 
-**Choose level** lets you browse all five landscapes with board previews and
-replay any unlocked level. Future levels stay locked until you reach them.
+**Choose level** lets you browse all five landscapes and replay any unlocked
+level. Board previews appear as you unlock levels; future levels stay locked
+until you reach them.
 After a game over, **Try again** starts the furthest unlocked level with
 three lives and a fresh score.
 
