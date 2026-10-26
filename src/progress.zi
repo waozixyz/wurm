@@ -1,35 +1,60 @@
+// One run through every level: the level it reached, with the lives and score
+// it carried into that level. A game over starts the next run at level one.
 Records :: #import, file "controls.zi";
-completed: [5]u8;
+LEVELS :: 200;
+START_LIVES :: 3;
+level: s32;
+lives: s32 = START_LIVES;
+score: s32;
 loaded: bool;
 
 Load :: () {
     if loaded { return }
     loaded = true
-    bytes: [6]u8
-    if Records.ReadRecord("journey.dat", bytes[:]) != 5 { return }
-    for stage: 0..4 { if bytes[stage] > 40 { return } }
-    for stage: 0..4 { completed[stage] = bytes[stage] }
+    bytes: [7]u8
+    if Records.ReadRecord("run.dat", bytes[:]) == 6 {
+        saved := cast(s32)bytes[2] | (cast(s32)bytes[3] << 8) | (cast(s32)bytes[4] << 16) | (cast(s32)(bytes[5] & 127) << 24)
+        if cast(s32)bytes[0] < LEVELS && bytes[1] > 0 {
+            level = cast(s32)bytes[0]
+            lives = cast(s32)bytes[1]
+            score = saved
+        }
+        return
+    }
+    // Progress from the former stage page continues at its first uncleared level.
+    completed: [6]u8
+    if Records.ReadRecord("journey.dat", completed[:]) != 5 { return }
+    for stage: 0..4 { if completed[stage] > 40 { return } }
+    for stage: 0..4 {
+        if completed[stage] < 40 {
+            level = cast(s32)stage * 40 + cast(s32)completed[stage]
+            return
+        }
+    }
 }
-Unlocked :: (stage: s32) -> bool {
+
+Save :: () -> bool {
+    kept := ifx lives > 255 then 255 else lives
+    bytes: [6]u8 = .[cast(u8)level, cast(u8)kept, cast(u8)(score & 255), cast(u8)((score >> 8) & 255),
+        cast(u8)((score >> 16) & 255), cast(u8)((score >> 24) & 127)]
+    return Records.WriteRecord("run.dat", bytes[:])
+}
+
+// Each level starts from what the run carries into it.
+Begin :: (at: s32, carried_lives: s32, carried_score: s32) -> bool {
+    loaded = true
+    level = at
+    lives = carried_lives
+    score = carried_score
+    return Save()
+}
+
+// A lost life is kept even if the level is left unfinished; lives earned
+// within the level are only kept by finishing it.
+LoseLife :: () -> bool {
     Load()
-    if stage < 0 || stage >= 5 { return false }
-    for before: 0..stage - 1 { if completed[before] < 40 { return false } }
-    return true
+    if lives > 1 { lives -= 1 }
+    return Save()
 }
-Cleared :: (stage: s32) -> s32 { Load(); return cast(s32)completed[stage] }
-LevelUnlocked :: (level: s32) -> bool {
-    if level < 0 || level >= 200 { return false }
-    return Unlocked(level / 40) && level % 40 <= Cleared(level / 40)
-}
-Win :: (level: s32) -> bool {
-    Load()
-    if !LevelUnlocked(level) { return false }
-    stage := level / 40
-    number := level % 40 + 1
-    if number <= cast(s32)completed[stage] { return true }
-    previous := completed[stage]
-    completed[stage] = cast(u8)number
-    if Records.WriteRecord("journey.dat", completed[:]) { return true }
-    completed[stage] = previous
-    return false
-}
+
+Restart :: () -> bool { return Begin(0, START_LIVES, 0) }

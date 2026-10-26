@@ -31,8 +31,6 @@ Touch :: #import, file "steering.zi";
 HeartIcon :: #import "mingcute/mingcute_filled_heart";
 AppleIcon :: #import "mingcute/mingcute_filled_apple_fruit";
 StarIcon :: #import "mingcute/mingcute_filled_star";
-LockIcon :: #import "mingcute/mingcute_filled_lock";
-CheckIcon :: #import "mingcute/mingcute_filled_check_circle";
 Input :: #import "kryon/input_protocol";
 #if #defined(WURM_PORTABLE) {
     Timer :: #import "portable_runtime";
@@ -62,7 +60,6 @@ Custom :: #import, file "custom_levels.zi";
     ART_MOUNTAINS :: "assets/wurm/art/campaign-mountains.png";
     ART_CANOPY :: "assets/wurm/art/forest-canopy.png";
     ART_CANOPY_PORTRAIT :: "assets/wurm/art/forest-canopy-portrait.png";
-    ART_COVERS :: "assets/wurm/art/stage-covers.png";
     ART_TITLE :: "assets/wurm/art/title.png";
     ART_TITLE_PORTRAIT :: "assets/wurm/art/title-portrait.png";
     ART_PREVIEWS :: "assets/wurm/art/campaign-previews/";
@@ -74,7 +71,6 @@ Custom :: #import, file "custom_levels.zi";
     ART_MOUNTAINS :: "assets/art/campaign-mountains.png";
     ART_CANOPY :: "assets/art/forest-canopy.png";
     ART_CANOPY_PORTRAIT :: "assets/art/forest-canopy-portrait.png";
-    ART_COVERS :: "assets/art/stage-covers.png";
     ART_TITLE :: "assets/art/title.png";
     ART_TITLE_PORTRAIT :: "assets/art/title-portrait.png";
     ART_PREVIEWS :: "assets/art/campaign-previews/";
@@ -287,13 +283,8 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     }
     if game.mode == MODE_PAUSED {
         if Button(session, ButtonProps.{.key = 61,
-                .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 120.0, (card.width - 52.0) / 2.0, 48.0},
+                .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 120.0, card.width - 40.0, 48.0},
                 .label = "Controls", .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { AskControls() }
-    }
-    if game.mode == MODE_PAUSED && !editor.playtest {
-        if Button(session, ButtonProps.{.key = 62,
-                .bounds = Rectangle.{card.x + card.width / 2.0 + 6.0, card.y + card.height - 120.0, (card.width - 52.0) / 2.0, 48.0},
-                .label = "Stages", .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenJourney() }
     }
     if Button(session, ButtonProps.{.key = 58,
             .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 60.0, card.width - 40.0, 48.0},
@@ -954,91 +945,18 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
     return clicked || key == Input.KeyEnter || key == 32
 }
 
-selected_stage: s32;
-journey_scroll: s32;
 recorded_level: s32 = -1;
-progress_digits: [21]u8;
-OpenJourney :: () {
-    editor.playtest = false
-    touch_steering.active = false
-    game.mode = MODE_JOURNEY
+// Play continues the saved run from the start of its level, with the lives
+// and score it carried in; every level follows in order, without a menu.
+StartRun :: (now: s64) {
+    Progress.Load()
+    StartLevel(Progress.level, now, cast(u32)(now & 4294967295))
+    game.lives = Progress.lives
+    game.score = Progress.score
 }
-DrawJourney :: (session: Session, area: Rectangle) {
-    unused DrawTitle(session, area, 0, false)
-    unused Box(session, BoxProps.{.key = 24000, .bounds = area, .fill = Color.{25, 55, 34, 90}})
-    unused Box(session, BoxProps.{.key = 24001, .bounds = Rectangle.{area.x + 10.0, area.y + 10.0, area.width - 20.0, 56.0},
-        .fill = Color.{255, 250, 234, 245}, .radius = 20.0})
-    if Button(session, ButtonProps.{.key = 24002, .bounds = Rectangle.{area.x + 18.0, area.y + 14.0, 48.0, 48.0},
-            .label = "Back to title", .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18"}) != 0 { OpenStages() }
-    CentreText(session, 24003, "Your journey", Rectangle.{area.x + 72.0, area.y + 23.0, area.width - 144.0, 32.0}, 24)
-    card_height: float32 = ifx area.width < 520.0 then 90.0 else 110.0
-    content_width := area.width - 24.0
-    if content_width > 680.0 { content_width = 680.0 }
-    scroll := Scroll(session, ScrollProps.{.key = 24004,
-        .bounds = Rectangle.{area.x + (area.width - content_width) / 2.0, area.y + 76.0, content_width, area.height - 84.0},
-        .content_height = cast(s32)(5.0 * (card_height + 12.0)), .scroll_offset = journey_scroll})
-    journey_scroll = scroll.scroll_offset
-    if scroll.opened {
-        for chapter: 0..4 {
-            stage := cast(s32)chapter
-            unlocked := Progress.Unlocked(stage)
-            completed := Progress.Cleared(stage)
-            card := Rectangle.{scroll.content.x + 2.0, scroll.content.y + cast(float32)chapter * (card_height + 12.0), content_width - 12.0, card_height}
-            unused Box(session, BoxProps.{.key = 24100 + cast(u64)chapter, .bounds = card,
-                .fill = Color.{255, 250, 234, 255}, .border = ifx unlocked then Color.{99, 151, 79, 255} else Color.{191, 195, 172, 255}, .radius = 18.0})
-            cover_width := card.width * 0.36
-            unused Image(session, ImageProps.{.key = 24110 + cast(u64)chapter,
-                .asset_path = ART_COVERS, .bounds = Rectangle.{card.x + 6.0, card.y + 6.0, cover_width, card.height - 12.0},
-                .source = Rectangle.{0.0, cast(float32)chapter * 320.0, 960.0, 320.0}, .fit = ImageFit.ImageFitCover, .smooth = true})
-            text_x := card.x + cover_width + 18.0
-            text_width := card.width - cover_width - 54.0
-            GameText(session, 24120 + cast(u64)chapter, StageName(stage), Rectangle.{text_x, card.y + 12.0, text_width + 20.0, 26.0}, 20)
-            progress := FormatInteger(cast(s64)completed, progress_digits[:])
-            GameText(session, 24130 + cast(u64)chapter, ifx unlocked then progress else "40 levels",
-                Rectangle.{text_x, card.y + card.height - 30.0, text_width, 22.0}, 14, !unlocked)
-            if unlocked { GameText(session, 24140 + cast(u64)chapter, "/ 40", Rectangle.{text_x + 25.0, card.y + card.height - 30.0, text_width - 25.0, 22.0}, 14, true) }
-            if unlocked {
-                unused Box(session, BoxProps.{.key = 24150 + cast(u64)chapter,
-                    .bounds = Rectangle.{text_x, card.y + card.height - 45.0, text_width, 6.0},
-                    .fill = Color.{220, 228, 202, 255}, .radius = 3.0})
-                if completed > 0 {
-                    unused Box(session, BoxProps.{.key = 24160 + cast(u64)chapter,
-                        .bounds = Rectangle.{text_x, card.y + card.height - 45.0, text_width * cast(float32)completed / 40.0, 6.0},
-                        .fill = Color.{86, 141, 68, 255}, .radius = 3.0})
-                }
-            }
-            if !unlocked || completed == 40 {
-                SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{card.x + card.width - 34.0, card.y + 32.0, 22.0, 22.0},
-                    .shape = ifx unlocked then CheckIcon.Shape else LockIcon.Shape,
-                    .color = ifx unlocked then Color.{65, 113, 68, 255} else Color.{117, 120, 98, 255}})
-            }
-            if Button(session, ButtonProps.{.key = 24010 + cast(u64)chapter, .bounds = card,
-                    .label = StageName(stage), .detail = ifx unlocked then "Choose a level" else "Locked", .invisible = true,
-                    .disabled = !unlocked}) != 0 { selected_stage = stage; game.mode = MODE_LEVELS }
-        }
-        unused End(session)
-    }
-}
-DrawPlayableLevels :: (session: Session, area: Rectangle, now: s64) {
-    unused Box(session, BoxProps.{.key = 24200, .bounds = area, .fill = Color.{229, 237, 210, 255}})
-    if Button(session, ButtonProps.{.key = 24201, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 72.0, 48.0},
-            .label = "Stages", .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenJourney() }
-    CentreText(session, 24202, StageName(selected_stage), Rectangle.{area.x + 88.0, area.y + 20.0, area.width - 176.0, 32.0}, 24)
-    columns: s32 = ifx area.width < 520.0 then 5 else 10
-    side := (area.width - 24.0 - cast(float32)(columns - 1) * 8.0) / cast(float32)columns
-    if side > 80.0 { side = 80.0 }
-    start_x := area.x + (area.width - (cast(float32)columns * side + cast(float32)(columns - 1) * 8.0)) / 2.0
-    for number: 0..39 {
-        level := selected_stage * 40 + cast(s32)number
-        label := FormatInteger(cast(s64)number + 1, level_digits[:])
-        bounds := Rectangle.{start_x + cast(float32)(number % columns) * (side + 8.0),
-            area.y + 84.0 + cast(float32)(number / columns) * (side + 8.0), side, side}
-        if Button(session, ButtonProps.{.key = 24300 + cast(u64)number, .bounds = bounds, .label = label,
-                .disabled = !Progress.LevelUnlocked(level), .class_name = 10, .tone = ButtonTone.ButtonToneSuccess,
-                .emphasis = ifx Progress.Cleared(selected_stage) > number then ButtonEmphasis.ButtonEmphasisSoft else ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
-            StartLevel(level, now, cast(u32)(now & 4294967295))
-        }
-    }
+Play :: (now: s64) {
+    if Controls.Chosen() { StartRun(now) }
+    else { AskControls() }
 }
 
 controls_previous_mode: s32 = MODE_STAGES;
@@ -1050,7 +968,7 @@ AskControls :: () {
 ChooseControls :: (pad: bool, now: s64) {
     unused Controls.SetPad(pad)
     touch_steering.active = false
-    if controls_previous_mode == MODE_STAGES { OpenJourney() }
+    if controls_previous_mode == MODE_STAGES { StartRun(now) }
     else { game.mode = controls_previous_mode; game.next_step = now + TickInterval(game.level) }
 }
 DrawControls :: (session: Session, area: Rectangle, now: s64) {
@@ -1097,43 +1015,36 @@ HandleInput :: (key: s32, now: s64) {
         else if key == Input.KeyEscape { game.mode = controls_previous_mode }
         return
     }
-    if game.mode == MODE_JOURNEY {
-        if key == Input.KeyEscape { OpenStages() }
-        else if key >= 49 && key <= 53 && Progress.Unlocked(key - 49) {
-            selected_stage = key - 49; game.mode = MODE_LEVELS
-        }
-        return
-    }
-    if game.mode == MODE_LEVELS {
-        if key == Input.KeyEscape { OpenJourney() }
-        else if key == Input.KeyEnter || key == 32 {
-            within := Progress.Cleared(selected_stage)
-            if within >= 40 { within = 39 }
-            StartLevel(selected_stage * 40 + within, now, cast(u32)(now & 4294967295))
-        }
-        return
-    }
     if game.mode == MODE_STAGES && (key == 69 || key == 101) {
         editor.browsing = true
         OpenEditor(game.level)
         return
     }
     if game.mode == MODE_PLAYING {
-        if key == 82 || key == 114 { ReloadLevel(game.level, now) }
+        // R restarts the level as the run entered it.
+        if key == 82 || key == 114 {
+            if editor.playtest { ReloadLevel(game.level, now) }
+            else { StartRun(now) }
+        }
         else { unused ApplyInput(*game, key) }
     } else if game.mode == MODE_PAUSED {
         unused ApplyInput(*game, key)
         if game.mode == MODE_PLAYING { game.next_step = now + TickInterval(game.level) }
         if game.mode == MODE_STAGES { LeavePlay() }
     } else if game.mode == MODE_FINISHED {
-        if !editor.playtest && (game.level + 1) % 40 == 0 { OpenJourney() }
-        else { ReloadLevel(game.level + 1, now) }
+        // Landscapes follow one another; lives and score carry on.
+        ReloadLevel(game.level + 1, now)
+        if !editor.playtest { unused Progress.Begin(game.level, game.lives, game.score) }
     } else if game.mode == MODE_DIED {
-        if key == Input.KeyEnter || key == 32 { StartLevel(game.level, now, 1) }
-        else if key == Input.KeyEscape { LeavePlay() }
+        if key == Input.KeyEnter || key == 32 {
+            if editor.playtest { StartLevel(game.level, now, 1) }
+            else { StartRun(now) }
+        } else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_VICTORY {
-        if key == Input.KeyEnter || key == 32 { StartLevel(0, now, 1) }
-        else if key == Input.KeyEscape { LeavePlay() }
+        if key == Input.KeyEnter || key == 32 {
+            if editor.playtest { StartLevel(0, now, 1) }
+            else { StartRun(now) }
+        } else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_EDITOR {
         if editor.browsing {
             if key == Input.KeyEscape || key == 76 || key == 108 || key == 69 || key == 101 {
@@ -1274,11 +1185,16 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         }
     }
     now := Timer.MonotonicMilliseconds()
-    // The game opens on the stages.
-    if !game.started { game.started = true; OpenStages() }
     was_portrait := game_portrait
     game_portrait = viewport.height > viewport.width
-    if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED) {
+    if !game.started {
+        game.started = true
+        OpenStages()
+        // A collection's cover is the title: hosted, the game opens straight into play.
+        #if #defined(WURM_PORTABLE) {
+            Play(now)
+        }
+    } else if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED) {
         paused := game.mode == MODE_PAUSED
         ReloadLevel(game.level,now)
         if paused { game.mode = MODE_PAUSED }
@@ -1298,7 +1214,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // The stages screen is one full-bleed cover; every other mode carries the
     // green icon bar across the top with the board letterboxed below it, so
     // portrait and landscape both keep their proportions.
-    showing_bar := game.mode != MODE_STAGES && game.mode != MODE_JOURNEY && game.mode != MODE_LEVELS && !(game.mode == MODE_CONTROLS && controls_previous_mode == MODE_STAGES)
+    showing_bar := game.mode != MODE_STAGES && !(game.mode == MODE_CONTROLS && controls_previous_mode == MODE_STAGES)
     bar_height: float32 = 0.0
     if showing_bar { bar_height = ifx viewport.width < 520.0 then 104.0 else 72.0 }
     if game.mode == MODE_EDITOR { bar_height = 42.0 }
@@ -1316,22 +1232,22 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         direction := Touch.TouchDirection(*touch_steering, contact.down, contact.at_x, contact.at_y)
         if direction >= 0 { Steer(direction) }
     } else { touch_steering.active = false }
+    lives_before := game.lives
     unused Step(*game, now)
-    if (game.mode == MODE_FINISHED || game.mode == MODE_VICTORY) && !editor.playtest && recorded_level != game.level {
-        if Progress.Win(game.level) { recorded_level = game.level }
+    // The run keeps each lost life; a game over or the finished journey
+    // starts the next run at level one.
+    if !editor.playtest && game.lives < lives_before {
+        if game.mode == MODE_DIED { unused Progress.Restart() }
+        else { unused Progress.LoseLife() }
+    }
+    if game.mode == MODE_VICTORY && !editor.playtest && recorded_level != game.level {
+        if Progress.Restart() { recorded_level = game.level }
     }
     Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,
         game.level, game.apples, game.death_ticks, game.transition_ticks)
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
-        if DrawTitle(session, area, stage_key) {
-            if Controls.Chosen() { OpenJourney() }
-            else { AskControls() }
-        }
-    } else if game.mode == MODE_JOURNEY {
-        DrawJourney(session, viewport)
-    } else if game.mode == MODE_LEVELS {
-        DrawPlayableLevels(session, viewport, now)
+        if DrawTitle(session, area, stage_key) { Play(now) }
     } else if game.mode == MODE_CONTROLS {
         if controls_previous_mode == MODE_STAGES { unused DrawTitle(session, viewport, 0, false) }
         else { DrawBoard(session, stage) }

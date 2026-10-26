@@ -19,7 +19,7 @@ def prepare(resources, generated):
                 child.unlink()
     keep = {'garden.png', 'forest.png', 'forest-canopy.png', 'forest-canopy-portrait.png',
             'meadow.png', 'leafwood.png', 'pinewood.png', 'lake.png', 'mountains.png',
-            'title.png', 'title-portrait.png', 'stage-covers.png',
+            'title.png', 'title-portrait.png',
             'campaign-meadow.png', 'campaign-leafwood.png', 'campaign-pinewood.png', 'campaign-lake.png', 'campaign-mountains.png'}
     for path in (resources / 'art').rglob('*'):
         if path.is_file() and not (path.name in keep or

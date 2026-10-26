@@ -145,10 +145,7 @@ def main():
         choice = command('find', label='Swipe', role='button', visible=1)
         if choice.get('nodes'):
             command('press', label='Swipe', role='button')
-        wait('Your journey')
-        command('press', label='Meadow', role='button')
-        wait('Stages', 'button')
-        command('press', label='1', role='button')
+        # Play continues the run straight in the level, without a menu.
         wait('Pause', 'button')
 
     try:
@@ -176,10 +173,6 @@ def main():
             scale = picture.width / root['width']
         shell('input', 'tap', str(round((play['x'] + play['width'] / 2) * scale)),
               str(round((play['y'] + play['height'] / 2) * scale)))
-        # The OS tap also passes through the retained stage selector.
-        wait('Your journey')
-        command('press', label='Meadow', role='button')
-        command('press', label='1', role='button')
         wait('Pause', 'button')
         command('press', label='Pause', role='button')
         wait('Paused')
@@ -267,7 +260,7 @@ def main():
             assert shell('pidof', PACKAGE, check=False).stdout.strip() == owner_pid, 'Normal owner game process changed'
         receipt.update(passed=True, preserved_normal_process=bool(owner_pid),
                        behaviors=['portrait and landscape title', '60-unit Play button', 'OS touch start',
-                                  'pause in both orientations', 'resume', 'OS steering before touch release', 'stage selector', 'control choice', 'OS direction-pad steering', 'portrait level 2 editor playtest and safe approach', 'return to title'])
+                                  'pause in both orientations', 'resume', 'OS steering before touch release', 'straight into play', 'control choice', 'OS direction-pad steering', 'portrait level 2 editor playtest and safe approach', 'return to title'])
     finally:
         # This directory was absent before the test and contains only its protocol files.
         shell('run-as', package, 'rm', '-rf', DRIVER)

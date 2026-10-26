@@ -111,8 +111,7 @@ def main():
         capture("controls-choice")
         pointer(340, 428)
         assert (level_directory / "controls.dat").read_bytes() == bytes([0]), "swipe choice was not persisted"
-        capture("journey-selector")
-        key("1", "Return")
+        # The choice goes straight into level 1: no stage or level menu.
         time.sleep(0.2)
         key("space")
         time.sleep(0.15)
@@ -230,7 +229,7 @@ def main():
         capture("portrait-stages")
         portrait_title = numpy.asarray(Image.open(OUT / "portrait-stages.png").convert("RGB"))
         assert ((portrait_title.max(axis=2) > 40).mean()) > 0.95, "portrait title artwork is missing"
-        key("Return", "1", "Return")
+        key("Return")
         time.sleep(0.2)
         capture("portrait-level")
         from PIL import Image
@@ -327,7 +326,6 @@ def main():
             time.sleep(.3)
             capture(f"title-{width}x{height}")
             pointer(width // 2, height - 70)
-            key("1", "Return")
             time.sleep(.15)
             key("space")
             capture(f"play-{width}x{height}")
@@ -487,7 +485,7 @@ def main():
             else:
                 raise RuntimeError("No owned landscape probe")
             time.sleep(.2)
-            capture("journey-" + chapter)
+            capture("landscape-" + chapter)
         env["WURM_PROBE_LEVEL"] = "0"
 
         # Show the full, bent worm and both gates without a modal obscuring

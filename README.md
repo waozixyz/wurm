@@ -32,10 +32,11 @@ Layouts take inspiration from the recovered original game's rooms, spirals
 and crossings. Wandering fire, bouncing patrols and chasing enemies make the
 journey more demanding as you climb.
 
-Finish a landscape to unlock the next. Return to any unlocked stage or
-cleared level from **Your journey**.
-
-<p align="center"><img src="assets/marketing/journey.png" alt="Your journey: five illustrated landscapes with progress and stage unlocks" width="85%"></p>
+Press **Play** and you are straight in the game. There is no level select:
+the levels follow one after another through all five landscapes. You start
+with three lives and earn more as your score grows; a game over starts again
+from level 1. Leave at any time and Play continues from the start of the
+level you reached.
 
 ## Play your way
 
@@ -46,8 +47,8 @@ the screen for the next corner. Change your choice from Pause at any time.
 On a keyboard, use the arrow keys or WASD. Space or Escape pauses; M mutes.
 Collect every apple, then leave through the opening at the top of the board.
 
-Portrait and landscape use their own board layouts. Your stage progress and
-control choice stay on your device. Android plays offline; the browser edition
+Portrait and landscape use their own board layouts. Your run and control
+choice stay on your device. Android plays offline; the browser edition
 keeps its saves in this browser.
 
 ## Make a path of your own

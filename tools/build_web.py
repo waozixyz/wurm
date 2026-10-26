@@ -37,7 +37,7 @@ def main():
     art = OUT / 'assets/art'
     # Legacy cover studies are not used by the game. Keep the browser preload
     # below Pages' per-file limit without changing the published artwork.
-    unused_art = ('*.argb', 'garden-cover.png', 'space-cover.png', 'factory-cover.png')
+    unused_art = ('*.argb', 'garden-cover.png', 'space-cover.png', 'factory-cover.png', 'stage-covers.png')
     shutil.copytree(ROOT / 'assets/art', art, dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns(*unused_art))
     for name in unused_art[1:]:

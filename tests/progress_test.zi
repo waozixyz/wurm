@@ -8,12 +8,16 @@ Expect :: (value: bool, message: string) {
     if !value { print("FAIL: %\n", message); failures += 1 }
 }
 
+// A fresh process reads only what the record holds.
+Reopen :: () { Progress.loaded = false; Progress.level = 0; Progress.lives = 3; Progress.score = 0 }
+
 #program_export
 main :: () -> s32 {
     Expect(Custom.CustomSetRoot("build/progress-test-data/"), "private records")
     unused File.CreateDirectory("build/progress-test-data")
     unused File.RemoveFile("build/progress-test-data/controls.dat")
     unused File.RemoveFile("build/progress-test-data/journey.dat")
+    unused File.RemoveFile("build/progress-test-data/run.dat")
     Expect(!Controls.Chosen(), "first play asks for controls")
     Expect(Controls.SetPad(true) && Controls.Pad(), "choose direction pad")
     Controls.mode = -2
@@ -21,24 +25,38 @@ main :: () -> s32 {
     Expect(Controls.SetPad(false) && !Controls.Pad(), "change to swipe")
     Controls.mode = -2
     Expect(Controls.Chosen() && !Controls.Pad(), "swipe survives restart")
-    Expect(Progress.LevelUnlocked(0) && !Progress.LevelUnlocked(1), "start with the first level")
-    Expect(!Progress.Unlocked(1) && !Progress.Win(40), "cannot skip to a locked stage")
-    Expect(!Progress.Win(1), "cannot skip levels")
-    for level: 0..199 {
-        Expect(Progress.LevelUnlocked(cast(s32)level), "next level unlocks")
-        Expect(Progress.Win(cast(s32)level), "win persists")
-        Expect(Progress.Cleared(cast(s32)level / 40) == cast(s32)level % 40 + 1, "stage progress")
-        if level % 40 == 38 && level < 160 { Expect(!Progress.Unlocked(cast(s32)level / 40 + 1), "stage requires all forty wins") }
-        Progress.loaded = false
-        Expect(Progress.LevelUnlocked(cast(s32)level), "progress survives restart")
-        Expect(Progress.Win(0), "earlier levels remain replayable")
-    }
-    for stage: 0..4 { Expect(Progress.Unlocked(cast(s32)stage) && Progress.Cleared(cast(s32)stage) == 40, "all five stages complete") }
+    Progress.Load()
+    Expect(Progress.level == 0 && Progress.lives == 3 && Progress.score == 0, "a new run starts at level one")
+    Expect(Progress.Begin(57, 6, 1234567), "save the level a run reaches")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 57 && Progress.lives == 6 && Progress.score == 1234567, "the run continues after a restart")
+    Expect(Progress.LoseLife(), "save a lost life")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 57 && Progress.lives == 5 && Progress.score == 1234567, "leaving the level keeps the lost life")
+    unused Progress.Begin(57, 1, 10)
+    unused Progress.LoseLife()
+    Reopen(); Progress.Load()
+    Expect(Progress.lives == 1, "lives earned within the level keep the run going")
+    Expect(Progress.Begin(199, 300, 4000), "save the last level")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 199 && Progress.lives == 255, "many earned lives fit the record")
+    Expect(Progress.Restart(), "a game over restarts the run")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 0 && Progress.lives == 3 && Progress.score == 0, "the next run starts at level one")
+    // Progress from the former stage page continues at its first uncleared level.
+    unused File.RemoveFile("build/progress-test-data/run.dat")
+    journey: [5]u8 = .[40,40,7,0,0]
+    Expect(Controls.WriteRecord("journey.dat", journey[:]), "write a stage page record")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 87 && Progress.lives == 3 && Progress.score == 0, "stage progress continues as a run")
     invalid: [5]u8 = .[255,40,40,40,40]
     Expect(Controls.WriteRecord("journey.dat", invalid[:]), "write corrupt record fixture")
-    Progress.loaded = false
-    for stage: 0..4 { Progress.completed[stage] = 0 }
-    Expect(Progress.LevelUnlocked(0) && !Progress.Unlocked(1), "invalid progress cannot unlock stages")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 0, "an invalid record starts at level one")
+    broken: [6]u8 = .[200,3,0,0,0,0]
+    Expect(Controls.WriteRecord("run.dat", broken[:]), "write an out-of-range run")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 0 && Progress.lives == 3, "an out-of-range run starts at level one")
     print("Controls and progress local test failures: %\n", failures)
     return failures
 }

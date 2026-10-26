@@ -5,7 +5,7 @@ Application id `xyz.waozi.wurm`.
 
 A native Ziran and Kryon game. The illustrated Apfelwurm title has one
 **Play** button. Choose swipe steering or a direction pad on first play,
-then select your stage in **Your journey**. Follow the little orange worm
+and play goes straight into the level the run has reached. Follow the little orange worm
 through **200 unique original-inspired levels**, with 40 each in Meadow,
 deciduous Leafwood, coniferous Pinewood, Lake and Mountains.
 Rooms, spirals, crossings, islands and narrow passes draw from 83 recovered
@@ -13,8 +13,9 @@ layouts. The six original enemy types include wandering fire, bouncing
 patrols and chasing creatures. Enemy counts and apple goals increase across
 stages, while the first six levels introduce movement without enemies.
 Opening Meadow levels move more slowly before reaching the original pace.
-Complete all 40 levels to unlock the next landscape. Unlocked stages and
-cleared levels remain selectable; progress and the control choice persist.
+There is no stage or level selection: levels follow in order through every
+landscape. The run (level, lives and score carried into that level) and the
+control choice persist; a game over starts the next run at level 1.
 `tools/design_levels.py` regenerates the boards and static route certificates.
 The local engine replay wins all 200 levels in both orientations with enemies
 active, using recorded seeds and routes from `tests/campaign_cases.json`.
@@ -34,19 +35,20 @@ losing the last one ends the game at zero.
 
 ## Controls
 
-- Click Play, Enter or Space: choose controls, then a stage and level; Enter or Space also retries
+- Click Play, Enter or Space: choose controls on first play, then continue the run; Enter or Space also retries
 - Arrows, WASD, a held finger moving over the board, or the direction pad: steer immediately
 - Pause > Controls: change between swipe steering and the direction pad
-- Pause > Stages: select an unlocked stage and level
 - Escape, Space or P: pause and resume
 - Q while paused: back to the title
-- R: restart the current level
+- R: restart the current level with the lives and score the run brought into it
 - M: mute and unmute
 - E on the title: open the level editor
 
-Collect the apples, then leave through the top opening. Levels within each landscape
-connect automatically, keeping lives and score. A completed landscape returns
-to Your journey with the next stage unlocked.
+Collect the apples, then leave through the top opening. Every level, across
+all five landscapes, connects automatically, keeping lives and score. Lives lost
+are saved immediately; lives earned within a level are kept by finishing it.
+Hosted in Arcade, the cover is the title, so opening the game goes straight
+into play.
 
 ## Mobile-first layout
 
@@ -225,7 +227,7 @@ original Windows dialogs and DirectPlay multiplayer have not been ported.
 
 `python3 tools/build_web.py` compiles the same game with Kryon's Canvas2D host
 and Emscripten. `node tests/web_test.mjs` runs a private browser test, including
-control selection, stage selection, portrait resizing and persistent saves.
+control selection, the direct start, portrait resizing and persistent saves.
 The browser stores records through Kryon's IndexedDB provider.
 
 The Downloads workflow packages the verified web build beside the signed APKs.
