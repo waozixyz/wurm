@@ -29,6 +29,18 @@ try{
  await key('ArrowRight',39);await delay(150);await key(' ',32);await capture('playing');
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await delay(400);await capture('portrait');
  await command('Page.reload');await until("typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden");await delay(1200);await until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/controls.dat')[0]===0}catch{return false}})()");await key('Enter',13);await delay(300);await capture('playing-portrait');
+ // The real touch path paints Kryon's feedback above the board, then removes
+ // it on release. Read the same spot to avoid counting moving game pieces.
+ const pixel=async(x,y)=>evaluate(`(()=>{const c=document.getElementById('canvas'),b=c.getBoundingClientRect();return Array.from(c.getContext('2d').getImageData(Math.round((${x}-b.left)*c.width/b.width),Math.round((${y}-b.top)*c.height/b.height),1,1).data).slice(0,3)})()`);
+ const beforeTouch=await pixel(219,480);
+ await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:195,y:480}]});await delay(80);
+ await command('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:225,y:480}]});await delay(80);
+ const duringTouch=await pixel(219,480);await capture('swipe-feedback');
+ if(duringTouch.reduce((a,b)=>a+b,0)<beforeTouch.reduce((a,b)=>a+b,0)+80)throw new Error('Touch feedback did not appear above the board');
+ await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await delay(100);
+ const afterTouch=await pixel(219,480);
+ if(duringTouch.reduce((a,b)=>a+b,0)<afterTouch.reduce((a,b)=>a+b,0)+80)throw new Error('Touch feedback stayed after release');
+ await capture('swipe-released');
  // Import an old run, persist it through IndexedDB, then use the real title
  // buttons. Only this test's private browser profile contains these records.
  await evaluate("new Promise((resolve,reject)=>{Module.FS.writeFile('/kryon-apps/wurm/run.dat',new Uint8Array([57,6,120,0,0,0]));try{Module.FS.unlink('/kryon-apps/wurm/unlocked.dat')}catch{}Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})");
@@ -54,7 +66,21 @@ try{
  if(!await evaluate("Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57"))throw new Error('Level selection erased progress');
  await key(' ',32);await key('q',81);await key('l',76);await key('Escape',27);await key('c',67);
  await until("Module.FS.readFile('/kryon-apps/wurm/run.dat')[0]===57");
+ // Only this disposable browser's records change. Both orientations use the
+ // same library placement and retain a visible press highlight.
+ await evaluate("new Promise((resolve,reject)=>{Module.FS.writeFile('/kryon-apps/wurm/controls.dat',new Uint8Array([1]));Module.FS.writeFile('/kryon-apps/wurm/unlocked.dat',new Uint8Array([0]));Module.FS.writeFile('/kryon-apps/wurm/run.dat',new Uint8Array([0,3,0,0,0,0]));Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})");
+ for(const [width,height] of [[390,844],[844,390]]){
+  await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:true});
+  await command('Page.reload');await until("typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden");await delay(1200);await key('Enter',13);
+  const playHeight=height-(width<520?104:72),short=Math.min(width,playHeight),margin=Math.max(24,Math.min(32,short*.06)),side=Math.max(168,Math.min(216,short*.44));
+  const x=Math.round(margin+side/6),y=Math.round(height-margin-side/2);
+  const rest=await pixel(x-10,y+9);
+  await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});await delay(80);
+  const held=await pixel(x-10,y+9);await capture(`pad-${width}x${height}`);
+  if(held.reduce((a,b)=>a+b,0)>=rest.reduce((a,b)=>a+b,0)-40)throw new Error('Direction pad did not highlight the held arm at '+width+'x'+height);
+  await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ }
  if(errors.length)throw new Error(JSON.stringify(errors));
- await writeFile(join(out,'result.json'),JSON.stringify({passed:true,url,behaviors:['rendered title artwork','control choice','straight into level 1','keyboard steering','pause','portrait resize','durable saves after reload','old run migration','Continue highest level with fresh stats','Play from start preserves unlocks','Continue after browser reload','landscape level selector','touch scrolling without starting a level','locked levels cannot start','unlocked level selection starts fresh','selector keyboard back'],colorful,errors},null,2)+'\n');
- console.log('Browser local test: controls, play, portrait, save migration, Continue, Play from start, durable progress and unlocked-level selection passed.');
+ await writeFile(join(out,'result.json'),JSON.stringify({passed:true,url,behaviors:['shared touch feedback and release','mobile pad placement and held highlight in both orientations','rendered title artwork','control choice','straight into level 1','keyboard steering','pause','portrait resize','durable saves after reload','old run migration','Continue highest level with fresh stats','Play from start preserves unlocks','Continue after browser reload','landscape level selector','touch scrolling without starting a level','locked levels cannot start','unlocked level selection starts fresh','selector keyboard back'],colorful,errors},null,2)+'\n');
+ console.log('Browser local test: touch feedback and release, mobile pad placement and highlight, controls, play, portrait, durable progress and unlocked-level selection passed.');
 }catch(error){await writeFile(join(out,'failure.txt'),String(error)+'\n'+stderr);throw error;}finally{socket?.close();stop(browser);stop(server);await delay(300);await rm(profile,{recursive:true,force:true});}

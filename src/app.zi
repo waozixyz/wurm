@@ -1345,8 +1345,9 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // Read the held pointer before simulation, so the next 25 ms step can
     // already use this frame's direction. SwipeArea supplies captured contact;
     // its release-only swipe result is deliberately unused.
+    contact: SwipeAreaResult
     if game.mode == MODE_PLAYING && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
-        contact := SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
+        contact = SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
             .label = "Steer the worm", .now = cast(float64)now / 1000.0,
             .min_distance = 6.0})
         direction := Touch.TouchDirection(*touch_steering, contact.down, contact.at_x, contact.at_y)
@@ -1385,12 +1386,12 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         DrawEditor(session, area, now)
     } else {
         DrawBoard(session, stage)
+        if game.mode == MODE_PLAYING && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
+            SwipeFeedback(session, SwipeFeedbackProps.{.key = 24010, .gesture = contact})
+        }
         if game.mode == MODE_PLAYING && Controls.Pad() {
-            size := viewport.width * 0.34
-            if size < 132.0 { size = 132.0 }
-            if size > 192.0 { size = 192.0 }
             pad := DirectionPad(session, DirectionPadProps.{.key = PLAY_STEERING_KEY,
-                .bounds = Rectangle.{viewport.x + 12.0, viewport.y + viewport.height - size - 12.0, size, size},
+                .bounds = DirectionPadBounds(Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height}),
                 .label = "Direction pad", .now = cast(float64)now / 1000.0, .repeat_seconds = 0.08,
                 .floating = true, .disabled = game.death_ticks > 0 || game.transition_ticks > 0})
             if pad.step { Steer(pad.direction) }

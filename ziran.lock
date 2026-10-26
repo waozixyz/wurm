@@ -11,14 +11,6 @@
       "url": "https://github.com/raysan5/raylib.git"
     },
     {
-      "commit": "bab522f4edf3dee69827fbd09fafb2639311e1c6",
-      "dependencies": {"raylib": "p5a77c9c35110e925"},
-      "id": "pa7d5e0ee3b284d04",
-      "name": "kryon",
-      "ref": "master",
-      "url": "https://github.com/kryonlabs/kryon.git"
-    },
-    {
       "commit": "944826f70779a6b6cd53f6b06a75b36f4d8a2558",
       "dependencies": {},
       "id": "pc23fbf455e97614d",
@@ -28,11 +20,19 @@
     },
     {
       "commit": "a875f54350ec8ba09084318d1f0b4128880704ad",
-      "dependencies": {"crypto": "pc23fbf455e97614d", "kryon": "pa7d5e0ee3b284d04"},
+      "dependencies": {"crypto": "pc23fbf455e97614d", "kryon": "pdd57d651b3a7cdaa"},
       "id": "pcbd005e9df79a736",
       "name": "Apps",
       "ref": "master",
       "url": "https://github.com/waozixyz/apps.git"
+    },
+    {
+      "commit": "b52c3986ed734e051df396901da9e7aaa42ad667",
+      "dependencies": {"raylib": "p5a77c9c35110e925"},
+      "id": "pdd57d651b3a7cdaa",
+      "name": "kryon",
+      "ref": "master",
+      "url": "https://github.com/kryonlabs/kryon.git"
     },
     {
       "commit": "9cc6872f75447c3a24c16764f9829d0f58751cb0",
@@ -44,7 +44,7 @@
     }
   ],
   "root": {
-    "dependencies": {"apps": "pcbd005e9df79a736", "kryon": "pa7d5e0ee3b284d04", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "pcbd005e9df79a736", "kryon": "pdd57d651b3a7cdaa", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {

@@ -446,8 +446,10 @@ def main():
             else:
                 raise RuntimeError("No owned direction-pad probe")
             time.sleep(.15)
-            side = min(192, max(132, width * .34))
-            left, top = 12, height - side - 12
+            short = min(width, height - (104 if width < 520 else 72))
+            margin = min(32, max(24, short * .06))
+            side = min(216, max(168, short * .44))
+            left, top = margin, height - side - margin
             try:
                 for direction, x, y in ((2, left + side * .84, top + side * .5),
                                         (3, left + side * .5, top + side * .84),

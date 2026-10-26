@@ -26,6 +26,11 @@ def main():
     kryon, compiler = package('kryon'), package('ziran')
     generated = ROOT / 'build/web-native'
     ir, code = generated / 'ir', generated / 'c'
+    # Package module names change with dependency revisions. Never feed IR or
+    # C left by an earlier revision into this build alongside the current graph.
+    for folder in (ir, code):
+        if folder.exists():
+            shutil.rmtree(folder)
     for folder in (OUT, ir, code):
         folder.mkdir(parents=True, exist_ok=True)
     host = kryon / 'src/backend/canvas_run.zi'

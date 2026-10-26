@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.7] - 2026-10-26
+
+- See a glowing touch guide follow your finger while swipe steering.
+- Steer with a larger direction pad, with more space from the edges in portrait and landscape.
+
 ## [0.1.6] - 2026-10-26
 
 - Try again after game over starts the furthest unlocked level with three lives and a fresh score.
