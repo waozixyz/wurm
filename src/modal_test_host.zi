@@ -8,6 +8,8 @@ using UI :: #import "kryon/Widgets";
 #import "std/c_string"
 Timer :: #import "std/timer_linux";
 App :: #import "app";
+Progress :: #import, file "progress.zi";
+Controls :: #import, file "controls.zi";
 #import, file "game.zi";
 libc :: #system_library "libc";
 GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
@@ -21,6 +23,52 @@ Number :: (name: string, fallback: s32) -> s32 {
     return ifx value == null then fallback else ParseNumber(value)
 }
 
+ProbeFrame :: (session: Session) -> bool {
+    BeginDesktopFrame()
+    viewport := DesktopViewport()
+    if cast(s32)BeginFrame(session, 1, viewport) != 0 { return false }
+    if App.Frame(session, viewport) != 0 { return false }
+    return cast(s32)EndFrame(session) == 0 && EndDesktopFrame()
+}
+
+// Exercise the real frame and engine transitions with private save records.
+ProgressProbe :: (session: Session) -> s32 {
+    now := Timer.MonotonicMilliseconds()
+    unused Controls.SetPad(false)
+    if !Progress.Begin(39, 5, 120) { return 30 }
+    App.StartRun(now)
+    App.game.transition_ticks = 1
+    App.game.next_step = 0
+    if !ProbeFrame(session) { return 31 }
+    if Progress.level != 40 || Progress.unlocked != 40 || Progress.lives != 5 || Progress.score != 120 { return 32 }
+    if !ProbeFrame(session) || App.game.level != 40 || App.game.lives != 5 || App.game.score != 120 { return 33 }
+    App.game.score = 130
+    App.HandleInput(82, now)
+    if App.game.level != 40 || App.game.score != 120 || App.game.lives != 5 { return 34 }
+    App.editor.playtest = true
+    App.StartLevel(150, now, 1)
+    App.game.transition_ticks = 1
+    App.game.next_step = 0
+    if !ProbeFrame(session) || Progress.unlocked != 40 || Progress.level != 40 { return 35 }
+    App.editor.playtest = false
+    App.StartRun(now)
+    App.game.lives = 1
+    App.game.death_ticks = 1
+    App.game.next_step = 0
+    if !ProbeFrame(session) || App.game.mode != MODE_DIED || Progress.level != 0 || Progress.unlocked != 40 { return 36 }
+    App.Play(now, true)
+    if App.game.level != 40 || App.game.lives != 3 || App.game.score != 0 { return 37 }
+    App.Play(now)
+    if App.game.level != 0 || Progress.unlocked != 40 { return 38 }
+    if !Progress.Begin(199, 7, 220) { return 39 }
+    App.StartRun(now)
+    App.game.transition_ticks = 1
+    App.game.next_step = 0
+    if !ProbeFrame(session) || App.game.mode != MODE_VICTORY || Progress.level != 0 || Progress.unlocked != 199 { return 40 }
+    print("Application progress local test: level completion, carried stats, restart, editor isolation, game over, Continue, Play and victory passed.\n")
+    return 0
+}
+
 #program_export
 main :: () -> s32 {
     width := Number("WURM_PROBE_WIDTH", 320)
@@ -31,6 +79,7 @@ main :: () -> s32 {
     if !SessionValid(session) { return 2 }
     defer CloseSession(session)
     App.game_portrait = height > width
+    if Number("WURM_PROBE_PROGRESS", 0) != 0 { return ProgressProbe(session) }
     App.StartLevel(Number("WURM_PROBE_LEVEL", 0), Timer.MonotonicMilliseconds(), 1)
     state: *Game = *App.game
     // Behavioural adjacency cases: internal joins never receive borders,
@@ -117,7 +166,10 @@ main :: () -> s32 {
     if Number("WURM_PROBE_FREEZE", 0) != 0 { state.next_step = Timer.MonotonicMilliseconds() + 600000 }
     steering := Number("WURM_PROBE_STEERING", 0) != 0
     if steering {
-        state.length = 32
+        // Input probes make rapid successive turns; keep the test worm short
+        // so its own tail cannot kill it before the next pointer assertion.
+        state.length = 1
+        state.target_length = 1
         state.direction = 1
         state.next_direction = 1
         head := Point.{board_columns / 2 * 16 + 8, board_rows / 2 * 16 + 8}

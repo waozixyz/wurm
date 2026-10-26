@@ -34,9 +34,11 @@ journey more demanding as you climb.
 
 Press **Play** and you are straight in the game. There is no level select:
 the levels follow one after another through all five landscapes. You start
-with three lives and earn more as your score grows; a game over starts again
-from level 1. Leave at any time and Play continues from the start of the
-level you reached.
+with three lives and earn more as your score grows. Score and lives carry
+between levels throughout your run. **Continue** starts the furthest level
+unlocked on this device with three lives and a fresh score, even after a game
+over or closing the game. **Play from start** begins a new run at level 1
+without erasing your unlocked progress.
 
 ## Play your way
 

@@ -252,6 +252,15 @@ def main():
         assert black_columns == 0, f"{black_columns} black side columns; the board did not turn"
         print("Private UI local test rendered the turned portrait board and the top icon bar.")
 
+        # Real frame transitions save the next level immediately, including
+        # a landscape boundary, and keep editor playtests out of progress.
+        stop(app)
+        probe_directory = level_directory / "progress-probe"
+        probe_directory.mkdir()
+        subprocess.run([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT,
+                       env={**env, "WURM_LEVEL_DIR": str(probe_directory), "WURM_PROBE_PROGRESS": "1"},
+                       check=True, timeout=30)
+
         # Each dialog is exercised in a narrow phone portrait and a short
         # phone landscape window. The probe is a separate, uninstalled host.
         for width, height in ((320, 568), (640, 360)):
@@ -308,6 +317,9 @@ def main():
         print("Private UI local test: all three dialogs fit portrait/landscape; all primary and title actions worked.")
         for width, height in ((320, 568), (360, 800), (800, 360)):
             stop(app)
+            # A previous-version save unlocks its reached level on relaunch.
+            (level_directory / "run.dat").write_bytes(bytes([57, 6, 120, 0, 0, 0]))
+            (level_directory / "unlocked.dat").unlink(missing_ok=True)
             env.update(WURM_WINDOW=f"{width}x{height}")
             app = subprocess.Popen([str(ROOT / "build/Apfelwurm-desktop")], cwd=ROOT / "build", env=env,
                                    stdout=open(OUT / f"title-{width}x{height}.log", "wb"),
@@ -325,11 +337,17 @@ def main():
                 raise RuntimeError("Responsive title did not open")
             time.sleep(.3)
             capture(f"title-{width}x{height}")
+            pointer(width // 2, height - 144)
+            assert (level_directory / "run.dat").read_bytes() == bytes([57, 3, 0, 0, 0, 0]), "Continue did not start the highest unlocked level with fresh stats"
+            key("space", "q")
+            capture(f"continue-title-{width}x{height}")
             pointer(width // 2, height - 70)
+            assert (level_directory / "run.dat").read_bytes() == bytes([0, 3, 0, 0, 0, 0]), "Play did not start from level one"
+            assert (level_directory / "unlocked.dat").read_bytes() == bytes([57]), "Play erased unlocked progress"
             time.sleep(.15)
             key("space")
             capture(f"play-{width}x{height}")
-        print("Private UI local test: title and Play worked on small/tall portraits and wide landscape.")
+        print("Private UI local test: Continue and Play preserved progress on small/tall portraits and wide landscape.")
 
         # Real held pointer input: turns must take effect before mouseup,
         # including subsequent corners during that very same contact.

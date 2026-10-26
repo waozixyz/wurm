@@ -1,39 +1,61 @@
-// One run through every level: the level it reached, with the lives and score
-// it carried into that level. A game over starts the next run at level one.
+// The current run carries lives and score. Unlocked levels survive new runs
+// and game overs, so Continue can always replay the furthest level reached.
 Records :: #import, file "controls.zi";
 LEVELS :: 200;
 START_LIVES :: 3;
 level: s32;
 lives: s32 = START_LIVES;
 score: s32;
+unlocked: s32;
 loaded: bool;
 
 Load :: () {
     if loaded { return }
     loaded = true
+    furthest: [2]u8
+    if Records.ReadRecord("unlocked.dat", furthest[:]) == 1 && cast(s32)furthest[0] < LEVELS {
+        unlocked = cast(s32)furthest[0]
+    }
     bytes: [7]u8
+    has_run := false
     if Records.ReadRecord("run.dat", bytes[:]) == 6 {
         saved := cast(s32)bytes[2] | (cast(s32)bytes[3] << 8) | (cast(s32)bytes[4] << 16) | (cast(s32)(bytes[5] & 127) << 24)
         if cast(s32)bytes[0] < LEVELS && bytes[1] > 0 {
             level = cast(s32)bytes[0]
             lives = cast(s32)bytes[1]
             score = saved
+            has_run = true
+            if level > unlocked { unlocked = level }
         }
-        return
     }
-    // Progress from the former stage page continues at its first uncleared level.
+    // Import both older save formats without letting a newer run erase unlocks.
     completed: [6]u8
-    if Records.ReadRecord("journey.dat", completed[:]) != 5 { return }
-    for stage: 0..4 { if completed[stage] > 40 { return } }
-    for stage: 0..4 {
-        if completed[stage] < 40 {
-            level = cast(s32)stage * 40 + cast(s32)completed[stage]
-            return
+    if Records.ReadRecord("journey.dat", completed[:]) == 5 {
+        valid := true
+        for stage: 0..4 { if completed[stage] > 40 { valid = false } }
+        if valid {
+            reached: s32 = LEVELS - 1
+            for stage: 0..4 {
+                if completed[stage] < 40 {
+                    reached = cast(s32)stage * 40 + cast(s32)completed[stage]
+                    break
+                }
+            }
+            if reached > unlocked { unlocked = reached }
+            if !has_run { level = reached }
         }
     }
+    // Preserve imported progress before Play or a game over replaces run.dat.
+    if unlocked > 0 { unused SaveUnlocked() }
+}
+
+SaveUnlocked :: () -> bool {
+    bytes: [1]u8 = .[cast(u8)unlocked]
+    return Records.WriteRecord("unlocked.dat", bytes[:])
 }
 
 Save :: () -> bool {
+    if !SaveUnlocked() { return false }
     kept := ifx lives > 255 then 255 else lives
     bytes: [6]u8 = .[cast(u8)level, cast(u8)kept, cast(u8)(score & 255), cast(u8)((score >> 8) & 255),
         cast(u8)((score >> 16) & 255), cast(u8)((score >> 24) & 127)]
@@ -42,10 +64,12 @@ Save :: () -> bool {
 
 // Each level starts from what the run carries into it.
 Begin :: (at: s32, carried_lives: s32, carried_score: s32) -> bool {
-    loaded = true
+    if at < 0 || at >= LEVELS || carried_lives <= 0 || carried_score < 0 { return false }
+    Load()
     level = at
     lives = carried_lives
     score = carried_score
+    if at > unlocked { unlocked = at }
     return Save()
 }
 
@@ -58,3 +82,4 @@ LoseLife :: () -> bool {
 }
 
 Restart :: () -> bool { return Begin(0, START_LIVES, 0) }
+Continue :: () -> bool { Load(); return Begin(unlocked, START_LIVES, 0) }

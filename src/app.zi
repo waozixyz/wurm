@@ -915,9 +915,10 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
             .label = "Title", .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorExit() }
 }
 
-// One illustrated title, one Play button. Garden flows straight into Forest;
-// stage and level selection do not stand between the player and the game.
-DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = true) -> bool {
+// Play starts a full run; Continue replays the furthest unlocked level.
+// Return 1 for Play and 2 for Continue, keeping both touch and keyboard paths.
+continue_label: [48]u8;
+DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = true) -> s32 {
     portrait := area.height > area.width
     artwork := ifx portrait then ART_TITLE_PORTRAIT else ART_TITLE
     art_bounds := area
@@ -934,28 +935,47 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
     unused Box(session, BoxProps.{.key = 802,
         .bounds = Rectangle.{area.x, area.y + area.height - 140.0, area.width, 140.0},
         .fill = Color.{20, 47, 22, 0}, .fill_bottom = Color.{20, 47, 22, 170}, .has_fill_bottom = true})
-    if !play_button { return false }
+    if !play_button { return 0 }
+    Progress.Load()
     width := area.width - 48.0
     if width > 280.0 { width = 280.0 }
+    if Progress.unlocked > 0 {
+        digits: [21]u8
+        at := CopyInto(continue_label[:], 0, "Continue · Level ")
+        at = CopyInto(continue_label[:], at, FormatInteger(cast(s64)(Progress.unlocked + 1), digits[:]))
+        continue_label[at] = 0
+        if Button(session, ButtonProps.{.key = 809,
+                .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + area.height - 174.0, width, 60.0},
+                .label = TextUntilNul(continue_label[:]), .class_name = 13, .pill = true,
+                .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 67 || key == 99 { return 2 }
+    }
     clicked := Button(session, ButtonProps.{.key = 808,
         .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + area.height - 100.0, width, 60.0},
-        .label = "Play", .class_name = 13, .icon_shape = "F:M8 5L19 12L8 19Z", .pill = true,
+        .label = ifx Progress.unlocked > 0 then "Play from start" else "Play", .class_name = 13,
+        .icon_shape = "F:M8 5L19 12L8 19Z", .pill = true,
         .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneSuccess,
         .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0
-    return clicked || key == Input.KeyEnter || key == 32
+    return ifx clicked || key == Input.KeyEnter || key == 32 then 1 else 0
 }
 
 recorded_level: s32 = -1;
-// Play continues the saved run from the start of its level, with the lives
-// and score it carried in; every level follows in order, without a menu.
+// Reload the current run without resetting the score or lives it carried in.
 StartRun :: (now: s64) {
     Progress.Load()
     StartLevel(Progress.level, now, cast(u32)(now & 4294967295))
     game.lives = Progress.lives
     game.score = Progress.score
 }
-Play :: (now: s64) {
-    if Controls.Chosen() { StartRun(now) }
+continue_requested: bool;
+StartChosenRun :: (now: s64) {
+    if continue_requested { unused Progress.Continue() }
+    else { unused Progress.Restart() }
+    StartRun(now)
+}
+Play :: (now: s64, from_unlocked: bool = false) {
+    continue_requested = from_unlocked
+    if Controls.Chosen() { StartChosenRun(now) }
     else { AskControls() }
 }
 
@@ -968,7 +988,7 @@ AskControls :: () {
 ChooseControls :: (pad: bool, now: s64) {
     unused Controls.SetPad(pad)
     touch_steering.active = false
-    if controls_previous_mode == MODE_STAGES { StartRun(now) }
+    if controls_previous_mode == MODE_STAGES { StartChosenRun(now) }
     else { game.mode = controls_previous_mode; game.next_step = now + TickInterval(game.level) }
 }
 DrawControls :: (session: Session, area: Rectangle, now: s64) {
@@ -1192,7 +1212,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         OpenStages()
         // A collection's cover is the title: hosted, the game opens straight into play.
         #if #defined(WURM_PORTABLE) {
-            Play(now)
+            if Controls.Chosen() { StartRun(now) }
+            else { Play(now) }
         }
     } else if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED) {
         paused := game.mode == MODE_PAUSED
@@ -1234,6 +1255,10 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     } else { touch_steering.active = false }
     lives_before := game.lives
     unused Step(*game, now)
+    // Save the next unlocked level on completion, before loading its board.
+    if game.mode == MODE_FINISHED && !editor.playtest && recorded_level != game.level {
+        if Progress.Begin(game.level + 1, game.lives, game.score) { recorded_level = game.level }
+    }
     // The run keeps each lost life; a game over or the finished journey
     // starts the next run at level one.
     if !editor.playtest && game.lives < lives_before {
@@ -1247,7 +1272,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         game.level, game.apples, game.death_ticks, game.transition_ticks)
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
-        if DrawTitle(session, area, stage_key) { Play(now) }
+        action := DrawTitle(session, area, stage_key)
+        if action != 0 { Play(now, action == 2) }
     } else if game.mode == MODE_CONTROLS {
         if controls_previous_mode == MODE_STAGES { unused DrawTitle(session, viewport, 0, false) }
         else { DrawBoard(session, stage) }

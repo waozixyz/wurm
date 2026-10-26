@@ -9,15 +9,20 @@ Expect :: (value: bool, message: string) {
 }
 
 // A fresh process reads only what the record holds.
-Reopen :: () { Progress.loaded = false; Progress.level = 0; Progress.lives = 3; Progress.score = 0 }
+Reopen :: () { Progress.loaded = false; Progress.level = 0; Progress.lives = 3; Progress.score = 0; Progress.unlocked = 0 }
+Clear :: () {
+    unused File.RemoveFile("build/progress-test-data/journey.dat")
+    unused File.RemoveFile("build/progress-test-data/run.dat")
+    unused File.RemoveFile("build/progress-test-data/unlocked.dat")
+    Reopen()
+}
 
 #program_export
 main :: () -> s32 {
     Expect(Custom.CustomSetRoot("build/progress-test-data/"), "private records")
     unused File.CreateDirectory("build/progress-test-data")
     unused File.RemoveFile("build/progress-test-data/controls.dat")
-    unused File.RemoveFile("build/progress-test-data/journey.dat")
-    unused File.RemoveFile("build/progress-test-data/run.dat")
+    Clear()
     Expect(!Controls.Chosen(), "first play asks for controls")
     Expect(Controls.SetPad(true) && Controls.Pad(), "choose direction pad")
     Controls.mode = -2
@@ -30,6 +35,7 @@ main :: () -> s32 {
     Expect(Progress.Begin(57, 6, 1234567), "save the level a run reaches")
     Reopen(); Progress.Load()
     Expect(Progress.level == 57 && Progress.lives == 6 && Progress.score == 1234567, "the run continues after a restart")
+    Expect(Progress.unlocked == 57, "the reached level is unlocked")
     Expect(Progress.LoseLife(), "save a lost life")
     Reopen(); Progress.Load()
     Expect(Progress.level == 57 && Progress.lives == 5 && Progress.score == 1234567, "leaving the level keeps the lost life")
@@ -37,18 +43,47 @@ main :: () -> s32 {
     unused Progress.LoseLife()
     Reopen(); Progress.Load()
     Expect(Progress.lives == 1, "lives earned within the level keep the run going")
+    Expect(Progress.Restart(), "Play starts from level one")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 0 && Progress.unlocked == 57, "Play preserves the highest unlocked level")
+    Expect(Progress.Continue(), "Continue starts the highest unlocked level")
+    Expect(Progress.level == 57 && Progress.lives == 3 && Progress.score == 0, "Continue gives a fresh score and three lives")
+    Expect(Progress.Begin(58, 7, 900), "finishing the level carries score and earned lives")
+    Expect(Progress.Begin(4, 2, 11), "replaying earlier levels")
+    Reopen(); Progress.Load()
+    Expect(Progress.unlocked == 58 && Progress.level == 4 && Progress.lives == 2 && Progress.score == 11, "an earlier run cannot reduce unlocked progress")
     Expect(Progress.Begin(199, 300, 4000), "save the last level")
     Reopen(); Progress.Load()
     Expect(Progress.level == 199 && Progress.lives == 255, "many earned lives fit the record")
     Expect(Progress.Restart(), "a game over restarts the run")
     Reopen(); Progress.Load()
     Expect(Progress.level == 0 && Progress.lives == 3 && Progress.score == 0, "the next run starts at level one")
+    Expect(Progress.unlocked == 199, "game over and victory keep the final level unlocked")
+    Expect(Progress.Continue() && Progress.level == 199, "the final level can be replayed")
+    Expect(!Progress.Begin(200, 3, 0) && !Progress.Begin(-1, 3, 0) && !Progress.Begin(0, 0, 0), "invalid run values are rejected")
     // Progress from the former stage page continues at its first uncleared level.
-    unused File.RemoveFile("build/progress-test-data/run.dat")
+    Clear()
     journey: [5]u8 = .[40,40,7,0,0]
     Expect(Controls.WriteRecord("journey.dat", journey[:]), "write a stage page record")
     Reopen(); Progress.Load()
     Expect(Progress.level == 87 && Progress.lives == 3 && Progress.score == 0, "stage progress continues as a run")
+    Expect(Progress.Restart(), "restart after importing stage progress")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 0 && Progress.unlocked == 87, "stage migration survives a new run")
+    Clear()
+    old_run: [6]u8 = .[42,5,123,0,0,0]
+    Expect(Controls.WriteRecord("run.dat", old_run[:]), "write a previous-version run")
+    Reopen(); Progress.Load()
+    Expect(Progress.level == 42 && Progress.unlocked == 42 && Progress.lives == 5 && Progress.score == 123, "existing runs unlock their reached level without losing carried stats")
+    Expect(Progress.Restart(), "restart after importing a run")
+    Reopen(); Progress.Load()
+    Expect(Progress.unlocked == 42, "run migration is durable")
+    Clear()
+    complete: [5]u8 = .[40,40,40,40,40]
+    Expect(Controls.WriteRecord("journey.dat", complete[:]), "write a completed legacy campaign")
+    Reopen(); Progress.Load()
+    Expect(Progress.unlocked == 199, "a completed legacy campaign unlocks the final level")
+    Clear()
     invalid: [5]u8 = .[255,40,40,40,40]
     Expect(Controls.WriteRecord("journey.dat", invalid[:]), "write corrupt record fixture")
     Reopen(); Progress.Load()
@@ -57,6 +92,10 @@ main :: () -> s32 {
     Expect(Controls.WriteRecord("run.dat", broken[:]), "write an out-of-range run")
     Reopen(); Progress.Load()
     Expect(Progress.level == 0 && Progress.lives == 3, "an out-of-range run starts at level one")
+    corrupt: [2]u8 = .[255,1]
+    Expect(Controls.WriteRecord("unlocked.dat", corrupt[:]), "write corrupt unlocked progress")
+    Reopen(); Progress.Load()
+    Expect(Progress.unlocked == 0, "invalid unlocked records are ignored")
     print("Controls and progress local test failures: %\n", failures)
     return failures
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.5] - 2026-10-26
+
+- Continue from the furthest level unlocked on this device with three lives and a fresh score. Progress saves after every completed level and survives closing the game or a game over.
+- Play from start for a full run, carrying score and lives between levels without erasing unlocked progress.
+- Keep levels reached in existing saves available through Continue.
+
 ## [0.1.4] - 2026-10-25
 
 - Press Play and go straight into the game: no stage or level select. Play every level in order through all five landscapes, earning lives as your score grows; a game over starts again from level 1.

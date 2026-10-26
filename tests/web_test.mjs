@@ -29,7 +29,16 @@ try{
  await key('ArrowRight',39);await delay(150);await key(' ',32);await capture('playing');
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await delay(400);await capture('portrait');
  await command('Page.reload');await until("typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden");await delay(1200);await until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/controls.dat')[0]===0}catch{return false}})()");await key('Enter',13);await delay(300);await capture('playing-portrait');
+ // Import an old run, persist it through IndexedDB, then use the real title
+ // buttons. Only this test's private browser profile contains these records.
+ await evaluate("new Promise((resolve,reject)=>{Module.FS.writeFile('/kryon-apps/wurm/run.dat',new Uint8Array([57,6,120,0,0,0]));try{Module.FS.unlink('/kryon-apps/wurm/unlocked.dat')}catch{}Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})");
+ await command('Page.reload');await until("typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden");await delay(1500);await until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57}catch{return false}})()");await capture('continue-title');
+ const click=async(x,y)=>{await command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y});await delay(80);await command('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});await delay(80);await command('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});await delay(180);};
+ await click(195,700);await until("JSON.stringify(Array.from(Module.FS.readFile('/kryon-apps/wurm/run.dat')))==='[57,3,0,0,0,0]'");await capture('continued-level-58');
+ await key(' ',32);await key('q',81);await click(195,774);await until("JSON.stringify(Array.from(Module.FS.readFile('/kryon-apps/wurm/run.dat')))==='[0,3,0,0,0,0]'");
+ if(!await evaluate("Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57"))throw new Error('Play erased unlocked progress');
+ await delay(500);await command('Page.reload');await until("typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden");await delay(1500);await key('c',67);await until("JSON.stringify(Array.from(Module.FS.readFile('/kryon-apps/wurm/run.dat')))==='[57,3,0,0,0,0]'");
  if(errors.length)throw new Error(JSON.stringify(errors));
- await writeFile(join(out,'result.json'),JSON.stringify({passed:true,url,behaviors:['rendered title artwork','control choice','straight into level 1','keyboard steering','pause','portrait resize','durable saves after reload'],colorful,errors},null,2)+'\n');
- console.log('Browser local test: title, control choice, straight into play, portrait resize and saved choice after reload passed.');
+ await writeFile(join(out,'result.json'),JSON.stringify({passed:true,url,behaviors:['rendered title artwork','control choice','straight into level 1','keyboard steering','pause','portrait resize','durable saves after reload','old run migration','Continue highest level with fresh stats','Play from start preserves unlocks','Continue after browser reload'],colorful,errors},null,2)+'\n');
+ console.log('Browser local test: title, controls, play, portrait, old save migration, Continue, Play from start and durable progress after reload passed.');
 }catch(error){await writeFile(join(out,'failure.txt'),String(error)+'\n'+stderr);throw error;}finally{socket?.close();stop(browser);stop(server);await delay(300);await rm(profile,{recursive:true,force:true});}

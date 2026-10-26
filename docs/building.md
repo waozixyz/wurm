@@ -3,9 +3,9 @@
 Application id `xyz.waozi.wurm`.
 
 
-A native Ziran and Kryon game. The illustrated Apfelwurm title has one
-**Play** button. Choose swipe steering or a direction pad on first play,
-and play goes straight into the level the run has reached. Follow the little orange worm
+A native Ziran and Kryon game. The illustrated Apfelwurm title offers
+**Play from start** and, after unlocking another level, **Continue**.
+Choose swipe steering or a direction pad on first play. Follow the little orange worm
 through **200 unique original-inspired levels**, with 40 each in Meadow,
 deciduous Leafwood, coniferous Pinewood, Lake and Mountains.
 Rooms, spirals, crossings, islands and narrow passes draw from 83 recovered
@@ -15,7 +15,10 @@ stages, while the first six levels introduce movement without enemies.
 Opening Meadow levels move more slowly before reaching the original pace.
 There is no stage or level selection: levels follow in order through every
 landscape. The run (level, lives and score carried into that level) and the
-control choice persist; a game over starts the next run at level 1.
+control choice persist. Unlocked progress is saved after every completed
+level and survives game over, closing the game and starting a new run.
+Continue starts the highest unlocked level with three lives and a fresh
+score; Play from start begins at level 1. Earlier save records are imported.
 `tools/design_levels.py` regenerates the boards and static route certificates.
 The local engine replay wins all 200 levels in both orientations with enemies
 active, using recorded seeds and routes from `tests/campaign_cases.json`.
@@ -35,7 +38,8 @@ losing the last one ends the game at zero.
 
 ## Controls
 
-- Click Play, Enter or Space: choose controls on first play, then continue the run; Enter or Space also retries
+- Click Play, Enter or Space: choose controls on first play, then start at level 1; Enter or Space also retries
+- Click Continue or press C on the title: start the highest unlocked level with three lives and a fresh score
 - Arrows, WASD, a held finger moving over the board, or the direction pad: steer immediately
 - Pause > Controls: change between swipe steering and the direction pad
 - Escape, Space or P: pause and resume
