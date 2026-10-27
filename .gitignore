@@ -5,3 +5,4 @@ ziran.local.toml
 __pycache__/
 assets/campaign-levels/
 assets/entity.zx
+.yue/
