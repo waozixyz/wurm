@@ -43,13 +43,15 @@ def main():
     subprocess.run([str(compiler / 'build/bin/zi2c'), '--define', 'PLATFORM_WEB', '--root', str(ir),
                     '-o', str(code), *map(str, ir.glob('*.zir'))], cwd=ROOT, env=env, check=True)
     art = OUT / 'assets/art'
-    # Legacy cover studies are not used by the game. Keep the browser preload
+    # Legacy cover studies and the old level previews (the game shows
+    # campaign-previews) are not used by the game. Keep the browser preload
     # below Pages' per-file limit without changing the published artwork.
     unused_art = ('*.argb', 'garden-cover.png', 'space-cover.png', 'factory-cover.png', 'stage-covers.png')
     shutil.copytree(ROOT / 'assets/art', art, dirs_exist_ok=True,
-                    ignore=shutil.ignore_patterns(*unused_art))
+                    ignore=shutil.ignore_patterns(*unused_art, 'previews'))
     for name in unused_art[1:]:
         (art / name).unlink(missing_ok=True)
+    shutil.rmtree(art / 'previews', ignore_errors=True)
     emcc = (env.get('EMCC') or shutil.which('emcc', path=env.get('PATH'))
             or str(Path.home() / 'emsdk/upstream/emscripten/emcc'))
     subprocess.run([emcc, '-O2', '-Wno-parentheses-equality', '-I' + str(compiler / 'include'),

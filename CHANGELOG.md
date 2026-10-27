@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8] - 2026-10-27
+
+- After the meadow, a new idea arrives every few dozen levels and keeps coming back: squirrels that dash and sit from level 45, hedgehogs that curl into a spiky ball as you come close from 85, keys that open a gate from 101, frogs that hop two tiles from 125, switch stones that open and close a gate from 141, rolling stones from 165 and portal rooms, reached only through a ring, from 181.
+- Each new idea takes every other board for ten levels. After that, the ideas you have met take turns, with no more than two plain boards in a row.
+- A gate closes a doorway up to four tiles wide. Its key opens it for good and is worth 2 points; a switch stone flips it each time you arrive on it. Boards with a gate or a portal room score more.
+- New pictures for the squirrel, hedgehog, frog, rolling stone, key, switch stone and gate.
+
 ## [0.2.7] - 2026-10-27
 
 - On the desktop, Play starts right away with mouse steering; the keyboard always works, and Pause still switches to the direction pad.

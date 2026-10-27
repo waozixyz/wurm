@@ -139,11 +139,18 @@ def main():
     # keep the previous campaign and its cached art while development runs.
     fire = cells(SOURCE / 'fire.png', 2, 2)
     assert Image.open(SOURCE / 'fire.png').getchannel('A').getextrema()[0] == 0
+    # Row four: squirrel, hedgehog, frog and rolling stone frames, then the
+    # key, the switch stone off and on, and the gate across and down.
+    creatures = cells(SOURCE / 'journey-creatures.png', 4, 3)
+    assert Image.open(SOURCE / 'journey-creatures.png').getchannel('A').getextrema()[0] == 0
+    creatures.append(creatures[11].rotate(90))
     for row, (stage, _, _) in enumerate(STAGES):
         sheet = journey_sheet(base, journey[row * 4:row * 4 + 4])
         sheet.paste(fire[0], (0, 2 * CELL))
         for frame, image in enumerate(fire):
             sheet.paste(image, ((6 + frame) * CELL, 2 * CELL))
+        for column, image in enumerate(creatures):
+            sheet.paste(image, (column * CELL, 4 * CELL))
         save(sheet, ART / ('campaign-' + stage + '.png'), args.check)
     covers = Image.open(SOURCE / 'stage-covers.png').convert('RGBA').resize((960, 1600), Image.Resampling.LANCZOS)
     save(covers, ART / 'stage-covers.png', args.check)

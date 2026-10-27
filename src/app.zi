@@ -749,6 +749,19 @@ DrawBoard :: (session: Session, stage: Rectangle) {
     }
     DrawGatePosts(session, stage)
     DrawPortals(session, stage)
+    // A closed gate, the key that opens it or the switch stone that flips it.
+    if game.gate >= 0 && !game.gate_open {
+        for part: 0..game.gate_span - 1 {
+            cell := game.gate + cast(s32)part * game.gate_step
+            Sprite(session, 12110 + cast(u64)part, stage, Point.{(cell % board_columns) * 16 + 8, (cell / board_columns) * 16 + 8},
+                Rectangle.{(ifx game.gate_step == 1 then 11.0 else 12.0) * 16.0, 64.0, 16.0, 16.0}, sprites)
+        }
+    }
+    if game.key.x >= 0 { Sprite(session, 12101, stage, game.key, Rectangle.{8.0 * 16.0, 64.0, 16.0, 16.0}, sprites) }
+    if game.switch_stone.x >= 0 {
+        Sprite(session, 12102, stage, game.switch_stone,
+            Rectangle.{(ifx game.gate_open then 10.0 else 9.0) * 16.0, 64.0, 16.0, 16.0}, sprites)
+    }
     if game.apples > 0 && game.apple.x >= 0 {
         Sprite(session, 1400, stage, game.apple, Rectangle.{0.0, 112.0, 16.0, 16.0}, sprites)
         AppleFlash(session, stage)
@@ -776,10 +789,18 @@ DrawBoard :: (session: Session, stage: Rectangle) {
             Rectangle.{cast(float32)game.direction * 16.0, 48.0, 16.0, 16.0}, sprites, WORM_HEAD_SIZE)
     }
     for monster: 0..game.monster_count - 1 {
-        column := game.monsters[monster].kind - 1
-        if game.monsters[monster].kind == 1 { column = 6 + enemy_frame }
-        Sprite(session, 6000 + cast(u64)monster, stage, game.monsters[monster].position,
-            Rectangle.{cast(float32)column * 16.0, 32.0, 16.0, 16.0}, sprites)
+        creature := game.monsters[monster]
+        column := creature.kind - 1
+        row: float32 = 32.0
+        if creature.kind == 1 { column = 6 + enemy_frame }
+        // The animals met after the meadow share row four of every sheet.
+        if creature.animal != ANIMAL_CLASSIC { row = 64.0 }
+        if creature.animal == ANIMAL_SQUIRREL { column = (creature.timer / 4) % 2 }
+        if creature.animal == ANIMAL_HEDGEHOG { column = ifx creature.timer < 0 then 3 else 2 }
+        if creature.animal == ANIMAL_FROG { column = ifx creature.timer >= 14 && creature.timer % 14 < 4 then 5 else 4 }
+        if creature.animal == ANIMAL_STONE { column = 6 + (creature.timer / 3) % 2 }
+        Sprite(session, 6000 + cast(u64)monster, stage, creature.position,
+            Rectangle.{cast(float32)column * 16.0, row, 16.0, 16.0}, sprites)
     }
     for particle: 0..99 {
         life := game.particles[particle].life

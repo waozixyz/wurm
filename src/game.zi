@@ -48,9 +48,10 @@ Point :: struct { x: s32; y: s32; }
 // Two rings joined: stepping into one comes out of the other.
 Portal :: struct { a: Point; b: Point; }
 PORTAL_PAIRS :: 2;
-// The campaign certificate drives routes that never use a portal.
-portals_enabled: bool = true;
-Monster :: struct { position: Point; kind: s32; direction: s32; }
+// The certificate drives routes on the plain boards; animals stay active.
+features_enabled: bool = true;
+// animal: one of ANIMAL_*; timer counts the creature's own ticks.
+Monster :: struct { position: Point; kind: s32; direction: s32; animal: s32; timer: s32; }
 Particle :: struct { position: Point; life: s32; }
 Game :: struct {
     mode: s32
@@ -75,6 +76,17 @@ Game :: struct {
     portal_count: s32
     portals: [PORTAL_PAIRS]Portal
     portal_wait: s32
+    // This board's puzzle idea: a gate (a doorway up to four cells across,
+    // gate_span cells gate_step apart), its key or switch stone.
+    feature: s32
+    gate: s32
+    gate_span: s32
+    gate_step: s32
+    gate_tiles: [4]u8
+    gate_open: bool
+    key: Point
+    switch_stone: Point
+    on_switch: bool
     monsters: [MONSTER_LIMIT]Monster
     particles: [100]Particle
     death_ticks: s32
@@ -190,6 +202,11 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
                 game.monsters[index].position = Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8}
                 game.monsters[index].kind = kind
                 game.monsters[index].direction = ifx kind == 1 then Random(game, 4) else kind - 2
+                animal: s32 = ANIMAL_CLASSIC
+                if kind == 1 { animal = RoamerAnimal(level, index) }
+                else if kind >= 2 && kind <= 5 { animal = PatrolAnimal(level, index) }
+                game.monsters[index].animal = animal
+                game.monsters[index].timer = 0
                 game.monster_count += 1
                 game.board[Index(x, y)] = tile & 128
             }
@@ -199,25 +216,209 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     // Carve the entrance before the apple chooses its spot, so it can never
     // land on a cell the carving turns into wall.
     Respawn(game)
-    PlacePortals(game)
+    PlaceIdeas(game)
     SpawnApple(game)
     game.multiplier = LevelMultiplier(game)
 }
 
-// New ideas arrive slowly, one every twenty levels or so. Portals first
-// appear at level 61 on every third board, grow to every other board from 81
-// and every board from 161, with a second pair from 181.
-PORTAL_FIRST :: 60
-PortalPairsFor :: (level: s32) -> s32 {
-    if level < PORTAL_FIRST { return 0 }
-    if level < 80 { return ifx (level - PORTAL_FIRST) % 3 == 0 then 1 else 0 }
-    if level < 160 { return ifx level % 2 == 0 then 1 else 0 }
-    return ifx level >= 180 then PORTAL_PAIRS else 1
+// New ideas arrive one at a time, about twenty levels apart, and keep coming
+// back afterwards in a clean mix: squirrels from level 45, portals from 61,
+// hedgehogs from 85, keys and gates from 101, frogs from 125, switch stones
+// from 141, rolling stones from 165 and portal rooms from 181. A board's ideas
+// follow from its number and layout alone, so every player meets the same.
+IDEA_SQUIRREL :: 44
+IDEA_PORTALS :: 60
+IDEA_HEDGEHOG :: 84
+IDEA_KEY :: 100
+IDEA_FROG :: 124
+IDEA_SWITCH :: 140
+IDEA_STONE :: 164
+IDEA_PORTAL_ROOM :: 180
+// At most one puzzle idea per board.
+FEATURE_NONE :: 0
+FEATURE_PORTALS :: 1
+FEATURE_KEY :: 2
+FEATURE_SWITCH :: 3
+FEATURE_PORTAL_ROOM :: 4
+ANIMAL_CLASSIC :: 0
+ANIMAL_SQUIRREL :: 1
+ANIMAL_HEDGEHOG :: 2
+ANIMAL_FROG :: 3
+ANIMAL_STONE :: 4
+HEDGEHOG_CURL :: 60
+
+// A well-spread number for each value, the same on every platform: no step
+// overflows 63 bits.
+Mix :: (value: s64) -> s32 {
+    mixed := (value % 2147483648 + 2147483648) % 2147483648
+    for round: 0..1 {
+        mixed = (mixed * 1103515245 + 12345) % 2147483648
+        mixed = mixed ^ (mixed >> 16)
+    }
+    return cast(s32)(mixed % 1000003)
 }
 
-// Each ring stands in the middle of open floor, so the worm comes out safely
-// in any direction and a player can always go around one. The spots follow
-// from the board alone, so every player meets the same portals.
+// A new puzzle idea takes every other board for its first ten levels; then
+// the ideas so far take turns, with up to two plain boards between them.
+IdeaIntros: [4]s32 = .[IDEA_PORTALS, IDEA_KEY, IDEA_SWITCH, IDEA_PORTAL_ROOM];
+IdeasMet :: (level: s32) -> s32 {
+    count: s32 = 0
+    for index: 0..3 { if level >= IdeaIntros[index] { count = cast(s32)index + 1 } }
+    return count
+}
+BoardFeature :: (level: s32) -> s32 {
+    count := IdeasMet(level)
+    if count == 0 { return FEATURE_NONE }
+    newest := IdeaIntros[count - 1]
+    if level - newest < 10 { return ifx (level - newest) % 2 == 0 then count else FEATURE_NONE }
+    // Never more than two plain boards in a row.
+    plain := Mix(cast(s64)level) % 10 < 4
+    if plain && !(PlainMix(level - 1) && PlainMix(level - 2)) { return FEATURE_NONE }
+    return 1 + Mix(cast(s64)level * 7 + 3) % count
+}
+PlainMix :: (level: s32) -> bool {
+    count := IdeasMet(level)
+    return count == 0 || level - IdeaIntros[count - 1] < 10 || Mix(cast(s64)level) % 10 < 4
+}
+
+AnimalIntro :: (animal: s32) -> s32 {
+    if animal == ANIMAL_SQUIRREL { return IDEA_SQUIRREL }
+    if animal == ANIMAL_HEDGEHOG { return IDEA_HEDGEHOG }
+    if animal == ANIMAL_FROG { return IDEA_FROG }
+    if animal == ANIMAL_STONE { return IDEA_STONE }
+    return 0
+}
+
+// Wanderers: a landscape's own animal fills its first ten boards, then the
+// animals met so far mix with the classic flames.
+RoamerAnimal :: (level: s32, index: s32) -> s32 {
+    available: [3]s32
+    count: s32 = 0
+    if level >= IDEA_SQUIRREL { available[count] = ANIMAL_SQUIRREL; count += 1 }
+    if level >= IDEA_HEDGEHOG { available[count] = ANIMAL_HEDGEHOG; count += 1 }
+    if level >= IDEA_FROG { available[count] = ANIMAL_FROG; count += 1 }
+    if count == 0 { return ANIMAL_CLASSIC }
+    stage := StageOf(level)
+    native: s32 = ifx stage == 1 then ANIMAL_SQUIRREL else ifx stage == 2 then ANIMAL_HEDGEHOG else ifx stage == 3 then ANIMAL_FROG else ANIMAL_CLASSIC
+    ready := native != ANIMAL_CLASSIC && level >= AnimalIntro(native)
+    if ready && level - AnimalIntro(native) < 10 { return native }
+    roll := Mix(cast(s64)level * 131 + cast(s64)index) % 10
+    if roll < 3 { return ANIMAL_CLASSIC }
+    if ready && roll < 7 { return native }
+    return available[Mix(cast(s64)level * 17 + cast(s64)index) % count]
+}
+
+// Patrols become rolling stones in the mountains.
+PatrolAnimal :: (level: s32, index: s32) -> s32 {
+    if level < IDEA_STONE { return ANIMAL_CLASSIC }
+    if level - IDEA_STONE < 10 || Mix(cast(s64)level * 29 + cast(s64)index) % 2 == 0 { return ANIMAL_STONE }
+    return ANIMAL_CLASSIC
+}
+
+Passable :: (game: *Game, at: s32) -> bool {
+    tile := game.board[at]
+    return tile < 20 || tile >= 128
+}
+
+// Every cell the worm can reach from the entrance with a doorway closed: span
+// cells from door, step apart.
+FloodFrom :: (game: *Game, start: s32, door: s32, reached: []bool, span: s32 = 1, step: s32 = 1) -> s32 {
+    closed: [CELLS]bool
+    for at: 0..CELLS - 1 { reached[at] = false; closed[at] = false }
+    if door >= 0 { for cell: 0..span - 1 { closed[door + cast(s32)cell * step] = true } }
+    if !Passable(game, start) || closed[start] { return 0 }
+    queue: [CELLS]s32
+    head: s32 = 0
+    tail: s32 = 1
+    queue[0] = start
+    reached[start] = true
+    while head < tail {
+        at := queue[head]
+        head += 1
+        x := at % board_columns
+        y := at / board_columns
+        neighbours: [4]s32 = .[ifx x > 0 then at - 1 else -1, ifx x < board_columns - 1 then at + 1 else -1,
+            ifx y > 0 then at - board_columns else -1, ifx y < board_rows - 1 then at + board_columns else -1]
+        for next: neighbours {
+            if next < 0 || closed[next] || reached[next] || !Passable(game, next) { continue }
+            reached[next] = true
+            queue[tail] = next
+            tail += 1
+        }
+    }
+    return tail
+}
+
+// A doorway: a straight run of one to four floor cells across a corridor,
+// walled at both ends and open on both sides, that once closed cuts the board
+// into two sizable halves, the far one holding the exit when the board allows.
+// reached marks the entrance side.
+Floor :: (game: *Game, x: s32, y: s32) -> bool { return Inside(x, y) && Passable(game, Index(x, y)) && game.board[Index(x, y)] < 128 }
+Solid :: (game: *Game, x: s32, y: s32) -> bool { return Inside(x, y) && !Passable(game, Index(x, y)) }
+DoorwaySpan :: (game: *Game, x: s32, y: s32, dx: s32, dy: s32) -> s32 {
+    half := board_columns / 2
+    if !Solid(game, x - dx, y - dy) { return 0 }
+    for span: 1..4 {
+        cx := x + dx * cast(s32)(span - 1)
+        cy := y + dy * cast(s32)(span - 1)
+        if cy < 2 || cy > board_rows - 4 || (Abs(cx - half) <= 3 && (cy <= 3 || cy >= board_rows - 4)) { return 0 }
+        if !Floor(game, cx, cy) || !Floor(game, cx - dy, cy - dx) || !Floor(game, cx + dy, cy + dx) { return 0 }
+        if Solid(game, cx + dx, cy + dy) { return cast(s32)span }
+    }
+    return 0
+}
+FindDoorway :: (game: *Game, reached: []bool, span: *s32, step: *s32, feature: s32) -> s32 {
+    half := board_columns / 2
+    start := Index(half, board_rows - 2)
+    exit := Index(half, 1)
+    firsts: [2 * CELLS]s32
+    spans: [2 * CELLS]s32
+    steps: [2 * CELLS]s32
+    count: s32 = 0
+    for y: 2..board_rows - 4 {
+        for x: 1..board_columns - 2 {
+            across := DoorwaySpan(game, cast(s32)x, cast(s32)y, 1, 0)
+            if across > 0 { firsts[count] = Index(x, y); spans[count] = across; steps[count] = 1; count += 1 }
+            down := DoorwaySpan(game, cast(s32)x, cast(s32)y, 0, 1)
+            if down > 0 { firsts[count] = Index(x, y); spans[count] = down; steps[count] = board_columns; count += 1 }
+        }
+    }
+    if count == 0 { return -1 }
+    total: s32 = 0
+    for at: 0..CELLS - 1 { if Passable(game, cast(s32)at) { total += 1 } }
+    fallback: s32 = -1
+    offset := Mix(cast(s64)game.level) % count
+    for attempt: 0..count - 1 {
+        pick := (offset + cast(s32)attempt) % count
+        near := FloodFrom(game, start, firsts[pick], reached, spans[pick], steps[pick])
+        far := total - near - spans[pick]
+        if near < 24 || far < 24 { continue }
+        exit_beyond := Passable(game, exit) && !reached[exit]
+        if !exit_beyond && fallback >= 0 { continue }
+        if !IdeaFits(game, reached, firsts[pick], feature) { continue }
+        if exit_beyond { span.* = spans[pick]; step.* = steps[pick]; return firsts[pick] }
+        fallback = pick
+    }
+    if fallback < 0 { return -1 }
+    unused FloodFrom(game, start, firsts[fallback], reached, spans[fallback], steps[fallback])
+    span.* = spans[fallback]
+    step.* = steps[fallback]
+    return firsts[fallback]
+}
+
+// Whether this board's idea has its spots once the doorway closes: a key or
+// switch stone before it, a portal on each side of a portal room.
+IdeaFits :: (game: *Game, reached: []bool, door: s32, feature: s32) -> bool {
+    if feature == FEATURE_PORTAL_ROOM {
+        spots: [CELLS]s32
+        return OpenSpots(game, reached, 1, spots[:]) > 0 && OpenSpots(game, reached, 0, spots[:]) > 0
+    }
+    return SideSpot(game, reached, door, feature == FEATURE_KEY).x >= 0
+}
+
+// Open spots for portals, keys and switch stones: the middle of open floor,
+// clear of the entrance and exit lanes and of the board's creatures. A key
+// or switch stone may also lie in a corridor (loose).
 OpenAround :: (game: *Game, x: s32, y: s32) -> bool {
     for dy: -1..1 {
         for dx: -1..1 {
@@ -226,49 +427,65 @@ OpenAround :: (game: *Game, x: s32, y: s32) -> bool {
     }
     return true
 }
+OpenFloor :: (game: *Game, x: s32, y: s32) -> bool { return Inside(x, y) && game.board[Index(x, y)] < 20 }
+InCorridor :: (game: *Game, x: s32, y: s32) -> bool {
+    if !OpenFloor(game, x, y) { return false }
+    open: s32 = 0
+    if OpenFloor(game, x - 1, y) { open += 1 }
+    if OpenFloor(game, x + 1, y) { open += 1 }
+    if OpenFloor(game, x, y - 1) { open += 1 }
+    if OpenFloor(game, x, y + 1) { open += 1 }
+    return open >= 3
+}
+// side: 1 only the entrance side, 0 only the far side, -1 anywhere.
+OpenSpots :: (game: *Game, reached: []bool, side: s32, output: []s32, loose: bool = false) -> s32 {
+    count: s32 = 0
+    half := board_columns / 2
+    for y: 3..board_rows - 4 {
+        for x: 2..board_columns - 3 {
+            if Abs(cast(s32)x - half) <= 2 && (y <= 5 || y >= board_rows - 6) { continue }
+            if !OpenAround(game, cast(s32)x, cast(s32)y) && !(loose && InCorridor(game, cast(s32)x, cast(s32)y)) { continue }
+            at := Index(x, y)
+            if side >= 0 && reached[at] != (side == 1) { continue }
+            centre := Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8}
+            crowded := false
+            for index: 0..game.monster_count - 1 {
+                if Near(centre, game.monsters[index].position, 32) { crowded = true }
+            }
+            if !crowded { output[count] = at; count += 1 }
+        }
+    }
+    return count
+}
 PortalCentre :: (cell: s32) -> Point {
     return Point.{(cell % board_columns) * 16 + 8, (cell / board_columns) * 16 + 8}
 }
 CellsApart :: (first: s32, second: s32) -> s32 {
     return Abs(first % board_columns - second % board_columns) + Abs(first / board_columns - second / board_columns)
 }
-PlacePortals :: (game: *Game) {
-    game.portal_count = 0
-    game.portal_wait = 0
-    pairs := PortalPairsFor(game.level)
-    if !portals_enabled || pairs == 0 { return }
-    candidates: [CELLS]s32
-    count: s32 = 0
-    half := board_columns / 2
-    for y: 3..board_rows - 4 {
-        for x: 2..board_columns - 3 {
-            // Clear of the entrance and the exit lanes.
-            if Abs(cast(s32)x - half) <= 2 && (y <= 5 || y >= board_rows - 6) { continue }
-            if !OpenAround(game, cast(s32)x, cast(s32)y) { continue }
-            centre := Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8}
-            crowded := false
-            for index: 0..game.monster_count - 1 {
-                if Near(centre, game.monsters[index].position, 48) { crowded = true }
-            }
-            if !crowded { candidates[count] = Index(x, y); count += 1 }
-        }
-    }
-    if count < 2 { return }
+// Pairs far apart in the open; a portal room joins one spot on each side.
+PlacePortals :: (game: *Game, pairs: s32, reached: []bool, room: bool) -> bool {
+    near_spots: [CELLS]s32
+    far_spots: [CELLS]s32
+    near := OpenSpots(game, reached, ifx room then 1 else -1, near_spots[:])
+    far := ifx room then OpenSpots(game, reached, 0, far_spots[:]) else 0
+    if !room { far_spots = near_spots; far = near }
+    if near < 1 || far < 1 { return false }
     taken: [4]s32
     taken_count: s32 = 0
     for pair: 0..pairs - 1 {
         first: s32 = -1
-        for attempt: 0..count - 1 {
-            cell := candidates[(cast(s64)game.level * 7919 + cast(s64)attempt * 104729 + cast(s64)pair * 31) % cast(s64)count]
+        for attempt: 0..near - 1 {
+            cell := near_spots[(Mix(cast(s64)game.level * 7919 + cast(s64)pair * 31) + cast(s32)attempt) % near]
             free := true
             for index: 0..taken_count - 1 { if CellsApart(cell, taken[index]) < 6 { free = false } }
             if free { first = cell; break }
         }
         if first < 0 { break }
         second: s32 = -1
-        farthest: s32 = 13
-        for index: 0..count - 1 {
-            cell := candidates[index]
+        farthest: s32 = ifx room then 0 else 13
+        for index: 0..far - 1 {
+            cell := far_spots[index]
             apart := CellsApart(cell, first)
             if apart <= farthest { continue }
             free := true
@@ -282,12 +499,120 @@ PlacePortals :: (game: *Game) {
         taken_count += 2
         game.portal_count += 1
     }
+    return game.portal_count > 0
+}
+// The spot on the entrance side farthest from the entrance, for a key; a
+// switch stone takes a spot partway there.
+SideSpot :: (game: *Game, reached: []bool, door: s32, farthest: bool) -> Point {
+    spots: [CELLS]s32
+    count := OpenSpots(game, reached, 1, spots[:], true)
+    start := Index(board_columns / 2, board_rows - 2)
+    best: s32 = -1
+    best_apart: s32 = -1
+    for index: 0..count - 1 {
+        cell := spots[index]
+        if CellsApart(cell, door) < 4 || CellsApart(cell, start) < 6 { continue }
+        apart := CellsApart(cell, start)
+        if !farthest { apart = 100 - Abs(apart - 14) }
+        if apart > best_apart { best = cell; best_apart = apart }
+    }
+    if best < 0 { return Point.{-1, -1} }
+    return PortalCentre(best)
+}
+OpenGate :: (game: *Game, open: bool) {
+    if game.gate < 0 { return }
+    for cell: 0..game.gate_span - 1 {
+        game.board[game.gate + cast(s32)cell * game.gate_step] = ifx open then game.gate_tiles[cell] else 20
+    }
+    game.gate_open = open
+}
+PlaceIdeas :: (game: *Game) {
+    game.portal_count = 0
+    game.portal_wait = 0
+    game.feature = FEATURE_NONE
+    game.gate = -1
+    game.gate_span = 0
+    game.gate_step = 1
+    game.gate_open = false
+    game.key = Point.{-1, -1}
+    game.switch_stone = Point.{-1, -1}
+    game.on_switch = false
+    if !features_enabled { return }
+    feature := BoardFeature(game.level)
+    reached: [CELLS]bool
+    if feature == FEATURE_PORTALS {
+        pairs: s32 = ifx game.level >= IDEA_PORTAL_ROOM && Mix(cast(s64)game.level * 3) % 2 == 1 then PORTAL_PAIRS else 1
+        if PlacePortals(game, pairs, reached[:], false) { game.feature = feature }
+        return
+    }
+    if feature == FEATURE_NONE {
+        // A new gate idea that found no doorway on the board before moves
+        // on to this one.
+        newest := IdeasMet(game.level)
+        if newest < FEATURE_KEY || game.level - IdeaIntros[newest - 1] >= 10 || HostsIdea(game.level - 1, newest) { return }
+        if PlaceGate(game, newest, reached[:]) { game.feature = newest }
+        return
+    }
+    // A board without a doorway for its idea takes another gate idea met
+    // so far, or else portals.
+    ideas: [3]s32 = .[feature, FEATURE_SWITCH, FEATURE_KEY]
+    intros: [3]s32 = .[0, IDEA_SWITCH, IDEA_KEY]
+    for index: 0..2 {
+        idea := ideas[index]
+        if (index > 0 && idea == feature) || game.level < intros[index] { continue }
+        if PlaceGate(game, idea, reached[:]) { game.feature = idea; return }
+    }
+    if PlacePortals(game, 1, reached[:], false) { game.feature = FEATURE_PORTALS }
+}
+// Whether a level's board has a doorway for a gate idea, loaded aside.
+HostsIdea :: (level: s32, feature: s32) -> bool {
+    columns := board_columns
+    rows := board_rows
+    enabled := features_enabled
+    features_enabled = false
+    aside: Game
+    aside.random = 1
+    LoadLevel(*aside, level, 0)
+    reached: [CELLS]bool
+    span: s32 = 0
+    step: s32 = 1
+    hosts := FindDoorway(*aside, reached[:], *span, *step, feature) >= 0
+    features_enabled = enabled
+    BoardSize(columns, rows)
+    return hosts
+}
+PlaceGate :: (game: *Game, feature: s32, reached: []bool) -> bool {
+    span: s32 = 0
+    step: s32 = 1
+    door := FindDoorway(game, reached, *span, *step, feature)
+    if door < 0 { return false }
+    game.gate = door
+    game.gate_span = span
+    game.gate_step = step
+    for cell: 0..span - 1 { game.gate_tiles[cell] = game.board[door + cast(s32)cell * step] }
+    OpenGate(game, false)
+    if feature == FEATURE_KEY { game.key = SideSpot(game, reached, door, true) }
+    if feature == FEATURE_SWITCH { game.switch_stone = SideSpot(game, reached, door, false) }
+    placed := (feature == FEATURE_KEY && game.key.x >= 0) || (feature == FEATURE_SWITCH && game.switch_stone.x >= 0) ||
+    (feature == FEATURE_PORTAL_ROOM && PlacePortals(game, 1, reached, true))
+    if !placed {
+        OpenGate(game, true)
+        game.gate = -1
+        game.gate_span = 0
+        game.key = Point.{-1, -1}
+        game.switch_stone = Point.{-1, -1}
+        game.portal_count = 0
+        return false
+    }
+    // A portal room's doorway stays a plain hedge for good.
+    if feature == FEATURE_PORTAL_ROOM { game.gate = -1; game.gate_span = 0 }
+    return true
 }
 OnPortal :: (game: *Game, position: Point) -> bool {
     for pair: 0..game.portal_count - 1 {
         if Near(position, game.portals[pair].a, 12) || Near(position, game.portals[pair].b, 12) { return true }
     }
-    return false
+    return Near(position, game.key, 12) || Near(position, game.switch_stone, 12)
 }
 // The complete playable campaign is designed and certified. The recovered
 // 99-level archive stays an independent, untouched historical reference.
@@ -552,13 +877,65 @@ MoveMonster :: (game: *Game, index: s32) {
         if !MonsterBlocked(game, index, candidate) { monster.position = candidate }
         return
     }
+    monster.timer += 1
+    if monster.animal == ANIMAL_STONE {
+        // A rolling stone keeps its patrol at twice the pace.
+        PatrolStep(game, index)
+        PatrolStep(game, index)
+        return
+    }
+    if monster.kind == 1 && monster.animal == ANIMAL_SQUIRREL {
+        // A squirrel dashes at twice the pace for a moment, then sits still.
+        phase := monster.timer % 16
+        if phase >= 8 { return }
+        if phase == 0 { monster.direction = Random(game, 4) }
+        for step: 0..1 {
+            candidate := MonsterNext(monster.position, monster.direction)
+            if MonsterBlocked(game, index, candidate) || candidate.y < 16 {
+                monster.direction = Random(game, 4)
+                return
+            }
+            monster.position = candidate
+        }
+        return
+    }
+    if monster.kind == 1 && monster.animal == ANIMAL_HEDGEHOG {
+        // A hedgehog ambles at half pace and curls into a still, spiky ball
+        // for a while when the worm's head comes close.
+        if monster.timer < 0 { return }
+        if game.length > 0 && Near(game.worm[0], monster.position, 40) { monster.timer = -HEDGEHOG_CURL; return }
+        if monster.timer % 2 == 1 { return }
+        RoamerStep(game, index)
+        return
+    }
+    if monster.kind == 1 && monster.animal == ANIMAL_FROG {
+        // A frog sits, then hops two tiles at once, even over a hedge.
+        if monster.timer % 14 != 0 { return }
+        direction := Random(game, 4)
+        landing := monster.position
+        for step: 0..31 { landing = MonsterNext(landing, direction) }
+        if landing.y >= 16 && landing.x >= 16 && landing.x < (board_columns - 1) * 16 && landing.y < (board_rows - 1) * 16 &&
+        !MonsterBlocked(game, index, landing) {
+            monster.position = landing
+            monster.direction = direction
+        }
+        return
+    }
+    if monster.kind == 1 { RoamerStep(game, index) }
+    else { PatrolStep(game, index) }
+}
+RoamerStep :: (game: *Game, index: s32) {
+    monster := *game.monsters[index]
     candidate := MonsterNext(monster.position, monster.direction)
     blocked := MonsterBlocked(game, index, candidate)
-    if monster.kind == 1 {
-        if !blocked { blocked = Random(game, 25) == 0 || candidate.y < 16 }
-        if blocked { monster.direction = Random(game, 4) }
-        else { monster.position = candidate }
-    } else if blocked {
+    if !blocked { blocked = Random(game, 25) == 0 || candidate.y < 16 }
+    if blocked { monster.direction = Random(game, 4) }
+    else { monster.position = candidate }
+}
+PatrolStep :: (game: *Game, index: s32) {
+    monster := *game.monsters[index]
+    candidate := MonsterNext(monster.position, monster.direction)
+    if MonsterBlocked(game, index, candidate) {
         monster.direction = (monster.direction + 2) % 4
         monster.kind = monster.direction + 2
     } else { monster.position = candidate }
@@ -577,6 +954,7 @@ LevelMultiplier :: (game: *Game) -> s32 {
     tightness := ifx walls > 300 then (walls - 300) * 10 / 150 else 0
     difficulty := 10 * game.monster_count + 10 * roamers + 5 * (game.apples - 5) + tightness +
     5 * (32 - cast(s32)TickInterval(game.level))
+    if game.feature >= FEATURE_KEY { difficulty += 10 }
     if difficulty < 0 { difficulty = 0 }
     return 1 + difficulty / 20
 }
@@ -653,6 +1031,22 @@ Tick :: (game: *Game) {
             game.portal_wait = 5
             break
         }
+    }
+    // The key opens its gate for good; a switch stone flips it each time the
+    // head arrives on it.
+    if game.key.x >= 0 && Near(next, game.key, 10) {
+        for spark: 0..5 { AddParticle(game, game.key) }
+        game.key = Point.{-1, -1}
+        OpenGate(game, true)
+        AddScore(game, 2)
+    }
+    if game.switch_stone.x >= 0 {
+        over := Near(next, game.switch_stone, 8)
+        if over && !game.on_switch {
+            OpenGate(game, !game.gate_open)
+            for spark: 0..3 { AddParticle(game, game.switch_stone) }
+        }
+        game.on_switch = over
     }
     if game.apples == 0 && next.y < 0 {
         count := game.length

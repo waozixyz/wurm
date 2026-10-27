@@ -123,29 +123,83 @@ main :: () -> s32 {
     Tick(*game)
     Expect(game.lives == 3 && game.worm[0].y == 496, "death consumes a life and respawns")
 
-    // Portals arrive slowly from level 61, then rings in open floor carry
-    // the head across.
-    for level: 0..PORTAL_FIRST - 1 {
-        StartGame(*game, cast(s32)level, 0)
-        Expect(game.portal_count == 0, "no portals before level 61")
-    }
-    Expect(PortalPairsFor(60) == 1 && PortalPairsFor(61) == 0 && PortalPairsFor(81) == 0 && PortalPairsFor(82) == 1 &&
-        PortalPairsFor(170) == 1 && PortalPairsFor(199) == 2, "portals spread out over the journey")
-    portal_boards: s32 = 0
+    // New ideas open one at a time and come back in a mix.
+    for level: 0..IDEA_PORTALS - 1 { Expect(BoardFeature(cast(s32)level) == FEATURE_NONE, "no puzzle idea before level 61") }
+    Expect(BoardFeature(IDEA_PORTALS) == FEATURE_PORTALS && BoardFeature(IDEA_PORTALS + 1) == FEATURE_NONE &&
+        BoardFeature(IDEA_KEY) == FEATURE_KEY && BoardFeature(IDEA_SWITCH) == FEATURE_SWITCH &&
+        BoardFeature(IDEA_PORTAL_ROOM) == FEATURE_PORTAL_ROOM, "each puzzle idea opens on its own board")
+    for level: 0..IDEA_SQUIRREL - 1 { Expect(RoamerAnimal(cast(s32)level, 0) == ANIMAL_CLASSIC, "no new animals in the meadow") }
+    Expect(RoamerAnimal(IDEA_SQUIRREL, 0) == ANIMAL_SQUIRREL && RoamerAnimal(IDEA_HEDGEHOG, 0) == ANIMAL_HEDGEHOG &&
+        RoamerAnimal(IDEA_FROG, 0) == ANIMAL_FROG && PatrolAnimal(IDEA_STONE, 0) == ANIMAL_STONE &&
+        PatrolAnimal(IDEA_STONE - 1, 0) == ANIMAL_CLASSIC, "each animal opens in its own landscape")
+    placed: [5]s32
+    later_animals: [5]s32
+    key_level: s32 = -1
+    switch_level: s32 = -1
+    room_level: s32 = -1
     portal_level: s32 = -1
-    for level: 40..LEVEL_COUNT - 1 {
+    reached: [CELLS]bool
+    for level: 0..LEVEL_COUNT - 1 {
         StartGame(*game, cast(s32)level, 0)
-        if game.portal_count > 0 { portal_boards += 1 }
-        if game.portal_count > 0 && portal_level < 0 { portal_level = cast(s32)level }
+        placed[game.feature] += 1
+        for index: 0..game.monster_count - 1 {
+            if level >= IDEA_PORTAL_ROOM { later_animals[game.monsters[index].animal] += 1 }
+        }
+        start := Index(board_columns / 2, board_rows - 2)
+        unused FloodFrom(*game, start, -1, reached[:])
+        if game.feature == FEATURE_PORTALS && portal_level < 0 { portal_level = cast(s32)level }
         for pair: 0..game.portal_count - 1 {
             a := game.portals[pair].a
             b := game.portals[pair].b
-            Expect(OpenAround(*game, a.x / 16, a.y / 16) && OpenAround(*game, b.x / 16, b.y / 16) &&
-                CellsApart(Index(a.x / 16, a.y / 16), Index(b.x / 16, b.y / 16)) >= 14, "portals stand in open floor, far apart")
+            Expect(OpenAround(*game, a.x / 16, a.y / 16) && OpenAround(*game, b.x / 16, b.y / 16), "portals stand in open floor")
             Expect(!Near(game.apple, a, 12) && !Near(game.apple, b, 12), "apples never land on a portal")
         }
+        if game.feature == FEATURE_KEY || game.feature == FEATURE_SWITCH {
+            Expect(game.gate >= 0 && !game.gate_open && game.board[game.gate] == 20, "a gate starts closed")
+            spot := ifx game.feature == FEATURE_KEY then game.key else game.switch_stone
+            Expect(reached[Index(spot.x / 16, spot.y / 16)], "its key or switch lies on the entrance side")
+            if game.feature == FEATURE_KEY && key_level < 0 { key_level = cast(s32)level }
+            if game.feature == FEATURE_SWITCH && switch_level < 0 { switch_level = cast(s32)level }
+        }
+        if game.feature == FEATURE_PORTAL_ROOM {
+            a := game.portals[0].a
+            b := game.portals[0].b
+            Expect(reached[Index(a.x / 16, a.y / 16)] && !reached[Index(b.x / 16, b.y / 16)], "a portal room is reached only through its portal")
+            if room_level < 0 { room_level = cast(s32)level }
+        }
     }
-    Expect(portal_boards >= 70 && portal_level >= PORTAL_FIRST, "portals grow common after level 61")
+    print("Ideas placed: portals % keys % switches % rooms %; animals after 180: flames % squirrels % hedgehogs % frogs % stones %\n",
+        placed[1], placed[2], placed[3], placed[4], later_animals[0], later_animals[1], later_animals[2], later_animals[3], later_animals[4])
+    Expect(placed[FEATURE_PORTALS] >= 20 && placed[FEATURE_KEY] >= 8 && placed[FEATURE_SWITCH] >= 6 && placed[FEATURE_PORTAL_ROOM] >= 3,
+        "every puzzle idea comes back in later levels")
+    Expect(later_animals[1] > 0 && later_animals[2] > 0 && later_animals[3] > 0 && later_animals[4] > 0, "the last boards mix every animal")
+    Expect(key_level >= 0 && switch_level >= 0 && room_level >= 0 && portal_level >= 0, "every puzzle idea is placed somewhere")
+    if key_level < 0 || switch_level < 0 || portal_level < 0 { print("Gameplay failures: %\n", failures); return failures }
+    // The key opens its gate for good.
+    StartGame(*game, key_level, 0)
+    game.apples = 3
+    game.worm[0] = Point.{game.key.x, game.key.y + 4}
+    game.direction = DIR_UP
+    game.next_direction = DIR_UP
+    Tick(*game)
+    Expect(game.key.x < 0 && game.gate_open && game.board[game.gate] == game.gate_tiles[0], "the key opens its gate")
+    // A switch stone flips its gate each time the head arrives on it.
+    StartGame(*game, switch_level, 0)
+    game.apples = 3
+    stone := game.switch_stone
+    game.worm[0] = Point.{stone.x, stone.y + 8}
+    game.direction = DIR_UP
+    game.next_direction = DIR_UP
+    Tick(*game)
+    Expect(game.gate_open, "a switch stone opens its gate")
+    Tick(*game)
+    Tick(*game)
+    Tick(*game)
+    Expect(game.gate_open && game.on_switch == false, "it stays open as the head moves on")
+    game.worm[0] = Point.{stone.x, stone.y + 8}
+    Tick(*game)
+    Expect(!game.gate_open && game.board[game.gate] == 20, "arriving again closes it")
+    // A head stepping into a ring comes out of its partner.
     StartGame(*game, portal_level, 0)
     portal := game.portals[0]
     game.apples = 3
@@ -156,6 +210,41 @@ main :: () -> s32 {
     Expect(game.worm[0].x == portal.b.x && game.worm[0].y == portal.b.y, "the worm comes out of the partner ring")
     Tick(*game)
     Expect(game.worm[0].x == portal.b.x && game.worm[0].y == portal.b.y - 4 && game.death_ticks == 0, "it keeps its course out of the ring")
+    // A squirrel sits between dashes; a frog hops two tiles or not at all.
+    StartGame(*game, IDEA_SQUIRREL, 0)
+    for index: 0..game.monster_count - 1 {
+        if game.monsters[index].animal != ANIMAL_SQUIRREL { continue }
+        game.monsters[index].timer = 8
+        before := game.monsters[index].position
+        MoveMonster(*game, cast(s32)index)
+        Expect(game.monsters[index].position.x == before.x && game.monsters[index].position.y == before.y, "a squirrel sits between dashes")
+    }
+    // A hedgehog curls into a still ball as the worm's head comes close.
+    StartGame(*game, IDEA_HEDGEHOG, 0)
+    curled := false
+    for index: 0..game.monster_count - 1 {
+        if game.monsters[index].animal != ANIMAL_HEDGEHOG { continue }
+        curled = true
+        before := game.monsters[index].position
+        game.worm[0] = Point.{before.x + 24, before.y}
+        for tick: 0..HEDGEHOG_CURL - 2 { MoveMonster(*game, cast(s32)index) }
+        Expect(game.monsters[index].timer < 0 && game.monsters[index].position.x == before.x &&
+            game.monsters[index].position.y == before.y, "a hedgehog curls up and keeps still")
+        game.worm[0] = Point.{-100, -100}
+        for tick: 0..3 { MoveMonster(*game, cast(s32)index) }
+        Expect(game.monsters[index].timer >= 0, "it uncurls once the worm has gone")
+        break
+    }
+    Expect(curled, "the first hedgehog board has a hedgehog")
+    StartGame(*game, IDEA_FROG, 0)
+    for index: 0..game.monster_count - 1 {
+        if game.monsters[index].animal != ANIMAL_FROG { continue }
+        game.monsters[index].timer = 13
+        before := game.monsters[index].position
+        MoveMonster(*game, cast(s32)index)
+        moved := Abs(game.monsters[index].position.x - before.x) + Abs(game.monsters[index].position.y - before.y)
+        Expect(moved == 0 || moved == 32, "a frog hops two tiles")
+    }
     game.lives = 1
     game.death_ticks = 1
     Tick(*game)
@@ -176,7 +265,7 @@ main :: () -> s32 {
 
     StartGame(*game, 0, 0)
     game.monster_count = 1
-    game.monsters[0] = Monster.{Point.{168, 168}, 3, 1}
+    game.monsters[0] = Monster.{Point.{168, 168}, 3, 1, 0, 0}
     game.board[Index(10, 10)] = 0
     MoveMonster(*game, 0)
     Expect(game.monsters[0].position.x == 169, "monster moves one pixel")
