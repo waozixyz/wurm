@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.7] - 2026-10-27
+
+- On the desktop, Play starts right away with mouse steering; the keyboard always works, and Pause still switches to the direction pad.
+- wurm.waozi.xyz opens faster with a much lighter loading picture.
+
 ## [0.2.6] - 2026-10-27
 
 - Glowing portals arrive from level 61: first on a few boards, then more often, with two pairs late in the mountains. Steer into one ring to come out of its partner, keeping your direction. Each ring stands in open ground, so you can always go around it.
