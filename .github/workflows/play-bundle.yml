@@ -28,25 +28,24 @@ jobs:
         with:
           path: waozixyz/wurm
           persist-credentials: false
-      - name: Read the locked compiler and release version
+      - name: Read the release version
         id: version
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           from pathlib import Path
-          print('compiler=' + json.loads(Path('ziran.lock').read_text())['toolchain']['commit'])
           print('version=' + json.loads(Path('version.json').read_text())['version'])
           PY
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+      # The locked compiler comes prebuilt, the package checkouts cached, and
+      # Ubuntu packages from the canonical archive.
+      - name: Set up the locked Ziran, its packages and the build tools
+        uses: ziranlang/ziran/.github/actions/setup@979159a55bcf1f9edb9eb8f26ea10aca421412e2
         with:
-          repository: ziranlang/ziran
-          ref: ${{ steps.version.outputs.compiler }}
+          project: waozixyz/wurm
           path: ziranlang/ziran
-          persist-credentials: false
-      - name: Install native build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config python3-pil python3-numpy libssl-dev
+          fetch: true
+          packages: >-
+            build-essential cmake pkg-config python3-pil python3-numpy libssl-dev
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -54,13 +53,6 @@ jobs:
       - name: Install the pinned Android SDK tools
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358' 'build-tools;36.0.0' 'platforms;android-36' 'cmake;3.22.1'
-      - name: Build the locked compiler
-        working-directory: ziranlang/ziran
-        run: |
-          env -u DISPLAY -u WAYLAND_DISPLAY make -j1
-          echo "$PWD/build/bin" >> "$GITHUB_PATH"
-      - name: Fetch only locked packages
-        run: ziran fetch --locked
       - name: Verify release metadata
         run: |
           sh update_version.sh
