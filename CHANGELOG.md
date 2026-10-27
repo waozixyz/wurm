@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.3] - 2026-10-27
+
+- Top up in the Profile opens dew.waozi.xyz, where you can buy Dew with Monero in any amount or with almost any other coin.
+
 ## [0.2.2] - 2026-10-27
 
 - Set an account alias with capitals, an @ or spaces; a taken alias now says so.
