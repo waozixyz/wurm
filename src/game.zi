@@ -204,7 +204,17 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     game.multiplier = LevelMultiplier(game)
 }
 
-// After the meadow, each board gets a pair of portals, and the mountains two.
+// New ideas arrive slowly, one every twenty levels or so. Portals first
+// appear at level 61 on every third board, grow to every other board from 81
+// and every board from 161, with a second pair from 181.
+PORTAL_FIRST :: 60
+PortalPairsFor :: (level: s32) -> s32 {
+    if level < PORTAL_FIRST { return 0 }
+    if level < 80 { return ifx (level - PORTAL_FIRST) % 3 == 0 then 1 else 0 }
+    if level < 160 { return ifx level % 2 == 0 then 1 else 0 }
+    return ifx level >= 180 then PORTAL_PAIRS else 1
+}
+
 // Each ring stands in the middle of open floor, so the worm comes out safely
 // in any direction and a player can always go around one. The spots follow
 // from the board alone, so every player meets the same portals.
@@ -225,7 +235,8 @@ CellsApart :: (first: s32, second: s32) -> s32 {
 PlacePortals :: (game: *Game) {
     game.portal_count = 0
     game.portal_wait = 0
-    if !portals_enabled || game.level < 40 { return }
+    pairs := PortalPairsFor(game.level)
+    if !portals_enabled || pairs == 0 { return }
     candidates: [CELLS]s32
     count: s32 = 0
     half := board_columns / 2
@@ -243,7 +254,6 @@ PlacePortals :: (game: *Game) {
         }
     }
     if count < 2 { return }
-    pairs := ifx game.level >= 160 then PORTAL_PAIRS else 1
     taken: [4]s32
     taken_count: s32 = 0
     for pair: 0..pairs - 1 {

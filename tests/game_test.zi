@@ -123,10 +123,14 @@ main :: () -> s32 {
     Tick(*game)
     Expect(game.lives == 3 && game.worm[0].y == 496, "death consumes a life and respawns")
 
-    // Portals: none in the meadow; after it, rings in open floor that carry
+    // Portals arrive slowly from level 61, then rings in open floor carry
     // the head across.
-    StartGame(*game, 0, 0)
-    Expect(game.portal_count == 0, "the meadow has no portals")
+    for level: 0..PORTAL_FIRST - 1 {
+        StartGame(*game, cast(s32)level, 0)
+        Expect(game.portal_count == 0, "no portals before level 61")
+    }
+    Expect(PortalPairsFor(60) == 1 && PortalPairsFor(61) == 0 && PortalPairsFor(81) == 0 && PortalPairsFor(82) == 1 &&
+        PortalPairsFor(170) == 1 && PortalPairsFor(199) == 2, "portals spread out over the journey")
     portal_boards: s32 = 0
     portal_level: s32 = -1
     for level: 40..LEVEL_COUNT - 1 {
@@ -141,7 +145,7 @@ main :: () -> s32 {
             Expect(!Near(game.apple, a, 12) && !Near(game.apple, b, 12), "apples never land on a portal")
         }
     }
-    Expect(portal_boards >= 120 && portal_level >= 40, "most boards after the meadow have portals")
+    Expect(portal_boards >= 70 && portal_level >= PORTAL_FIRST, "portals grow common after level 61")
     StartGame(*game, portal_level, 0)
     portal := game.portals[0]
     game.apples = 3
