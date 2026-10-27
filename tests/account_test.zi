@@ -115,9 +115,10 @@ main :: () -> s32 {
     Wardrobe.Pump(1000000, true)
     Wardrobe.Pump(1000500, false)
     Expect(Wardrobe.played == elapsed, "suspended and paused time does not count")
-    Expect(!Wardrobe.Available(5), "level 40 is still an earned cosmetic condition")
-    Progress.Complete(39)
-    Expect(Wardrobe.Available(5), "completing level 40 unlocks Golden apple")
+    Progress.unlocked = 38
+    Expect(!Wardrobe.Available(5), "reaching level 39 does not unlock Golden apple")
+    unused Progress.Begin(39, 3, 0)
+    Expect(Wardrobe.Available(5) && !Progress.Completed(39), "reaching level 40 unlocks Golden apple before completing it")
     Wardrobe.Visit()
     Expect(Wardrobe.Available(6), "website visit unlocks Explorer")
     Wardrobe.played = 1000; other_time = 17999000; Wardrobe.poll_at = 0

@@ -74,7 +74,7 @@ Dein erster Begleiter
 5 Stunden spielen
 ---
 [wurm_ui_24]
-Level 40 abschließen
+Level 40 erreichen
 ---
 [wurm_ui_25]
 waozi.xyz besuchen

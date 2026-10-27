@@ -48,7 +48,7 @@ Available :: (id: s32) -> bool {
     if id == 0 { return true }
     if id > 0 && id <= 3 { return (owned & (1 << id)) != 0 }
     if id == 4 { return played + other_played >= 18000000 }
-    if id == 5 { return Progress.Completed(39) }
+    if id == 5 { return Progress.unlocked >= 39 }
     if id == 6 { return visited }
     return false
 }

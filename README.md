@@ -83,7 +83,7 @@ The title's **Skin shop** offers Mint for **10 Dew**, Berry for **20 Dew** and
 Rose for **30 Dew**, with confirmation before buying. Retrying a purchase,
 including from another device, cannot charge for that skin twice. Earn
 **Night owl** by playing actively for **5 hours**, **Golden apple** by
-completing **level 40**, or **Explorer** by opening **waozi.xyz** from the shop.
+reaching **level 40**, or **Explorer** by opening **waozi.xyz** from the shop.
 Levels unlock through play; Dew buys optional cosmetics.
 
 Account sync and Dew need a connection. There is no advertising or analytics,

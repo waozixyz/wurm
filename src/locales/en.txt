@@ -74,7 +74,7 @@ Your first companion
 Play for 5 hours
 ---
 [wurm_ui_24]
-Complete level 40
+Reach level 40
 ---
 [wurm_ui_25]
 Visit waozi.xyz

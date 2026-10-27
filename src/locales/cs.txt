@@ -74,7 +74,7 @@ Tvůj první společník
 Hraj 5 hodin
 ---
 [wurm_ui_24]
-Dokonči úroveň 40
+Dosáhni úrovně 40
 ---
 [wurm_ui_25]
 Navštiv waozi.xyz

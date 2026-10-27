@@ -74,7 +74,7 @@ Teman pertamamu
 Main selama 5 jam
 ---
 [wurm_ui_24]
-Selesaikan level 40
+Capai level 40
 ---
 [wurm_ui_25]
 Kunjungi waozi.xyz

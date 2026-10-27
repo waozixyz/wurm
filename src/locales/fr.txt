@@ -74,7 +74,7 @@ Votre premier compagnon
 Jouez pendant 5 h
 ---
 [wurm_ui_24]
-Terminez le niveau 40
+Atteignez le niveau 40
 ---
 [wurm_ui_25]
 Visitez waozi.xyz

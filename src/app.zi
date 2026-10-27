@@ -445,7 +445,7 @@ DrawShop :: (session: Session, area: Rectangle) {
         CharacterPreview(session, key + 20, Rectangle.{x + width / 2.0 - 42.0, y + 10.0, 84.0, 50.0}, cast(s32)id)
         GameText(session, key + 8, SkinName(cast(s32)id), Rectangle.{x + 4.0, y + 68.0, width - 8.0, 24.0}, 17, false, true)
         available := Wardrobe.Available(cast(s32)id)
-        detail := ifx id == 0 then "Your first companion" else ifx id <= 3 then SkinPriceText(cast(s32)id) else ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Complete level 40" else "Visit waozi.xyz"
+        detail := ifx id == 0 then "Your first companion" else ifx id <= 3 then SkinPriceText(cast(s32)id) else ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Reach level 40" else "Visit waozi.xyz"
         GameText(session, key + 9, detail, Rectangle.{x + 4.0, y + 99.0, width - 8.0, 22.0}, 12, true, true)
         label := ifx Wardrobe.skin == id then "Wearing" else ifx available then "Wear" else ifx id <= 3 then "Buy" else ifx id == 6 then "Visit" else "Locked"
         if Button(session, ButtonProps.{.key = key + 10, .bounds = Rectangle.{x + 10.0, y + 132.0, width - 20.0, 42.0},

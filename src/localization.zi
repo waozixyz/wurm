@@ -60,7 +60,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "Průzkumník" }
         if source == "Your first companion" { return "Tvůj první společník" }
         if source == "Play for 5 hours" { return "Hraj 5 hodin" }
-        if source == "Complete level 40" { return "Dokonči úroveň 40" }
+        if source == "Reach level 40" { return "Dosáhni úrovně 40" }
         if source == "Visit waozi.xyz" { return "Navštiv waozi.xyz" }
         if source == "Wearing" { return "Používáš" }
         if source == "Wear" { return "Použít" }
@@ -102,7 +102,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "Entdecker" }
         if source == "Your first companion" { return "Dein erster Begleiter" }
         if source == "Play for 5 hours" { return "5 Stunden spielen" }
-        if source == "Complete level 40" { return "Level 40 abschließen" }
+        if source == "Reach level 40" { return "Level 40 erreichen" }
         if source == "Visit waozi.xyz" { return "waozi.xyz besuchen" }
         if source == "Wearing" { return "Ausgewählt" }
         if source == "Wear" { return "Auswählen" }
@@ -145,7 +145,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "Explorador" }
         if source == "Your first companion" { return "Tu primer compañero" }
         if source == "Play for 5 hours" { return "Juega 5 horas" }
-        if source == "Complete level 40" { return "Completa el nivel 40" }
+        if source == "Reach level 40" { return "Alcanza el nivel 40" }
         if source == "Visit waozi.xyz" { return "Visita waozi.xyz" }
         if source == "Wearing" { return "En uso" }
         if source == "Wear" { return "Usar" }
@@ -187,7 +187,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "Explorateur" }
         if source == "Your first companion" { return "Votre premier compagnon" }
         if source == "Play for 5 hours" { return "Jouez pendant 5 h" }
-        if source == "Complete level 40" { return "Terminez le niveau 40" }
+        if source == "Reach level 40" { return "Atteignez le niveau 40" }
         if source == "Visit waozi.xyz" { return "Visitez waozi.xyz" }
         if source == "Wearing" { return "Équipé" }
         if source == "Wear" { return "Équiper" }
@@ -228,7 +228,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "Penjelajah" }
         if source == "Your first companion" { return "Teman pertamamu" }
         if source == "Play for 5 hours" { return "Main selama 5 jam" }
-        if source == "Complete level 40" { return "Selesaikan level 40" }
+        if source == "Reach level 40" { return "Capai level 40" }
         if source == "Visit waozi.xyz" { return "Kunjungi waozi.xyz" }
         if source == "Wearing" { return "Dipakai" }
         if source == "Wear" { return "Pakai" }
@@ -271,7 +271,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "Esploratore" }
         if source == "Your first companion" { return "Il tuo primo compagno" }
         if source == "Play for 5 hours" { return "Gioca per 5 ore" }
-        if source == "Complete level 40" { return "Completa il livello 40" }
+        if source == "Reach level 40" { return "Raggiungi il livello 40" }
         if source == "Visit waozi.xyz" { return "Visita waozi.xyz" }
         if source == "Wearing" { return "In uso" }
         if source == "Wear" { return "Indossa" }
@@ -314,7 +314,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "探検家" }
         if source == "Your first companion" { return "最初の仲間" }
         if source == "Play for 5 hours" { return "5時間プレイ" }
-        if source == "Complete level 40" { return "レベル40をクリア" }
+        if source == "Reach level 40" { return "レベル40に到達" }
         if source == "Visit waozi.xyz" { return "waozi.xyzを訪問" }
         if source == "Wearing" { return "使用中" }
         if source == "Wear" { return "使う" }
@@ -357,7 +357,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "탐험가" }
         if source == "Your first companion" { return "첫 번째 친구" }
         if source == "Play for 5 hours" { return "5시간 플레이" }
-        if source == "Complete level 40" { return "40레벨 완료" }
+        if source == "Reach level 40" { return "40레벨 도달" }
         if source == "Visit waozi.xyz" { return "waozi.xyz 방문" }
         if source == "Wearing" { return "사용 중" }
         if source == "Wear" { return "사용" }
@@ -400,7 +400,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "Explorador" }
         if source == "Your first companion" { return "Seu primeiro companheiro" }
         if source == "Play for 5 hours" { return "Jogue por 5 horas" }
-        if source == "Complete level 40" { return "Conclua o nível 40" }
+        if source == "Reach level 40" { return "Alcance o nível 40" }
         if source == "Visit waozi.xyz" { return "Visite waozi.xyz" }
         if source == "Wearing" { return "Em uso" }
         if source == "Wear" { return "Usar" }
@@ -443,7 +443,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "Исследователь" }
         if source == "Your first companion" { return "Твой первый спутник" }
         if source == "Play for 5 hours" { return "Играй 5 часов" }
-        if source == "Complete level 40" { return "Пройди уровень 40" }
+        if source == "Reach level 40" { return "Достигни уровня 40" }
         if source == "Visit waozi.xyz" { return "Посети waozi.xyz" }
         if source == "Wearing" { return "Выбрано" }
         if source == "Wear" { return "Надеть" }
@@ -486,7 +486,7 @@ Text :: (source: string) -> string {
         if source == "Explorer" { return "探险家" }
         if source == "Your first companion" { return "最初的伙伴" }
         if source == "Play for 5 hours" { return "游玩5小时" }
-        if source == "Complete level 40" { return "完成第40关" }
+        if source == "Reach level 40" { return "达到第40关" }
         if source == "Visit waozi.xyz" { return "访问waozi.xyz" }
         if source == "Wearing" { return "使用中" }
         if source == "Wear" { return "使用" }

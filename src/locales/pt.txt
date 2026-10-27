@@ -74,7 +74,7 @@ Seu primeiro companheiro
 Jogue por 5 horas
 ---
 [wurm_ui_24]
-Conclua o nível 40
+Alcance o nível 40
 ---
 [wurm_ui_25]
 Visite waozi.xyz
