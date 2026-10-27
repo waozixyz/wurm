@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.9] - 2026-10-27
+
+- More portal rooms in the mountains: five more boards have a walled corner room whose doorway closes, so a ring is the only way in, and boards there that bring portals use their room. Seven of the last twenty boards now have a portal room.
+
 ## [0.2.8] - 2026-10-27
 
 - After the meadow, a new idea arrives every few dozen levels and keeps coming back: squirrels that dash and sit from level 45, hedgehogs that curl into a spiky ball as you come close from 85, keys that open a gate from 101, frogs that hop two tiles from 125, switch stones that open and close a gate from 141, rolling stones from 165 and portal rooms, reached only through a ring, from 181.

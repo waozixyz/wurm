@@ -164,6 +164,41 @@ def layout(stage,within,attempt):
     return source,accent,walls
 
 
+# Mountain boards that close a corner room with a single doorway. The game
+# seals that doorway, so a portal is the only way in; with the doorway open
+# the room is ordinary floor for the certificate.
+PORTAL_ROOMS=(181,183,185,189,191)
+
+
+def portal_room(walls,number):
+    # Each corner room is 4x3 blocks, walled toward the middle, with its door
+    # on the side or the bottom; the boards try them in a per-level order.
+    corners=[]
+    for right in (False,True):
+        for bottom in (False,True):
+            xs=range(15,19) if right else range(0,4)
+            ys=range(11,14) if bottom else range(0,3)
+            wall_x=14 if right else 4
+            wall_y=10 if bottom else 3
+            ring=[(wall_x,y) for y in (range(10,14) if bottom else range(0,4))]+[(x,wall_y) for x in (range(14,19) if right else range(0,5))]
+            side=(wall_x,12 if bottom else 1);outside_side=(wall_x+(-1 if right else 1),side[1])
+            below=(16 if right else 2,wall_y);outside_below=(below[0],wall_y+(-1 if bottom else 1))
+            for door,outside in ((side,outside_side),(below,outside_below)):
+                corners.append(({(x,y) for x in xs for y in ys},ring,door,outside))
+    tile=Counter(walls.values()).most_common(1)[0][0] if walls else 20
+    order=list(range(len(corners)));random.Random(number*977).shuffle(order)
+    for index in order:
+        room,ring,door,outside=corners[index]
+        shaped=dict(walls)
+        for p in room:shaped.pop(p,None)
+        for p in ring:shaped[p]=tile
+        shaped.pop(door,None);shaped.pop(outside,None)
+        allowed=ALL-set(shaped)
+        if reachable(allowed,(9,13))==allowed and not (set(shaped)&GATES):
+            return shaped,room
+    return None,set()
+
+
 def campaign():
     levels=[];known=set()
     for stage,(stage_name,first,end) in enumerate(STAGES):
@@ -171,6 +206,10 @@ def campaign():
             number=first+within+1
             for attempt in range(512):
                 source,accent,walls=layout(stage,within,attempt)
+                room=set()
+                if number in PORTAL_ROOMS:
+                    walls,room=portal_room(walls,number)
+                    if walls is None:continue
                 floors=ALL-set(walls);key=signature(walls)
                 if key in known or len(floors)<88 or (within>=6 and len(walls)<8):continue
                 known.add(key);break
@@ -181,8 +220,10 @@ def campaign():
                     for dy in range(2):grid[1+mx*2+dx][1+my*2+dy]=tile
             cycle=safe_cycle(floors,number*4099)
             count=0 if stage==0 and within<6 else min(8,1+stage+within//16)
+            # Creatures stay out of a portal room, leaving it room for the ring.
             candidates=[p for p in cycle if 3<=p[0]<=36 and 3<=p[1]<=23 and
-                        abs(p[0]-20)+abs(p[1]-27)>=14 and abs(p[0]-37)+abs(p[1]-14)>=10]
+                        abs(p[0]-20)+abs(p[1]-27)>=14 and abs(p[0]-37)+abs(p[1]-14)>=10 and
+                        ((p[0]-1)//2,(p[1]-1)//2) not in room]
             rng=random.Random(number*65537);rng.shuffle(candidates);placed=[];kinds=[]
             for x,y in candidates:
                 if len(placed)>=count:break

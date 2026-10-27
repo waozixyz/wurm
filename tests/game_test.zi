@@ -170,7 +170,7 @@ main :: () -> s32 {
     }
     print("Ideas placed: portals % keys % switches % rooms %; animals after 180: flames % squirrels % hedgehogs % frogs % stones %\n",
         placed[1], placed[2], placed[3], placed[4], later_animals[0], later_animals[1], later_animals[2], later_animals[3], later_animals[4])
-    Expect(placed[FEATURE_PORTALS] >= 20 && placed[FEATURE_KEY] >= 8 && placed[FEATURE_SWITCH] >= 6 && placed[FEATURE_PORTAL_ROOM] >= 3,
+    Expect(placed[FEATURE_PORTALS] >= 20 && placed[FEATURE_KEY] >= 8 && placed[FEATURE_SWITCH] >= 6 && placed[FEATURE_PORTAL_ROOM] >= 7,
         "every puzzle idea comes back in later levels")
     Expect(later_animals[1] > 0 && later_animals[2] > 0 && later_animals[3] > 0 && later_animals[4] > 0, "the last boards mix every animal")
     Expect(key_level >= 0 && switch_level >= 0 && room_level >= 0 && portal_level >= 0, "every puzzle idea is placed somewhere")

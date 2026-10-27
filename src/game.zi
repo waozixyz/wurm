@@ -541,6 +541,12 @@ PlaceIdeas :: (game: *Game) {
     feature := BoardFeature(game.level)
     reached: [CELLS]bool
     if feature == FEATURE_PORTALS {
+        // In the last landscape a board with a closed room puts its portal
+        // there.
+        if game.level >= IDEA_PORTAL_ROOM && PlaceGate(game, FEATURE_PORTAL_ROOM, reached[:]) {
+            game.feature = FEATURE_PORTAL_ROOM
+            return
+        }
         pairs: s32 = ifx game.level >= IDEA_PORTAL_ROOM && Mix(cast(s64)game.level * 3) % 2 == 1 then PORTAL_PAIRS else 1
         if PlacePortals(game, pairs, reached[:], false) { game.feature = feature }
         return
