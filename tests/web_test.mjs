@@ -26,8 +26,8 @@ try{
  const click=async(x,y)=>{await command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y});await delay(80);await command('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});await delay(80);await command('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});await delay(180);};
  await until("typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden");await until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()");await delay(1800);await capture('title');
  const colorful=await evaluate("(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data,s=new Set();for(let i=0;i<p.length;i+=80)s.add(p[i]+','+p[i+1]+','+p[i+2]);return s.size})()");if(colorful<200)throw new Error('Title artwork did not render: '+colorful);
- await click(1018,82);await delay(400);await capture('profile');await click(48,78);await delay(200);
- await click(1066,82);await delay(200);await capture('settings');await key('Escape',27);
+ await click(1018,34);await delay(400);await capture('profile');await click(48,30);await delay(200);
+ await click(1066,34);await delay(200);await capture('settings');await key('Escape',27);
  await key('Enter',13);await delay(200);await capture('controls');await key('1',49);await until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/controls.dat')[0]===0}catch{return false}})()");await delay(300);await capture('level-1');
  await key('ArrowRight',39);await delay(150);await key(' ',32);await capture('playing');
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await delay(400);await capture('portrait');
@@ -61,9 +61,9 @@ try{
  if(await gridFingerprint()===beforeScroll)throw new Error('Browser selector did not scroll under touch drag');
  if(!await evaluate("Module.FS.readFile('/kryon-apps/wurm/run.dat')[0]===57"))throw new Error('Dragging the selector started a level');
  await capture('level-selector-scrolled');
- await click(354,138);await click(90,280); // Future Pinewood shows only locks.
+ await click(354,96);await click(90,238); // Future Pinewood shows only locks.
  if(!await evaluate("Module.FS.readFile('/kryon-apps/wurm/run.dat')[0]===57"))throw new Error('A locked browser level started');
- await capture('locked-levels');await click(36,138);await click(90,280);
+ await capture('locked-levels');await click(36,96);await click(90,238);
  await until("JSON.stringify(Array.from(Module.FS.readFile('/kryon-apps/wurm/run.dat')))==='[40,3,0,0,0,0]'");
  if(!await evaluate("Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57"))throw new Error('Level selection erased progress');
  await key(' ',32);await key('q',81);await key('l',76);await key('Escape',27);await key('c',67);

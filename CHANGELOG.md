@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.4] - 2026-10-27
+
+- Play on the whole page at wurm.waozi.xyz, without a title bar above the game.
+
 ## [0.2.3] - 2026-10-27
 
 - Top up in the Profile opens dew.waozi.xyz, where you can buy Dew with Monero in any amount or with almost any other coin.
