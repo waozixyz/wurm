@@ -3,7 +3,7 @@
   "packages": [
     {
       "commit": "dc1cfe389905c63c0bb453727d06d72afc1fa0b0",
-      "dependencies": {"crypto": "pc23fbf455e97614d", "kryon": "peb24c24393004f5f"},
+      "dependencies": {"crypto": "pc23fbf455e97614d", "kryon": "p3127065409ca96f6"},
       "id": "p00b93f1ddcd2802f",
       "name": "Apps",
       "ref": "master",
@@ -18,6 +18,14 @@
       "url": "https://github.com/ziranlang/qrcode.git"
     },
     {
+      "commit": "0931212f92d5f1a3f8b1be80abab7a9695bda50e",
+      "dependencies": {"raylib": "p5a77c9c35110e925"},
+      "id": "p3127065409ca96f6",
+      "name": "kryon",
+      "ref": "master",
+      "url": "https://github.com/kryonlabs/kryon.git"
+    },
+    {
       "commit": "e1f480f382d9443c4412133b55948374c77a5c21",
       "dependencies": {},
       "id": "p4b0a50b49959e674",
@@ -27,9 +35,9 @@
       "url": "https://github.com/open-quantum-safe/liboqs.git"
     },
     {
-      "commit": "91ef8713174a1d88106dd8ea2293ef8d46f8ee66",
-      "dependencies": {"daochi_client": "p9972fcdd2d5ba999", "kryon": "peb24c24393004f5f", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
-      "id": "p4d0db653f861a40d",
+      "commit": "ca637d08b0d6b54ab6bb56bbfd9a25d7fb70f56c",
+      "dependencies": {"daochi_client": "p9972fcdd2d5ba999", "kryon": "p3127065409ca96f6", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
+      "id": "p52862c0351d05875",
       "name": "Entity",
       "ref": "master",
       "url": "https://github.com/waozixyz/entity.git"
@@ -83,18 +91,10 @@
       "name": "mingcute",
       "ref": "master",
       "url": "https://github.com/kryonlabs/mingcute.git"
-    },
-    {
-      "commit": "65d207e21ebc8969c920d7d495d448db1e90d849",
-      "dependencies": {"raylib": "p5a77c9c35110e925"},
-      "id": "peb24c24393004f5f",
-      "name": "kryon",
-      "ref": "master",
-      "url": "https://github.com/kryonlabs/kryon.git"
     }
   ],
   "root": {
-    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "p4d0db653f861a40d", "kryon": "peb24c24393004f5f", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "p52862c0351d05875", "kryon": "p3127065409ca96f6", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {

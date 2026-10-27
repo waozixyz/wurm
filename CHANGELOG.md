@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.2] - 2026-10-27
+
+- Set an account alias with capitals, an @ or spaces; a taken alias now says so.
+
 ## [0.2.1] - 2026-10-26
 
 - Use Arcade or Inner Breeze's Profile, Dew and navigation when playing inside them, without duplicate title controls or an extra Back button.
