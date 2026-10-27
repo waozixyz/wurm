@@ -76,6 +76,12 @@ def main():
     for source in (ROOT / 'src/web').iterdir():
         if source.is_file():
             shutil.copy2(source, OUT / source.name)
+    # The page shows the title art while the game loads and in link previews.
+    # Small copies keep that first paint fast; the game keeps the original.
+    from PIL import Image
+    title = Image.open(ROOT / 'assets/art/title.png').convert('RGB')
+    title.resize((1280, 853), Image.Resampling.LANCZOS).save(OUT / 'loading.webp', 'WEBP', quality=86, method=6)
+    title.resize((1200, 800), Image.Resampling.LANCZOS).save(OUT / 'social.jpg', 'JPEG', quality=88, optimize=True, progressive=True)
     version = json.loads((ROOT / 'version.json').read_text())['version']
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     (OUT / 'version.json').write_text(json.dumps({'version': version, 'revision': revision,
