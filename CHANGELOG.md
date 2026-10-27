@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.1] - 2026-10-26
+
+- Use Arcade or Inner Breeze's Profile, Dew and navigation when playing inside them, without duplicate title controls or an extra Back button.
+- Open the shared Profile reliably from the skin shop's sign-in button.
+
 ## [0.2.0] - 2026-10-26
 
 - Play with softer Dusk, Forest and Sage themes, with saved sound and control settings.

@@ -207,7 +207,6 @@ GameSecondaryPointer :: (session: Session) -> Input.SecondaryPointerFrame {
     }
 }
 
-AtTitle :: () -> bool { return game.mode == MODE_STAGES }
 NavigateBack :: (now: s64) -> bool {
     if game.mode == MODE_STAGES { return false }
     HandleInput(Input.KeyEscape, now)
@@ -292,15 +291,22 @@ DewText :: () -> string {
 TitleActions :: (session: Session, area: Rectangle) {
     right := area.x + area.width - 12.0
     top := area.y + 12.0
-    if Button(session, ButtonProps.{.key = 28000, .bounds = Rectangle.{right - 220.0, top, 44.0, 44.0},
+    shop_right := right - 176.0
+    #if #defined(WURM_PORTABLE) {
+        // Embedded games use the enclosing host's navigation and account UI.
+        shop_right = right - 48.0
+    }
+    if Button(session, ButtonProps.{.key = 28000, .bounds = Rectangle.{shop_right - 44.0, top, 44.0, 44.0},
             .label = Locale.Text("Skin shop"), .icon_only = true, .icon_shape = "S1.8rr:M5 8H19L20 21H4ZM8 8V6C8 1 16 1 16 6V8",
             .class_name = 11}) != 0 { game.mode = MODE_SHOP; Wardrobe.poll_at = 0; unused Account.Service("entity.game-shop", "refresh") }
-    if Button(session, ButtonProps.{.key = 28001, .bounds = Rectangle.{right - 168.0, top, 68.0, 44.0},
-            .label = DewText(), .icon_shape = DewIcon.Shape,
-            .class_name = 11}) != 0 { Account.OpenProfile() }
-    if Button(session, ButtonProps.{.key = 28002, .bounds = Rectangle.{right - 92.0, top, 44.0, 44.0},
-            .label = Locale.Text("Profile"), .icon_only = true, .icon_shape = ProfileIcon.Shape,
-            .class_name = 11}) != 0 { Account.OpenProfile() }
+    #if !#defined(WURM_PORTABLE) {
+        if Button(session, ButtonProps.{.key = 28001, .bounds = Rectangle.{right - 168.0, top, 68.0, 44.0},
+                .label = DewText(), .icon_shape = DewIcon.Shape,
+                .class_name = 11}) != 0 { Account.OpenProfile() }
+        if Button(session, ButtonProps.{.key = 28002, .bounds = Rectangle.{right - 92.0, top, 44.0, 44.0},
+                .label = Locale.Text("Profile"), .icon_only = true, .icon_shape = ProfileIcon.Shape,
+                .class_name = 11}) != 0 { Account.OpenProfile() }
+    }
     if Button(session, ButtonProps.{.key = 28003, .bounds = Rectangle.{right - 44.0, top, 44.0, 44.0},
             .label = Locale.Text("Settings"), .icon_only = true, .icon_shape = "S1.8rr:M4 6H20M4 12H20M4 18H20M8 3V9M16 9V15M10 15V21",
             .class_name = 11}) != 0 { game.mode = MODE_SETTINGS }
@@ -407,7 +413,7 @@ DrawShop :: (session: Session, area: Rectangle) {
         width := area.width - 32.0
         if width > 360.0 { width = 360.0 }
         x := area.x + (area.width - width) / 2.0; y := area.y + 112.0
-        Character(session, 28310, Rectangle.{x + width / 2.0 - 26.0, y, 52.0, 52.0}, id, true)
+        Character(session, 28320, Rectangle.{x + width / 2.0 - 26.0, y, 52.0, 52.0}, id, true)
         GameText(session, 28311, SkinName(id), Rectangle.{x, y + 68.0, width, 28.0}, 22, false, true)
         price := SkinPriceText(id)
         GameText(session, 28312, price, Rectangle.{x, y + 106.0, width, 24.0}, 18, false, true)

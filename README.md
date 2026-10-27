@@ -75,6 +75,8 @@ other version. Playtest always uses the selected layout.
 Open **Settings** on the title to choose the softer Dusk, Forest or Sage theme,
 change controls or switch sound on and off. **Profile** uses the same account
 system as Shovey: create an account, import your key or link another device.
+Inside Arcade or Inner Breeze, the host supplies Profile, Dew and navigation;
+the game's title keeps Shop and Settings without duplicating those controls.
 Completion marks, active playtime, preferences and your chosen skin follow the
 signed-in account. Guest progress and each account stay separate. Your
 unfinished run and personal editor records stay on this device.

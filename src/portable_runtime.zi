@@ -35,4 +35,3 @@ WriteLevel :: (name: string, bytes: []u8) -> bool {
     return SaveAppRecordHost(name, TextView(text[:bytes.count * 2]))
 }
 RemoveLevel :: (name: string) -> bool { return SaveAppRecordHost(name, "") }
-Leave :: () { unused AppServiceHost("arcade.navigation", "back") }

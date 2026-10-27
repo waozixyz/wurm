@@ -111,6 +111,13 @@ def main():
             command('press', label='Buy', index=0, visible=1, enabled=1)
             nodes = tree('confirm-' + size)
             assert 'Sign in' in [node['label'] for node in nodes]
+            press('Sign in')
+            nodes = tree('shop-profile-' + size)
+            assert all(label in [node['label'] for node in nodes] for label in
+                       ('Profile', 'Import key', 'Link from another device')), 'Shop sign-in must open shared Profile'
+            press('Back')
+            nodes = tree('confirm-return-' + size)
+            assert 'Sign in' in [node['label'] for node in nodes]
             press('Cancel')
             press('Back')
             press('Profile')

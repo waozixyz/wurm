@@ -1,0 +1,137 @@
+#import "kryon/session"
+#import "kryon/tree"
+#import "kryon/tree_input"
+#import "kryon/tree_draw"
+#import "kryon/geometry"
+#import "kryon/widget_kind"
+#import "kryon/input_protocol"
+#import "kryon/pixmap"
+#import "apps/node_types"
+#import "std/text_buffer"
+#import "std/vec"
+Portable :: #import, file "../src/portable.zi";
+Account :: #import, file "../src/account.zi";
+Progress :: #import, file "../src/progress.zi";
+using WidgetKind;
+
+message: AppMessage;
+frame: AppUiFrame;
+profile_opens: s32;
+balance_reads: s32;
+failures: s32;
+connected: bool = true;
+host_account :: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+answer: [256]u8;
+pointer: PointerFrame;
+
+#program_export
+ReadAppHost :: () -> AppMessage { return message }
+#program_export
+WriteAppHost :: (value: AppMessage) { message = value }
+#program_export
+ReadAppUiHost :: () -> AppUiFrame { return frame }
+#program_export
+AppKeyHost :: () -> s32 { return 0 }
+#program_export
+PollPointer :: () -> PointerFrame { return pointer }
+#program_export
+AppSoundHost :: (name: string) -> bool { unused name; return true }
+#program_export
+AppRecordHost :: (name: string) -> string { unused name; return "" }
+#program_export
+SaveAppRecordHost :: (name: string, value: string) -> bool { unused name; unused value; return true }
+#program_export
+AppServiceHost :: (name: string, request: string) -> string {
+    if name == "entity.profile" && request == "open" { profile_opens += 1; return "available" }
+    if name == "entity.records" {
+        if request == "{\"operation\":\"status\"}" {
+            out: Vec(u8)
+            BuilderPrint(*out, "{\"status\":\"done\",\"account\":\"%\"}", ifx connected then host_account else "")
+            text := BuilderFinish(out)
+            for byte, index: text { answer[index] = byte }
+            answer[text.count] = 0
+            return TextUntilNul(answer[:])
+        }
+        return "{\"status\":\"missing\"}"
+    }
+    if name == "entity.dew" {
+        if request == "balance" { balance_reads += 1; return "{\"units\":123000000}" }
+        return "{\"status\":\"done\",\"owned\":0}"
+    }
+    return ""
+}
+Expect :: (ok: bool, reason: string) {
+    if !ok { print("FAIL: %\n", reason); failures += 1 }
+}
+Draw :: () {
+    frame.now += 0.1
+    Expect(cast(s32)BeginFrame(frame.session, 1, Rectangle.{0.0, 0.0, cast(float32)frame.width, cast(float32)frame.height}) == 0, "start hosted frame")
+    message.action = APP_FRAME
+    unused Portable.Main()
+    Expect(message.succeeded && cast(s32)EndFrame(frame.session) == 0, "hosted frame accepted")
+}
+Find :: (label: string) -> s32 {
+    for index: cast(s32)0..TreeCount(frame.session) - 1 {
+        node := TreeNodeAt(frame.session, index)
+        if node.kind == WidgetKindButton && node.semantic_label == label { return index }
+    }
+    return -1
+}
+Click :: (label: string) {
+    index := Find(label)
+    Expect(index >= 0, label)
+    if index < 0 { return }
+    bounds := TreeNodeAt(frame.session, index).bounds
+    pointer = PointerFrame.{bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0, true, true, false}
+    unused TreePointerUpdate(frame.session, pointer)
+    Draw()
+    pointer.down = false; pointer.pressed = false; pointer.released = true
+    unused TreePointerUpdate(frame.session, pointer)
+    Draw()
+    pointer.released = false
+    unused TreePointerUpdate(frame.session, pointer)
+    Draw()
+}
+#program_export
+main :: () -> s32 {
+    message.abi = MODULE_ABI
+    message.locale = "en"
+    frame.session = SessionOpen()
+    frame.top = 56
+    frame.now = 1.0
+    for portrait: 0..1 {
+        frame.width = ifx portrait == 1 then 390 else 844
+        frame.height = ifx portrait == 1 then 844 else 390
+        Draw()
+        Expect(Find("Play") >= 0 && Find("Skin shop") >= 0 && Find("Settings") >= 0, "hosted title retains play, shop and settings")
+        Expect(Find("Back") < 0 && Find("Profile") < 0 && Find("123") < 0, "host owns title navigation and account controls")
+        Expect(balance_reads == 0, "hosted title does not duplicate the host wallet")
+        Expect(TextUntilNul(Progress.owner[:]) == host_account, "game uses the enclosing host account")
+        message.action = APP_BACK
+        unused Portable.Main()
+        Expect(!message.succeeded, "title Back is left to the enclosing host")
+        Click("Settings")
+        Expect(Find("Back") >= 0, "settings retains its in-game Back")
+        message.action = APP_BACK
+        unused Portable.Main()
+        Expect(message.succeeded, "settings Back returns inside the game")
+        Draw()
+        Click("Skin shop")
+        Expect(Find("Buy") >= 0, "shop remains available inside a host")
+        message.action = APP_BACK
+        unused Portable.Main()
+        Expect(message.succeeded, "shop Back returns inside the game")
+        Draw()
+    }
+    connected = false
+    Progress.poll_at = 0
+    Draw()
+    Click("Skin shop")
+    Click("Buy")
+    Expect(Find("Sign in") >= 0, "signed-out shop offers the host sign-in")
+    Click("Sign in")
+    Expect(profile_opens == 1 && !Account.ProfileVisible(), "profile requests open the enclosing host profile")
+    Expect(SessionClose(frame.session), "close hosted test session")
+    print("Hosted UI local test failures: %\n", failures)
+    return failures
+}

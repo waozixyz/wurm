@@ -1,0 +1,6 @@
+// The hosted title/settings/shop probe never starts a campaign board.
+BundledLevel :: (level: s32, output: []u8) -> s64 {
+    unused level
+    unused output
+    return -1
+}
