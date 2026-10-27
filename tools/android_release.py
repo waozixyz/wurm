@@ -102,6 +102,8 @@ def verify_bundle(bundle, bundletool):
             assert archive.read('base/assets/assets/art/' + name) == (ROOT / 'assets/art' / name).read_bytes(), name
         assert not any(name.startswith('base/assets/assets/campaign-levels/') for name in archive.namelist()), 'Personal campaign edits must stay private'
         assert archive.read('base/assets/assets/entity.zx') == (ROOT / 'build/profile/entity.zx').read_bytes(), 'The shared Profile must be packaged'
+        dex = b''.join(archive.read(name) for name in archive.namelist() if name.startswith('base/dex/'))
+        assert b'Lorg/kryonlabs/play/PlayBilling;' in dex, 'The Google Play edition must include Play Billing'
     return dict(version=version['version'], version_code=version['version_code'], package='xyz.waozi.wurm', abis=abis,
                 sha256=hashlib.sha256(bundle.read_bytes()).hexdigest(), certificate_sha256=expected)
 
@@ -121,7 +123,7 @@ def main():
         if args.action == 'sign':
             args.output.mkdir(parents=True, exist_ok=True)
             version = json.loads((ROOT / 'version.json').read_text())['version']
-            bundle = args.output / f'wurm-v{version}.aab'
+            bundle = args.output / f'wurm-v{version}-gplay.aab'
             temporary = args.output / 'wurm.new.aab'
             try:
                 subprocess.run(['jarsigner', '-keystore', str(args.keystore.resolve(strict=True)),

@@ -3,7 +3,7 @@
   "packages": [
     {
       "commit": "dc1cfe389905c63c0bb453727d06d72afc1fa0b0",
-      "dependencies": {"crypto": "pc23fbf455e97614d", "kryon": "p3127065409ca96f6"},
+      "dependencies": {"crypto": "pc23fbf455e97614d", "kryon": "pbee0d88cb89b9cc3"},
       "id": "p00b93f1ddcd2802f",
       "name": "Apps",
       "ref": "master",
@@ -16,31 +16,6 @@
       "name": "qrcode",
       "ref": "master",
       "url": "https://github.com/ziranlang/qrcode.git"
-    },
-    {
-      "commit": "0931212f92d5f1a3f8b1be80abab7a9695bda50e",
-      "dependencies": {"raylib": "p5a77c9c35110e925"},
-      "id": "p3127065409ca96f6",
-      "name": "kryon",
-      "ref": "master",
-      "url": "https://github.com/kryonlabs/kryon.git"
-    },
-    {
-      "commit": "e1f480f382d9443c4412133b55948374c77a5c21",
-      "dependencies": {},
-      "id": "p4b0a50b49959e674",
-      "name": "liboqs",
-      "ref": "main",
-      "source": true,
-      "url": "https://github.com/open-quantum-safe/liboqs.git"
-    },
-    {
-      "commit": "7d37be6e1f0643c01b35545e42e48c633f19a90d",
-      "dependencies": {"daochi_client": "p9972fcdd2d5ba999", "kryon": "p3127065409ca96f6", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
-      "id": "p6feeecb5bfff3686",
-      "name": "Entity",
-      "ref": "master",
-      "url": "https://github.com/waozixyz/entity.git"
     },
     {
       "commit": "fafa2cea97d0cb379d832086ba45a989fa6f9c8e",
@@ -69,12 +44,28 @@
       "url": "https://github.com/LoupVaillant/Monocypher.git"
     },
     {
+      "commit": "06a10539fe16f0850d3992593e8821768f6a47aa",
+      "dependencies": {"daochi_client": "p9972fcdd2d5ba999", "kryon": "pbee0d88cb89b9cc3", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
+      "id": "p995b7fa23ba31475",
+      "name": "Entity",
+      "ref": "master",
+      "url": "https://github.com/waozixyz/entity.git"
+    },
+    {
       "commit": "25d9f649c43a8de44a5fea602d2835e33e6ca999",
       "dependencies": {"crypto": "pc23fbf455e97614d", "oqs": "p7098ac9cd92f7e5f"},
       "id": "p9972fcdd2d5ba999",
       "name": "DaochiClient",
       "ref": "master",
       "url": "https://github.com/ziranlang/daochi-client.git"
+    },
+    {
+      "commit": "ec0e4063b3657f1c739d5e1f00a4a394e5af8ecf",
+      "dependencies": {"raylib": "p5a77c9c35110e925"},
+      "id": "pbee0d88cb89b9cc3",
+      "name": "kryon",
+      "ref": "master",
+      "url": "https://github.com/kryonlabs/kryon.git"
     },
     {
       "commit": "944826f70779a6b6cd53f6b06a75b36f4d8a2558",
@@ -91,10 +82,19 @@
       "name": "mingcute",
       "ref": "master",
       "url": "https://github.com/kryonlabs/mingcute.git"
+    },
+    {
+      "commit": "e1f480f382d9443c4412133b55948374c77a5c21",
+      "dependencies": {},
+      "id": "p4b0a50b49959e674",
+      "name": "liboqs",
+      "ref": "main",
+      "source": true,
+      "url": "https://github.com/open-quantum-safe/liboqs.git"
     }
   ],
   "root": {
-    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "p6feeecb5bfff3686", "kryon": "p3127065409ca96f6", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "p995b7fa23ba31475", "kryon": "pbee0d88cb89b9cc3", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {

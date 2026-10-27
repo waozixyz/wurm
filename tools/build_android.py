@@ -24,7 +24,7 @@ def main():
     parser.add_argument('--abi', choices=('arm64-v8a', 'armeabi-v7a', 'universal'), default='arm64-v8a')
     parser.add_argument('--release', action='store_true', help='build the unsigned production APK for signing')
     parser.add_argument('--bundle', action='store_true',
-                        help='build the unsigned Google Play App Bundle, without Dew funding, for signing')
+                        help="build the unsigned Google Play edition's App Bundle for signing")
     parser.add_argument('--verification', action='store_true',
                         help='build a separate test install without replacing the normal game')
     args = parser.parse_args()
@@ -58,10 +58,8 @@ def main():
     # The account provider uses the same native cryptography on both ABIs.
     # These changes belong to this app's generated scaffold, never Kryon's.
     cmake = ROOT / 'droid/app/src/main/cpp/CMakeLists.txt'
-    # Google Play builds keep earning and spending Dew but offer no way to buy it.
-    defines = '--define ANDROID_BUILD --define WURM_ACCOUNTS' + (' --define GOOGLE_PLAY' if args.bundle else '')
-    text = re.sub(r'set\(APP_ZIRAN_DEFINES --define ANDROID_BUILD[^)]*\)', 'set(APP_ZIRAN_DEFINES ' + defines + ')',
-                  cmake.read_text(), count=1)
+    text = re.sub(r'set\(APP_ZIRAN_DEFINES --define ANDROID_BUILD[^)]*\)',
+                  'set(APP_ZIRAN_DEFINES --define ANDROID_BUILD --define WURM_ACCOUNTS)', cmake.read_text(), count=1)
     text = text.split('\n# Apfelwurm account libraries\n')[0]
     text += f'''
 # Apfelwurm account libraries
@@ -104,6 +102,9 @@ target_link_libraries(main oqs)
                '-Pkryon.dir=' + str(kryon), '-Pziran.dir=' + str(ziran), '-Praylib.dir=' + str(raylib / 'src'),
                '-Papp.abis=' + abis, '-Papp.minSdk=21', '-Papp.codegen=c99',
                '-Pandroid.aapt2FromMavenOverride=' + str(aapt)]
+    # Kryon's Google Play edition adds Play Billing, so Dew is bought through Play.
+    if args.bundle:
+        command += ['-Papp.edition=gplay', '-Pandroid.useAndroidX=true']
     install_id = 'xyz.waozi.wurm.verification' if args.verification else 'xyz.waozi.wurm'
     command.append('-Papp.installId=' + install_id)
     subprocess.run(command, cwd=ROOT, env=environment, check=True)

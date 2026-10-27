@@ -65,7 +65,7 @@ jobs:
         run: |
           sh update_version.sh
           git diff --exit-code -- version.json
-      - name: Build both ARM architectures in one Google Play bundle
+      - name: Build both ARM architectures in one Google Play edition bundle
         run: python3 tools/build_android.py --bundle --abi universal
       - name: Sign with the Apfelwurm upload key and verify
         env:
@@ -88,6 +88,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: wurm-play-${{ steps.version.outputs.version }}
-          path: waozixyz/wurm/build/downloads/wurm-v${{ steps.version.outputs.version }}.aab
+          path: waozixyz/wurm/build/downloads/wurm-v${{ steps.version.outputs.version }}-gplay.aab
           if-no-files-found: error
           retention-days: 14
