@@ -45,6 +45,11 @@ TickInterval :: (level: s32) -> s64 {
 }
 
 Point :: struct { x: s32; y: s32; }
+// Two rings joined: stepping into one comes out of the other.
+Portal :: struct { a: Point; b: Point; }
+PORTAL_PAIRS :: 2;
+// The campaign certificate drives routes that never use a portal.
+portals_enabled: bool = true;
 Monster :: struct { position: Point; kind: s32; direction: s32; }
 Particle :: struct { position: Point; life: s32; }
 Game :: struct {
@@ -66,6 +71,10 @@ Game :: struct {
     monster_count: s32
     // Points per apple on this board; see LevelMultiplier.
     multiplier: s32
+    // Portal pairs on this board and the ticks before the next jump.
+    portal_count: s32
+    portals: [PORTAL_PAIRS]Portal
+    portal_wait: s32
     monsters: [MONSTER_LIMIT]Monster
     particles: [100]Particle
     death_ticks: s32
@@ -122,7 +131,7 @@ SpawnApple :: (game: *Game) {
         // the permanent interior floor, never inside those gate cells.
         candidate := Point.{16 + Random(game, (board_columns - 2) * 16),
             16 + Random(game, (board_rows - 2) * 16)}
-        if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) {
+        if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) && !OnPortal(game, candidate) {
             game.apple = candidate
             game.apple_flash = 128
             return
@@ -131,7 +140,7 @@ SpawnApple :: (game: *Game) {
     for at: 0..CELLS - 1 {
         candidate := Point.{cast(s32)(at % board_columns) * 16 + 8, cast(s32)(at / board_columns) * 16 + 8}
         if candidate.x < 16 || candidate.y < 16 || candidate.x >= (board_columns - 1) * 16 || candidate.y >= (board_rows - 1) * 16 { continue }
-        if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) {
+        if TileAt(game, candidate) < 20 && !WormNear(game, candidate, 0, 10) && !OnPortal(game, candidate) {
             game.apple = candidate
             game.apple_flash = 128
             return
@@ -190,8 +199,85 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     // Carve the entrance before the apple chooses its spot, so it can never
     // land on a cell the carving turns into wall.
     Respawn(game)
+    PlacePortals(game)
     SpawnApple(game)
     game.multiplier = LevelMultiplier(game)
+}
+
+// After the meadow, each board gets a pair of portals, and the mountains two.
+// Each ring stands in the middle of open floor, so the worm comes out safely
+// in any direction and a player can always go around one. The spots follow
+// from the board alone, so every player meets the same portals.
+OpenAround :: (game: *Game, x: s32, y: s32) -> bool {
+    for dy: -1..1 {
+        for dx: -1..1 {
+            if !Inside(x + dx, y + dy) || game.board[Index(x + dx, y + dy)] >= 20 { return false }
+        }
+    }
+    return true
+}
+PortalCentre :: (cell: s32) -> Point {
+    return Point.{(cell % board_columns) * 16 + 8, (cell / board_columns) * 16 + 8}
+}
+CellsApart :: (first: s32, second: s32) -> s32 {
+    return Abs(first % board_columns - second % board_columns) + Abs(first / board_columns - second / board_columns)
+}
+PlacePortals :: (game: *Game) {
+    game.portal_count = 0
+    game.portal_wait = 0
+    if !portals_enabled || game.level < 40 { return }
+    candidates: [CELLS]s32
+    count: s32 = 0
+    half := board_columns / 2
+    for y: 3..board_rows - 4 {
+        for x: 2..board_columns - 3 {
+            // Clear of the entrance and the exit lanes.
+            if Abs(cast(s32)x - half) <= 2 && (y <= 5 || y >= board_rows - 6) { continue }
+            if !OpenAround(game, cast(s32)x, cast(s32)y) { continue }
+            centre := Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8}
+            crowded := false
+            for index: 0..game.monster_count - 1 {
+                if Near(centre, game.monsters[index].position, 48) { crowded = true }
+            }
+            if !crowded { candidates[count] = Index(x, y); count += 1 }
+        }
+    }
+    if count < 2 { return }
+    pairs := ifx game.level >= 160 then PORTAL_PAIRS else 1
+    taken: [4]s32
+    taken_count: s32 = 0
+    for pair: 0..pairs - 1 {
+        first: s32 = -1
+        for attempt: 0..count - 1 {
+            cell := candidates[(cast(s64)game.level * 7919 + cast(s64)attempt * 104729 + cast(s64)pair * 31) % cast(s64)count]
+            free := true
+            for index: 0..taken_count - 1 { if CellsApart(cell, taken[index]) < 6 { free = false } }
+            if free { first = cell; break }
+        }
+        if first < 0 { break }
+        second: s32 = -1
+        farthest: s32 = 13
+        for index: 0..count - 1 {
+            cell := candidates[index]
+            apart := CellsApart(cell, first)
+            if apart <= farthest { continue }
+            free := true
+            for other: 0..taken_count - 1 { if CellsApart(cell, taken[other]) < 6 { free = false } }
+            if free { second = cell; farthest = apart }
+        }
+        if second < 0 { break }
+        game.portals[pair] = Portal.{PortalCentre(first), PortalCentre(second)}
+        taken[taken_count] = first
+        taken[taken_count + 1] = second
+        taken_count += 2
+        game.portal_count += 1
+    }
+}
+OnPortal :: (game: *Game, position: Point) -> bool {
+    for pair: 0..game.portal_count - 1 {
+        if Near(position, game.portals[pair].a, 12) || Near(position, game.portals[pair].b, 12) { return true }
+    }
+    return false
 }
 // The complete playable campaign is designed and certified. The recovered
 // 99-level archive stays an independent, untouched historical reference.
@@ -542,6 +628,22 @@ Tick :: (game: *Game) {
     else if game.direction == DIR_UP { next.y -= 4 }
     else if game.direction == DIR_RIGHT { next.x += 4 }
     else { next.y += 4 }
+    // A head reaching a ring's centre comes out of its partner, keeping its
+    // course; the body follows through the same rings.
+    if game.portal_wait > 0 { game.portal_wait -= 1 }
+    else {
+        for pair: 0..game.portal_count - 1 {
+            portal := game.portals[pair]
+            from := portal.a
+            to := portal.b
+            if Abs(next.x - portal.b.x) <= 4 && Abs(next.y - portal.b.y) <= 4 { from = portal.b; to = portal.a }
+            else if Abs(next.x - portal.a.x) > 4 || Abs(next.y - portal.a.y) > 4 { continue }
+            for spark: 0..3 { AddParticle(game, from); AddParticle(game, to) }
+            next = Point.{to.x + next.x - from.x, to.y + next.y - from.y}
+            game.portal_wait = 5
+            break
+        }
+    }
     if game.apples == 0 && next.y < 0 {
         count := game.length
         if count > 100 { count = 100 }

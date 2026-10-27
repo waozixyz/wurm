@@ -122,6 +122,36 @@ main :: () -> s32 {
     game.death_ticks = 1
     Tick(*game)
     Expect(game.lives == 3 && game.worm[0].y == 496, "death consumes a life and respawns")
+
+    // Portals: none in the meadow; after it, rings in open floor that carry
+    // the head across.
+    StartGame(*game, 0, 0)
+    Expect(game.portal_count == 0, "the meadow has no portals")
+    portal_boards: s32 = 0
+    portal_level: s32 = -1
+    for level: 40..LEVEL_COUNT - 1 {
+        StartGame(*game, cast(s32)level, 0)
+        if game.portal_count > 0 { portal_boards += 1 }
+        if game.portal_count > 0 && portal_level < 0 { portal_level = cast(s32)level }
+        for pair: 0..game.portal_count - 1 {
+            a := game.portals[pair].a
+            b := game.portals[pair].b
+            Expect(OpenAround(*game, a.x / 16, a.y / 16) && OpenAround(*game, b.x / 16, b.y / 16) &&
+                CellsApart(Index(a.x / 16, a.y / 16), Index(b.x / 16, b.y / 16)) >= 14, "portals stand in open floor, far apart")
+            Expect(!Near(game.apple, a, 12) && !Near(game.apple, b, 12), "apples never land on a portal")
+        }
+    }
+    Expect(portal_boards >= 120 && portal_level >= 40, "most boards after the meadow have portals")
+    StartGame(*game, portal_level, 0)
+    portal := game.portals[0]
+    game.apples = 3
+    game.worm[0] = Point.{portal.a.x, portal.a.y + 4}
+    game.direction = DIR_UP
+    game.next_direction = DIR_UP
+    Tick(*game)
+    Expect(game.worm[0].x == portal.b.x && game.worm[0].y == portal.b.y, "the worm comes out of the partner ring")
+    Tick(*game)
+    Expect(game.worm[0].x == portal.b.x && game.worm[0].y == portal.b.y - 4 && game.death_ticks == 0, "it keeps its course out of the ring")
     game.lives = 1
     game.death_ticks = 1
     Tick(*game)

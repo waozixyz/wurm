@@ -2,6 +2,7 @@
 
 ## [0.2.6] - 2026-10-27
 
+- Glowing portals join the boards after the meadow, and the mountains have two pairs: steer into one ring to come out of its partner, keeping your direction. Each ring stands in open ground, so you can always go around it.
 - See your best run on the Profile leaderboard: the furthest level you reached and your highest score, as separate Level and Score columns ranked against your friends.
 - Sign in once for every waozi.xyz site: a profile signed in on Arcade, Dew or here is used by the others in the same browser.
 

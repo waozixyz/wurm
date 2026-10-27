@@ -693,6 +693,32 @@ AppleFlash :: (session: Session, stage: Rectangle) {
         .shape = StarIcon.Shape, .color = Color.{255, 227, 116, 220}})
 }
 
+// Each portal pair glows in its own colour and breathes slowly, so the two
+// rings that belong together are easy to tell apart.
+portal_frame: s32;
+DrawPortals :: (session: Session, stage: Rectangle) {
+    if game.portal_count == 0 { return }
+    portal_frame = (portal_frame + 1) % 120
+    scale := stage.width / (cast(float32)board_columns * 16.0)
+    breath := cast(float32)(ifx portal_frame < 60 then portal_frame else 120 - portal_frame) / 60.0
+    for pair: 0..game.portal_count - 1 {
+        glow := ifx pair == 0 then Color.{150, 112, 255, 255} else Color.{255, 160, 70, 255}
+        core := ifx pair == 0 then Color.{58, 30, 120, 235} else Color.{120, 58, 12, 235}
+        for end: 0..1 {
+            centre := ifx end == 0 then game.portals[pair].a else game.portals[pair].b
+            key := 12000 + cast(u64)pair * 8 + cast(u64)end * 4
+            outer := (13.0 + 2.0 * breath) * scale
+            inner := 8.0 * scale
+            x := stage.x + cast(float32)centre.x * scale
+            y := stage.y + cast(float32)centre.y * scale
+            unused Box(session, BoxProps.{.key = key, .bounds = Rectangle.{x - outer, y - outer, outer * 2.0, outer * 2.0},
+                    .fill = Color.{glow.r, glow.g, glow.b, cast(u8)(70.0 + 50.0 * breath)}, .radius = outer})
+            unused Box(session, BoxProps.{.key = key + 1, .bounds = Rectangle.{x - inner, y - inner, inner * 2.0, inner * 2.0},
+                    .fill = core, .border = glow, .radius = inner})
+        }
+    }
+}
+
 // Stone posts mark each open gate throughout the journey. Their tiles and the
 // centre opening keep their existing collision data and width.
 DrawGatePosts :: (session: Session, stage: Rectangle) {
@@ -722,6 +748,7 @@ DrawBoard :: (session: Session, stage: Rectangle) {
         }
     }
     DrawGatePosts(session, stage)
+    DrawPortals(session, stage)
     if game.apples > 0 && game.apple.x >= 0 {
         Sprite(session, 1400, stage, game.apple, Rectangle.{0.0, 112.0, 16.0, 16.0}, sprites)
         AppleFlash(session, stage)

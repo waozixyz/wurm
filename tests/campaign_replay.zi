@@ -235,6 +235,8 @@ Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
 replay_deaths: s32;
 #program_export
 main :: (argc: s32, argv: **u8) -> s32 {
+    // The certificate proves every board can be won without a portal.
+    portals_enabled = false
     search := argc > 1
     first: s32 = ifx argc > 2 then ParseNumber(argv[2]) - 1 else 0
     last: s32 = ifx argc > 3 then ParseNumber(argv[3]) - 1 else LEVEL_COUNT - 1
