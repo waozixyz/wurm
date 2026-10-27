@@ -60,8 +60,10 @@ Load :: () {
     count := ReadRecord("controls.dat", bytes[:])
     if count == 1 && bytes[0] <= 1 { mode = cast(s32)bytes[0] }
     // A desktop always has a keyboard, and a mouse drag steers like a swipe,
-    // so it starts with swipe steering instead of asking.
-    #if #defined(PLATFORM_DESKTOP) {
+    // so it starts with swipe steering instead of asking. Phones, browsers
+    // and hosted copies still ask.
+    #if #defined(ANDROID_BUILD) || #defined(PLATFORM_WEB) || #defined(WURM_PORTABLE) {
+    } else {
         if mode < 0 { mode = 0 }
     }
 }

@@ -25,7 +25,7 @@ main :: () -> s32 {
     unused File.CreateDirectory("build/progress-test-data")
     unused File.RemoveFile("build/progress-test-data/controls.dat")
     Clear()
-    Expect(!Controls.Chosen(), "first play asks for controls")
+    Expect(Controls.Chosen() && !Controls.Pad(), "a desktop starts with swipe steering without asking")
     Expect(Controls.SetPad(true) && Controls.Pad(), "choose direction pad")
     Controls.mode = -2
     Expect(Controls.Chosen() && Controls.Pad(), "pad survives restart")
