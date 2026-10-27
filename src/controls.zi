@@ -59,6 +59,11 @@ Load :: () {
     bytes: [2]u8
     count := ReadRecord("controls.dat", bytes[:])
     if count == 1 && bytes[0] <= 1 { mode = cast(s32)bytes[0] }
+    // A desktop always has a keyboard, and a mouse drag steers like a swipe,
+    // so it starts with swipe steering instead of asking.
+    #if #defined(PLATFORM_DESKTOP) {
+        if mode < 0 { mode = 0 }
+    }
 }
 Chosen :: () -> bool { Load(); return mode >= 0 }
 Pad :: () -> bool { Load(); return mode == 1 }

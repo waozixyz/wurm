@@ -107,12 +107,10 @@ def main():
         assert ((title_pixels.max(axis=2) > 40).mean()) > 0.95, "title artwork is missing or black"
         # Launch from build/, as the actual desktop launcher does, then use
         # the single Play button. Q from a paused level returns to the title.
+        # A desktop has a keyboard, so Play starts swipe steering without
+        # asking, straight into level 1: no controls, stage or level menu.
         pointer(480, 530)
-        time.sleep(0.15)
-        capture("controls-choice")
-        pointer(340, 428)
-        assert (level_directory / "controls.dat").read_bytes() == bytes([0]), "swipe choice was not persisted"
-        # The choice goes straight into level 1: no stage or level menu.
+        assert not (level_directory / "controls.dat").exists(), "the desktop asked for controls"
         time.sleep(0.2)
         key("space")
         time.sleep(0.15)
