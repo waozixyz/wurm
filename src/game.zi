@@ -64,6 +64,8 @@ Game :: struct {
     apple: Point
     apple_flash: s32
     monster_count: s32
+    // Points per apple on this board; see LevelMultiplier.
+    multiplier: s32
     monsters: [MONSTER_LIMIT]Monster
     particles: [100]Particle
     death_ticks: s32
@@ -189,6 +191,7 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     // land on a cell the carving turns into wall.
     Respawn(game)
     SpawnApple(game)
+    game.multiplier = LevelMultiplier(game)
 }
 // The complete playable campaign is designed and certified. The recovered
 // 99-level archive stays an independent, untouched historical reference.
@@ -464,10 +467,32 @@ MoveMonster :: (game: *Game, index: s32) {
         monster.kind = monster.direction + 2
     } else { monster.position = candidate }
 }
-AddScore :: (game: *Game, amount: s32) {
-    previous := game.score / 33
-    game.score += amount
-    if game.score / 33 > previous { game.lives += 1 }
+// Points follow how hard a board is: its enemies (wandering ones count
+// twice), the apples it asks for, how tightly its walls close in and its
+// speed. The first meadows are worth one point an apple, the hardest boards
+// nine. Every player gets the same multiplier for the same board.
+LevelMultiplier :: (game: *Game) -> s32 {
+    roamers: s32 = 0
+    for index: 0..game.monster_count - 1 { if game.monsters[index].kind == 1 { roamers += 1 } }
+    walls: s32 = 0
+    for at: 0..board_columns * board_rows - 1 {
+        if game.board[at] >= 20 && (game.board[at] & 128) == 0 { walls += 1 }
+    }
+    tightness := ifx walls > 300 then (walls - 300) * 10 / 150 else 0
+    difficulty := 10 * game.monster_count + 10 * roamers + 5 * (game.apples - 5) + tightness +
+    5 * (32 - cast(s32)TickInterval(game.level))
+    if difficulty < 0 { difficulty = 0 }
+    return 1 + difficulty / 20
+}
+
+AddScore :: (game: *Game, points: s32) {
+    multiplier := ifx game.multiplier > 0 then game.multiplier else 1
+    // The extra-life step grows with the points, so a life still comes
+    // about every 33 apples at any level.
+    step := 33 * multiplier
+    previous := game.score / step
+    game.score += points * multiplier
+    if game.score / step > previous { game.lives += 1 }
 }
 
 AddParticle :: (game: *Game, position: Point) {

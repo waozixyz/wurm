@@ -35,9 +35,9 @@
       "url": "https://github.com/open-quantum-safe/liboqs.git"
     },
     {
-      "commit": "1b46c4f2c750300cb1c5c46e203e14691571a72c",
+      "commit": "7b5f12b27b34d283d7abb10bf1140ee63f4e73a2",
       "dependencies": {"daochi_client": "p9972fcdd2d5ba999", "kryon": "p3127065409ca96f6", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
-      "id": "pc231a4f8596eb9ca",
+      "id": "p82ecfcb38925f7e8",
       "name": "Entity",
       "ref": "master",
       "url": "https://github.com/waozixyz/entity.git"
@@ -94,7 +94,7 @@
     }
   ],
   "root": {
-    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "pc231a4f8596eb9ca", "kryon": "p3127065409ca96f6", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "p82ecfcb38925f7e8", "kryon": "p3127065409ca96f6", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {

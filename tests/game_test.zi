@@ -73,6 +73,7 @@ main :: () -> s32 {
         Expect(StageOf(first - 1) == stage && StageOf(first) == stage + 1, "landscape boundary")
         Expect(StageNumber(first) == 1 && StageLevels(cast(s32)stage) == 40, "chapter numbering")
         StartGame(*game, first - 1, 0)
+        multiplier := game.multiplier
         game.score = 12
         game.apples = 0
         game.worm[0] = Point.{328, 0}
@@ -80,7 +81,7 @@ main :: () -> s32 {
         for i: 0..49 { Tick(*game) }
         Expect(game.mode == MODE_FINISHED, "landscapes connect without ending the run")
         LoadLevel(*game, first, 2000)
-        Expect(game.level == first && game.mode == MODE_PLAYING && game.lives == 3 && game.score == 17,
+        Expect(game.level == first && game.mode == MODE_PLAYING && game.lives == 3 && game.score == 12 + 5 * multiplier,
             "next landscape preserves lives and score")
     }
 
@@ -95,6 +96,29 @@ main :: () -> s32 {
     game.score = 32
     AddScore(*game, 1)
     Expect(game.lives == 4, "extra life every 33 points")
+    // Points follow each board's difficulty, not its number.
+    lowest: s32 = 100
+    highest: s32 = 0
+    meadow_low: s32 = 100
+    meadow_high: s32 = 0
+    for level: 0..LEVEL_COUNT - 1 {
+        StartGame(*game, cast(s32)level, 0)
+        if game.multiplier < lowest { lowest = game.multiplier }
+        if game.multiplier > highest { highest = game.multiplier }
+        if level < 40 && game.multiplier < meadow_low { meadow_low = game.multiplier }
+        if level < 40 && game.multiplier > meadow_high { meadow_high = game.multiplier }
+    }
+    StartGame(*game, 0, 0)
+    Expect(game.multiplier == 1 && lowest == 1 && highest >= 8 && highest <= 9 && meadow_high > meadow_low,
+        "harder boards are worth more")
+    StartGame(*game, 120, 0)
+    multiplier := game.multiplier
+    AddScore(*game, 1)
+    Expect(game.score == multiplier, "an apple scores the board's multiplier")
+    game.score = 33 * multiplier - 1
+    lives := game.lives
+    AddScore(*game, 1)
+    Expect(game.lives == lives + 1, "extra lives keep pace with the multiplier")
     game.death_ticks = 1
     Tick(*game)
     Expect(game.lives == 3 && game.worm[0].y == 496, "death consumes a life and respawns")

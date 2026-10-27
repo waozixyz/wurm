@@ -38,6 +38,9 @@
     #import "kryon/tree_input"
     #import "kryon/key_input"
     #import "kryon/text_input_props"
+    #import "kryon/text_props"
+    #import "kryon/text_align"
+    #import "kryon/text_widget"
     #import "kryon/open_uri"
     #if #defined(ANDROID_BUILD) {
         #import "kryon/android_jni"
@@ -85,14 +88,34 @@
         if name == "entity.profile" && request == "open" { OpenProfile(); return "available" }
         return ""
     }
-    OpenProfile :: () { if ready { Entity.EntityHostReload(); visible = true } }
+    // The Profile always opens. One that could not start tries again and,
+    // if it still cannot, says why instead of doing nothing.
+    OpenProfile :: () {
+        if !ready && started && profile_bytes != "" {
+            root: [4096]u8
+            ready = Entity.EntityHostOpen(profile_bytes, Root(root[:]), "arcade", true)
+        }
+        if ready { Entity.EntityHostReload() }
+        visible = true
+    }
     ProfileVisible :: () -> bool { return visible }
     DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {
+        if !ready {
+            problem := Entity.EntityHostProblem()
+            if problem == "" { problem = "The profile could not start. Reload the page to try again." }
+            unused Text(session, TextProps.{.key = 29010, .text = problem, .font = 18, .wrap = TextWrap.TextWrapAuto,
+                    .align = TextAlign.TextAlignCenter,
+                    .bounds = Rectangle.{bounds.x + 24.0, bounds.y + 48.0, bounds.width - 48.0, 120.0}})
+            return
+        }
         typed: [1024]u8
         input := TextFieldInputFor(key, KeyboardModifiers(session), TypedTextTake(session, typed[:]))
         unused Entity.EntityHostFrame(session, bounds, key, KeyboardModifiers(session), input, dark)
     }
-    Back :: () { if !Entity.EntityHostBack() && Entity.EntityHostSave() { visible = false } }
+    Back :: () {
+        if !ready { visible = false; return }
+        if !Entity.EntityHostBack() && Entity.EntityHostSave() { visible = false }
+    }
     VisitWebsite :: () -> bool { return OpenUri("https://waozi.xyz/") }
 } else {
     #import "kryon/open_uri"
