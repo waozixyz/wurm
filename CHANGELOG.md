@@ -1,10 +1,14 @@
 # Changelog
 
+## [0.2.6] - 2026-10-27
+
+- See your best run on the Profile leaderboard: the furthest level you reached and your highest score, as separate Level and Score columns ranked against your friends.
+- Sign in once for every waozi.xyz site: a profile signed in on Arcade, Dew or here is used by the others in the same browser.
+
 ## [0.2.5] - 2026-10-27
 
 - Score more on harder boards: each level's apples are worth one to nine points by how many creatures roam it, how many apples it asks for and how tight its walls are. Extra lives still come about every 33 apples.
 - The Profile always opens. If it cannot start on this device, it says why instead of doing nothing, and a saved account key that cannot be read is kept aside.
-- See your best run on the Profile leaderboard: the furthest level you reached and your highest score, as separate Level and Score columns ranked against your friends.
 
 ## [0.2.4] - 2026-10-27
 

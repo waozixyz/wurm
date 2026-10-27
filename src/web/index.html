@@ -21,7 +21,24 @@
   <main id="canvas-frame"><canvas id="canvas" tabindex="0" aria-label="Apfelwurm game: choose swipe or direction pad, collect apples, then leave through the top gate."></canvas><div id="loading" role="status"><strong>A little worm.<br>A long journey.</strong><span>Opening Apfelwurm…</span></div></main>
   <script>
     var Module={canvas:document.getElementById('canvas'),onRuntimeInitialized(){document.getElementById('loading').hidden=true;Module.canvas.focus()},onAbort(){document.getElementById('loading').hidden=false;document.getElementById('loading').textContent='The game could not open. Please reload to try again.'},printErr(text){console.error(text)}};
+    // One sign-in for every waozi.xyz site: account.waozi.xyz hands over the
+    // shared profile before the game starts, or the game starts without it.
+    (function () {
+      var started = false;
+      function start() {
+        if (started) return;
+        started = true;
+        var game = document.createElement('script');
+        game.src = 'game.js';
+        document.body.appendChild(game);
+      }
+      var shared = document.createElement('script');
+      shared.src = 'https://account.waozi.xyz/share.js';
+      shared.onload = function () { WaoziAccount.attach(Module, 2500).then(start, start); };
+      shared.onerror = start;
+      setTimeout(start, 4000);
+      document.head.appendChild(shared);
+    })();
   </script>
-  <script src="game.js" defer></script>
 </body>
 </html>
