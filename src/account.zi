@@ -69,6 +69,10 @@
     Pump :: () {
         if !started {
             started = true
+            // Dew cannot be bought in the Google Play edition.
+            #if #defined(GOOGLE_PLAY) {
+                Entity.EntityHostAllowFunding(false)
+            }
             #if #defined(ANDROID_BUILD) {
                 profile_bytes = Assets.ReadAppAsset("assets/entity.zx")
             } else {

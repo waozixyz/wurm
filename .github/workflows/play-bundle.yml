@@ -1,0 +1,93 @@
+name: Google Play bundle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wurm-play-bundle
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    name: Signed Google Play App Bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      ZIRAN_PAR_THREADS: '1'
+      MAKEFLAGS: -j1
+      OMP_NUM_THREADS: '1'
+      YUE_DESKTOP_RECOVERY: '0'
+    defaults:
+      run:
+        working-directory: waozixyz/wurm
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          path: waozixyz/wurm
+          persist-credentials: false
+      - name: Read the locked compiler and release version
+        id: version
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          print('compiler=' + json.loads(Path('ziran.lock').read_text())['toolchain']['commit'])
+          print('version=' + json.loads(Path('version.json').read_text())['version'])
+          PY
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          repository: ziranlang/ziran
+          ref: ${{ steps.version.outputs.compiler }}
+          path: ziranlang/ziran
+          persist-credentials: false
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config python3-pil python3-numpy libssl-dev
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install the pinned Android SDK tools
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358' 'build-tools;36.0.0' 'platforms;android-36' 'cmake;3.22.1'
+      - name: Build the locked compiler
+        working-directory: ziranlang/ziran
+        run: |
+          env -u DISPLAY -u WAYLAND_DISPLAY make -j1
+          echo "$PWD/build/bin" >> "$GITHUB_PATH"
+      - name: Fetch only locked packages
+        run: ziran fetch --locked
+      - name: Verify release metadata
+        run: |
+          sh update_version.sh
+          git diff --exit-code -- version.json
+      - name: Build both ARM architectures in one Google Play bundle
+        run: python3 tools/build_android.py --bundle --abi universal
+      - name: Sign with the Apfelwurm upload key and verify
+        env:
+          KEYSTORE: ${{ secrets.WURM_ANDROID_KEYSTORE }}
+          PASSWORD: ${{ secrets.WURM_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE" && test -n "$PASSWORD"
+          curl --fail --show-error --location --retry 3 \
+            https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar \
+            --output "$RUNNER_TEMP/bundletool.jar"
+          umask 077
+          trap 'rm -f "$RUNNER_TEMP/wurm-release.p12" "$RUNNER_TEMP/wurm-password"' EXIT
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/wurm-release.p12"
+          printf '%s\n' "$PASSWORD" > "$RUNNER_TEMP/wurm-password"
+          python3 tools/android_release.py sign build/android/Apfelwurm-release-unsigned.aab \
+            --keystore "$RUNNER_TEMP/wurm-release.p12" --password-file "$RUNNER_TEMP/wurm-password" \
+            --bundletool "$RUNNER_TEMP/bundletool.jar"
+          cat backup/android-release/play-verification.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wurm-play-${{ steps.version.outputs.version }}
+          path: waozixyz/wurm/build/downloads/wurm-v${{ steps.version.outputs.version }}.aab
+          if-no-files-found: error
+          retention-days: 14

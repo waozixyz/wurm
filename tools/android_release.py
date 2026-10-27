@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sign and verify both Apfelwurm Android download names, as Shovey does."""
+"""Sign and verify both Apfelwurm Android download names and the Google Play bundle, as Shovey does."""
 import argparse
 import hashlib
 import json
@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +67,45 @@ def verify(apk):
                 sha256=hashlib.sha256(apk.read_bytes()).hexdigest(), certificate_sha256=expected)
 
 
+def verify_bundle(bundle, bundletool):
+    version = json.loads((ROOT / 'version.json').read_text())
+    subprocess.run(['java', '-jar', str(bundletool), 'validate', '--bundle=' + str(bundle)],
+                   check=True, stdout=subprocess.DEVNULL)
+    manifest = ET.fromstring(subprocess.check_output(['java', '-jar', str(bundletool), 'dump', 'manifest',
+                                                      '--bundle=' + str(bundle)], text=True))
+    android = '{http://schemas.android.com/apk/res/android}'
+    assert manifest.get('package') == 'xyz.waozi.wurm'
+    assert manifest.get(android + 'versionName') == version['version']
+    assert int(manifest.get(android + 'versionCode')) == version['version_code']
+    assert int(manifest.find('uses-sdk').get(android + 'targetSdkVersion')) >= 35, 'Google Play needs a current target SDK'
+    assert manifest.find('application').get(android + 'debuggable') != 'true', 'A debug bundle cannot be released'
+    environment = dict(os.environ, LC_ALL='C')
+    assert 'jar verified.' in subprocess.check_output(['jarsigner', '-verify', str(bundle)], text=True, env=environment)
+    certificate = subprocess.check_output(['openssl', 'x509', '-in', str(ROOT / 'packaging/android/certificate.pem'), '-outform', 'DER'])
+    expected = hashlib.sha256(certificate).hexdigest()
+    found = re.findall(r'SHA256:\s*([A-Fa-f0-9:]+)', subprocess.check_output(
+        ['keytool', '-printcert', '-jarfile', str(bundle)], text=True, env=environment))
+    assert found and {item.replace(':', '').lower() for item in found} == {expected}, 'Unexpected upload certificate'
+    with zipfile.ZipFile(bundle) as archive:
+        abis = sorted({name.split('/')[2] for name in archive.namelist() if re.fullmatch(r'base/lib/[^/]+/libmain\.so', name)})
+        assert abis == ['arm64-v8a', 'armeabi-v7a'], 'Both ARM architectures are required'
+        with tempfile.TemporaryDirectory(dir=ROOT / 'build') as directory:
+            for name in archive.namelist():
+                if not name.startswith('base/lib/arm64-v8a/') or not name.endswith('.so'):
+                    continue
+                library = Path(directory) / Path(name).name
+                library.write_bytes(archive.read(name))
+                headers = subprocess.check_output(['readelf', '-lW', str(library)], text=True)
+                loads = [line.split() for line in headers.splitlines() if line.strip().startswith('LOAD ')]
+                assert loads and all(int(parts[-1], 16) >= 16384 for parts in loads), 'Native libraries require 16 KB load alignment'
+        for name in ('title.png', 'title-portrait.png', 'stage-covers.png'):
+            assert archive.read('base/assets/assets/art/' + name) == (ROOT / 'assets/art' / name).read_bytes(), name
+        assert not any(name.startswith('base/assets/assets/campaign-levels/') for name in archive.namelist()), 'Personal campaign edits must stay private'
+        assert archive.read('base/assets/assets/entity.zx') == (ROOT / 'build/profile/entity.zx').read_bytes(), 'The shared Profile must be packaged'
+    return dict(version=version['version'], version_code=version['version_code'], package='xyz.waozi.wurm', abis=abis,
+                sha256=hashlib.sha256(bundle.read_bytes()).hexdigest(), certificate_sha256=expected)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('sign', 'verify'))
@@ -73,7 +113,32 @@ def main():
     parser.add_argument('--keystore', type=Path, default=ROOT / 'backup/android-signing/wurm-release.p12')
     parser.add_argument('--password-file', type=Path, default=ROOT / 'backup/android-signing/password')
     parser.add_argument('--output', type=Path, default=ROOT / 'build/downloads')
+    parser.add_argument('--bundletool', type=Path, help='Google bundletool JAR, required for .aab files')
     args = parser.parse_args()
+    if args.apk.suffix == '.aab':
+        assert args.bundletool, '--bundletool is required for a Google Play bundle'
+        bundle = args.apk.resolve(strict=True)
+        if args.action == 'sign':
+            args.output.mkdir(parents=True, exist_ok=True)
+            version = json.loads((ROOT / 'version.json').read_text())['version']
+            bundle = args.output / f'wurm-v{version}.aab'
+            temporary = args.output / 'wurm.new.aab'
+            try:
+                subprocess.run(['jarsigner', '-keystore', str(args.keystore.resolve(strict=True)),
+                                '-storepass:file', str(args.password_file.resolve(strict=True)),
+                                '-signedjar', str(temporary), str(args.apk.resolve(strict=True)), 'wurm'], check=True)
+                result = verify_bundle(temporary, args.bundletool.resolve(strict=True))
+                temporary.replace(bundle)
+            finally:
+                temporary.unlink(missing_ok=True)
+        else:
+            result = verify_bundle(bundle, args.bundletool.resolve(strict=True))
+        records = ROOT / 'backup/android-release'
+        records.mkdir(parents=True, exist_ok=True)
+        (records / 'play-verification.json').write_text(json.dumps(result, indent=2) + '\n')
+        print(f'Apfelwurm {result["version"]} ({result["version_code"]}): Google Play bundle identity, version, '
+              'both ARM architectures, upload signature, alignment and current assets verified.')
+        return
     if args.action == 'verify':
         verify(args.apk)
     else:

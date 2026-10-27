@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Apfelwurm's native debug APK, including its art, scores and levels."""
+"""Build Apfelwurm's native APK or Google Play bundle, including its art, scores and levels."""
 import argparse
 import json
 import os
@@ -23,6 +23,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--abi', choices=('arm64-v8a', 'armeabi-v7a', 'universal'), default='arm64-v8a')
     parser.add_argument('--release', action='store_true', help='build the unsigned production APK for signing')
+    parser.add_argument('--bundle', action='store_true',
+                        help='build the unsigned Google Play App Bundle, without Dew funding, for signing')
     parser.add_argument('--verification', action='store_true',
                         help='build a separate test install without replacing the normal game')
     args = parser.parse_args()
@@ -56,8 +58,10 @@ def main():
     # The account provider uses the same native cryptography on both ABIs.
     # These changes belong to this app's generated scaffold, never Kryon's.
     cmake = ROOT / 'droid/app/src/main/cpp/CMakeLists.txt'
-    text = cmake.read_text().replace('set(APP_ZIRAN_DEFINES --define ANDROID_BUILD)',
-        'set(APP_ZIRAN_DEFINES --define ANDROID_BUILD --define WURM_ACCOUNTS)')
+    # Google Play builds keep earning and spending Dew but offer no way to buy it.
+    defines = '--define ANDROID_BUILD --define WURM_ACCOUNTS' + (' --define GOOGLE_PLAY' if args.bundle else '')
+    text = re.sub(r'set\(APP_ZIRAN_DEFINES --define ANDROID_BUILD[^)]*\)', 'set(APP_ZIRAN_DEFINES ' + defines + ')',
+                  cmake.read_text(), count=1)
     text = text.split('\n# Apfelwurm account libraries\n')[0]
     text += f'''
 # Apfelwurm account libraries
@@ -95,7 +99,7 @@ target_link_libraries(main oqs)
     aapt = sdk / 'build-tools/36.0.0/aapt2'
     assert aapt.exists(), 'Install Android build-tools 36.0.0'
     abis = 'arm64-v8a,armeabi-v7a' if args.abi == 'universal' else args.abi
-    task = 'assembleRelease' if args.release else 'assembleDebug'
+    task = 'bundleRelease' if args.bundle else 'assembleRelease' if args.release else 'assembleDebug'
     command = ['sh', 'droid/gradlew', '-p', 'droid', '--no-daemon', '--max-workers=1', task,
                '-Pkryon.dir=' + str(kryon), '-Pziran.dir=' + str(ziran), '-Praylib.dir=' + str(raylib / 'src'),
                '-Papp.abis=' + abis, '-Papp.minSdk=21', '-Papp.codegen=c99',
@@ -103,6 +107,12 @@ target_link_libraries(main oqs)
     install_id = 'xyz.waozi.wurm.verification' if args.verification else 'xyz.waozi.wurm'
     command.append('-Papp.installId=' + install_id)
     subprocess.run(command, cwd=ROOT, env=environment, check=True)
+    if args.bundle:
+        target = ROOT / 'build/android/Apfelwurm-release-unsigned.aab'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / 'droid/app/build/outputs/bundle/release/app-release.aab', target)
+        print('Built ' + str(target))
+        return
     label = 'Apfelwurm-verification-' if args.verification else 'Apfelwurm-'
     variant = 'release' if args.release else 'debug'
     suffix = '-release-unsigned.apk' if args.release else '-debug.apk'
