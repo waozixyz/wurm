@@ -1,0 +1,129 @@
+Progress :: #import, file "../src/progress.zi";
+Wardrobe :: #import, file "../src/wardrobe.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+Controls :: #import, file "../src/controls.zi";
+File :: #import "std/file";
+#import "std/json_scan"
+#import "std/c_string"
+#import "std/text_buffer"
+#import "std/vec"
+owner: string;
+device :: "0123456789abcdef0123456789abcdef";
+alice :: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+bob :: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+remote: string;
+last_write: [8192]u8;
+last_owner: string;
+answer: [8192]u8;
+other_time: s64;
+writes: s32;
+Text :: (out: Vec(u8)) -> string {
+    text := BuilderFinish(out)
+    unused CopyCString(text, answer[:])
+    return TextUntilNul(answer[:])
+}
+#program_export
+WurmAccountService :: (name: string, request: string) -> string {
+    out: Vec(u8)
+    if name == "entity.game-shop" {
+        BuilderPrint(*out, "{\"device\":\"%\",\"owned\":0,\"status\":\"done\"}", device)
+        return Text(out)
+    }
+    if name != "entity.records" { return "" }
+    operation: [24]u8
+    unused ReadStringText(request, FieldAt(request, 0, "operation"), operation[:])
+    op := TextUntilNul(operation[:])
+    if op == "status" {
+        BuilderPrint(*out, "{\"status\":\"done\",\"account\":\"%\",\"sync\":\"synced\"}", owner)
+        return Text(out)
+    }
+    if op == "get" {
+        if remote == "" { return "{\"status\":\"missing\"}" }
+        BuilderPrint(*out, "{\"status\":\"done\",\"document\":%}", remote)
+        return Text(out)
+    }
+    if op == "put" {
+        writes += 1; last_owner = owner
+        unused CopyCString(request, last_write[:])
+        return "{\"status\":\"done\"}"
+    }
+    if op == "list" {
+        BuilderPrint(*out, "{\"status\":\"done\",\"records\":[{\"id\":\"ffffffffffffffffffffffffffffffff\",\"played_ms\":%,\"visited\":true}]}", other_time)
+        return Text(out)
+    }
+    return ""
+}
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: %\n", message); failures += 1 }
+}
+#program_export
+main :: () -> s32 {
+    unused File.CreateDirectory("build/account-test-data")
+    Expect(Custom.CustomSetRoot("build/account-test-data/"), "isolated account records")
+    owners: [3]string = .["", alice, bob]
+    names: [5]string = .["run.dat", "unlocked.dat", "completed.dat", "progress-pending.dat", "wardrobe.dat"]
+    for identity: owners {
+        for name: names {
+            path: Vec(u8)
+            BuilderPrint(*path, "build/account-test-data/%", identity)
+            if identity != "" { BuilderPrint(*path, ".") }
+            BuilderPrint(*path, "%", name)
+            unused File.RemoveFile(TextView(VecSlice(path, 0, path.count)))
+            VecFree(path)
+        }
+    }
+    owner = ""
+    Progress.Load()
+    Progress.Complete(99)
+    Expect(Progress.Completed(99), "guest progress is retained locally")
+    owner = alice
+    remote = "{\"game\":\"wurm\",\"unlocked\":4,\"completed\":\"101\"}"
+    Expect(Progress.Pump(10000), "account sign in reloads scoped progress")
+    Expect(Progress.Completed(0) && Progress.Completed(2) && !Progress.Completed(99), "remote marks merge without importing guest progress")
+    Expect(writes == 0, "signing in never publishes the guest save")
+    Expect(!Progress.Select(199), "future levels stay locked behind play")
+    unused Progress.Select(2)
+    Expect(!Progress.Completed(199) && !Progress.Completed(39), "selecting an unlocked level is not a completion")
+    Progress.Complete(39)
+    unused Progress.Pump(11000)
+    Expect(writes == 1 && last_owner == alice, "only an earned completion publishes to its original account")
+    record := TextUntilNul(last_write[:])
+    marks: [201]u8
+    unused ReadStringText(record, FieldAt(record, FieldAt(record, 0, "document"), "completed"), marks[:])
+    Expect(marks[39] == #char "1" && marks[199] == #char "0", "published progress records actual wins")
+    Progress.Complete(41)
+    Progress.loaded = false; Progress.dirty = false
+    Progress.Load()
+    Expect(Progress.dirty && Progress.Completed(41), "offline pending completion survives a process restart")
+    owner = bob
+    Progress.Complete(50)
+    Expect(!Progress.Completed(50), "an account switch cannot receive the previous account's win")
+    remote = "{\"game\":\"wurm\",\"unlocked\":2,\"completed\":\"1\"}"
+    Progress.poll_at = 0
+    Expect(Progress.Pump(20000), "switching accounts reloads the new account")
+    Expect(Progress.Completed(0) && !Progress.Completed(39) && !Progress.Completed(41), "completion masks stay isolated")
+    Expect(writes == 1, "switching does not publish dirty marks under another identity")
+    Wardrobe.Reset()
+    Wardrobe.played = 17999000
+    Wardrobe.Pump(21000, false)
+    Wardrobe.Pump(21500, true)
+    Expect(!Wardrobe.Available(4), "less than five hours does not unlock Night owl")
+    Wardrobe.Pump(22000, true)
+    Expect(Wardrobe.Available(4), "five active hours unlock Night owl")
+    elapsed := Wardrobe.played
+    Wardrobe.Pump(1000000, true)
+    Wardrobe.Pump(1000500, false)
+    Expect(Wardrobe.played == elapsed, "suspended and paused time does not count")
+    Expect(!Wardrobe.Available(5), "level 40 is still an earned cosmetic condition")
+    Progress.Complete(39)
+    Expect(Wardrobe.Available(5), "completing level 40 unlocks Golden apple")
+    Wardrobe.Visit()
+    Expect(Wardrobe.Available(6), "website visit unlocks Explorer")
+    Wardrobe.played = 1000; other_time = 17999000; Wardrobe.poll_at = 0
+    Wardrobe.Pump(2000000, false)
+    Expect(Wardrobe.Available(4), "playtime from different devices is added")
+    Expect(!Wardrobe.Available(1) && !Wardrobe.Available(2) && !Wardrobe.Available(3), "paid skins require confirmed ownership")
+    print("Account and wardrobe local test failures: %\n", failures)
+    return failures
+}

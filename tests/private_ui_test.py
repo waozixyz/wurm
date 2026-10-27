@@ -133,9 +133,9 @@ def main():
         from PIL import Image
         import numpy
         browser = numpy.asarray(Image.open(OUT / "editor-browser.png").convert("RGB"), dtype=int)
-        # The browser now uses the same pale garden surface as the game UI.
-        pale = float(((browser[:, :, 0] > 210) & (browser[:, :, 1] > 220)).mean())
-        assert pale > 0.5, f"browser surface is only {pale:.0%} pale"
+        # The editor browser shares the softer dark garden surface.
+        dark = float(((browser[:, :, 0] < 100) & (browser[:, :, 1] < 120)).mean())
+        assert dark > 0.5, f"browser surface is only {dark:.0%} dark"
 
         # All five landscapes are reachable from the same editor browser.
         for chapter in ('leafwood', 'pinewood', 'lake', 'mountains', 'meadow'):
@@ -183,7 +183,7 @@ def main():
         time.sleep(0.3)
         capture("editor-turned")
         turned = numpy.asarray(Image.open(OUT / "editor-turned.png").convert("RGB"), dtype=int)
-        side_columns = ((turned[100:500, 0:712, 0] > 220) & (turned[100:500, 0:712, 1] > 225)).mean(axis=0)
+        side_columns = ((turned[100:500, 0:712, 0] < 100) & (turned[100:500, 0:712, 1] < 120)).mean(axis=0)
         assert (side_columns > 0.9).sum() > 100, "the canvas board did not stand up"
         pointer(813, 269)  # Stone brush.
         pointer(223, 537)  # Portrait cell (5, 35), beyond landscape rows.
@@ -205,7 +205,7 @@ def main():
         print("Private UI local test played the standing level, opened the editor with E, browsed the Meadow levels and edited one.")
 
         # A portrait window proves the mobile-first layout: WURM_WINDOW sizes
-        # the second launch, the cream status bar stays on top and the board
+        # the second launch, the themed status bar stays on top and the board
         # letterboxes below it.
         stop(app)
         env.update(WURM_WINDOW="480x700")
@@ -238,7 +238,7 @@ def main():
         assert picture.size == (480, 700), picture.size
         top = picture.crop((0, 0, 480, 42))
         top_green = sum(channel * count for channel, count in enumerate(top.histogram()[256:512]))
-        assert top_green > 480 * 42 * 90, "the status bar did not render across the top"
+        assert 480 * 42 * 40 < top_green < 480 * 42 * 130, "the themed status bar did not render across the top"
         board = picture.crop((0, 42, 480, 698))
         # The turned board fills the portrait width edge to edge: a green
         # field taller than wide with no black bars at the sides.
@@ -351,14 +351,13 @@ def main():
             assert (level_directory / "run.dat").read_bytes() == bytes([0, 3, 0, 0, 0, 0]), "Play did not start from level one"
             assert (level_directory / "unlocked.dat").read_bytes() == bytes([57]), "Play erased unlocked progress"
             key("space", "q")
-            pointer(width - 82, 40)  # Choose level.
+            key("l")  # Choose level.
             capture(f"levels-{width}x{height}")
-            # Leafwood is the latest unlocked landscape. Future Pinewood
-            # cards are visible but disabled, including their picture area.
+            # Future Pinewood cards show only a lock and cannot start.
             pointer(width - 36, 96)
-            columns = min(8, max(2, int((width - 24) / 112)))
-            card_width = (width - 40 - (columns - 1) * 10) / columns
-            card_height = max(148, (card_width - 16) * .75 + 58)
+            columns = 2 if width - 24 < 560 else 3 if width - 24 < 900 else 4
+            card_width = (width - 40 - (columns - 1) * 12) / columns
+            card_height = (card_width - 16) * (4 / 3 if height > width else .75) + 44
             pointer(round(12 + card_width / 2), round(132 + card_height / 2))
             assert (level_directory / "run.dat").read_bytes()[0] == 0, "a locked level started"
             capture(f"levels-locked-{width}x{height}")

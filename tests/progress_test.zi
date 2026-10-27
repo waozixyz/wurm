@@ -14,6 +14,8 @@ Clear :: () {
     unused File.RemoveFile("build/progress-test-data/journey.dat")
     unused File.RemoveFile("build/progress-test-data/run.dat")
     unused File.RemoveFile("build/progress-test-data/unlocked.dat")
+    unused File.RemoveFile("build/progress-test-data/completed.dat")
+    unused File.RemoveFile("build/progress-test-data/progress-pending.dat")
     Reopen()
 }
 
@@ -52,7 +54,7 @@ main :: () -> s32 {
     Expect(Progress.Begin(4, 2, 11), "replaying earlier levels")
     Reopen(); Progress.Load()
     Expect(Progress.unlocked == 58 && Progress.level == 4 && Progress.lives == 2 && Progress.score == 11, "an earlier run cannot reduce unlocked progress")
-    Expect(!Progress.Select(59) && !Progress.Select(-1), "locked levels cannot be selected")
+    Expect(!Progress.Select(59) && !Progress.Select(-1) && !Progress.Select(200), "future levels stay locked without Dew")
     Expect(Progress.Select(7) && Progress.level == 7 && Progress.lives == 3 && Progress.score == 0 && Progress.unlocked == 58, "an unlocked level starts fresh without reducing progress")
     Expect(Progress.Begin(199, 300, 4000), "save the last level")
     Reopen(); Progress.Load()

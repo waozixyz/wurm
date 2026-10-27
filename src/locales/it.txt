@@ -1,3 +1,123 @@
 [wurm_back]
 Indietro
 ---
+[wurm_ui_0]
+Indietro
+---
+[wurm_ui_1]
+Profilo
+---
+[wurm_ui_2]
+Impostazioni
+---
+[wurm_ui_3]
+Negozio di aspetti
+---
+[wurm_ui_4]
+Un piccolo cambio di personaggio.
+---
+[wurm_ui_5]
+Aspetto
+---
+[wurm_ui_6]
+Colori tenui per la tua avventura.
+---
+[wurm_ui_7]
+Tramonto
+---
+[wurm_ui_8]
+Foresta
+---
+[wurm_ui_9]
+Salvia
+---
+[wurm_ui_10]
+Comandi
+---
+[wurm_ui_11]
+Scorri
+---
+[wurm_ui_12]
+Pad direzionale
+---
+[wurm_ui_13]
+Audio
+---
+[wurm_ui_14]
+Attivo
+---
+[wurm_ui_15]
+Disattivo
+---
+[wurm_ui_16]
+Menta
+---
+[wurm_ui_17]
+Bacca
+---
+[wurm_ui_18]
+Rosa
+---
+[wurm_ui_19]
+Nottambulo
+---
+[wurm_ui_20]
+Mela d’oro
+---
+[wurm_ui_21]
+Esploratore
+---
+[wurm_ui_22]
+Il tuo primo compagno
+---
+[wurm_ui_23]
+Gioca per 5 ore
+---
+[wurm_ui_24]
+Completa il livello 40
+---
+[wurm_ui_25]
+Visita waozi.xyz
+---
+[wurm_ui_26]
+In uso
+---
+[wurm_ui_27]
+Indossa
+---
+[wurm_ui_28]
+Acquista
+---
+[wurm_ui_29]
+Visita
+---
+[wurm_ui_30]
+Bloccato
+---
+[wurm_ui_31]
+Annulla
+---
+[wurm_ui_32]
+Accedi
+---
+[wurm_ui_33]
+Attendi…
+---
+[wurm_ui_34]
+Conferma acquisto
+---
+[wurm_ui_35]
+Acquisto non confermato. Controlla i Dew e riprova.
+---
+[wurm_ui_36]
+Completa i livelli per sbloccarne altri
+---
+[wurm_ui_37]
+Disponibile
+---
+[wurm_ui_38]
+Completato
+---
+[wurm_ui_39]
+Scegli livello
+---

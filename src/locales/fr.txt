@@ -1,3 +1,123 @@
 [wurm_back]
 Retour
 ---
+[wurm_ui_0]
+Retour
+---
+[wurm_ui_1]
+Profil
+---
+[wurm_ui_2]
+Réglages
+---
+[wurm_ui_3]
+Boutique de styles
+---
+[wurm_ui_4]
+Un petit changement de personnage.
+---
+[wurm_ui_5]
+Apparence
+---
+[wurm_ui_6]
+Des couleurs douces pour votre aventure.
+---
+[wurm_ui_7]
+Crépuscule
+---
+[wurm_ui_8]
+Forêt
+---
+[wurm_ui_9]
+Sauge
+---
+[wurm_ui_10]
+Commandes
+---
+[wurm_ui_11]
+Glisser
+---
+[wurm_ui_12]
+Croix directionnelle
+---
+[wurm_ui_13]
+Son
+---
+[wurm_ui_14]
+Activé
+---
+[wurm_ui_15]
+Désactivé
+---
+[wurm_ui_16]
+Menthe
+---
+[wurm_ui_17]
+Baie
+---
+[wurm_ui_18]
+Rose
+---
+[wurm_ui_19]
+Oiseau de nuit
+---
+[wurm_ui_20]
+Pomme d’or
+---
+[wurm_ui_21]
+Explorateur
+---
+[wurm_ui_22]
+Votre premier compagnon
+---
+[wurm_ui_23]
+Jouez pendant 5 h
+---
+[wurm_ui_24]
+Terminez le niveau 40
+---
+[wurm_ui_25]
+Visitez waozi.xyz
+---
+[wurm_ui_26]
+Équipé
+---
+[wurm_ui_27]
+Équiper
+---
+[wurm_ui_28]
+Acheter
+---
+[wurm_ui_29]
+Visiter
+---
+[wurm_ui_30]
+Verrouillé
+---
+[wurm_ui_31]
+Annuler
+---
+[wurm_ui_32]
+Se connecter
+---
+[wurm_ui_33]
+Patientez…
+---
+[wurm_ui_34]
+Confirmer l’achat
+---
+[wurm_ui_35]
+Achat non confirmé. Vérifiez vos Dew et réessayez.
+---
+[wurm_ui_36]
+Terminez des niveaux pour en débloquer
+---
+[wurm_ui_37]
+Disponible
+---
+[wurm_ui_38]
+Terminé
+---
+[wurm_ui_39]
+Choisir un niveau
+---

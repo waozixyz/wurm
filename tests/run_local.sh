@@ -15,6 +15,7 @@ fi
 python3 tests/recovery_test.py "${1:-/mnt/storage/Games/The-Worm_Win_EN}"
 python3 tools/design_levels.py --check
 python3 tests/campaign_design_test.py
+python3 tools/locales.py --check
 python3 tools/make_art.py --check
 python3 tools/render_previews.py --check
 ziran check $lock
@@ -26,6 +27,8 @@ ziran build $lock --project --root tests --target=c --entry campaign_replay:main
 build/campaign-replay/campaign_replay
 ziran build $lock --project --root tests --target=c --entry progress_test:main --exe -o build/progress-test tests/progress_test.zi
 build/progress-test/progress_test
+ziran build $lock --project --root tests --define WURM_ACCOUNT_TEST --target=c --entry account_test:main --exe -o build/account-test tests/account_test.zi
+build/account-test/account_test
 ziran build $lock --project --root tests --target=c --entry editor_test:main --exe -o build/editor-test tests/editor_test.zi
 build/editor-test/editor_test
 ziran build $lock --project --root tests --target=c --entry level_probe:main --exe -o build/level-probe tests/level_probe.zi

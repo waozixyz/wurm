@@ -24,6 +24,14 @@
 #import "kryon/direction_pad";
 Controls :: #import, file "controls.zi";
 Progress :: #import, file "progress.zi";
+Appearance :: #import, file "appearance.zi";
+Account :: #import, file "account.zi";
+Wardrobe :: #import, file "wardrobe.zi";
+Locale :: #import, file "localization.zi";
+#import "kryon/widget_palette"
+#import "std/json_scan"
+#import "entity/dew_model"
+ShopModel :: #import "entity/game_shop";
 FingerSwipe :: #import "mingcute/mingcute_filled_finger_swipe";
 Touch :: #import, file "steering.zi";
 #import "kryon/svg_icon_props"
@@ -31,6 +39,10 @@ Touch :: #import, file "steering.zi";
 HeartIcon :: #import "mingcute/mingcute_filled_heart";
 AppleIcon :: #import "mingcute/mingcute_filled_apple_fruit";
 StarIcon :: #import "mingcute/mingcute_filled_star";
+ProfileIcon :: #import "mingcute/mingcute_regular_user_4";
+DewIcon :: #import "mingcute/mingcute_filled_drop";
+LockIcon :: #import "mingcute/mingcute_filled_lock";
+MoonIcon :: #import "mingcute/mingcute_filled_moon";
 Input :: #import "kryon/input_protocol";
 #if #defined(WURM_PORTABLE) {
     Timer :: #import "portable_runtime";
@@ -68,6 +80,7 @@ Custom :: #import, file "custom_levels.zi";
     ART_TITLE :: "assets/wurm/art/title.png";
     ART_TITLE_PORTRAIT :: "assets/wurm/art/title-portrait.png";
     ART_PREVIEWS :: "assets/wurm/art/campaign-previews/";
+    ART_GROUND :: "assets/wurm/art/ground-meadow.png";
 } else {
     ART_MEADOW :: "assets/art/campaign-meadow.png";
     ART_LEAFWOOD :: "assets/art/campaign-leafwood.png";
@@ -79,6 +92,7 @@ Custom :: #import, file "custom_levels.zi";
     ART_TITLE :: "assets/art/title.png";
     ART_TITLE_PORTRAIT :: "assets/art/title-portrait.png";
     ART_PREVIEWS :: "assets/art/campaign-previews/";
+    ART_GROUND :: "assets/art/ground-meadow.png";
 }
 
 PLAY_STEERING_KEY :: 100000;
@@ -166,52 +180,15 @@ Picture :: (session: Session, key: u64, asset: string, bounds: Rectangle, source
 }
 
 TextLine :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32) {
-    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = text,
+    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = Locale.Text(text),
         .font = size, .wrap = TextWrap.TextWrapNone})
 }
 
 CentreText :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32) {
-    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = text,
+    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = Locale.Text(text),
         .font = size, .align = TextAlign.TextAlignCenter})
 }
 
-#if !#defined(WURM_PORTABLE) {
-// A single visual language for the title, HUD and every dialog. These are
-// ordinary Kryon style rules, shared by desktop and Android.
-styles_ready: bool;
-GameSelector :: (kind: s32, class_name: s32 = 0) -> StyleSelector {
-    return StyleSelector.{.kind = kind, .class_name = class_name, .role = -1,
-        .tone = -1, .emphasis = -1, .size = -1, .state = -1, .validation = -1,
-        .orientation = -1, .placement = -1}
-}
-GameStyles :: () {
-    if styles_ready { return }
-    rules := ActiveStyleRules()
-    at := rules.count
-    rules.items[at] = StyleRule.{.selector = GameSelector(StyleKindText()),
-        .style = StyleData.{.fields = 2, .foreground = 0x244734FF}}
-    rules.items[at + 1] = StyleRule.{.selector = GameSelector(StyleKindText(), 2),
-        .style = StyleData.{.fields = 2, .foreground = 0x596D54FF}}
-    rules.items[at + 2] = StyleRule.{.selector = GameSelector(StyleKindButton()),
-        .style = StyleData.{.fields = 1040, .font_size = 16.0, .radius = 16.0}}
-    // Filled and quiet actions keep readable contrast in every host theme.
-    rules.items[at + 3] = StyleRule.{.selector = GameSelector(StyleKindButton(), 10),
-        .style = StyleData.{.fields = 1079, .background = 0x326A45FF, .foreground = 0xFFF9E9FF,
-            .border = 0x265437FF, .border_width = 2.0, .radius = 24.0, .font_size = 21.0}}
-    rules.items[at + 4] = StyleRule.{.selector = GameSelector(StyleKindButton(), 11),
-        .style = StyleData.{.fields = 1079, .background = 0xE8EEDAFF, .foreground = 0x31533EFF,
-            .border = 0xD5DFC4FF, .border_width = 1.0, .radius = 20.0, .font_size = 17.0}}
-    rules.items[at + 5] = StyleRule.{.selector = GameSelector(StyleKindButton(), 13),
-        .style = StyleData.{.fields = 1079, .background = 0xF5CE64FF, .foreground = 0x274734FF,
-            .border = 0xD8AE4BFF, .border_width = 2.0, .radius = 30.0, .font_size = 22.0}}
-    rules.items[at + 6] = StyleRule.{.selector = GameSelector(StyleKindButton(), 14),
-        .style = StyleData.{.fields = 3639,
-            .background = 0xFFFAEAFF, .foreground = 0x244734FF, .border = 0x508658FF,
-            .border_width = 1.0, .radius = 12.0, .font_size = 17.0, .icon_size = 80.0, .gap = 6.0}}
-    rules.count = at + 7
-    styles_ready = InstallStyleRules(rules)
-}
-}
 
 GamePointer :: (session: Session) -> Input.PointerFrame {
     #if #defined(WURM_PORTABLE) {
@@ -238,9 +215,248 @@ NavigateBack :: (now: s64) -> bool {
 }
 GameText :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32, muted: bool = false,
              centre: bool = false) {
-    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = text, .font = size,
+    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = Locale.Text(text), .font = size,
         .class_name = ifx muted then 2 else 0, .align = ifx centre then TextAlign.TextAlignCenter else TextAlign.TextAlignStart,
         .wrap = TextWrap.TextWrapNone})
+}
+
+sound_loaded: bool;
+preferences_dirty: bool;
+preferences_poll: s64;
+PreferencesChanged :: () { preferences_dirty = true; preferences_poll = 0 }
+PreferencesPump :: (now: s64) {
+    if now < preferences_poll || Progress.owner[0] == 0 { return }
+    preferences_poll = now + 5000
+    if preferences_dirty {
+        out: Vec(u8)
+        BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"wurm-settings\",\"id\":\"00000000000000000000000000000001\",\"schema\":\"wurm.settings.v1\",\"document\":{\"theme\":%,\"pad\":%,\"muted\":%,\"skin\":%}}",
+            Appearance.mode, Controls.Pad(), Audio.muted, Wardrobe.skin)
+        answer := Account.Service("entity.records", TextView(VecSlice(out, 0, out.count)))
+        done: [16]u8
+        preferences_dirty = ReadStringText(answer, FieldAt(answer, 0, "status"), done[:]) < 0 || TextUntilNul(done[:]) != "done"
+        VecFree(out)
+        return
+    }
+    reply := Account.Service("entity.records", "{\"operation\":\"get\",\"kind\":\"wurm-settings\",\"id\":\"00000000000000000000000000000001\"}")
+    document := FieldAt(reply, 0, "document")
+    if document < 0 { return }
+    theme := ReadNumber(reply, FieldAt(reply, document, "theme"))
+    if theme.valid && theme.value >= 0.0 && theme.value <= 2.0 && theme.value == cast(float64)cast(s32)theme.value &&
+    cast(s32)theme.value != Appearance.mode { Appearance.Set(cast(s32)theme.value) }
+    pad := FieldAt(reply, document, "pad")
+    if pad >= 0 && (reply[pad] == #char "t" || reply[pad] == #char "f") {
+        desired := reply[pad] == #char "t"
+        if !Controls.Chosen() || Controls.Pad() != desired { unused Controls.SetPad(desired) }
+    }
+    sound := FieldAt(reply, document, "muted")
+    if sound >= 0 && (reply[sound] == #char "t" || reply[sound] == #char "f") &&
+    Audio.muted != (reply[sound] == #char "t") { Audio.ToggleMute() }
+    chosen := ReadNumber(reply, FieldAt(reply, document, "skin"))
+    if chosen.valid && chosen.value >= 0.0 && chosen.value <= 6.0 && chosen.value == cast(float64)cast(s32)chosen.value &&
+    Wardrobe.Available(cast(s32)chosen.value) {
+        Wardrobe.skin = cast(s32)chosen.value
+        Wardrobe.Save()
+    }
+}
+LoadSound :: () {
+    if sound_loaded { return }
+    sound_loaded = true
+    bytes: [2]u8
+    if Controls.ReadRecord("sound.dat", bytes[:]) == 1 && bytes[0] == 1 && !Audio.muted { Audio.ToggleMute() }
+}
+ToggleSound :: () {
+    LoadSound()
+    Audio.ToggleMute()
+    bytes: [1]u8 = .[ifx Audio.muted then cast(u8)1 else cast(u8)0]
+    unused Controls.WriteRecord("sound.dat", bytes[:])
+    PreferencesChanged()
+}
+dew_text: [32]u8;
+skin_price_text: [64]u8;
+SkinPriceText :: (id: s32) -> string {
+    digits: [32]u8
+    if !DewFormat(ShopModel.GameShopPrice(id), DewUnits, digits[:]) { return "" }
+    at := CopyInto(skin_price_text[:], 0, TextUntilNul(digits[:]))
+    at = CopyInto(skin_price_text[:], at, " Dew")
+    skin_price_text[at] = 0
+    return TextUntilNul(skin_price_text[:])
+}
+DewText :: () -> string {
+    reply := Account.Service("entity.dew", "balance")
+    units := ReadNumber(reply, FieldAt(reply, 0, "units"))
+    if units.valid && units.value < 0.0 { return "…" }
+    value := ifx units.valid && units.value >= 0.0 then cast(s64)units.value else cast(s64)0
+    if !DewFormat(value, DewUnits, dew_text[:]) { return "0" }
+    return TextUntilNul(dew_text[:])
+}
+TitleActions :: (session: Session, area: Rectangle) {
+    right := area.x + area.width - 12.0
+    top := area.y + 12.0
+    if Button(session, ButtonProps.{.key = 28000, .bounds = Rectangle.{right - 220.0, top, 44.0, 44.0},
+            .label = Locale.Text("Skin shop"), .icon_only = true, .icon_shape = "S1.8rr:M5 8H19L20 21H4ZM8 8V6C8 1 16 1 16 6V8",
+            .class_name = 11}) != 0 { game.mode = MODE_SHOP; Wardrobe.poll_at = 0; unused Account.Service("entity.game-shop", "refresh") }
+    if Button(session, ButtonProps.{.key = 28001, .bounds = Rectangle.{right - 168.0, top, 68.0, 44.0},
+            .label = DewText(), .icon_shape = DewIcon.Shape,
+            .class_name = 11}) != 0 { Account.OpenProfile() }
+    if Button(session, ButtonProps.{.key = 28002, .bounds = Rectangle.{right - 92.0, top, 44.0, 44.0},
+            .label = Locale.Text("Profile"), .icon_only = true, .icon_shape = ProfileIcon.Shape,
+            .class_name = 11}) != 0 { Account.OpenProfile() }
+    if Button(session, ButtonProps.{.key = 28003, .bounds = Rectangle.{right - 44.0, top, 44.0, 44.0},
+            .label = Locale.Text("Settings"), .icon_only = true, .icon_shape = "S1.8rr:M4 6H20M4 12H20M4 18H20M8 3V9M16 9V15M10 15V21",
+            .class_name = 11}) != 0 { game.mode = MODE_SETTINGS }
+}
+PageHeading :: (session: Session, area: Rectangle, title: string) {
+    unused Box(session, BoxProps.{.key = 28100, .bounds = area, .fill = Appearance.Canvas()})
+    GameText(session, 28101, title, Rectangle.{area.x + 108.0, area.y + 18.0, area.width - 124.0, 32.0}, 24)
+    if Button(session, ButtonProps.{.key = 28102, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 84.0, 44.0},
+            .label = Locale.Text("Back"), .class_name = 11}) != 0 { game.mode = MODE_STAGES; buy_skin = 0 }
+}
+settings_scroll: s32;
+DrawSettings :: (session: Session, area: Rectangle) {
+    PageHeading(session, area, "Settings")
+    width := area.width - 32.0
+    if width > 540.0 { width = 540.0 }
+    scroller := Scroll(session, ScrollProps.{.key = 28200,
+        .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + 76.0, width, area.height - 88.0},
+        .content_height = 370, .scroll_offset = settings_scroll})
+    settings_scroll = scroller.scroll_offset
+    if !scroller.opened { return }
+    x := scroller.content.x; y := scroller.content.y; width = scroller.content.width
+    GameText(session, 28201, "Appearance", Rectangle.{x, y, width, 28.0}, 20)
+    GameText(session, 28202, "Softer colours for your apple adventure.", Rectangle.{x, y + 32.0, width, 24.0}, 14, true)
+    button_width := (width - 16.0) / 3.0
+    for mode: 0..2 {
+        label := ifx mode == 0 then "Dusk" else ifx mode == 1 then "Forest" else "Sage"
+        if Button(session, ButtonProps.{.key = 28210 + cast(u64)mode,
+                .bounds = Rectangle.{x + cast(float32)mode * (button_width + 8.0), y + 70.0, button_width, 52.0},
+                .label = Locale.Text(label), .selected = Appearance.mode == mode, .class_name = 11}) != 0 { Appearance.Set(cast(s32)mode); PreferencesChanged() }
+    }
+    GameText(session, 28220, "Controls", Rectangle.{x, y + 150.0, width, 28.0}, 20)
+    half := (width - 8.0) / 2.0
+    if Button(session, ButtonProps.{.key = 28221, .bounds = Rectangle.{x, y + 188.0, half, 52.0},
+            .label = Locale.Text("Swipe"), .selected = !Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(false); PreferencesChanged() }
+    if Button(session, ButtonProps.{.key = 28222, .bounds = Rectangle.{x + half + 8.0, y + 188.0, half, 52.0},
+            .label = Locale.Text("Direction pad"), .selected = Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(true); PreferencesChanged() }
+    GameText(session, 28230, "Sound", Rectangle.{x, y + 270.0, width - 104.0, 32.0}, 20)
+    if Button(session, ButtonProps.{.key = 28231, .bounds = Rectangle.{x + width - 100.0, y + 260.0, 100.0, 52.0},
+            .label = Locale.Text(ifx Audio.muted then "Off" else "On"), .selected = !Audio.muted, .class_name = 11}) != 0 { ToggleSound() }
+    unused End(session)
+}
+
+SkinName :: (id: s32) -> string {
+    if id == 1 { return "Mint" }
+    if id == 2 { return "Berry" }
+    if id == 3 { return "Rose" }
+    if id == 4 { return "Night owl" }
+    if id == 5 { return "Golden apple" }
+    if id == 6 { return "Explorer" }
+    return "Apfelwurm"
+}
+SkinColor :: (id: s32) -> Color {
+    if id == 1 { return Color.{94, 192, 151, 255} }
+    if id == 2 { return Color.{154, 119, 207, 255} }
+    if id == 3 { return Color.{221, 133, 151, 255} }
+    if id == 4 { return Color.{107, 139, 199, 255} }
+    if id == 5 { return Color.{227, 185, 80, 255} }
+    if id == 6 { return Color.{135, 173, 91, 255} }
+    return Color.{236, 151, 67, 255}
+}
+CharacterPreview :: (session: Session, key: u64, bounds: Rectangle, id: s32) {
+    for segment: 0..2 {
+        size := 21.0 + cast(float32)segment * 4.0
+        x := bounds.x + cast(float32)segment * 16.0
+        y := bounds.y + 22.0 - cast(float32)segment * 5.0
+        Character(session, key + cast(u64)segment * 8, Rectangle.{x, y, size, size}, id, false)
+    }
+    Character(session, key + 24, Rectangle.{bounds.x + 43.0, bounds.y + 1.0, 42.0, 42.0}, id, true, 1)
+}
+Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool, direction: s32 = 2) {
+    size := bounds.width
+    if bounds.height < size { size = bounds.height }
+    unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = SkinColor(id), .radius = size / 2.0,
+        .border = Color.{30, 48, 35, 100}})
+    if !head { return }
+    dx: float32 = ifx direction == 0 then -1.0 else ifx direction == 2 then 1.0 else 0.0
+    dy: float32 = ifx direction == 1 then -1.0 else ifx direction == 3 then 1.0 else 0.0
+    cx := bounds.x + bounds.width / 2.0 + dx * size * 0.14
+    cy := bounds.y + bounds.height / 2.0 + dy * size * 0.14
+    eye := size * 0.18
+    for side: 0..1 {
+        sign: float32 = ifx side == 0 then -1.0 else 1.0
+        x := cx - dy * size * 0.2 * sign - eye / 2.0
+        y := cy + dx * size * 0.2 * sign - eye / 2.0
+        unused Box(session, BoxProps.{.key = key + 1 + cast(u64)side, .bounds = Rectangle.{x, y, eye, eye},
+            .fill = Color.{246, 244, 223, 255}, .radius = eye / 2.0})
+        unused Box(session, BoxProps.{.key = key + 3 + cast(u64)side,
+            .bounds = Rectangle.{x + eye * 0.3, y + eye * 0.3, eye * 0.5, eye * 0.5},
+            .fill = Color.{28, 44, 35, 255}, .radius = eye / 2.0})
+    }
+    if id >= 4 {
+        shape := ifx id == 4 then MoonIcon.Shape else ifx id == 5 then StarIcon.Shape else "S2rr:M3 19L9 5L15 15L18 10L22 19Z"
+        SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{bounds.x + size * 0.3, bounds.y - size * 0.18, size * 0.4, size * 0.4},
+            .shape = shape, .color = Color.{249, 229, 157, 255}})
+    }
+}
+shop_scroll: s32;
+buy_skin: s32;
+DrawShop :: (session: Session, area: Rectangle) {
+    PageHeading(session, area, "Skin shop")
+    GameText(session, 28300, "A little change of character.", Rectangle.{area.x + 16.0, area.y + 68.0, area.width - 32.0, 24.0}, 15, true)
+    if buy_skin > 0 {
+        id := buy_skin
+        width := area.width - 32.0
+        if width > 360.0 { width = 360.0 }
+        x := area.x + (area.width - width) / 2.0; y := area.y + 112.0
+        Character(session, 28310, Rectangle.{x + width / 2.0 - 26.0, y, 52.0, 52.0}, id, true)
+        GameText(session, 28311, SkinName(id), Rectangle.{x, y + 68.0, width, 28.0}, 22, false, true)
+        price := SkinPriceText(id)
+        GameText(session, 28312, price, Rectangle.{x, y + 106.0, width, 24.0}, 18, false, true)
+        pending := TextUntilNul(Wardrobe.status[:]) == "pending"
+        signin := Progress.owner[0] == 0 || TextUntilNul(Wardrobe.status[:]) == "signin"
+        if Wardrobe.Available(id) { buy_skin = 0; Wardrobe.Select(id); PreferencesChanged(); return }
+        if Button(session, ButtonProps.{.key = 28313, .bounds = Rectangle.{x, y + 150.0, width, 48.0},
+                .label = Locale.Text(ifx signin then "Sign in" else ifx pending then "Please wait…" else "Confirm purchase"),
+                .disabled = pending && !signin, .class_name = 10}) != 0 {
+            if signin { Account.OpenProfile() }
+            else {
+                product := ifx id == 1 then "wurm.mint" else ifx id == 2 then "wurm.berry" else "wurm.rose"
+                unused Account.Service("entity.game-shop", product)
+                Wardrobe.poll_at = 0
+            }
+        }
+        if Button(session, ButtonProps.{.key = 28314, .bounds = Rectangle.{x, y + 210.0, width, 44.0}, .label = Locale.Text("Cancel"), .class_name = 11}) != 0 { buy_skin = 0 }
+        failed := TextUntilNul(Wardrobe.status[:]) == "failed" || TextUntilNul(Wardrobe.status[:]) == "insufficient"
+        if failed { GameText(session, 28315, "Purchase not confirmed. Check your Dew and retry.", Rectangle.{x, y + 264.0, width, 24.0}, 12, true, true) }
+        Wardrobe.poll_at = 0
+        return
+    }
+    grid := Rectangle.{area.x + 16.0, area.y + 108.0, area.width - 32.0, area.height - 120.0}
+    columns: s32 = ifx grid.width >= 650.0 then 3 else 2
+    width := (grid.width - 16.0 - cast(float32)(columns - 1) * 12.0) / cast(float32)columns
+    rows := (7 + columns - 1) / columns
+    scroller := Scroll(session, ScrollProps.{.key = 28400, .bounds = grid, .content_height = rows * 196, .scroll_offset = shop_scroll})
+    shop_scroll = scroller.scroll_offset
+    if !scroller.opened { return }
+    for id: 0..6 {
+        x := scroller.content.x + cast(float32)(id % columns) * (width + 12.0)
+        y := scroller.content.y + cast(float32)(id / columns) * 196.0
+        key := cast(u64)28500 + cast(u64)id * 100
+        unused Box(session, BoxProps.{.key = key, .bounds = Rectangle.{x, y, width, 184.0}, .fill = Appearance.Surface(), .radius = 16.0})
+        CharacterPreview(session, key + 20, Rectangle.{x + width / 2.0 - 42.0, y + 10.0, 84.0, 50.0}, cast(s32)id)
+        GameText(session, key + 8, SkinName(cast(s32)id), Rectangle.{x + 4.0, y + 68.0, width - 8.0, 24.0}, 17, false, true)
+        available := Wardrobe.Available(cast(s32)id)
+        detail := ifx id == 0 then "Your first companion" else ifx id <= 3 then SkinPriceText(cast(s32)id) else ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Complete level 40" else "Visit waozi.xyz"
+        GameText(session, key + 9, detail, Rectangle.{x + 4.0, y + 99.0, width - 8.0, 22.0}, 12, true, true)
+        label := ifx Wardrobe.skin == id then "Wearing" else ifx available then "Wear" else ifx id <= 3 then "Buy" else ifx id == 6 then "Visit" else "Locked"
+        if Button(session, ButtonProps.{.key = key + 10, .bounds = Rectangle.{x + 10.0, y + 132.0, width - 20.0, 42.0},
+                .label = Locale.Text(label), .disabled = Wardrobe.skin == id || (!available && (id == 4 || id == 5)),
+                .selected = Wardrobe.skin == id, .class_name = 11}) != 0 {
+            if available { Wardrobe.Select(cast(s32)id); PreferencesChanged() }
+            else if id <= 3 { buy_skin = cast(s32)id }
+            else if id == 6 && Account.VisitWebsite() { Wardrobe.Visit(); Wardrobe.Select(6); PreferencesChanged() }
+        }
+    }
+    unused End(session)
 }
 
 // Pause, game over and completion use the same roomy card, with full-width
@@ -258,13 +474,13 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
         .bounds = Rectangle.{card.x, card.y + 6.0, card.width, card.height},
         .fill = Color.{10, 30, 18, 70}, .radius = 28.0})
     unused Box(session, BoxProps.{.key = 52, .bounds = card,
-        .fill = Color.{255, 250, 234, 255}, .border = Color.{218, 225, 198, 255}, .radius = 28.0})
+        .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 28.0})
     title_y: float32 = ifx compact then 22.0 else 86.0
     if !compact {
         centre := card.x + card.width / 2.0
         unused Box(session, BoxProps.{.key = 53,
             .bounds = Rectangle.{centre - 27.0, card.y + 22.0, 54.0, 54.0},
-            .fill = Color.{231, 237, 208, 255}, .radius = 27.0})
+            .fill = Appearance.Canvas(), .radius = 27.0})
         shape := "F:M7 5H10V19H7ZM14 5H17V19H14Z"
         color := Color.{65, 113, 68, 255}
         if game.mode == MODE_DIED { shape = HeartIcon.Shape; color = Color.{213, 95, 89, 255} }
@@ -293,11 +509,11 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     if game.mode == MODE_PAUSED {
         if Button(session, ButtonProps.{.key = 61,
                 .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 120.0, card.width - 40.0, 48.0},
-                .label = "Controls", .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { AskControls() }
+                .label = Locale.Text("Controls"), .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { AskControls() }
     }
     if Button(session, ButtonProps.{.key = 58,
             .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 60.0, card.width - 40.0, 48.0},
-            .label = "Back to title", .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { LeavePlay() }
+            .label = Locale.Text("Back to title"), .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { LeavePlay() }
 }
 
 // A logical-pixel sprite square on the live board.
@@ -325,8 +541,10 @@ Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source
         source.y + (clipped_top - top) / height * source.height,
         (clipped_right - clipped_left) / width * source.width,
         (clipped_bottom - clipped_top) / height * source.height}
-    Picture(session, key, sheet,
-        Rectangle.{clipped_left, clipped_top, clipped_right - clipped_left, clipped_bottom - clipped_top}, fragment)
+    bounds := Rectangle.{clipped_left, clipped_top, clipped_right - clipped_left, clipped_bottom - clipped_top}
+    if Wardrobe.skin > 0 && source.y == 48.0 && key >= 2000 && key < 3000 {
+        Character(session, key * 8 + 300000, bounds, Wardrobe.skin, key == 2000, game.direction)
+    } else { Picture(session, key, sheet, bounds, fragment) }
 }
 
 // Garden-only dressage: animated water frames and grass floor variants,
@@ -399,14 +617,27 @@ DrawWallEdges :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, 
 }
 
 // Tile edges land on whole pixels, so scaled neighbours meet without seams.
+MeadowGround :: (session: Session, key: u64, bounds: Rectangle, x: s32, y: s32) {
+    width := 1448.0 / cast(float32)board_columns
+    height := 1086.0 / cast(float32)board_rows
+    unused Image(session, ImageProps.{.key = key, .asset_path = ART_GROUND, .bounds = bounds,
+        .source = Rectangle.{cast(float32)x * width, cast(float32)y * height, width, height},
+        .smooth = true, .alt_text = "Continuous meadow ground"})
+}
 Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string) {
     bounds := TileBounds(stage, x, y)
     kind := tile & 127
     if kind >= 40 && kind <= 45 {
-        Picture(session, key, sheet, bounds, Rectangle.{0.0, 0.0, 16.0, 16.0})
+        if sheet == Sheet(0) { MeadowGround(session, key, bounds, x, y) }
+        else { Picture(session, key, sheet, bounds, Rectangle.{0.0, 0.0, 16.0, 16.0}) }
         column := kind - 40
         if kind == 40 { column = 6 + enemy_frame }
         Picture(session, key + 1000000, sheet, bounds, Rectangle.{cast(float32)column * 16.0, 32.0, 16.0, 16.0})
+        return
+    }
+    if sheet == Sheet(0) && (kind == 0 || kind == 3 || kind == 4 || kind == 5 || kind == 6 ||
+        kind == 15 || kind == 16 || kind == 17 || kind == 19) {
+        MeadowGround(session, key, bounds, x, y)
         return
     }
     if WallMaterial(tile) == 20 && sheet == Sheet(1) {
@@ -696,16 +927,16 @@ DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32,
 // sampled small as the picture, the number as the caption, a green frame on
 // saved edits, the current level filled, one click to edit. Back returns.
 DrawLevelBrowser :: (session: Session, area: Rectangle) {
-    unused Box(session, BoxProps.{.key = 8700, .bounds = area, .fill = Color.{229, 237, 210, 255}})
+    unused Box(session, BoxProps.{.key = 8700, .bounds = area, .fill = Appearance.Canvas()})
     if Button(session, ButtonProps.{.key = 8703, .bounds = Rectangle.{area.x + 10.0, area.y + 8.0, 88.0, 36.0},
-            .label = "Back", .tone = ButtonTone.ButtonToneNeutral}) != 0 { editor.browsing = false; return }
+            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { editor.browsing = false; return }
     chapter := StageOf(editor.level)
     if Button(session, ButtonProps.{.key = 8704, .bounds = Rectangle.{area.x + area.width - 94.0, area.y + 8.0, 38.0, 36.0},
-            .label = "Previous landscape", .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18"}) != 0 {
+            .label = Locale.Text("Previous landscape"), .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18"}) != 0 {
         EditorSave(); OpenEditor(StageFirst((chapter + STAGE_COUNT - 1) % STAGE_COUNT)); editor.browsing = true; return
     }
     if Button(session, ButtonProps.{.key = 8705, .bounds = Rectangle.{area.x + area.width - 48.0, area.y + 8.0, 38.0, 36.0},
-            .label = "Next landscape", .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18"}) != 0 {
+            .label = Locale.Text("Next landscape"), .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18"}) != 0 {
         EditorSave(); OpenEditor(StageFirst((chapter + 1) % STAGE_COUNT)); editor.browsing = true; return
     }
     CentreText(session, 8701, StageName(chapter),
@@ -738,7 +969,7 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
             return
         }
         unused Box(session, BoxProps.{.key = 8710 + cast(u64)index, .bounds = bounds,
-            .fill = ifx current then Color.{207, 225, 175, 255} else Color.{251, 248, 231, 255},
+            .fill = ifx current then Color.{207, 225, 175, 255} else Appearance.Surface(),
             .border = ifx edited then Color.{120, 220, 150, 255} else Color.{240, 242, 232, 90},
             .radius = 10.0})
         // The picture: the level's rendered preview board.
@@ -847,7 +1078,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
         }
     }
 
-    unused Box(session, BoxProps.{.key = 8200, .bounds = panel, .fill = Color.{251, 248, 231, 255}})
+    unused Box(session, BoxProps.{.key = 8200, .bounds = panel, .fill = Appearance.Surface()})
     level_text := FormatInteger(cast(s64)(StageNumber(editor.level)), editor_digits[:])
     TextLine(session, 8202, "LEVEL", Rectangle.{panel.x + 8.0, panel.y + 8.0, 50.0, 20.0}, 14)
     TextLine(session, 8203, level_text, Rectangle.{panel.x + 60.0, panel.y + 8.0, 30.0, 20.0}, 14)
@@ -896,19 +1127,19 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     bottom := panel.y + panel.height - 142.0
     TextLine(session, 8215, "APPLES", Rectangle.{panel.x + 8.0, bottom + 8.0, 64.0, 20.0}, 14)
     if Button(session, ButtonProps.{.key = 8216, .bounds = Rectangle.{panel.x + 76.0, bottom, 36.0, 32.0},
-            .label = "Fewer apples", .icon_shape = "S2rr:M5 12L19 12", .icon_only = true,
+            .label = Locale.Text("Fewer apples"), .icon_shape = "S2rr:M5 12L19 12", .icon_only = true,
             .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
         EditorSetApples(-1)
     }
     apple_text := FormatInteger(cast(s64)editor.apples, apple_digits[:])
     TextLine(session, 8217, apple_text, Rectangle.{panel.x + 120.0, bottom + 8.0, 28.0, 20.0}, 14)
     if Button(session, ButtonProps.{.key = 8218, .bounds = Rectangle.{panel.x + 152.0, bottom, 36.0, 32.0},
-            .label = "More apples", .icon_shape = "S2rr:M12 5L12 19", .icon_only = true,
+            .label = Locale.Text("More apples"), .icon_shape = "S2rr:M12 5L12 19", .icon_only = true,
             .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
         EditorSetApples(1)
     }
     if Button(session, ButtonProps.{.key = 8219, .bounds = Rectangle.{panel.x + 8.0, bottom + 40.0, 110.0, 40.0},
-            .label = "Save", .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorSave() }
+            .label = Locale.Text("Save"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorSave() }
     reset_label := ifx editor.reset_armed then "Sure?" else "Reset"
     if Button(session, ButtonProps.{.key = 8220, .bounds = Rectangle.{panel.x + 130.0, bottom + 40.0, 110.0, 40.0},
             .label = reset_label, .tone = ButtonTone.ButtonToneNeutral,
@@ -918,10 +1149,10 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
         else { editor.reset_armed = true }
     }
     if Button(session, ButtonProps.{.key = 8221, .bounds = Rectangle.{panel.x + 8.0, bottom + 88.0, 110.0, 40.0},
-            .label = "Playtest", .tone = ButtonTone.ButtonToneSuccess,
+            .label = Locale.Text("Playtest"), .tone = ButtonTone.ButtonToneSuccess,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { EditorPlaytest(now) }
     if Button(session, ButtonProps.{.key = 8222, .bounds = Rectangle.{panel.x + 130.0, bottom + 88.0, 110.0, 40.0},
-            .label = "Title", .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorExit() }
+            .label = Locale.Text("Title"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorExit() }
 }
 
 // Play starts a full run; Continue replays the furthest unlocked level.
@@ -940,15 +1171,17 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
     unused Image(session, ImageProps.{.key = 801, .asset_path = artwork, .bounds = art_bounds, .source = source,
         .fit = ImageFit.ImageFitCover, .smooth = true,
         .alt_text = "Apfelwurm: a cheerful worm and an apple, from the garden into the forest"})
+    unused Box(session, BoxProps.{.key = 803, .bounds = area, .fill = Appearance.ArtworkShade()})
     // The artwork keeps this lower strip clear for the real interactive button.
     unused Box(session, BoxProps.{.key = 802,
         .bounds = Rectangle.{area.x, area.y + area.height - 140.0, area.width, 140.0},
         .fill = Color.{20, 47, 22, 0}, .fill_bottom = Color.{20, 47, 22, 170}, .has_fill_bottom = true})
     if !play_button { return 0 }
     Progress.Load()
+    TitleActions(session, area)
     if Button(session, ButtonProps.{.key = 810,
-            .bounds = Rectangle.{area.x + area.width - 148.0, area.y + 16.0, 132.0, 48.0},
-            .label = "Choose level", .pill = true, .tone = ButtonTone.ButtonToneNeutral,
+            .bounds = Rectangle.{area.x + (area.width - 164.0) / 2.0, area.y + area.height - 56.0, 164.0, 40.0},
+            .label = Locale.Text("Choose level"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 76 || key == 108 { return 3 }
     width := area.width - 48.0
     if width > 280.0 { width = 280.0 }
@@ -958,13 +1191,13 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
         at = CopyInto(continue_label[:], at, FormatInteger(cast(s64)(Progress.unlocked + 1), digits[:]))
         continue_label[at] = 0
         if Button(session, ButtonProps.{.key = 809,
-                .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + area.height - 174.0, width, 60.0},
+                .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + area.height - 202.0, width, 60.0},
                 .label = TextUntilNul(continue_label[:]), .class_name = 13, .pill = true,
                 .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneSuccess,
                 .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 67 || key == 99 { return 2 }
     }
     clicked := Button(session, ButtonProps.{.key = 808,
-        .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + area.height - 100.0, width, 60.0},
+        .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + area.height - 128.0, width, 60.0},
         .label = ifx Progress.unlocked > 0 then "Play from start" else "Play", .class_name = 13,
         .icon_shape = "F:M8 5L19 12L8 19Z", .pill = true,
         .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneSuccess,
@@ -1025,26 +1258,22 @@ DrawLevels :: (session: Session, area: Rectangle, now: s64) {
     }
     if Button(session, ButtonProps.{.key = 26001,
             .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 88.0, 48.0},
-            .label = "Back", .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenStages(); return }
+            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenStages(); return }
     GameText(session, 26002, "Choose level", Rectangle.{area.x + 112.0, area.y + 20.0, area.width - 124.0, 32.0}, 24)
     if Button(session, ButtonProps.{.key = 26003,
             .bounds = Rectangle.{area.x + 12.0, area.y + 72.0, 48.0, 48.0},
-            .label = "Previous landscape", .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18",
+            .label = Locale.Text("Previous landscape"), .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18",
             .disabled = level_chapter == 0}) != 0 { level_chapter -= 1; level_scroll = 0 }
     if Button(session, ButtonProps.{.key = 26004,
             .bounds = Rectangle.{area.x + area.width - 60.0, area.y + 72.0, 48.0, 48.0},
-            .label = "Next landscape", .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18",
+            .label = Locale.Text("Next landscape"), .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18",
             .disabled = level_chapter == STAGE_COUNT - 1}) != 0 { level_chapter += 1; level_scroll = 0 }
     GameText(session, 26005, StageName(level_chapter), Rectangle.{area.x + 68.0, area.y + 72.0, area.width - 136.0, 26.0}, 20, false, true)
     GameText(session, 26006, "Finish levels to unlock more", Rectangle.{area.x + 64.0, area.y + 100.0, area.width - 128.0, 20.0}, 12, true, true)
     grid := Rectangle.{area.x + 12.0, area.y + 132.0, area.width - 24.0, area.height - 144.0}
-    columns := cast(s32)(grid.width / 112.0)
-    if columns < 2 { columns = 2 }
-    if columns > 8 { columns = 8 }
-    // Reserve room for the scrollbar before sizing the touch cards.
-    width := (grid.width - 16.0 - cast(float32)(columns - 1) * 10.0) / cast(float32)columns
-    height := (width - 16.0) * 0.75 + 58.0
-    if height < 148.0 { height = 148.0 }
+    columns: s32 = ifx grid.width < 560.0 then 2 else ifx grid.width < 900.0 then 3 else 4
+    width := (grid.width - 16.0 - cast(float32)(columns - 1) * 12.0) / cast(float32)columns
+    height := (width - 16.0) * (ifx game_portrait then 4.0 / 3.0 else 0.75) + 44.0
     count := StageLevels(level_chapter)
     rows := (count + columns - 1) / columns
     scroller := Scroll(session, ScrollProps.{.key = 26007, .bounds = grid,
@@ -1054,18 +1283,32 @@ DrawLevels :: (session: Session, area: Rectangle, now: s64) {
     chosen: s32 = -1
     for index: 0..count - 1 {
         level := StageFirst(level_chapter) + cast(s32)index
-        bounds := Rectangle.{scroller.content.x + cast(float32)(index % columns) * (width + 10.0),
+        bounds := Rectangle.{scroller.content.x + cast(float32)(index % columns) * (width + 12.0),
             scroller.content.y + cast(float32)(index / columns) * (height + 10.0), width, height}
         locked := level > Progress.unlocked
         current := level == Progress.unlocked
+        key := cast(u64)27000 + cast(u64)level * 10
         label := LevelLabel(level)
-        status := ifx locked then "Locked" else ifx current then "Latest unlocked" else "Completed"
-        if Button(session, ButtonProps.{.key = 27004 + cast(u64)level * 5, .bounds = bounds,
-                .label = label, .detail = status, .class_name = 14, .disabled = locked, .selected = current,
-                .image = ImageProps.{.asset_path = ifx locked then "" else PreviewPath(level_chapter, cast(s32)index + 1, game_portrait),
-                    .fit = ImageFit.ImageFitContain, .smooth = true, .alt_text = "Level board preview"},
-                .icon_placement = IconPlacement.IconPlacementAbove,
-                .tone = ButtonTone.ButtonToneSuccess}) != 0 { chosen = level }
+        unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
+            .border = ifx current then ColorFromPacked(Appearance.Palette().selected) else Appearance.Border(), .radius = 14.0})
+        if Button(session, ButtonProps.{.key = key + 1, .bounds = bounds, .label = ifx locked then Locale.Text("Locked") else label,
+                .detail = ifx Progress.Completed(level) then Locale.Text("Completed") else "", .disabled = locked,
+                .invisible = true}) != 0 { chosen = level }
+        if locked {
+            SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{bounds.x + (width - 30.0) / 2.0,
+                    bounds.y + (height - 30.0) / 2.0, 30.0, 30.0},
+                .shape = LockIcon.Shape, .color = Appearance.Border()})
+        } else {
+            unused Image(session, ImageProps.{.key = key + 2,
+                .bounds = Rectangle.{bounds.x + 8.0, bounds.y + 8.0, width - 16.0, height - 44.0},
+                .asset_path = PreviewPath(level_chapter, cast(s32)index + 1, game_portrait),
+                .fit = ImageFit.ImageFitContain, .smooth = true, .radius = 8.0, .alt_text = "Level board preview"})
+            GameText(session, key + 3, label, Rectangle.{bounds.x + 8.0, bounds.y + height - 30.0, width - 16.0, 22.0}, 15, false, true)
+            if Progress.Completed(level) {
+                SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{bounds.x + width - 28.0, bounds.y + height - 29.0, 18.0, 18.0},
+                    .shape = "S2rr:M5 12L10 17L20 6", .color = ColorFromPacked(Appearance.Palette().selected)})
+            }
+        }
     }
     unused End(session)
     if chosen >= 0 { unused PlaySelected(chosen, now) }
@@ -1079,6 +1322,7 @@ AskControls :: () {
 }
 ChooseControls :: (pad: bool, now: s64) {
     unused Controls.SetPad(pad)
+    PreferencesChanged()
     touch_steering.active = false
     if controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS { StartChosenRun(now) }
     else { game.mode = controls_previous_mode; game.next_step = now + TickInterval(game.level) }
@@ -1089,7 +1333,7 @@ DrawControls :: (session: Session, area: Rectangle, now: s64) {
     if width > 560.0 { width = 560.0 }
     height: float32 = ifx area.height < 400.0 then 248.0 else 342.0
     card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0, width, height}
-    unused Box(session, BoxProps.{.key = 23001, .bounds = card, .fill = Color.{255, 250, 234, 255}, .radius = 24.0})
+    unused Box(session, BoxProps.{.key = 23001, .bounds = card, .fill = Appearance.Surface(), .radius = 24.0})
     CentreText(session, 23002, "How do you want to move?", Rectangle.{card.x + 12.0, card.y + 18.0, width - 24.0, 28.0}, 20)
     CentreText(session, 23003, "Change this later in Pause > Controls.", Rectangle.{card.x + 12.0, card.y + 50.0, width - 24.0, 22.0}, 13)
     tile_width := (width - 42.0) / 2.0
@@ -1097,7 +1341,7 @@ DrawControls :: (session: Session, area: Rectangle, now: s64) {
     for choice: 0..1 {
         tile := Rectangle.{card.x + 14.0 + cast(float32)choice * (tile_width + 14.0), card.y + 80.0, tile_width, tile_height}
         unused Box(session, BoxProps.{.key = 23010 + cast(u64)choice, .bounds = tile,
-            .fill = Color.{231, 238, 213, 255}, .border = Color.{200, 214, 180, 255}, .radius = 16.0})
+            .fill = Appearance.Canvas(), .border = Appearance.Border(), .radius = 16.0})
         art_height := tile.height - 56.0
         side := art_height - 12.0
         if side > tile.width - 16.0 { side = tile.width - 16.0 }
@@ -1105,22 +1349,26 @@ DrawControls :: (session: Session, area: Rectangle, now: s64) {
         if choice == 0 {
             Picture(session, 23020, Sheet(0), square, Rectangle.{0.0, 48.0, 16.0, 16.0})
             SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{square.x + side * 0.4, square.y + side * 0.35, side * 0.65, side * 0.65},
-                .shape = FingerSwipe.Shape, .color = Color.{255, 250, 234, 255}})
+                .shape = FingerSwipe.Shape, .color = Appearance.Surface()})
         } else {
             preview := DirectionPad(session, DirectionPadProps.{.key = 23021, .bounds = square,
-                .label = "Try the direction pad", .now = cast(float64)now / 1000.0})
+                .label = Locale.Text("Try the direction pad"), .now = cast(float64)now / 1000.0})
             if preview.step { ChooseControls(true, now) }
         }
         label := ifx choice == 0 then "Swipe" else "Direction pad"
         if Button(session, ButtonProps.{.key = 23030 + cast(u64)choice,
                 .bounds = Rectangle.{tile.x + 6.0, tile.y + tile.height - 50.0, tile.width - 12.0, 44.0},
-                .label = label, .class_name = 10, .tone = ButtonTone.ButtonToneSuccess,
+                .label = Locale.Text(label), .class_name = 10, .tone = ButtonTone.ButtonToneSuccess,
                 .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { ChooseControls(choice == 1, now) }
     }
 }
 
 HandleInput :: (key: s32, now: s64) {
-    if key == 77 || key == 109 { Audio.ToggleMute(); return }
+    if key == 77 || key == 109 { ToggleSound(); return }
+    if game.mode == MODE_SHOP || game.mode == MODE_SETTINGS {
+        if key == Input.KeyEscape { game.mode = MODE_STAGES; buy_skin = 0 }
+        return
+    }
     if game.mode == MODE_CONTROLS {
         if key == 49 { ChooseControls(false, now) }
         else if key == 50 { ChooseControls(true, now) }
@@ -1194,7 +1442,7 @@ Steer :: (direction: s32) {
 // scores grow, so they cannot collide with the pause target on a phone.
 StatusChip :: (session: Session, key: u64, bounds: Rectangle, shape: string, color: Color, value: string) {
     unused Box(session, BoxProps.{.key = key, .bounds = bounds,
-        .fill = Color.{233, 238, 215, 255}, .radius = 16.0})
+        .fill = Appearance.Surface(), .radius = 16.0})
     SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{bounds.x + 10.0, bounds.y + (bounds.height - 21.0) / 2.0, 21.0, 21.0},
         .shape = shape, .color = color})
     GameText(session, key + 1, value, Rectangle.{bounds.x + 37.0, bounds.y + (bounds.height - 24.0) / 2.0,
@@ -1203,7 +1451,7 @@ StatusChip :: (session: Session, key: u64, bounds: Rectangle, shape: string, col
 
 LivesChip :: (session: Session, bounds: Rectangle) {
     unused Box(session, BoxProps.{.key = 17, .bounds = bounds,
-        .fill = Color.{233, 238, 215, 255}, .radius = 16.0})
+        .fill = Appearance.Surface(), .radius = 16.0})
     slots := game.lives
     if slots < 3 { slots = 3 }
     columns := slots
@@ -1225,18 +1473,18 @@ LivesChip :: (session: Session, bounds: Rectangle) {
 }
 
 DrawTopBar :: (session: Session, hud: Rectangle) {
-    unused Box(session, BoxProps.{.key = 10, .bounds = hud, .fill = Color.{251, 248, 231, 255}})
+    unused Box(session, BoxProps.{.key = 10, .bounds = hud, .fill = Appearance.Surface()})
     unused Box(session, BoxProps.{.key = 15,
-        .bounds = Rectangle.{hud.x, hud.y + hud.height - 2.0, hud.width, 2.0}, .fill = Color.{207, 221, 184, 255}})
+        .bounds = Rectangle.{hud.x, hud.y + hud.height - 2.0, hud.width, 2.0}, .fill = Appearance.Border()})
     if game.mode == MODE_EDITOR {
         if Button(session, ButtonProps.{.key = 8225, .bounds = Rectangle.{hud.x + 12.0, hud.y + 5.0, 88.0, 32.0},
-                .label = "Levels", .tone = ButtonTone.ButtonToneSuccess}) != 0 {
+                .label = Locale.Text("Levels"), .tone = ButtonTone.ButtonToneSuccess}) != 0 {
             EditorSave(); editor.browsing = true
         }
         if Button(session,ButtonProps.{.key = 8226,.bounds = Rectangle.{hud.x + 108.0,hud.y + 5.0,96.0,32.0},
-                .label = "Landscape",.tone = ifx !editor.turned then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral}) != 0 && editor.turned { EditorTurn() }
+                .label = Locale.Text("Landscape"),.tone = ifx !editor.turned then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral}) != 0 && editor.turned { EditorTurn() }
         if Button(session,ButtonProps.{.key = 8227,.bounds = Rectangle.{hud.x + 212.0,hud.y + 5.0,86.0,32.0},
-                .label = "Portrait",.tone = ifx editor.turned then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral}) != 0 && !editor.turned { EditorTurn() }
+                .label = Locale.Text("Portrait"),.tone = ifx editor.turned then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral}) != 0 && !editor.turned { EditorTurn() }
         return
     }
     narrow := hud.width < 520.0
@@ -1275,7 +1523,7 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
     if game.mode == MODE_PLAYING {
         if Button(session, ButtonProps.{.key = 59,
                 .bounds = Rectangle.{hud.x + hud.width - 60.0, hud.y + 8.0, 48.0, 48.0},
-                .label = "Pause", .icon_only = true, .class_name = 10,
+                .label = Locale.Text("Pause"), .icon_only = true, .class_name = 10,
                 .icon_shape = "F:M7 5H10V19H7ZM14 5H17V19H14Z", .tone = ButtonTone.ButtonToneSuccess,
                 .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { HandleInput(Input.KeyEscape, Timer.MonotonicMilliseconds()) }
     }
@@ -1283,13 +1531,7 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
 
 #program_export
 Frame :: (session: Session, viewport: Rectangle) -> s32 {
-    #if #defined(WURM_PORTABLE) {
-        unused WidgetPaletteUse(session, WidgetPalette.{.background = 0xe5edd2ff, .base = 0xfffaeaff,
-            .text = 0x244734ff, .selected = 0x326a45ff, .selected_text = 0xfff9e9ff,
-            .border = 0xd5dfc4ff, .danger = 0xd55f59ff, .warning = 0xf5ce64ff, .success = 0x326a45ff})
-    } else {
-        GameStyles()
-    }
+    unused WidgetPaletteUse(session, Appearance.Palette())
     #if #defined(PLATFORM_WEB) {
         if !browser_storage_started {
             browser_storage_started = true
@@ -1303,16 +1545,33 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         }
     }
     now := Timer.MonotonicMilliseconds()
+    Account.Pump()
+    LoadSound()
+    if Account.ProfileVisible() {
+        profile_key: s32
+        #if !#defined(WURM_PORTABLE) {
+            profile_key = KeyboardTake(session)
+        }
+        unused Box(session, BoxProps.{.key = 29000, .bounds = viewport, .fill = Appearance.Canvas()})
+        GameText(session, 29001, "Profile", Rectangle.{viewport.x + 100.0, viewport.y + 14.0, viewport.width - 112.0, 32.0}, 22)
+        Account.DrawProfile(session, Rectangle.{viewport.x, viewport.y + 64.0, viewport.width, viewport.height - 64.0}, profile_key, Appearance.mode != 2)
+        if Button(session, ButtonProps.{.key = 29002, .bounds = Rectangle.{viewport.x + 12.0, viewport.y + 8.0, 76.0, 44.0}, .label = Locale.Text("Back")}) != 0 || profile_key == Input.KeyEscape { Account.Back(); Progress.poll_at = 0; Wardrobe.poll_at = 0 }
+        return 0
+    }
+    if Progress.Pump(now) {
+        Wardrobe.Reset(); preferences_poll = 0; preferences_dirty = false
+        if game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_FINISHED || game.mode == MODE_DIED || game.mode == MODE_VICTORY {
+            game.mode = MODE_STAGES
+            touch_steering.active = false
+        }
+    }
+    PreferencesPump(now)
+    Wardrobe.Pump(now, game.mode == MODE_PLAYING && !editor.playtest && game.death_ticks == 0 && game.transition_ticks == 0)
     was_portrait := game_portrait
     game_portrait = viewport.height > viewport.width
     if !game.started {
         game.started = true
         OpenStages()
-        // A collection's cover is the title: hosted, the game opens straight into play.
-        #if #defined(WURM_PORTABLE) {
-            if Controls.Chosen() { StartRun(now) }
-            else { Play(now) }
-        }
     } else if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED) {
         paused := game.mode == MODE_PAUSED
         ReloadLevel(game.level,now)
@@ -1329,11 +1588,12 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
     HandleInput(key, now)
-    unused Box(session, BoxProps.{.key = 1, .bounds = viewport, .fill = Color.{229, 237, 210, 255}})
+    unused Box(session, BoxProps.{.key = 1, .bounds = viewport, .fill = Appearance.Canvas()})
     // The stages screen is one full-bleed cover; every other mode carries the
     // green icon bar across the top with the board letterboxed below it, so
     // portrait and landscape both keep their proportions.
     showing_bar := game.mode != MODE_STAGES && game.mode != MODE_LEVELS &&
+        game.mode != MODE_SETTINGS && game.mode != MODE_SHOP &&
         !(game.mode == MODE_CONTROLS && (controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS))
     bar_height: float32 = 0.0
     if showing_bar { bar_height = ifx viewport.width < 520.0 then 104.0 else 72.0 }
@@ -1348,7 +1608,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     contact: SwipeAreaResult
     if game.mode == MODE_PLAYING && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
         contact = SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
-            .label = "Steer the worm", .now = cast(float64)now / 1000.0,
+            .label = Locale.Text("Steer the worm"), .now = cast(float64)now / 1000.0,
             .min_distance = 6.0})
         direction := Touch.TouchDirection(*touch_steering, contact.down, contact.at_x, contact.at_y)
         if direction >= 0 { Steer(direction) }
@@ -1357,6 +1617,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     unused Step(*game, now)
     // Save the next unlocked level on completion, before loading its board.
     if game.mode == MODE_FINISHED && !editor.playtest && recorded_level != game.level {
+        Progress.Complete(game.level)
         if Progress.Begin(game.level + 1, game.lives, game.score) { recorded_level = game.level }
     }
     // The run keeps each lost life; a game over or the finished journey
@@ -1366,6 +1627,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         else { unused Progress.LoseLife() }
     }
     if game.mode == MODE_VICTORY && !editor.playtest && recorded_level != game.level {
+        Progress.Complete(game.level)
         if Progress.Restart() { recorded_level = game.level }
     }
     Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,
@@ -1375,6 +1637,10 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         action := DrawTitle(session, area, stage_key)
         if action == 3 { OpenLevels() }
         else if action != 0 { Play(now, action == 2) }
+    } else if game.mode == MODE_SHOP {
+        DrawShop(session, viewport)
+    } else if game.mode == MODE_SETTINGS {
+        DrawSettings(session, viewport)
     } else if game.mode == MODE_LEVELS {
         DrawLevels(session, viewport, now)
     } else if game.mode == MODE_CONTROLS {
@@ -1392,7 +1658,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         if game.mode == MODE_PLAYING && Controls.Pad() {
             pad := DirectionPad(session, DirectionPadProps.{.key = PLAY_STEERING_KEY,
                 .bounds = DirectionPadBounds(Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height}),
-                .label = "Direction pad", .now = cast(float64)now / 1000.0, .repeat_seconds = 0.08,
+                .label = Locale.Text("Direction pad"), .now = cast(float64)now / 1000.0, .repeat_seconds = 0.08,
                 .floating = true, .disabled = game.death_ticks > 0 || game.transition_ticks > 0})
             if pad.step { Steer(pad.direction) }
         }

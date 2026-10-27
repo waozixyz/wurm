@@ -1,0 +1,36 @@
+#import "kryon/widget_palette"
+#import "kryon/drawing_props"
+Records :: #import, file "controls.zi";
+mode: s32 = -1;
+Load :: () {
+    if mode >= 0 { return }
+    mode = 0
+    bytes: [2]u8
+    if Records.ReadRecord("appearance.dat", bytes[:]) == 1 && bytes[0] < 3 { mode = cast(s32)bytes[0] }
+}
+Set :: (value: s32) {
+    if value < 0 || value > 2 { return }
+    mode = value
+    bytes: [1]u8 = .[cast(u8)value]
+    unused Records.WriteRecord("appearance.dat", bytes[:])
+}
+Palette :: () -> WidgetPalette {
+    Load()
+    if mode == 2 {
+        return WidgetPalette.{.background = 0xc3cbb7ff, .base = 0xdde1cfff, .text = 0x263b30ff,
+            .selected = 0x476c50ff, .selected_text = 0xf2f0e2ff, .border = 0xa1b198ff,
+            .danger = 0xad4e4eff, .warning = 0x997028ff, .success = 0x476c50ff}
+    }
+    return WidgetPalette.{.background = ifx mode == 1 then 0x111d19ff else 0x202b26ff,
+        .base = ifx mode == 1 then 0x1c2c25ff else 0x303c33ff, .text = 0xe0e7d9ff,
+        .selected = 0x71986aff, .selected_text = 0x142217ff, .border = 0x52634fff,
+        .danger = 0xdd8982ff, .warning = 0xd4b66fff, .success = 0x71986aff}
+}
+Canvas :: () -> Color { return ColorFromPacked(Palette().background) }
+Surface :: () -> Color { return ColorFromPacked(Palette().base) }
+Border :: () -> Color { return ColorFromPacked(Palette().border) }
+TextColor :: () -> Color { return ColorFromPacked(Palette().text) }
+ArtworkShade :: () -> Color {
+    Load()
+    return Color.{13, 28, 20, ifx mode == 2 then 18 else ifx mode == 1 then 105 else 60}
+}

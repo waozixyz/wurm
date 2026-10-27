@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import re
+from account_build import profile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +32,9 @@ def main():
     kryon = package('kryon')
     ziran = package('ziran')
     raylib = package('raylib')
+    profile_bundle = profile()
+    monocypher = package('monocypher')
+    liboqs = package('liboqs')
     subprocess.run(['python3', str(kryon / 'scripts/android_scaffold.py'), '--root', str(ROOT),
                     '--name', 'Apfelwurm', '--package', 'xyz.waozi.wurm', '--activity', 'MainActivity',
                     '--kryon', str(kryon)], check=True)
@@ -46,8 +50,31 @@ def main():
     text = manifest.read_text().replace('android:name=".MainActivity"',
         'android:name="xyz.waozi.wurm.MainActivity"').replace('android:targetActivity=".MainActivity"',
         'android:targetActivity="xyz.waozi.wurm.MainActivity"')
+    if 'android.permission.INTERNET' not in text:
+        text = text.replace('    <application', '    <uses-permission android:name="android.permission.INTERNET" />\n\n    <application', 1)
     manifest.write_text(text)
+    # The account provider uses the same native cryptography on both ABIs.
+    # These changes belong to this app's generated scaffold, never Kryon's.
+    cmake = ROOT / 'droid/app/src/main/cpp/CMakeLists.txt'
+    text = cmake.read_text().replace('set(APP_ZIRAN_DEFINES --define ANDROID_BUILD)',
+        'set(APP_ZIRAN_DEFINES --define ANDROID_BUILD --define WURM_ACCOUNTS)')
+    text = text.split('\n# Apfelwurm account libraries\n')[0]
+    text += f'''
+# Apfelwurm account libraries
+set(OQS_BUILD_ONLY_LIB ON CACHE BOOL "" FORCE)
+set(OQS_USE_OPENSSL OFF CACHE BOOL "" FORCE)
+set(OQS_DIST_BUILD OFF CACHE BOOL "" FORCE)
+set(OQS_OPT_TARGET generic CACHE STRING "" FORCE)
+set(OQS_MINIMAL_BUILD SIG_ml_dsa_44 CACHE STRING "" FORCE)
+add_subdirectory("{liboqs}" "${{CMAKE_BINARY_DIR}}/account-oqs" EXCLUDE_FROM_ALL)
+target_sources(main PRIVATE "{monocypher}/src/monocypher.c" "{monocypher}/src/optional/monocypher-ed25519.c")
+target_include_directories(main PRIVATE "{monocypher}/src")
+target_link_libraries(main oqs)
+'''
+    cmake.write_text(text)
     destination = ROOT / 'droid/app/src/main/assets'
+    (destination / 'assets').mkdir(parents=True, exist_ok=True)
+    shutil.copy2(profile_bundle, destination / 'assets/entity.zx')
     # Personal edits never become release assets. The base campaign is compiled.
     shutil.rmtree(destination / 'assets/campaign-levels', ignore_errors=True)
     for folder, pattern in [('art', '*.png'), ('sounds', '*.pcm'), ('levels', '*.dat')]:

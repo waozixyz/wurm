@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import wave
+from account_build import profile, libraries
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/web'
@@ -24,6 +25,8 @@ def main():
         return Path(subprocess.check_output(['ziran', 'pkg', 'path', name, *lock], cwd=ROOT, env=env, text=True).strip())
 
     kryon, compiler = package('kryon'), package('ziran')
+    profile_bundle = profile()
+    account_libraries = libraries(web=True)
     generated = ROOT / 'build/web-native'
     ir, code = generated / 'ir', generated / 'c'
     # Package module names change with dependency revisions. Never feed IR or
@@ -35,7 +38,7 @@ def main():
         folder.mkdir(parents=True, exist_ok=True)
     host = kryon / 'src/backend/canvas_run.zi'
     raster = kryon / 'src/backend/canvas_raster.zi'
-    subprocess.run(['ziran', 'ir', *lock, '--project', '--define', 'PLATFORM_WEB',
+    subprocess.run(['ziran', 'ir', *lock, '--project', '--define', 'PLATFORM_WEB', '--define', 'WURM_ACCOUNTS',
                     '-o', str(ir), str(host), str(raster)], cwd=ROOT, env=env, check=True)
     subprocess.run([str(compiler / 'build/bin/zi2c'), '--define', 'PLATFORM_WEB', '--root', str(ir),
                     '-o', str(code), *map(str, ir.glob('*.zir'))], cwd=ROOT, env=env, check=True)
@@ -51,12 +54,14 @@ def main():
             or str(Path.home() / 'emsdk/upstream/emscripten/emcc'))
     subprocess.run([emcc, '-O2', '-Wno-parentheses-equality', '-I' + str(compiler / 'include'),
                     '-iquote', str(code), *map(str, code.glob('*.c')),
+                    *account_libraries, '-sUSE_ZLIB=1',
                     '--js-library', str(compiler / 'web/ziran_web.js'),
                     '-sEXPORTED_RUNTIME_METHODS=FS', '-sFORCE_FILESYSTEM=1', '-lidbfs.js',
                     '-sALLOW_MEMORY_GROWTH=1', '-sASYNCIFY', '-sENVIRONMENT=web',
                     '-sSTACK_SIZE=8388608', '-sASYNCIFY_STACK_SIZE=1048576',
                     '--preload-file', str(kryon / 'assets/fonts/LiberationSans-Regular.ttf') + '@/kryon-font.ttf',
                     '--preload-file', str(art) + '@/assets/art',
+                    '--preload-file', str(profile_bundle) + '@/assets/entity.zx',
                     '-o', str(OUT / 'game.js')], cwd=ROOT, env=env, check=True)
     assert (OUT / 'game.data').stat().st_size <= 25 * 1024 * 1024, 'Browser asset preload exceeds Pages limit'
     sounds = OUT / 'assets/sounds'

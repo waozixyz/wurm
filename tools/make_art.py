@@ -150,7 +150,7 @@ def main():
     canopy = Image.open(SOURCE / 'forest-canopy.png').convert('RGBA').resize((40 * CELL, 30 * CELL), Image.Resampling.LANCZOS)
     save(canopy, ART / 'forest-canopy.png', args.check)
     save(canopy.transpose(Image.Transpose.ROTATE_270), ART / 'forest-canopy-portrait.png', args.check)
-    for name in ('title', 'title-portrait'):
+    for name in ('title', 'title-portrait', 'ground-meadow'):
         image = Image.open(ART / (name + '.png')).convert('RGBA')
         mirror = struct.pack('<II', *image.size) + image.tobytes('raw', 'BGRA')
         path = ART / (name + '.argb')

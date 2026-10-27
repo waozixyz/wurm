@@ -125,7 +125,7 @@ def main():
         assert play['width'] >= 48 and play['height'] >= 48, play
         assert play['visible_width'] >= play['width'] - 1 and play['visible_height'] >= play['height'] - 1, play
         assert root['y'] <= play['y'] and play['y'] + play['height'] <= root['y'] + root['height'], play
-        assert sum(n.get('kind') == 'button' and n.get('interactive') and n.get('visible') for n in tree['nodes']) == 1
+        assert all(label in [n.get('label') for n in tree['nodes']] for label in ('Skin shop', 'Profile', 'Settings', 'Choose level'))
         return play, root
 
     def return_to_title():
@@ -181,7 +181,15 @@ def main():
         command('press', label='Resume', role='button')
         wait('Pause', 'button')
         board = wait('Steer the worm')
-        before = command('find', key=2000)['nodes'][0]
+        # Keep the equipped character. The original head is an Image and a
+        # cosmetic head is a composed Box at its own stable root key.
+        head_key = 2000
+        heads = command('find', key=head_key)['nodes']
+        if not heads:
+            head_key = 316000
+            heads = command('find', key=head_key)['nodes']
+        assert heads, 'The active character head is missing'
+        before = heads[0]
         # Use the OS touch path for steering, then inspect actual worm motion.
         command('pointer', real=1)
         with Image.open(OUTPUT / 'paused.png') as picture:
@@ -195,7 +203,10 @@ def main():
         try:
             deadline = time.monotonic() + 1.4
             while time.monotonic() < deadline:
-                after = command('find', key=2000)['nodes'][0]
+                heads = command('find', key=head_key)['nodes']
+                if not heads:
+                    continue
+                after = heads[0]
                 if after['x'] > before['x'] + before['width']:
                     assert gesture.poll() is None, 'Steering was observed only after touch release'
                     break
@@ -215,7 +226,7 @@ def main():
         # gesture does not leave the worm beside a wall before the pad test.
         command('key', code=82)
         pad = wait('Direction pad')
-        before = command('find', key=2000)['nodes'][0]
+        before = command('find', key=head_key)['nodes'][0]
         # A physical OS tap on the right arm follows Android's native input
         # path and changes the freshly spawned worm's upward direction.
         command('pointer', real=1)
@@ -224,7 +235,7 @@ def main():
         shell('input', 'tap', str(x), str(y))
         deadline = time.monotonic() + 1.2
         while time.monotonic() < deadline:
-            nodes = command('find', key=2000)['nodes']
+            nodes = command('find', key=head_key)['nodes']
             if not nodes:
                 continue
             after = nodes[0]
@@ -250,7 +261,7 @@ def main():
         time.sleep(2.0)
         command('press', label='Pause', role='button')
         wait('Paused')
-        assert command('find', key=2000).get('nodes'), 'Portrait level 2 lost the worm during its approach'
+        assert command('find', key=head_key).get('nodes'), 'Portrait level 2 lost the worm during its approach'
         assert not command('find', label='Game over', visible=1).get('nodes')
         capture('level-2-portrait-approach')
         command('press', label='Back to title', role='button')

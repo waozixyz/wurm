@@ -1,0 +1,103 @@
+Account :: #import, file "account.zi";
+Progress :: #import, file "progress.zi";
+Records :: #import, file "controls.zi";
+#import "std/json_scan"
+#import "std/text_buffer"
+#import "std/vec"
+
+skin: s32;
+owned: s32;
+played: s64;
+other_played: s64;
+visited: bool;
+device: [33]u8;
+last_frame: s64;
+save_at: s64;
+poll_at: s64;
+loaded: bool;
+dirty: bool;
+status: [24]u8;
+Load :: () {
+    if loaded { return }
+    loaded = true
+    bytes: [12]u8
+    count := Records.ReadRecord(Progress.RecordName("wardrobe.dat"), bytes[:])
+    if count == 10 || count == 11 {
+        skin = ifx bytes[0] < 7 then cast(s32)bytes[0] else 0
+        visited = bytes[1] == 1
+        played = 0
+        for index: 0..7 { played |= cast(s64)(bytes[index + 2] & (ifx index == 7 then 127 else 255)) << (index * 8) }
+        if played > 315576000000 { played = 0 }
+        if count == 11 && bytes[10] <= 14 { owned = cast(s32)bytes[10] }
+    }
+}
+Save :: () {
+    bytes: [11]u8
+    bytes[0] = cast(u8)skin; bytes[1] = ifx visited then 1 else 0
+    for index: 0..7 { bytes[index + 2] = cast(u8)((played >> (index * 8)) & 255) }
+    bytes[10] = cast(u8)owned
+    unused Records.WriteRecord(Progress.RecordName("wardrobe.dat"), bytes[:])
+}
+Reset :: () {
+    loaded = false; skin = 0; owned = 0; played = 0; other_played = 0; visited = false
+    device = .{}; dirty = false; poll_at = 0; last_frame = 0
+    status = .{}
+    Load()
+}
+Available :: (id: s32) -> bool {
+    if id == 0 { return true }
+    if id > 0 && id <= 3 { return (owned & (1 << id)) != 0 }
+    if id == 4 { return played + other_played >= 18000000 }
+    if id == 5 { return Progress.Completed(39) }
+    if id == 6 { return visited }
+    return false
+}
+Select :: (id: s32) { if Available(id) { skin = id; dirty = true; Save() } }
+Visit :: () { visited = true; dirty = true; Save(); poll_at = 0 }
+Pump :: (now: s64, playing: bool) {
+    Load()
+    if last_frame > 0 && playing {
+        elapsed := now - last_frame
+        // Pauses, suspended tabs and background stalls do not earn playtime.
+        if elapsed > 0 && elapsed <= 1000 { played += elapsed; dirty = true }
+    }
+    last_frame = now
+    if now >= save_at { Save(); save_at = now + 10000 }
+    if now < poll_at { return }
+    poll_at = now + 10000
+    shop := Account.Service("entity.game-shop", "status")
+    unused ReadStringText(shop, FieldAt(shop, 0, "status"), status[:])
+    unused ReadStringText(shop, FieldAt(shop, 0, "device"), device[:])
+    value := ReadNumber(shop, FieldAt(shop, 0, "owned"))
+    if value.valid && value.value >= 0.0 && value.value <= 14.0 { owned = cast(s32)value.value }
+    if Progress.owner[0] == 0 || device[0] == 0 { return }
+    reply := Account.Service("entity.records", "{\"operation\":\"list\",\"kind\":\"wurm-player\",\"fields\":[\"played_ms\",\"visited\",\"skin\"]}")
+    records := FieldAt(reply, 0, "records")
+    if records >= 0 {
+        other_played = 0
+        index: s32 = 0
+        while true {
+            at := ElementAt(reply, records, index)
+            if at < 0 { break }
+            id: [33]u8
+            unused ReadStringText(reply, FieldAt(reply, at, "id"), id[:])
+            duration := ReadNumber(reply, FieldAt(reply, at, "played_ms"))
+            if duration.valid && duration.value >= 0.0 && duration.value <= 315576000000.0 {
+                if TextUntilNul(id[:]) == TextUntilNul(device[:]) {
+                    if cast(s64)duration.value > played { played = cast(s64)duration.value }
+                } else { other_played += cast(s64)duration.value }
+            }
+            flag := FieldAt(reply, at, "visited")
+            if flag >= 0 && reply[flag] == #char "t" { visited = true }
+            index += 1
+        }
+    }
+    if !dirty { return }
+    out: Vec(u8)
+    BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"wurm-player\",\"schema\":\"wurm.player.v1\",\"id\":\"%\",\"document\":{\"played_ms\":%,\"visited\":%,\"skin\":%}}",
+        TextUntilNul(device[:]), played, visited, skin)
+    answer := Account.Service("entity.records", TextView(VecSlice(out, 0, out.count)))
+    done: [16]u8
+    dirty = ReadStringText(answer, FieldAt(answer, 0, "status"), done[:]) < 0 || TextUntilNul(done[:]) != "done"
+    VecFree(out)
+}

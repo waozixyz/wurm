@@ -29,7 +29,7 @@ def verify(apk):
     assert package and package[1] == 'xyz.waozi.wurm' and package[3] == version['version']
     assert int(package[2]) == version['version_code']
     assert 'application-debuggable' not in badging, 'A debug APK cannot be released'
-    assert 'android.permission.INTERNET' not in badging, 'The offline APK must not gain an updater or network permission'
+    assert 'android.permission.INTERNET' in badging, 'Optional account sync and Dew require network access'
     certificate = subprocess.check_output(['openssl', 'x509', '-in', str(ROOT / 'packaging/android/certificate.pem'), '-outform', 'DER'])
     expected = hashlib.sha256(certificate).hexdigest()
     signature = subprocess.check_output([str(tools / 'apksigner'), 'verify', '--verbose', '--print-certs', str(apk)], text=True)
@@ -61,6 +61,7 @@ def verify(apk):
             name = f'assets/levels/level{number}.dat'
             assert archive.read('assets/' + name) == (ROOT / name).read_bytes(), name
         assert archive.read('assets/assets/sounds/garden.pcm') == (ROOT / 'assets/sounds/garden.pcm').read_bytes()
+        assert archive.read('assets/assets/entity.zx') == (ROOT / 'build/profile/entity.zx').read_bytes(), 'The shared Profile must be packaged'
     return dict(version=version['version'], version_code=version['version_code'], package=package[1], abis=abis,
                 sha256=hashlib.sha256(apk.read_bytes()).hexdigest(), certificate_sha256=expected)
 

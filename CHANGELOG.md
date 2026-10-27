@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0] - 2026-10-26
+
+- Play with softer Dusk, Forest and Sage themes, with saved sound and control settings.
+- See a continuous painted meadow instead of a repeating grass grid, and clear Profile and Dew icons on the title.
+- Sign in through the shared Profile to sync completed levels, playtime, settings and your chosen character across devices.
+- Browse the skin shop from the title beside Profile and your Dew balance. Mint, Berry and Rose cost 10, 20 and 30 Dew, with confirmation before buying.
+- Earn Night owl after five hours of active play, Golden apple by completing level 40, and Explorer by visiting waozi.xyz. Purchased skins belong to your account.
+- Unlock all 200 levels by playing. The mobile selector shows large previews for unlocked levels and only a lock for later ones. Dew is used for optional cosmetics.
+
 ## [0.1.8] - 2026-10-26
 
 - Level previews now appear only after you unlock them.

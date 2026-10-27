@@ -65,3 +65,7 @@ ref = "master"
 [dependencies.apps]
 git = "https://github.com/waozixyz/apps.git"
 ref = "master"
+
+[dependencies.entity]
+git = "https://github.com/waozixyz/entity.git"
+ref = "master"

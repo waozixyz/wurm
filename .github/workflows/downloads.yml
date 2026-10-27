@@ -48,7 +48,7 @@ jobs:
       - name: Install native and private-display test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config python3-pil python3-numpy ffmpeg libssl-dev libsdl2-dev libcairo2-dev libfreetype-dev libfontconfig-dev libpango1.0-dev libx11-dev libxcursor-dev libxinerama-dev libxrandr-dev libxi-dev libgl1-mesa-dev xvfb xauth xdotool imagemagick
+          sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config python3-pil python3-numpy ffmpeg libssl-dev libsdl2-dev libcairo2-dev libfreetype-dev libfontconfig-dev libpango1.0-dev libgtk-3-dev libx11-dev libxcursor-dev libxinerama-dev libxrandr-dev libxi-dev libgl1-mesa-dev xvfb xauth xdotool imagemagick
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -78,6 +78,10 @@ jobs:
         run: sh tests/run_local.sh
       - name: Exercise the app on its own private display
         run: python3 tests/private_ui_test.py
+      - name: Build and exercise the shared account interface
+        run: |
+          python3 tools/build_desktop.py
+          python3 tests/account_ui_test.py
       - name: Build and play the browser edition
         run: |
           python3 tools/build_web.py

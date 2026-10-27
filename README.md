@@ -18,7 +18,8 @@ lakeshores to the mountains. Apfelwurm brings the spirit of the original
 Worm game to **200 distinct levels**, with illustrated landscapes, a gentle
 acoustic soundtrack and controls that respond while your finger stays down.
 
-Free to play. No account, no ads and no in-game purchases.
+Free to play. All 200 levels can be unlocked through play. No ads. An optional account keeps your
+progress and character choices in sync, with cosmetic skins available for Dew.
 
 ## Five landscapes. Forty levels each.
 
@@ -36,13 +37,12 @@ Press **Play** and you are straight in the game. The levels follow one after
 another through all five landscapes. You start
 with three lives and earn more as your score grows. Score and lives carry
 between levels throughout your run. **Continue** starts the furthest level
-unlocked on this device with three lives and a fresh score, even after a game
+reached in your journey with three lives and a fresh score, even after a game
 over or closing the game. **Play from start** begins a new run at level 1
-without erasing your unlocked progress.
+without erasing your progress.
 
-**Choose level** lets you browse all five landscapes and replay any unlocked
-level. Board previews appear as you unlock levels; future levels stay locked
-until you reach them.
+**Choose level** lets you browse all five landscapes, see a large board preview for unlocked levels and a lock for later levels.
+Complete a level to unlock the next one.
 After a game over, **Try again** starts the furthest unlocked level with
 three lives and a fresh score.
 
@@ -55,9 +55,9 @@ the screen for the next corner. Change your choice from Pause at any time.
 On a keyboard, use the arrow keys or WASD. Space or Escape pauses; M mutes.
 Collect every apple, then leave through the opening at the top of the board.
 
-Portrait and landscape use their own board layouts. Your run and control
-choice stay on your device. Android plays offline; the browser edition
-keeps its saves in this browser.
+Portrait and landscape use their own board layouts. Your unfinished run stays
+on this device. Android and the browser can play offline after their assets
+are loaded. Signing in syncs earned completion marks and preferences.
 
 ## Make a path of your own
 
@@ -72,9 +72,22 @@ other version. Playtest always uses the selected layout.
 
 ## Keep the journey yours
 
-Progress, control choices and personal levels are stored locally. There is no
-account or tracking. The Android edition needs no network permission, and
-personal editor records are kept out of the published game packages.
+Open **Settings** on the title to choose the softer Dusk, Forest or Sage theme,
+change controls or switch sound on and off. **Profile** uses the same account
+system as Shovey: create an account, import your key or link another device.
+Completion marks, active playtime, preferences and your chosen skin follow the
+signed-in account. Guest progress and each account stay separate. Your
+unfinished run and personal editor records stay on this device.
+
+The title's **Skin shop** offers Mint for **10 Dew**, Berry for **20 Dew** and
+Rose for **30 Dew**, with confirmation before buying. Retrying a purchase,
+including from another device, cannot charge for that skin twice. Earn
+**Night owl** by playing actively for **5 hours**, **Golden apple** by
+completing **level 40**, or **Explorer** by opening **waozi.xyz** from the shop.
+Levels unlock through play; Dew buys optional cosmetics.
+
+Account sync and Dew need a connection. There is no advertising or analytics,
+and personal editor records are kept out of published packages.
 
 [Play Apfelwurm](https://wurm.waozi.xyz/)
 · [Android downloads](https://github.com/waozixyz/wurm/releases/latest)
@@ -86,7 +99,8 @@ Built with [Ziran](https://ziran-lang.org) and [Kryon](https://kryonlabs.com).
 The desktop, Android and browser editions share the same game rules.
 
 ```sh
-ziran run desktop
+python3 tools/build_desktop.py
+build/account-desktop/wurm
 sh tests/run_local.sh
 ```
 

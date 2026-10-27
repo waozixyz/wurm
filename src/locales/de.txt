@@ -1,3 +1,123 @@
 [wurm_back]
 Zurück
 ---
+[wurm_ui_0]
+Zurück
+---
+[wurm_ui_1]
+Profil
+---
+[wurm_ui_2]
+Einstellungen
+---
+[wurm_ui_3]
+Skin-Shop
+---
+[wurm_ui_4]
+Ein kleiner Typwechsel.
+---
+[wurm_ui_5]
+Aussehen
+---
+[wurm_ui_6]
+Sanftere Farben für dein Apfelabenteuer.
+---
+[wurm_ui_7]
+Abend
+---
+[wurm_ui_8]
+Wald
+---
+[wurm_ui_9]
+Salbei
+---
+[wurm_ui_10]
+Steuerung
+---
+[wurm_ui_11]
+Wischen
+---
+[wurm_ui_12]
+Steuerkreuz
+---
+[wurm_ui_13]
+Ton
+---
+[wurm_ui_14]
+An
+---
+[wurm_ui_15]
+Aus
+---
+[wurm_ui_16]
+Minze
+---
+[wurm_ui_17]
+Beere
+---
+[wurm_ui_18]
+Rose
+---
+[wurm_ui_19]
+Nachteule
+---
+[wurm_ui_20]
+Goldapfel
+---
+[wurm_ui_21]
+Entdecker
+---
+[wurm_ui_22]
+Dein erster Begleiter
+---
+[wurm_ui_23]
+5 Stunden spielen
+---
+[wurm_ui_24]
+Level 40 abschließen
+---
+[wurm_ui_25]
+waozi.xyz besuchen
+---
+[wurm_ui_26]
+Ausgewählt
+---
+[wurm_ui_27]
+Auswählen
+---
+[wurm_ui_28]
+Kaufen
+---
+[wurm_ui_29]
+Besuchen
+---
+[wurm_ui_30]
+Gesperrt
+---
+[wurm_ui_31]
+Abbrechen
+---
+[wurm_ui_32]
+Anmelden
+---
+[wurm_ui_33]
+Bitte warten…
+---
+[wurm_ui_34]
+Kauf bestätigen
+---
+[wurm_ui_35]
+Kauf unbestätigt. Dew prüfen und erneut versuchen.
+---
+[wurm_ui_36]
+Schließe Level ab, um weitere freizuschalten
+---
+[wurm_ui_37]
+Spielbereit
+---
+[wurm_ui_38]
+Abgeschlossen
+---
+[wurm_ui_39]
+Level wählen
+---

@@ -1,6 +1,12 @@
 // The current run carries lives and score. Unlocked levels survive new runs
 // and game overs, so Continue can always replay the furthest level reached.
 Records :: #import, file "controls.zi";
+Account :: #import, file "account.zi";
+Shared :: #import "entity/game_progress";
+#import "std/json_scan"
+#import "std/c_string"
+#import "std/text_buffer"
+#import "std/vec"
 LEVELS :: 200;
 START_LIVES :: 3;
 level: s32;
@@ -8,17 +14,34 @@ lives: s32 = START_LIVES;
 score: s32;
 unlocked: s32;
 loaded: bool;
+owner: [65]u8;
+completed: [200]u8;
+dirty: bool;
+poll_at: s64;
+record_name: [112]u8;
+RecordName :: (name: string) -> string {
+    if owner[0] == 0 { return name }
+    at: s64 = 0
+    for byte: TextUntilNul(owner[:]) { record_name[at] = byte; at += 1 }
+    record_name[at] = #char "."; at += 1
+    for byte: name { record_name[at] = byte; at += 1 }
+    record_name[at] = 0
+    return TextUntilNul(record_name[:])
+}
 
 Load :: () {
     if loaded { return }
     loaded = true
+    completed = .{}
+    pending: [2]u8
+    if Records.ReadRecord(RecordName("progress-pending.dat"), pending[:]) == 1 { dirty = pending[0] == 1 }
     furthest: [2]u8
-    if Records.ReadRecord("unlocked.dat", furthest[:]) == 1 && cast(s32)furthest[0] < LEVELS {
+    if Records.ReadRecord(RecordName("unlocked.dat"), furthest[:]) == 1 && cast(s32)furthest[0] < LEVELS {
         unlocked = cast(s32)furthest[0]
     }
     bytes: [7]u8
     has_run := false
-    if Records.ReadRecord("run.dat", bytes[:]) == 6 {
+    if Records.ReadRecord(RecordName("run.dat"), bytes[:]) == 6 {
         saved := cast(s32)bytes[2] | (cast(s32)bytes[3] << 8) | (cast(s32)bytes[4] << 16) | (cast(s32)(bytes[5] & 127) << 24)
         if cast(s32)bytes[0] < LEVELS && bytes[1] > 0 {
             level = cast(s32)bytes[0]
@@ -29,15 +52,15 @@ Load :: () {
         }
     }
     // Import both older save formats without letting a newer run erase unlocks.
-    completed: [6]u8
-    if Records.ReadRecord("journey.dat", completed[:]) == 5 {
+    legacy: [6]u8
+    if Records.ReadRecord(RecordName("journey.dat"), legacy[:]) == 5 {
         valid := true
-        for stage: 0..4 { if completed[stage] > 40 { valid = false } }
+        for stage: 0..4 { if legacy[stage] > 40 { valid = false } }
         if valid {
             reached: s32 = LEVELS - 1
             for stage: 0..4 {
-                if completed[stage] < 40 {
-                    reached = cast(s32)stage * 40 + cast(s32)completed[stage]
+                if legacy[stage] < 40 {
+                    reached = cast(s32)stage * 40 + cast(s32)legacy[stage]
                     break
                 }
             }
@@ -47,11 +70,15 @@ Load :: () {
     }
     // Preserve imported progress before Play or a game over replaces run.dat.
     if unlocked > 0 { unused SaveUnlocked() }
+    earned: [201]u8
+    if Records.ReadRecord(RecordName("completed.dat"), earned[:]) == 200 {
+        for index: 0..199 { completed[index] = ifx earned[index] == 1 then 1 else 0 }
+    }
 }
 
 SaveUnlocked :: () -> bool {
     bytes: [1]u8 = .[cast(u8)unlocked]
-    return Records.WriteRecord("unlocked.dat", bytes[:])
+    return Records.WriteRecord(RecordName("unlocked.dat"), bytes[:])
 }
 
 Save :: () -> bool {
@@ -59,7 +86,7 @@ Save :: () -> bool {
     kept := ifx lives > 255 then 255 else lives
     bytes: [6]u8 = .[cast(u8)level, cast(u8)kept, cast(u8)(score & 255), cast(u8)((score >> 8) & 255),
         cast(u8)((score >> 16) & 255), cast(u8)((score >> 24) & 127)]
-    return Records.WriteRecord("run.dat", bytes[:])
+    return Records.WriteRecord(RecordName("run.dat"), bytes[:])
 }
 
 // Each level starts from what the run carries into it.
@@ -85,6 +112,73 @@ Restart :: () -> bool { return Begin(0, START_LIVES, 0) }
 Continue :: () -> bool { Load(); return Begin(unlocked, START_LIVES, 0) }
 Select :: (at: s32) -> bool {
     Load()
-    if at < 0 || at > unlocked { return false }
+    if at < 0 || at > unlocked || at >= LEVELS { return false }
     return Begin(at, START_LIVES, 0)
+}
+
+Completed :: (at: s32) -> bool { return at >= 0 && at < LEVELS && completed[at] == 1 }
+Complete :: (at: s32) {
+    if at < 0 || at >= LEVELS { return }
+    // A completion belongs to the account that started this game.
+    status := Account.Service("entity.records", "{\"operation\":\"status\"}")
+    current: [65]u8
+    if ReadStringText(status, FieldAt(status, 0, "account"), current[:]) >= 0 &&
+    TextUntilNul(current[:]) != TextUntilNul(owner[:]) { return }
+    completed[at] = 1
+    unused Records.WriteRecord(RecordName("completed.dat"), completed[:])
+    dirty = true
+    pending: [1]u8 = .[1]
+    unused Records.WriteRecord(RecordName("progress-pending.dat"), pending[:])
+    poll_at = 0
+}
+Pump :: (now: s64) -> bool {
+    if now < poll_at { return false }
+    poll_at = now + 5000
+    status := Account.Service("entity.records", "{\"operation\":\"status\"}")
+    current: [65]u8
+    if ReadStringText(status, FieldAt(status, 0, "account"), current[:]) < 0 { return false }
+    changed := TextUntilNul(current[:]) != TextUntilNul(owner[:])
+    if changed {
+        owner = current
+        loaded = false
+        level = 0; lives = START_LIVES; score = 0; unlocked = 0
+        completed = .{}
+        dirty = false
+        Load()
+    }
+    if current[0] == 0 { return changed }
+    reply := Account.Service("entity.records", "{\"operation\":\"get\",\"kind\":\"game-progress\",\"game\":\"wurm\"}")
+    at := FieldAt(reply, 0, "document")
+    end := ValueEnd(reply, at, 0)
+    record: Shared.GameProgressRecord
+    unused CopyCString("wurm", record.game[:])
+    record.unlocked = 1
+    if at >= 0 && end > at && Shared.GameProgressRead(reply[at:end], *record) &&
+    TextUntilNul(record.game[:]) == "wurm" {
+        if record.unlocked - 1 > unlocked && record.unlocked <= LEVELS { unlocked = record.unlocked - 1; unused SaveUnlocked() }
+        for index: 0..199 {
+            if record.completed[index] == #char "1" { completed[index] = 1 }
+        }
+        unused Records.WriteRecord(RecordName("completed.dat"), completed[:])
+    }
+    if !dirty { return changed }
+    unused CopyCString("wurm", record.game[:])
+    record.unlocked = 1
+    for index: 0..199 {
+        record.completed[index] = ifx completed[index] == 1 then #char "1" else #char "0"
+        if completed[index] == 1 { record.unlocked = cast(s32)index + 2 }
+    }
+    record.completed[200] = 0
+    if record.unlocked > LEVELS { record.unlocked = LEVELS }
+    out: Vec(u8)
+    BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"game-progress\",\"schema\":\"entity.game-progress.v1\",\"document\":")
+    Shared.GameProgressWrite(*record, *out)
+    BuilderPrint(*out, "}")
+    saved := Account.Service("entity.records", TextView(VecSlice(out, 0, out.count)))
+    bytes: [16]u8
+    dirty = ReadStringText(saved, FieldAt(saved, 0, "status"), bytes[:]) < 0 || TextUntilNul(bytes[:]) != "done"
+    pending: [1]u8 = .[ifx dirty then cast(u8)1 else cast(u8)0]
+    unused Records.WriteRecord(RecordName("progress-pending.dat"), pending[:])
+    VecFree(out)
+    return changed
 }

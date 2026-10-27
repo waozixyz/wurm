@@ -8,6 +8,7 @@
 #import "kryon/tree"
 #import "kryon/tree_input"
 #import "kryon/Frame"
+#import "kryon/TestDriver"
 File :: #import "std/file_linux";
 App :: #import "app";
 
@@ -32,8 +33,11 @@ FindAssets :: () -> bool {
     path[index] = 0
     if ChangeDirectory(*path[0]) != 0 { return false }
     if File.PathExists("assets/art/title.png") { return true }
-    if !CopyCString("..", link[:]) || ChangeDirectory(*link[0]) != 0 { return false }
-    return File.PathExists("assets/art/title.png")
+    for parent: 0..2 {
+        if !CopyCString("..", link[:]) || ChangeDirectory(*link[0]) != 0 { return false }
+        if File.PathExists("assets/art/title.png") { return true }
+    }
+    return false
 }
 
 window_width: s32;
@@ -81,10 +85,10 @@ StartScreen :: () {
 DrawFrame :: (session: Session) -> bool {
     BeginDesktopFrame()
     viewport := DesktopViewport()
-    pointer := PollPointer()
+    pointer := TestDriverPointer(session, PollPointer())
     TreePointerUpdate(session, pointer)
     TreeSecondaryPointerUpdate(session, PollSecondaryPointer())
-    wheel := DesktopWheelMove()
+    wheel := TestDriverWheel(DesktopWheelMove())
     PointerWheelSend(session, pointer.x, pointer.y, wheel)
     if cast(s32)BeginFrame(session, 1, viewport) != 0 { return false }
     if App.Frame(session, viewport) != 0 {
@@ -92,6 +96,7 @@ DrawFrame :: (session: Session) -> bool {
         return false
     }
     if cast(s32)EndFrame(session) != 0 { return false }
+    TestDriverFrame(session)
     unused DesktopCursor(session)
     return EndDesktopFrame()
 }

@@ -1,3 +1,123 @@
 [wurm_back]
 Back
 ---
+[wurm_ui_0]
+Back
+---
+[wurm_ui_1]
+Profile
+---
+[wurm_ui_2]
+Settings
+---
+[wurm_ui_3]
+Skin shop
+---
+[wurm_ui_4]
+A little change of character.
+---
+[wurm_ui_5]
+Appearance
+---
+[wurm_ui_6]
+Softer colours for your apple adventure.
+---
+[wurm_ui_7]
+Dusk
+---
+[wurm_ui_8]
+Forest
+---
+[wurm_ui_9]
+Sage
+---
+[wurm_ui_10]
+Controls
+---
+[wurm_ui_11]
+Swipe
+---
+[wurm_ui_12]
+Direction pad
+---
+[wurm_ui_13]
+Sound
+---
+[wurm_ui_14]
+On
+---
+[wurm_ui_15]
+Off
+---
+[wurm_ui_16]
+Mint
+---
+[wurm_ui_17]
+Berry
+---
+[wurm_ui_18]
+Rose
+---
+[wurm_ui_19]
+Night owl
+---
+[wurm_ui_20]
+Golden apple
+---
+[wurm_ui_21]
+Explorer
+---
+[wurm_ui_22]
+Your first companion
+---
+[wurm_ui_23]
+Play for 5 hours
+---
+[wurm_ui_24]
+Complete level 40
+---
+[wurm_ui_25]
+Visit waozi.xyz
+---
+[wurm_ui_26]
+Wearing
+---
+[wurm_ui_27]
+Wear
+---
+[wurm_ui_28]
+Buy
+---
+[wurm_ui_29]
+Visit
+---
+[wurm_ui_30]
+Locked
+---
+[wurm_ui_31]
+Cancel
+---
+[wurm_ui_32]
+Sign in
+---
+[wurm_ui_33]
+Please wait…
+---
+[wurm_ui_34]
+Confirm purchase
+---
+[wurm_ui_35]
+Purchase not confirmed. Check your Dew and retry.
+---
+[wurm_ui_36]
+Finish levels to unlock more
+---
+[wurm_ui_37]
+Ready to play
+---
+[wurm_ui_38]
+Completed
+---
+[wurm_ui_39]
+Choose level
+---

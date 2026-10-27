@@ -1,3 +1,123 @@
 [wurm_back]
 Kembali
 ---
+[wurm_ui_0]
+Kembali
+---
+[wurm_ui_1]
+Profil
+---
+[wurm_ui_2]
+Pengaturan
+---
+[wurm_ui_3]
+Toko tampilan
+---
+[wurm_ui_4]
+Sedikit perubahan karakter.
+---
+[wurm_ui_5]
+Tampilan
+---
+[wurm_ui_6]
+Warna lembut untuk petualanganmu.
+---
+[wurm_ui_7]
+Senja
+---
+[wurm_ui_8]
+Hutan
+---
+[wurm_ui_9]
+Sage
+---
+[wurm_ui_10]
+Kontrol
+---
+[wurm_ui_11]
+Geser
+---
+[wurm_ui_12]
+Tombol arah
+---
+[wurm_ui_13]
+Suara
+---
+[wurm_ui_14]
+Aktif
+---
+[wurm_ui_15]
+Nonaktif
+---
+[wurm_ui_16]
+Mint
+---
+[wurm_ui_17]
+Beri
+---
+[wurm_ui_18]
+Mawar
+---
+[wurm_ui_19]
+Burung malam
+---
+[wurm_ui_20]
+Apel emas
+---
+[wurm_ui_21]
+Penjelajah
+---
+[wurm_ui_22]
+Teman pertamamu
+---
+[wurm_ui_23]
+Main selama 5 jam
+---
+[wurm_ui_24]
+Selesaikan level 40
+---
+[wurm_ui_25]
+Kunjungi waozi.xyz
+---
+[wurm_ui_26]
+Dipakai
+---
+[wurm_ui_27]
+Pakai
+---
+[wurm_ui_28]
+Beli
+---
+[wurm_ui_29]
+Kunjungi
+---
+[wurm_ui_30]
+Terkunci
+---
+[wurm_ui_31]
+Batal
+---
+[wurm_ui_32]
+Masuk
+---
+[wurm_ui_33]
+Tunggu…
+---
+[wurm_ui_34]
+Konfirmasi pembelian
+---
+[wurm_ui_35]
+Pembelian belum terkonfirmasi. Periksa Dew dan coba lagi.
+---
+[wurm_ui_36]
+Selesaikan level untuk membuka yang lain
+---
+[wurm_ui_37]
+Siap dimainkan
+---
+[wurm_ui_38]
+Selesai
+---
+[wurm_ui_39]
+Pilih level
+---

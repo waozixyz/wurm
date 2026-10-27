@@ -1,3 +1,123 @@
 [wurm_back]
 Atrás
 ---
+[wurm_ui_0]
+Atrás
+---
+[wurm_ui_1]
+Perfil
+---
+[wurm_ui_2]
+Ajustes
+---
+[wurm_ui_3]
+Tienda de aspectos
+---
+[wurm_ui_4]
+Un pequeño cambio de personaje.
+---
+[wurm_ui_5]
+Apariencia
+---
+[wurm_ui_6]
+Colores suaves para tu aventura.
+---
+[wurm_ui_7]
+Atardecer
+---
+[wurm_ui_8]
+Bosque
+---
+[wurm_ui_9]
+Salvia
+---
+[wurm_ui_10]
+Controles
+---
+[wurm_ui_11]
+Deslizar
+---
+[wurm_ui_12]
+Cruceta
+---
+[wurm_ui_13]
+Sonido
+---
+[wurm_ui_14]
+Activado
+---
+[wurm_ui_15]
+Desactivado
+---
+[wurm_ui_16]
+Menta
+---
+[wurm_ui_17]
+Baya
+---
+[wurm_ui_18]
+Rosa
+---
+[wurm_ui_19]
+Búho nocturno
+---
+[wurm_ui_20]
+Manzana dorada
+---
+[wurm_ui_21]
+Explorador
+---
+[wurm_ui_22]
+Tu primer compañero
+---
+[wurm_ui_23]
+Juega 5 horas
+---
+[wurm_ui_24]
+Completa el nivel 40
+---
+[wurm_ui_25]
+Visita waozi.xyz
+---
+[wurm_ui_26]
+En uso
+---
+[wurm_ui_27]
+Usar
+---
+[wurm_ui_28]
+Comprar
+---
+[wurm_ui_29]
+Visitar
+---
+[wurm_ui_30]
+Bloqueado
+---
+[wurm_ui_31]
+Cancelar
+---
+[wurm_ui_32]
+Iniciar sesión
+---
+[wurm_ui_33]
+Espera…
+---
+[wurm_ui_34]
+Confirmar compra
+---
+[wurm_ui_35]
+Compra sin confirmar. Revisa tu Dew e inténtalo de nuevo.
+---
+[wurm_ui_36]
+Completa niveles para desbloquear más
+---
+[wurm_ui_37]
+Disponible
+---
+[wurm_ui_38]
+Completado
+---
+[wurm_ui_39]
+Elegir nivel
+---

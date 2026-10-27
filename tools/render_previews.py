@@ -25,6 +25,7 @@ def main():
     for stage, first, end in STAGES:
         sheet = Image.open(ROOT / f"assets/art/campaign-{stage}.png").convert("RGBA")
         canopy = Image.open(ROOT / 'assets/art/forest-canopy.png').convert('RGBA') if stage == 'leafwood' else None
+        ground = Image.open(ROOT / 'assets/art/ground-meadow.png').convert('RGBA') if stage == 'meadow' else None
         for number in range(1, end - first + 1):
             designed = ROOT / "build/designed" / f"level{first + number}.dat"
             raw_path = designed
@@ -51,6 +52,9 @@ def main():
                         source=sheet.crop(((tile%20)*32,(tile//20)*32,(tile%20)*32+32,(tile//20)*32+32))
                         if field is not None and (tile==20 or 50<=tile<=58):
                             source=field.crop((x*32,y*32,(x+1)*32,(y+1)*32))
+                        if ground is not None and tile in (0,3,4,5,6,15,16,17,19):
+                            source=ground.crop((x*ground.width/columns,y*ground.height/rows,
+                                               (x+1)*ground.width/columns,(y+1)*ground.height/rows))
                         if enemy is not None:
                             column=6 if enemy==40 else enemy-40
                             source=source.copy()

@@ -6,6 +6,7 @@ AppKeyHost :: () -> s32 #foreign host_api;
 AppRecordHost :: (name: string) -> string #foreign host_api;
 SaveAppRecordHost :: (name: string, text: string) -> bool #foreign host_api;
 AppServiceHost :: (name: string, request: string) -> string #foreign host_api;
+Service :: (name: string, request: string) -> string { return AppServiceHost(name, request) }
 
 frame_time: s64;
 FrameTime :: (now: float64) { frame_time = cast(s64)(now * 1000.0) }

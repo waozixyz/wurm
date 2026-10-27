@@ -34,6 +34,8 @@ MODE_VICTORY :: 5;
 MODE_EDITOR :: 6;
 MODE_CONTROLS :: 7;
 MODE_LEVELS :: 8;
+MODE_SETTINGS :: 9;
+MODE_SHOP :: 10;
 
 // A gentle Meadow introduction, reaching the recovered pace at Leafwood.
 TickInterval :: (level: s32) -> s64 {

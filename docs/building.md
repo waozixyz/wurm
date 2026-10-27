@@ -14,8 +14,7 @@ patrols and chasing creatures. Enemy counts and apple goals increase across
 stages, while the first six levels introduce movement without enemies.
 Opening Meadow levels move more slowly before reaching the original pace.
 Levels follow in order through every landscape. Choose level offers a
-scrollable grid for each landscape; only unlocked levels show board previews
-and can be played. The run (level, lives and score carried into that level) and the
+scrollable grid for each landscape; unlocked levels have large board previews and future levels show a lock. The run (level, lives and score carried into that level) and the
 control choice persist. Unlocked progress is saved after every completed
 level and survives game over, closing the game and starting a new run.
 Continue starts the highest unlocked level with three lives and a fresh
@@ -60,7 +59,7 @@ into play.
 
 ## Mobile-first layout
 
-In play, a cream status bar shows the chapter, level, hearts, apples and score.
+In play, a themed status bar shows the chapter, level, hearts, apples and score.
 Its status chips move onto a second row on narrow phones, keeping the 48-unit
 Pause button clear. Pause, game-over and completion dialogs use large stacked
 touch buttons and a compact composition for short landscape screens; the title artwork fills the
@@ -127,7 +126,8 @@ The portable host plays packed sound effects. The native editions keep the
 streaming soundtrack and secondary-pointer editor controls.
 
 ```sh
-ziran run --locked desktop
+python3 tools/build_desktop.py
+build/account-desktop/wurm
 python3 tools/build_android.py --abi arm64-v8a
 ziran run --locked shot > build/stages.ppm
 WORM_SHOT_LEVEL=200 ziran run --locked shot > build/forest-finale.ppm
@@ -243,3 +243,36 @@ The website repository's Apfelwurm site workflow checks for a newer published
 release every ten minutes and deploys its verified browser archive to the
 `wurm` Cloudflare Pages project at https://wurm.waozi.xyz automatically, using
 the website's existing deployment credentials. Nothing needs updating by hand.
+
+## Profile, appearance and cosmetics
+
+The release desktop build uses `tools/build_desktop.py`. Android and browser
+builds use the same native Entity account provider through `src/account.zi`;
+keys stay in the provider. Desktop profile data lives in
+`$XDG_DATA_HOME/wurm/profile` (or `~/.local/share/wurm/profile`), Android uses
+private app storage, and the browser uses IndexedDB. `WURM_PROFILE_DIR` selects
+a private fixture. Do not point tests at an owner's profile.
+
+Earned marks use Entity's merged `game-progress` record named `wurm`. Runs are
+local and completion masks are account scoped. Account changes end the current
+view without publishing its old run under the new account. Guest marks never
+seed another account automatically. Offline pending completions survive restart.
+
+`wurm-player` has one record per provider device ID, so active milliseconds from
+different devices are summed rather than overwritten. Pauses and suspended
+frames do not count. `wurm-settings` keeps the selected skin, theme, sound and
+controls. A website unlock records opening the explicit `https://waozi.xyz/`
+link; it makes no claim to track visits or browsing.
+
+The provider's `entity.game-shop` spends exact integer millionths of Dew and
+restores ownership from account-scoped ledger receipts. One stable product key
+is shared across retries and devices. The game grants paid skins only after a
+confirmed receipt. The three prices are 10, 20 and 30 Dew.
+
+`tests/account_test.zi` covers account changes, completion-only publication,
+offline retry and playtime unlocks. `tests/account_ui_test.py` drives the actual
+account build on its own verified Xvfb display in both orientations. Entity's
+`python3 scripts/game_shop_test.py` additionally verifies authenticated private
+node spending, retry deduplication, fresh-device restore and isolation with
+throwaway accounts and Dew. GitHub Actions and live deployment are verified
+separately from these local tests.

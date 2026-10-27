@@ -1,0 +1,106 @@
+// Portable games receive only bounded services. Native editions keep keys in
+// Entity's provider, in this application's private profile directory.
+#import "kryon/session"
+#import "kryon/geometry"
+#if #defined(WURM_ACCOUNT_TEST) {
+    test_api :: #system_library "host_api";
+    WurmAccountService :: (name: string, request: string) -> string #foreign test_api;
+    Service :: (name: string, request: string) -> string { return WurmAccountService(name, request) }
+} else #if #defined(WURM_PORTABLE) {
+    Runtime :: #import "portable_runtime";
+    #import "std/text_buffer"
+    shop_request: [128]u8;
+    Service :: (name: string, request: string) -> string {
+        if name == "entity.game-shop" && request.count < 120 {
+            prefix := "shop:"
+            for byte, index: prefix { shop_request[index] = byte }
+            for byte, index: request { shop_request[index + 5] = byte }
+            shop_request[request.count + 5] = 0
+            return Runtime.Service("entity.dew", TextUntilNul(shop_request[:]))
+        }
+        return Runtime.Service(name, request)
+    }
+    Pump :: () {}
+    OpenProfile :: () { unused Service("entity.profile", "open") }
+    ProfileVisible :: () -> bool { return false }
+    DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {}
+    Back :: () {}
+    VisitWebsite :: () -> bool { return Service("entity.game-shop", "visit") == "queued" }
+} else #if #defined(WURM_ACCOUNTS) {
+    Entity :: #import "entity/native_host";
+    Records :: #import "entity/entity_records";
+    Dew :: #import "entity/entity_dew";
+    Shop :: #import "entity/game_shop_native";
+    Files :: #import "entity/native_files";
+    File :: #import "std/file";
+    #import "std/text_buffer"
+    #import "kryon/app_files"
+    #import "kryon/tree_input"
+    #import "kryon/key_input"
+    #import "kryon/text_input_props"
+    #import "kryon/open_uri"
+    #if #defined(ANDROID_BUILD) {
+        #import "kryon/android_jni"
+        Assets :: #import "kryon/app_asset";
+    }
+    started: bool;
+    ready: bool;
+    visible: bool;
+    profile_bytes: string;
+    Root :: (output: []u8) -> string {
+        #if #defined(PLATFORM_WEB) {
+            return "/kryon-apps/wurm-profile"
+        }
+        override := Files.NativeEnvironment("WURM_PROFILE_DIR")
+        if override != "" { return override }
+        base: [4096]u8
+        #if #defined(ANDROID_BUILD) {
+            return Files.NativeJoin(output, AndroidPrivateDataPath(base[:]), "profile")
+        } else {
+            data := Files.NativeEnvironment("XDG_DATA_HOME")
+            if data == "" { data = Files.NativeJoin(base[:], Files.NativeEnvironment("HOME"), ".local/share") }
+            app: [4096]u8
+            return Files.NativeJoin(output, Files.NativeJoin(app[:], data, "wurm"), "profile")
+        }
+    }
+    Pump :: () {
+        if !started {
+            started = true
+            #if #defined(ANDROID_BUILD) {
+                profile_bytes = Assets.ReadAppAsset("assets/entity.zx")
+            } else {
+                bytes, found := File.ReadEntireFile("assets/entity.zx")
+                if found { profile_bytes = bytes }
+            }
+            root: [4096]u8
+            if profile_bytes != "" { ready = Entity.EntityHostOpen(profile_bytes, Root(root[:]), "arcade", true) }
+        }
+        if ready { Entity.EntityHostPump() }
+    }
+    Service :: (name: string, request: string) -> string {
+        if !ready { return "" }
+        if name == "entity.records" { return Records.EntityRecordsAnswer(request) }
+        if name == "entity.dew" { return Dew.EntityDewAnswer(request) }
+        if name == "entity.game-shop" { return Shop.EntityGameShopAnswer(request) }
+        if name == "entity.profile" && request == "open" { OpenProfile(); return "available" }
+        return ""
+    }
+    OpenProfile :: () { if ready { Entity.EntityHostReload(); visible = true } }
+    ProfileVisible :: () -> bool { return visible }
+    DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {
+        typed: [1024]u8
+        input := TextFieldInputFor(key, KeyboardModifiers(session), TypedTextTake(session, typed[:]))
+        unused Entity.EntityHostFrame(session, bounds, key, KeyboardModifiers(session), input, dark)
+    }
+    Back :: () { if !Entity.EntityHostBack() && Entity.EntityHostSave() { visible = false } }
+    VisitWebsite :: () -> bool { return OpenUri("https://waozi.xyz/") }
+} else {
+    #import "kryon/open_uri"
+    Service :: (name: string, request: string) -> string { unused name; unused request; return "" }
+    Pump :: () {}
+    OpenProfile :: () {}
+    ProfileVisible :: () -> bool { return false }
+    DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {}
+    Back :: () {}
+    VisitWebsite :: () -> bool { return OpenUri("https://waozi.xyz/") }
+}

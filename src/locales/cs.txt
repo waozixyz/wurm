@@ -1,3 +1,123 @@
 [wurm_back]
 Zpět
 ---
+[wurm_ui_0]
+Zpět
+---
+[wurm_ui_1]
+Profil
+---
+[wurm_ui_2]
+Nastavení
+---
+[wurm_ui_3]
+Obchod se vzhledy
+---
+[wurm_ui_4]
+Malá změna postavičky.
+---
+[wurm_ui_5]
+Vzhled
+---
+[wurm_ui_6]
+Jemnější barvy pro tvé dobrodružství.
+---
+[wurm_ui_7]
+Soumrak
+---
+[wurm_ui_8]
+Les
+---
+[wurm_ui_9]
+Šalvěj
+---
+[wurm_ui_10]
+Ovládání
+---
+[wurm_ui_11]
+Tažení
+---
+[wurm_ui_12]
+Směrový ovladač
+---
+[wurm_ui_13]
+Zvuk
+---
+[wurm_ui_14]
+Zapnuto
+---
+[wurm_ui_15]
+Vypnuto
+---
+[wurm_ui_16]
+Máta
+---
+[wurm_ui_17]
+Bobule
+---
+[wurm_ui_18]
+Růže
+---
+[wurm_ui_19]
+Noční sova
+---
+[wurm_ui_20]
+Zlaté jablko
+---
+[wurm_ui_21]
+Průzkumník
+---
+[wurm_ui_22]
+Tvůj první společník
+---
+[wurm_ui_23]
+Hraj 5 hodin
+---
+[wurm_ui_24]
+Dokonči úroveň 40
+---
+[wurm_ui_25]
+Navštiv waozi.xyz
+---
+[wurm_ui_26]
+Používáš
+---
+[wurm_ui_27]
+Použít
+---
+[wurm_ui_28]
+Koupit
+---
+[wurm_ui_29]
+Navštívit
+---
+[wurm_ui_30]
+Zamčeno
+---
+[wurm_ui_31]
+Zrušit
+---
+[wurm_ui_32]
+Přihlásit se
+---
+[wurm_ui_33]
+Počkej…
+---
+[wurm_ui_34]
+Potvrdit nákup
+---
+[wurm_ui_35]
+Nákup nepotvrzen. Zkontroluj Dew a zkus to znovu.
+---
+[wurm_ui_36]
+Dokonči úrovně a odemkni další
+---
+[wurm_ui_37]
+Připraveno
+---
+[wurm_ui_38]
+Dokončeno
+---
+[wurm_ui_39]
+Vybrat úroveň
+---
