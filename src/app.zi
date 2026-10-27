@@ -1625,15 +1625,20 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     if game.mode == MODE_FINISHED && !editor.playtest && recorded_level != game.level {
         Progress.Complete(game.level)
         if Progress.Begin(game.level + 1, game.lives, game.score) { recorded_level = game.level }
+        Progress.RecordRun(game.level + 2, game.score)
     }
     // The run keeps each lost life; a game over or the finished journey
     // starts the next run at level one.
     if !editor.playtest && game.lives < lives_before {
-        if game.mode == MODE_DIED { unused Progress.Restart() }
+        if game.mode == MODE_DIED {
+            Progress.RecordRun(game.level + 1, game.score)
+            unused Progress.Restart()
+        }
         else { unused Progress.LoseLife() }
     }
     if game.mode == MODE_VICTORY && !editor.playtest && recorded_level != game.level {
         Progress.Complete(game.level)
+        Progress.RecordRun(LEVEL_COUNT, game.score)
         if Progress.Restart() { recorded_level = game.level }
     }
     Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,

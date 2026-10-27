@@ -31,6 +31,7 @@
     Records :: #import "entity/entity_records";
     Dew :: #import "entity/entity_dew";
     Shop :: #import "entity/game_shop_native";
+    Leaderboard :: #import "entity/leaderboard_native";
     Files :: #import "entity/native_files";
     File :: #import "std/file";
     #import "std/text_buffer"
@@ -89,6 +90,11 @@
         if name == "entity.records" { return Records.EntityRecordsAnswer(request) }
         if name == "entity.dew" { return Dew.EntityDewAnswer(request) }
         if name == "entity.game-shop" { return Shop.EntityGameShopAnswer(request) }
+        // The best run, on the board Arcade names after the game's catalog id.
+        if name == "leaderboard" {
+            saved := Leaderboard.EntityLeaderboardReport("wurm", "Apfelwurm", "xyz.waozi.wurm", "Apfelwurm", request)
+            return ifx saved then "saved" else "rejected"
+        }
         if name == "entity.profile" && request == "open" { OpenProfile(); return "available" }
         return ""
     }

@@ -19,6 +19,12 @@ completed: [200]u8;
 dirty: bool;
 poll_at: s64;
 record_name: [112]u8;
+// The best run for the leaderboard: the furthest level reached and the
+// highest score of any run. Each account keeps its own.
+best_level: s32;
+best_score: s32;
+reported_level: s32 = -1;
+reported_score: s32 = -1;
 RecordName :: (name: string) -> string {
     if owner[0] == 0 { return name }
     at: s64 = 0
@@ -73,6 +79,44 @@ Load :: () {
     earned: [201]u8
     if Records.ReadRecord(RecordName("completed.dat"), earned[:]) == 200 {
         for index: 0..199 { completed[index] = ifx earned[index] == 1 then 1 else 0 }
+    }
+    best: [9]u8
+    if Records.ReadRecord(RecordName("best.dat"), best[:]) == 8 {
+        best_level = cast(s32)best[0] | (cast(s32)best[1] << 8)
+        best_score = cast(s32)best[4] | (cast(s32)best[5] << 8) | (cast(s32)best[6] << 16) | (cast(s32)(best[7] & 127) << 24)
+        if best_level > LEVELS { best_level = LEVELS }
+    }
+}
+
+// A finished level, a game over or the end of the journey: keep the best run
+// and tell the leaderboard when it improves.
+RecordRun :: (reached: s32, run_score: s32) {
+    Load()
+    level_reached := ifx reached > LEVELS then LEVELS else reached
+    if level_reached <= best_level && run_score <= best_score { return }
+    if level_reached > best_level { best_level = level_reached }
+    if run_score > best_score { best_score = run_score }
+    bytes: [8]u8 = .[cast(u8)(best_level & 255), cast(u8)((best_level >> 8) & 255), 0, 0,
+        cast(u8)(best_score & 255), cast(u8)((best_score >> 8) & 255), cast(u8)((best_score >> 16) & 255), cast(u8)((best_score >> 24) & 127)]
+    unused Records.WriteRecord(RecordName("best.dat"), bytes[:])
+    Report()
+}
+
+// "run LEVEL SCORE" to the host's leaderboard, once per change.
+Report :: () {
+    if best_level == 0 || (best_level == reported_level && best_score == reported_score) { return }
+    shown := ifx best_score > 100000 then 100000 else best_score
+    out: Vec(u8)
+    BuilderPrint(*out, "run % %", best_level, shown)
+    answer := Account.Service("leaderboard", TextView(VecSlice(out, 0, out.count)))
+    VecFree(out)
+    saved := false
+    for index: 0..answer.count - 5 {
+        if answer[index:index + 5] == "saved" { saved = true }
+    }
+    if saved {
+        reported_level = best_level
+        reported_score = best_score
     }
 }
 
@@ -134,6 +178,9 @@ Complete :: (at: s32) {
 Pump :: (now: s64) -> bool {
     if now < poll_at { return false }
     poll_at = now + 5000
+    // A best run recorded before the leaderboard could take it goes now.
+    Load()
+    Report()
     status := Account.Service("entity.records", "{\"operation\":\"status\"}")
     current: [65]u8
     if ReadStringText(status, FieldAt(status, 0, "account"), current[:]) < 0 { return false }
@@ -142,6 +189,7 @@ Pump :: (now: s64) -> bool {
         owner = current
         loaded = false
         level = 0; lives = START_LIVES; score = 0; unlocked = 0
+        best_level = 0; best_score = 0; reported_level = -1; reported_score = -1
         completed = .{}
         dirty = false
         Load()
