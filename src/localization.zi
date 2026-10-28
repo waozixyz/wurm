@@ -81,7 +81,9 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "Měsíční drak" }
         if source == "Winter cheer" { return "Vánoční radost" }
         if source == "Free · December 2026" { return "Zdarma · prosinec 2026" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "Získat\n\n[Volume]\nHlasitost\n[wurm_level_start]\nSpustit úroveň" }
+        if source == "Claim" { return "Získat" }
+        if source == "Volume" { return "Hlasitost" }
+        if source == "Start level" { return "Spustit úroveň" }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
@@ -128,7 +130,9 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "Monddrache" }
         if source == "Winter cheer" { return "Weihnachtsfreude" }
         if source == "Free · December 2026" { return "Kostenlos · Dezember 2026" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "Abholen\n\n[Volume]\nLautstärke\n[wurm_level_start]\nLevel starten" }
+        if source == "Claim" { return "Abholen" }
+        if source == "Volume" { return "Lautstärke" }
+        if source == "Start level" { return "Level starten" }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
@@ -177,7 +181,9 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "Dragón lunar" }
         if source == "Winter cheer" { return "Alegría navideña" }
         if source == "Free · December 2026" { return "Gratis · diciembre de 2026" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "Reclamar\n\n[Volume]\nVolumen\n[wurm_level_start]\nEmpezar nivel" }
+        if source == "Claim" { return "Reclamar" }
+        if source == "Volume" { return "Volumen" }
+        if source == "Start level" { return "Empezar nivel" }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
@@ -224,7 +230,8 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "Dragon lunaire" }
         if source == "Winter cheer" { return "Joie de Noël" }
         if source == "Free · December 2026" { return "Gratuit · décembre 2026" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "Obtenir\n\n[Volume]\nVolume\n[wurm_level_start]\nCommencer le niveau" }
+        if source == "Claim" { return "Obtenir" }
+        if source == "Start level" { return "Commencer le niveau" }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
@@ -271,7 +278,8 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "Naga bulan" }
         if source == "Winter cheer" { return "Keceriaan Natal" }
         if source == "Free · December 2026" { return "Gratis · Desember 2026" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "Klaim\n\n[Volume]\nVolume\n[wurm_level_start]\nMulai level" }
+        if source == "Claim" { return "Klaim" }
+        if source == "Start level" { return "Mulai level" }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
@@ -320,7 +328,8 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "Drago lunare" }
         if source == "Winter cheer" { return "Allegria natalizia" }
         if source == "Free · December 2026" { return "Gratis · dicembre 2026" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "Riscatta\n\n[Volume]\nVolume\n[wurm_level_start]\nInizia livello" }
+        if source == "Claim" { return "Riscatta" }
+        if source == "Start level" { return "Inizia livello" }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
@@ -369,7 +378,9 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "月のドラゴン" }
         if source == "Winter cheer" { return "クリスマスの喜び" }
         if source == "Free · December 2026" { return "無料 · 2026年12月" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "受け取る\n\n[Volume]\n音量\n[wurm_level_start]\nレベルを開始" }
+        if source == "Claim" { return "受け取る" }
+        if source == "Volume" { return "音量" }
+        if source == "Start level" { return "レベルを開始" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
@@ -418,7 +429,9 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "달빛 용" }
         if source == "Winter cheer" { return "크리스마스의 기쁨" }
         if source == "Free · December 2026" { return "무료 · 2026년 12월" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "받기\n\n[Volume]\n음량\n[wurm_level_start]\n레벨 시작" }
+        if source == "Claim" { return "받기" }
+        if source == "Volume" { return "음량" }
+        if source == "Start level" { return "레벨 시작" }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
@@ -467,7 +480,8 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "Dragão lunar" }
         if source == "Winter cheer" { return "Alegria de Natal" }
         if source == "Free · December 2026" { return "Grátis · dezembro de 2026" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "Resgatar\n\n[Volume]\nVolume\n[wurm_level_start]\nIniciar nível" }
+        if source == "Claim" { return "Resgatar" }
+        if source == "Start level" { return "Iniciar nível" }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
@@ -516,7 +530,9 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "Лунный дракон" }
         if source == "Winter cheer" { return "Рождественская радость" }
         if source == "Free · December 2026" { return "Бесплатно · декабрь 2026" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "Получить\n\n[Volume]\nГромкость\n[wurm_level_start]\nНачать уровень" }
+        if source == "Claim" { return "Получить" }
+        if source == "Volume" { return "Громкость" }
+        if source == "Start level" { return "Начать уровень" }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
@@ -565,7 +581,9 @@ Text :: (source: string) -> string {
         if source == "Moon dragon" { return "月光龙" }
         if source == "Winter cheer" { return "圣诞欢乐" }
         if source == "Free · December 2026" { return "免费 · 2026年12月" }
-        if source == "Claim\n\n[Volume]\nVolume\n[wurm_level_start]\nStart level" { return "领取\n\n[Volume]\n音量\n[wurm_level_start]\n开始关卡" }
+        if source == "Claim" { return "领取" }
+        if source == "Volume" { return "音量" }
+        if source == "Start level" { return "开始关卡" }
     }
     return source
 }

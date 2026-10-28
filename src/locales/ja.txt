@@ -146,8 +146,10 @@ waozi.xyzを訪問
 [wurm_claim]
 受け取る
 
-[Volume]
+---
+[wurm_volume]
 音量
+---
 [wurm_level_start]
 レベルを開始
 ---

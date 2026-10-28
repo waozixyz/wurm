@@ -146,8 +146,10 @@ Grátis · dezembro de 2026
 [wurm_claim]
 Resgatar
 
-[Volume]
+---
+[wurm_volume]
 Volume
+---
 [wurm_level_start]
 Iniciar nível
 ---

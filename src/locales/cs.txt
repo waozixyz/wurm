@@ -146,8 +146,10 @@ Zdarma · prosinec 2026
 [wurm_claim]
 Získat
 
-[Volume]
+---
+[wurm_volume]
 Hlasitost
+---
 [wurm_level_start]
 Spustit úroveň
 ---

@@ -146,8 +146,10 @@ waozi.xyz 방문
 [wurm_claim]
 받기
 
-[Volume]
+---
+[wurm_volume]
 음량
+---
 [wurm_level_start]
 레벨 시작
 ---

@@ -6,6 +6,7 @@
 #import "kryon/widget_kind"
 #import "kryon/input_protocol"
 #import "kryon/pixmap"
+#import "kryon/scroll_device"
 #import "apps/node_types"
 #import "std/text_buffer"
 #import "std/vec"
@@ -86,6 +87,8 @@ Expect :: (ok: bool, reason: string) {
 }
 Draw :: () {
     frame.now += 0.1
+    BeginScrollFrame(frame.session, Vector2.{pointer.x, pointer.y}, pointer.pressed,
+        pointer.down, pointer.released, 0.0, frame.now)
     Expect(cast(s32)BeginFrame(frame.session, 1, Rectangle.{0.0, 0.0, cast(float32)frame.width, cast(float32)frame.height}) == 0, "start hosted frame")
     message.action = APP_FRAME
     unused Portable.Main()
@@ -156,6 +159,10 @@ main :: () -> s32 {
         Expect(App.game.mode == Game.MODE_READY && App.game.level == 12 &&
             App.game.lives == 5 && App.game.score == 120, "hosted next level waits and carries the run")
         Expect(Find("Start level") >= 0, "hosted Start level action is available")
+        Expect(TreeModalLayer(frame.session) != 0, "level start owns a modal input layer")
+        button := Find("Start level")
+        Expect(button >= 0 && TreeNodeAt(frame.session, button).focus_id == 24204,
+            "level start has an explicit focus target")
         App.HandleInput(KeyUp, 100000)
         Draw()
         Expect(App.game.mode == Game.MODE_READY, "hosted steering cannot skip the preview")

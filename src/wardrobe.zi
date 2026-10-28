@@ -10,6 +10,8 @@ owned: s32;
 played: s64;
 other_played: s64;
 visited: bool;
+christmas_claimable: bool;
+special_supported: bool;
 device: [33]u8;
 last_frame: s64;
 save_at: s64;
@@ -23,31 +25,35 @@ Load :: () {
     loaded = true
     bytes: [12]u8
     count := Records.ReadRecord(Progress.RecordName("wardrobe.dat"), bytes[:])
-    if count == 10 || count == 11 {
-        skin = ifx bytes[0] < 7 then cast(s32)bytes[0] else 0
+    if count == 10 || count == 11 || count == 12 {
+        skin = ifx bytes[0] < 9 then cast(s32)bytes[0] else 0
         visited = bytes[1] == 1
         played = 0
         for index: 0..7 { played |= cast(s64)(bytes[index + 2] & (ifx index == 7 then 127 else 255)) << (index * 8) }
         if played > 315576000000 { played = 0 }
-        if count == 11 && bytes[10] <= 14 { owned = cast(s32)bytes[10] }
+        if count >= 11 { owned = cast(s32)bytes[10] }
+        if count == 12 { owned |= cast(s32)bytes[11] << 8 }
+        owned &= 398
     }
 }
 Save :: () {
-    bytes: [11]u8
+    bytes: [12]u8
     bytes[0] = cast(u8)skin; bytes[1] = ifx visited then 1 else 0
     for index: 0..7 { bytes[index + 2] = cast(u8)((played >> (index * 8)) & 255) }
     bytes[10] = cast(u8)owned
+    bytes[11] = cast(u8)(owned >> 8)
     unused Records.WriteRecord(Progress.RecordName("wardrobe.dat"), bytes[:])
 }
 Reset :: () {
     loaded = false; skin = 0; owned = 0; played = 0; other_played = 0; visited = false
     device = .{}; dirty = false; poll_at = 0; last_frame = 0
     status = .{}; reported_skin = -1
+    christmas_claimable = false; special_supported = false
     Load()
 }
 Available :: (id: s32) -> bool {
     if id == 0 { return true }
-    if id > 0 && id <= 3 { return (owned & (1 << id)) != 0 }
+    if (id > 0 && id <= 3) || id == 7 || id == 8 { return (owned & (1 << id)) != 0 }
     if id == 4 { return played + other_played >= 18000000 }
     if id == 5 { return Progress.unlocked >= 39 }
     if id == 6 { return visited }
@@ -56,7 +62,7 @@ Available :: (id: s32) -> bool {
 Select :: (id: s32) { if Available(id) { skin = id; dirty = true; Save() } }
 Visit :: () { visited = true; dirty = true; Save(); poll_at = 0 }
 Report :: () {
-    if skin < 0 || skin > 6 || skin == reported_skin || Progress.best_level == 0 { return }
+    if skin < 0 || skin > 8 || skin == reported_skin || Progress.best_level == 0 { return }
     out: Vec(u8)
     BuilderPrint(*out, "skin %", skin)
     reply := Account.Service("leaderboard", TextView(VecSlice(out, 0, out.count)))
@@ -79,7 +85,9 @@ Pump :: (now: s64, playing: bool) {
     unused ReadStringText(shop, FieldAt(shop, 0, "status"), status[:])
     unused ReadStringText(shop, FieldAt(shop, 0, "device"), device[:])
     value := ReadNumber(shop, FieldAt(shop, 0, "owned"))
-    if value.valid && value.value >= 0.0 && value.value <= 14.0 { owned = cast(s32)value.value }
+    if value.valid && value.value >= 0.0 && value.value <= 398.0 { owned = cast(s32)value.value }
+    christmas_claimable = MatchLiteral(shop, FieldAt(shop, 0, "christmas_claimable"), "true")
+    special_supported = MatchLiteral(shop, FieldAt(shop, 0, "special_skins"), "true")
     if Progress.owner[0] == 0 || device[0] == 0 { return }
     reply := Account.Service("entity.records", "{\"operation\":\"list\",\"kind\":\"wurm-player\",\"fields\":[\"played_ms\",\"visited\",\"skin\"]}")
     records := FieldAt(reply, 0, "records")

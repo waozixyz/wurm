@@ -157,8 +157,16 @@ main :: () -> s32 {
     Expect(skin_reports == 1 && TextUntilNul(reported_skin[:]) == "skin 0", "publish the equipped base skin once")
     Wardrobe.Select(6); Wardrobe.Report()
     Expect(skin_reports == 2 && TextUntilNul(reported_skin[:]) == "skin 6", "publish the selected unlocked skin without changing the score")
+    Expect(!Wardrobe.Available(7) && !Wardrobe.Available(8), "special skins require a purchase or a claim")
+    Wardrobe.owned |= 128
+    Wardrobe.Select(7); Wardrobe.Report()
+    Expect(skin_reports == 3 && TextUntilNul(reported_skin[:]) == "skin 7", "the confirmed Moon dragon can be equipped and reported")
     Wardrobe.Reset(); Wardrobe.Report()
-    Expect(skin_reports == 3, "account reload republishes its own saved skin")
+    Expect(skin_reports == 4 && Wardrobe.skin == 7 && Wardrobe.Available(7), "Moon dragon ownership and selection survive restart")
+    Wardrobe.owned |= 256
+    Wardrobe.Select(8); Wardrobe.Report()
+    Wardrobe.Reset(); Wardrobe.Report()
+    Expect(skin_reports == 6 && Wardrobe.skin == 8 && Wardrobe.Available(8), "a claimed holiday skin remains owned and selected after restart")
     print("Account and wardrobe local test failures: %\n", failures)
     return failures
 }

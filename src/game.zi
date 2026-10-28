@@ -39,11 +39,15 @@ MODE_SHOP :: 10;
 // The next board is visible, but its clock starts only on confirmation.
 MODE_READY :: 11;
 
-// A gentle Meadow introduction, reaching the recovered pace at Leafwood.
-TickInterval :: (level: s32) -> s64 {
+// Keep the original difficulty curve for scoring, with a gentler real-time pace.
+BaseTickInterval :: (level: s32) -> s64 {
     interval := 32 - level / 2
     if interval < TICK_MS { interval = TICK_MS }
     return cast(s64)interval
+}
+TickInterval :: (level: s32) -> s64 {
+    if level < 40 { return (BaseTickInterval(level) * 3 + 1) / 2 }
+    return (BaseTickInterval(level) * 9 + 4) / 8
 }
 
 Point :: struct { x: s32; y: s32; }
@@ -999,7 +1003,7 @@ LevelMultiplier :: (game: *Game) -> s32 {
     }
     tightness := ifx walls > 300 then (walls - 300) * 10 / 150 else 0
     difficulty := 10 * game.monster_count + 10 * roamers + 5 * (game.apples - 5) + tightness +
-    5 * (32 - cast(s32)TickInterval(game.level))
+    5 * (32 - cast(s32)BaseTickInterval(game.level))
     if game.feature >= FEATURE_KEY { difficulty += 10 }
     if difficulty < 0 { difficulty = 0 }
     return 1 + difficulty / 20

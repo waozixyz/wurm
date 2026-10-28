@@ -146,8 +146,10 @@ Kostenlos · Dezember 2026
 [wurm_claim]
 Abholen
 
-[Volume]
+---
+[wurm_volume]
 Lautstärke
+---
 [wurm_level_start]
 Level starten
 ---

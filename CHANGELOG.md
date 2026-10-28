@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.16] - 2026-10-28
+
+- Start the next level from a dedicated preview dialog when you are ready.
+- Play at a gentler pace while keeping the same scoring and level progression.
+- Send and accept friend requests reliably and see friends' chosen classic or abstract pictures.
+- Choose larger Profile pictures, with Avatar temporarily hidden and Material controls throughout.
+- Keep storage usage and storage plans out of the game's Profile and Dew pages.
+- Buy the distinctive Moon dragon skin for 50 Dew; owned skins restore across devices.
+- Claim Winter cheer for free during December 2026 and keep it afterward.
+- See Apfelwurm's original slimmer appearance in the skin shop and equipped skins on the leaderboard.
+- Read translated Start level and Volume labels in every supported language.
+
 ## [0.2.15] - 2026-10-28
 
 - Preview each next level with a dimmed board and press Start level when you are ready.

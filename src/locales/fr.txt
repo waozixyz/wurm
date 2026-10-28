@@ -146,8 +146,10 @@ Gratuit · décembre 2026
 [wurm_claim]
 Obtenir
 
-[Volume]
+---
+[wurm_volume]
 Volume
+---
 [wurm_level_start]
 Commencer le niveau
 ---

@@ -1,0 +1,17 @@
+{
+  "generator": "built-in image_gen",
+  "source": "special-skins.png",
+  "layout": {
+    "columns": 4,
+    "rows": 1,
+    "width": 2172,
+    "height": 724
+  },
+  "sprites": [
+    "lunar-dragon-head",
+    "lunar-dragon-body",
+    "christmas-2026-head",
+    "christmas-2026-body"
+  ],
+  "prompt": "Cozy glossy storybook game sprite atlas: a midnight teal lunar dragon worm head with ivory horns and golden crescent scales, matching round body; a green Christmas worm head with Santa hat and red scarf, matching round body with a gold bell. Four equal transparent cells, heads facing right, no text or scenery."
+}

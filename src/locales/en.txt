@@ -146,8 +146,10 @@ Free · December 2026
 [wurm_claim]
 Claim
 
-[Volume]
+---
+[wurm_volume]
 Volume
+---
 [wurm_level_start]
 Start level
 ---

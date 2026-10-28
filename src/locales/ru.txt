@@ -146,8 +146,10 @@
 [wurm_claim]
 Получить
 
-[Volume]
+---
+[wurm_volume]
 Громкость
+---
 [wurm_level_start]
 Начать уровень
 ---

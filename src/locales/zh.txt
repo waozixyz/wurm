@@ -146,8 +146,10 @@
 [wurm_claim]
 领取
 
-[Volume]
+---
+[wurm_volume]
 音量
+---
 [wurm_level_start]
 开始关卡
 ---

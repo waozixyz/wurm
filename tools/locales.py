@@ -12,6 +12,8 @@ def generate():
         for block in path.read_text().split('---\n'):
             lines = block.strip().splitlines()
             if lines and lines[0].startswith('[wurm_'):
+                assert not any(line.startswith('[') and line.endswith(']') for line in lines[1:]), f'Missing locale separator in {path.name}: {lines[0]}'
+                assert lines[0][1:-1] not in rows, f'Duplicate locale key in {path.name}: {lines[0]}'
                 rows[lines[0][1:-1]] = '\n'.join(lines[1:])
         values[path.stem] = rows
     english = values['en']

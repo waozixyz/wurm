@@ -405,6 +405,8 @@ SkinName :: (id: s32) -> string {
     if id == 4 { return "Night owl" }
     if id == 5 { return "Golden apple" }
     if id == 6 { return "Explorer" }
+    if id == 7 { return "Moon dragon" }
+    if id == 8 { return "Winter cheer" }
     return "Apfelwurm"
 }
 SkinColor :: (id: s32) -> Color {
@@ -426,6 +428,20 @@ CharacterPreview :: (session: Session, key: u64, bounds: Rectangle, id: s32) {
     Character(session, key + 24, Rectangle.{bounds.x + 43.0, bounds.y + 1.0, 42.0, 42.0}, id, true, 1)
 }
 Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool, direction: s32 = 2) {
+    if id == 0 {
+        column := ifx head then direction else 4
+        Picture(session, key, Sheet(0), bounds,
+            Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0})
+        return
+    }
+    if id == 7 || id == 8 {
+        column := ifx id == 7 then 0 else 2
+        if !head { column += 1 }
+        unused Image(session, ImageProps.{.key = key, .asset_path = "assets/art/special-skins.png",
+            .bounds = bounds, .source = Rectangle.{cast(float32)column * 543.0, 0.0, 543.0, 724.0},
+            .fit = ImageFit.ImageFitContain, .smooth = true, .alt_text = Locale.Text(SkinName(id))})
+        return
+    }
     size := bounds.width
     if bounds.height < size { size = bounds.height }
     unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = SkinColor(id), .radius = size / 2.0,
@@ -474,7 +490,7 @@ DrawShop :: (session: Session, area: Rectangle) {
                 .disabled = pending && !signin, .class_name = 10}) != 0 {
             if signin { Account.OpenProfile() }
             else {
-                product := ifx id == 1 then "wurm.mint" else ifx id == 2 then "wurm.berry" else "wurm.rose"
+                product := ShopModel.GameShopProduct(id)
                 unused Account.Service("entity.game-shop", product)
                 Wardrobe.poll_at = 0
             }
@@ -488,11 +504,12 @@ DrawShop :: (session: Session, area: Rectangle) {
     grid := Rectangle.{area.x + 16.0, area.y + 108.0, area.width - 32.0, area.height - 120.0}
     columns: s32 = ifx grid.width >= 650.0 then 3 else 2
     width := (grid.width - 16.0 - cast(float32)(columns - 1) * 12.0) / cast(float32)columns
-    rows := (7 + columns - 1) / columns
+    skin_count: s32 = ifx Wardrobe.christmas_claimable || Wardrobe.Available(8) then 9 else ifx Wardrobe.special_supported || Wardrobe.Available(7) then 8 else 7
+    rows := (skin_count + columns - 1) / columns
     scroller := Scroll(session, ScrollProps.{.key = 28400, .bounds = grid, .content_height = rows * 196, .scroll_offset = shop_scroll})
     shop_scroll = scroller.scroll_offset
     if !scroller.opened { return }
-    for id: 0..6 {
+    for id: 0..skin_count - 1 {
         x := scroller.content.x + cast(float32)(id % columns) * (width + 12.0)
         y := scroller.content.y + cast(float32)(id / columns) * 196.0
         key := cast(u64)28500 + cast(u64)id * 100
@@ -500,14 +517,15 @@ DrawShop :: (session: Session, area: Rectangle) {
         CharacterPreview(session, key + 20, Rectangle.{x + width / 2.0 - 42.0, y + 10.0, 84.0, 50.0}, cast(s32)id)
         GameText(session, key + 8, SkinName(cast(s32)id), Rectangle.{x + 4.0, y + 68.0, width - 8.0, 24.0}, 17, false, true)
         available := Wardrobe.Available(cast(s32)id)
-        detail := ifx id == 0 then "Your first companion" else ifx id <= 3 then SkinPriceText(cast(s32)id) else ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Reach level 40" else "Visit waozi.xyz"
+        detail := ifx id == 0 then "Your first companion" else ifx id <= 3 || id == 7 then SkinPriceText(cast(s32)id) else ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Reach level 40" else ifx id == 8 then "Free · December 2026" else "Visit waozi.xyz"
         GameText(session, key + 9, detail, Rectangle.{x + 4.0, y + 99.0, width - 8.0, 22.0}, 12, true, true)
-        label := ifx Wardrobe.skin == id then "Wearing" else ifx available then "Wear" else ifx id <= 3 then "Buy" else ifx id == 6 then "Visit" else "Locked"
+        label := ifx Wardrobe.skin == id then "Wearing" else ifx available then "Wear" else ifx id <= 3 || id == 7 then "Buy" else ifx id == 8 then "Claim" else ifx id == 6 then "Visit" else "Locked"
         if Button(session, ButtonProps.{.key = key + 10, .bounds = Rectangle.{x + 10.0, y + 132.0, width - 20.0, 42.0},
                 .label = Locale.Text(label), .disabled = Wardrobe.skin == id || (!available && (id == 4 || id == 5)),
                 .selected = Wardrobe.skin == id, .class_name = 11}) != 0 {
             if available { Wardrobe.Select(cast(s32)id); PreferencesChanged() }
-            else if id <= 3 { buy_skin = cast(s32)id }
+            else if id <= 3 || id == 7 { buy_skin = cast(s32)id }
+            else if id == 8 { unused Account.Service("entity.game-shop", "wurm.christmas-2026"); Wardrobe.poll_at = 0 }
             else if id == 6 && Account.VisitWebsite() { Wardrobe.Visit(); Wardrobe.Select(6); PreferencesChanged() }
         }
     }
@@ -573,18 +591,21 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
 
 // Keep the next board readable while its worm and enemies wait for Start.
 DrawLevelReady :: (session: Session, area: Rectangle) {
-    unused Box(session, BoxProps.{.key = 24200, .bounds = area, .fill = Color.{0, 0, 0, 64}})
     width := area.width - 32.0
     if width > 320.0 { width = 320.0 }
     height: float32 = ifx area.height < 180.0 then 132.0 else 164.0
     card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0, width, height}
+    overlay := DismissibleOverlay(session, DismissibleOverlayProps.{.key = 24200,
+        .bounds = card, .scrim = Color.{0, 0, 0, 64}, .dismiss_disabled = true})
+    if overlay.panel_node < 0 || !TreePushScope(session, overlay.panel_node) { return }
+    defer { unused End(session) }
     unused Box(session, BoxProps.{.key = 24201, .bounds = card, .fill = Appearance.Surface(),
         .border = Appearance.Border(), .radius = 24.0})
     CentreText(session, 24202, "Level", Rectangle.{card.x + 12.0, card.y + 12.0, width - 24.0, 22.0}, 16)
     digits: [21]u8
     number := FormatInteger(cast(s64)game.level + 1, digits[:])
     CentreText(session, 24203, number, Rectangle.{card.x + 12.0, card.y + 36.0, width - 24.0, 32.0}, 28)
-    if Button(session, ButtonProps.{.key = 24204,
+    if Button(session, ButtonProps.{.key = 24204, .id = 24204,
         .bounds = Rectangle.{card.x + 20.0, card.y + height - 64.0, width - 40.0, 48.0},
         .label = Locale.Text("Start level"), .class_name = 10,
         .tone = ButtonTone.ButtonToneSuccess, .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
