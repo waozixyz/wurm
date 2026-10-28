@@ -28,7 +28,14 @@ reported_score: s32 = -1;
 RecordName :: (name: string) -> string {
     if owner[0] == 0 { return name }
     at: s64 = 0
-    for byte: TextUntilNul(owner[:]) { record_name[at] = byte; at += 1 }
+    identity := TextUntilNul(owner[:])
+    #if #defined(WURM_PORTABLE) {
+        // The host already scopes records to the account and game. Keep a
+        // 128-bit account prefix to distinguish its guest/connected saves
+        // within the host's 64-byte record-name limit.
+        if identity.count > 32 { identity = identity[:32] }
+    }
+    for byte: identity { record_name[at] = byte; at += 1 }
     record_name[at] = #char "."; at += 1
     for byte: name { record_name[at] = byte; at += 1 }
     record_name[at] = 0
@@ -97,7 +104,7 @@ RecordRun :: (reached: s32, run_score: s32) {
     if level_reached > best_level { best_level = level_reached }
     if run_score > best_score { best_score = run_score }
     bytes: [8]u8 = .[cast(u8)(best_level & 255), cast(u8)((best_level >> 8) & 255), 0, 0,
-        cast(u8)(best_score & 255), cast(u8)((best_score >> 8) & 255), cast(u8)((best_score >> 16) & 255), cast(u8)((best_score >> 24) & 127)]
+    cast(u8)(best_score & 255), cast(u8)((best_score >> 8) & 255), cast(u8)((best_score >> 16) & 255), cast(u8)((best_score >> 24) & 127)]
     unused Records.WriteRecord(RecordName("best.dat"), bytes[:])
     Report()
 }
@@ -129,7 +136,7 @@ Save :: () -> bool {
     if !SaveUnlocked() { return false }
     kept := ifx lives > 255 then 255 else lives
     bytes: [6]u8 = .[cast(u8)level, cast(u8)kept, cast(u8)(score & 255), cast(u8)((score >> 8) & 255),
-        cast(u8)((score >> 16) & 255), cast(u8)((score >> 24) & 127)]
+    cast(u8)((score >> 16) & 255), cast(u8)((score >> 24) & 127)]
     return Records.WriteRecord(RecordName("run.dat"), bytes[:])
 }
 
@@ -209,12 +216,17 @@ Pump :: (now: s64) -> bool {
         }
         unused Records.WriteRecord(RecordName("completed.dat"), completed[:])
     }
+    // Older account saves can have earned unlocks without completion marks
+    // or a pending-sync marker. Migrate those unlocks without inventing wins.
+    if unlocked + 1 > record.unlocked { dirty = true }
     if !dirty { return changed }
     unused CopyCString("wurm", record.game[:])
-    record.unlocked = 1
+    record.unlocked = unlocked + 1
     for index: 0..199 {
         record.completed[index] = ifx completed[index] == 1 then #char "1" else #char "0"
-        if completed[index] == 1 { record.unlocked = cast(s32)index + 2 }
+        if completed[index] == 1 && cast(s32)index + 2 > record.unlocked {
+            record.unlocked = cast(s32)index + 2
+        }
     }
     record.completed[200] = 0
     if record.unlocked > LEVELS { record.unlocked = LEVELS }

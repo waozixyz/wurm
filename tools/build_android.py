@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import re
 from account_build import profile
+from android_icon import install_icon
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,7 +55,10 @@ def main():
         'android:targetActivity="xyz.waozi.wurm.MainActivity"')
     if 'android.permission.INTERNET' not in text:
         text = text.replace('    <application', '    <uses-permission android:name="android.permission.INTERNET" />\n\n    <application', 1)
+    if 'android:icon=' not in text:
+        text = text.replace('    <application', '    <application\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher"', 1)
     manifest.write_text(text)
+    install_icon(ROOT)
     # The account provider uses the same native cryptography on both ABIs.
     # These changes belong to this app's generated scaffold, never Kryon's.
     cmake = ROOT / 'droid/app/src/main/cpp/CMakeLists.txt'

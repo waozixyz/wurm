@@ -1,0 +1,10 @@
+{
+  "generator": "built-in image_gen",
+  "reference": "assets/art-source/head-profile.png",
+  "purpose": "Android launcher icon",
+  "prompt": "Use case: logo-brand. Asset type: finished square Android launcher app icon for Apfelwurm, a calm hand-illustrated worm puzzle game. Reference image: assets/art-source/head-profile.png is the existing character: orange worm, big blue eyes, friendly little mouth. Create a new icon, not a sprite sheet: one charming rounded light-orange worm head peeking up over a gentle curved body, a very small red apple tucked beside it, against a simple deep jade green and muted lake-blue garden background. Single strong silhouette, exceptionally legible at 48 pixels, soft hand-painted 2D shading, earth-brown outlines, restrained detail, friendly and playful. Keep the worm and apple within the central two thirds for Android circular/squircle masking. Full square opaque edge-to-edge background; no rounded square border or baked corner mask. No lettering, no numbers, no watermark, no UI, no glossy plastic, no glow. 1024x1024 square.",
+  "dimensions": [
+    1254,
+    1254
+  ]
+}

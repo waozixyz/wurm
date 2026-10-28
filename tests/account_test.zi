@@ -1,4 +1,5 @@
 Progress :: #import, file "../src/progress.zi";
+Shared :: #import "entity/game_progress";
 Wardrobe :: #import, file "../src/wardrobe.zi";
 Custom :: #import, file "../src/custom_levels.zi";
 Controls :: #import, file "../src/controls.zi";
@@ -104,6 +105,21 @@ main :: () -> s32 {
     Expect(Progress.Pump(20000), "switching accounts reloads the new account")
     Expect(Progress.Completed(0) && !Progress.Completed(39) && !Progress.Completed(41), "completion masks stay isolated")
     Expect(writes == 1, "switching does not publish dirty marks under another identity")
+    // An older account save has unlocks and a run, but no completion or
+    // pending-sync file. It must migrate without creating completion marks.
+    unused Progress.Begin(57, 6, 1234)
+    Progress.loaded = false
+    Progress.dirty = false
+    Progress.unlocked = 0
+    remote = ""
+    Progress.poll_at = 0
+    unused Progress.Pump(20500)
+    migrated: Shared.GameProgressRecord
+    json := TextUntilNul(last_write[:])
+    at := FieldAt(json, 0, "document")
+    Expect(Shared.GameProgressRead(json[at:ValueEnd(json, at, 0)], *migrated), "older account save migrates to a shared record")
+    Expect(migrated.unlocked == 58 && migrated.completed[56] != #char "1", "migration keeps earned unlocks without inventing completed levels")
+    Expect(Progress.level == 57 && Progress.lives == 6 && Progress.score == 1234, "migration preserves the unfinished local run")
     Wardrobe.Reset()
     Wardrobe.played = 17999000
     Wardrobe.Pump(21000, false)

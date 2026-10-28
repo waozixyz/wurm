@@ -9,6 +9,7 @@
 #import "apps/node_types"
 #import "std/text_buffer"
 #import "std/vec"
+#import "std/c_string"
 Portable :: #import, file "../src/portable.zi";
 Account :: #import, file "../src/account.zi";
 Progress :: #import, file "../src/progress.zi";
@@ -23,6 +24,10 @@ connected: bool = true;
 host_account :: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 answer: [256]u8;
 pointer: PointerFrame;
+record_names: [32][65]u8;
+record_values: [32][4803]u8;
+record_count: s32;
+invalid_record_names: s32;
 
 #program_export
 ReadAppHost :: () -> AppMessage { return message }
@@ -37,9 +42,23 @@ PollPointer :: () -> PointerFrame { return pointer }
 #program_export
 AppSoundHost :: (name: string) -> bool { unused name; return true }
 #program_export
-AppRecordHost :: (name: string) -> string { unused name; return "" }
+AppRecordHost :: (name: string) -> string {
+    for index: cast(s32)0..record_count - 1 {
+        if TextUntilNul(record_names[index][:]) == name { return TextUntilNul(record_values[index][:]) }
+    }
+    return ""
+}
 #program_export
-SaveAppRecordHost :: (name: string, value: string) -> bool { unused name; unused value; return true }
+SaveAppRecordHost :: (name: string, value: string) -> bool {
+    if name.count < 1 || name.count > 64 { invalid_record_names += 1; return false }
+    for index: cast(s32)0..record_count - 1 {
+        if TextUntilNul(record_names[index][:]) == name { return CopyCString(value, record_values[index][:]) }
+    }
+    if record_count >= 32 || !CopyCString(name, record_names[record_count][:]) ||
+    !CopyCString(value, record_values[record_count][:]) { return false }
+    record_count += 1
+    return true
+}
 #program_export
 AppServiceHost :: (name: string, request: string) -> string {
     if name == "entity.profile" && request == "open" { profile_opens += 1; return "available" }
@@ -123,6 +142,19 @@ main :: () -> s32 {
         Expect(message.succeeded, "shop Back returns inside the game")
         Draw()
     }
+    Expect(Progress.Begin(57, 6, 123456), "connected hosted run saves within host record limits")
+    Progress.Complete(56)
+    Progress.loaded = false
+    Progress.unlocked = 0
+    Progress.level = 0
+    Progress.lives = 3
+    Progress.score = 0
+    Progress.dirty = false
+    Progress.Load()
+    Expect(Progress.unlocked == 57 && Progress.level == 57 && Progress.lives == 6 && Progress.score == 123456,
+        "connected hosted run and unlocked progress survive restart")
+    Expect(Progress.Completed(56) && Progress.dirty, "connected hosted completion and sync retry survive restart")
+    Expect(invalid_record_names == 0, "every hosted save uses an accepted record name")
     connected = false
     Progress.poll_at = 0
     Draw()
