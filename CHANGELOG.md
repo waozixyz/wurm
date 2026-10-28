@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.11] - 2026-10-28
+
+- Buy a small 10 Dew pack in the Google Play edition and see each larger pack’s savings per Dew.
+
 ## [0.2.10] - 2026-10-28
 
 - Keep signed-in progress and unfinished runs after closing or updating Apfelwurm inside Arcade and Breeze.
