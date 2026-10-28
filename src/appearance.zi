@@ -1,7 +1,19 @@
 #import "kryon/widget_palette"
 #import "kryon/drawing_props"
+#import "kryon/system_theme"
 Records :: #import, file "controls.zi";
 mode: s32 = -1;
+shared_theme: s32 = -1;
+shared_accent: s32;
+shared_material: bool;
+shared_dark: bool;
+ApplyShared :: (theme: s32, accent: s32, material: bool, system_dark: bool) {
+    shared_theme = theme
+    shared_accent = accent
+    shared_material = material
+    shared_dark = theme == 2 || (theme == 0 && system_dark)
+    if theme >= 0 { mode = ifx shared_dark then 0 else 2 }
+}
 Load :: () {
     if mode >= 0 { return }
     mode = 0
@@ -16,6 +28,14 @@ Set :: (value: s32) {
 }
 Palette :: () -> WidgetPalette {
     Load()
+    if shared_theme >= 0 {
+        base := SystemPaletteFallback(shared_dark)
+        accents: [16]u32 = .[0x7355d9ff, 0x2563ebff, 0x059669ff, 0xdb2777ff, 0xd97706ff, 0x0891b2ff, 0xdc2626ff, 0x7c3aedff,
+            0x4f46e5ff, 0x0d9488ff, 0x65a30dff, 0xc026d3ff, 0xea580cff, 0x0284c7ff, 0x9333eaff, 0x475569ff]
+        return WidgetPalette.{.background = base.background, .base = base.base, .text = base.text,
+            .selected = accents[shared_accent], .selected_text = 0xffffffff, .border = base.border,
+            .danger = base.danger, .warning = base.warning, .success = base.success, .material = shared_material}
+    }
     if mode == 2 {
         return WidgetPalette.{.background = 0xc3cbb7ff, .base = 0xdde1cfff, .text = 0x263b30ff,
             .selected = 0x476c50ff, .selected_text = 0xf2f0e2ff, .border = 0xa1b198ff,

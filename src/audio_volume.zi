@@ -1,0 +1,11 @@
+ClampVolume :: (value: s32) -> s32 {
+    if value < 0 { return 0 }
+    if value > 100 { return 100 }
+    return value
+}
+VolumeSample :: (value: s32, percent: s32) -> s16 {
+    sample := value
+    if sample > 32767 { sample = 32767 }
+    if sample < -32768 { sample = -32768 }
+    return cast(s16)(sample * ClampVolume(percent) / 100)
+}

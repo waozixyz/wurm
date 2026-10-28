@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.15] - 2026-10-28
+
+- Preview each next level with a dimmed board and press Start level when you are ready.
+- Start every level with a clear entrance and room to turn on mobile.
+- See the app version in Settings.
+- Load your saved account alias across devices and manage your account directly in Profile.
+- Use Android Back to navigate inside the app.
+- Choose your Profile picture in a modal and open Friends from the same shared Profile.
+- Open Leaderboard and Dew directly from the title and return there with Back.
+- Choose the shared theme, accent and widget appearance options.
+- Adjust the sound volume from the dropdown immediately left of Pause.
+
 ## [0.2.14] - 2026-10-28
 
 - Include the latest saved Meadow layouts for levels 3, 13 and 35.

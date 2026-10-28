@@ -13,7 +13,9 @@ layouts. The six original enemy types include wandering fire, bouncing
 patrols and chasing creatures. Enemy counts and apple goals increase across
 stages, while the first six levels introduce movement without enemies.
 Opening Meadow levels move more slowly before reaching the original pace.
-Levels follow in order through every landscape. Choose level offers a
+Levels follow in order through every landscape. After each goal, the next
+board opens dimmed and waits for **Start level** (or Enter/Space). Movement
+and enemies stay paused until then; lives and score carry over. Choose level offers a
 scrollable grid for each landscape; unlocked levels have large board previews and future levels show a lock. The run (level, lives and score carried into that level) and the
 control choice persist. Unlocked progress is saved after every completed
 level and survives game over, closing the game and starting a new run.

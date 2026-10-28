@@ -38,7 +38,9 @@ and crossings. Wandering fire, bouncing patrols and chasing enemies make the
 journey more demanding as you climb.
 
 Press **Play** and you are straight in the game. The levels follow one after
-another through all five landscapes. You start
+another through all five landscapes. After each goal, preview the next board
+and press **Start level** (or Enter/Space) when ready. The worm and enemies wait
+while you look around. You start
 with three lives and earn more as your score grows. Score and lives carry
 between levels throughout your run. **Continue** starts the furthest level
 reached in your journey with three lives and a fresh score, even after a game

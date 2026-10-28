@@ -1,6 +1,7 @@
 // One game mixer, with SDL desktop and raylib Android output.
 File :: #import "std/file_linux";
 Output :: #import, file "audio_output.zi";
+#import, file "audio_volume.zi";
 #if #defined(ANDROID_BUILD) {
     Assets :: #import "kryon/app_asset";
     music_data: string;
@@ -10,6 +11,12 @@ Effect :: struct { bytes: [65536]u8; count: s32; position: s32; playing: bool; }
 device: u32;
 attempted: bool;
 muted: bool;
+volume: s32 = 100;
+CanSetVolume :: () -> bool { return true }
+SetVolume :: (value: s32) {
+    volume = ClampVolume(value)
+    if device != 0 { Output.Clear(device) }
+}
 effects: [4]Effect;
 music_file: File.FileHandle;
 music_bytes: s64;
@@ -136,9 +143,7 @@ PumpAudio :: () {
                     if sound.position >= sound.count { sound.playing = false }
                 }
             }
-            if value > 32767 { value = 32767 }
-            if value < -32768 { value = -32768 }
-            mixed[index] = cast(s16)value
+            mixed[index] = VolumeSample(value,volume)
         }
         if !Output.Submit(device, mixed[:]) { return }
     }

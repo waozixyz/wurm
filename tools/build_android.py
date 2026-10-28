@@ -46,6 +46,11 @@ def main():
     subprocess.run(['python3', str(kryon / 'scripts/android_scaffold.py'), '--root', str(ROOT),
                     '--name', 'Apfelwurm', '--package', 'xyz.waozi.wurm', '--activity', 'MainActivity',
                     '--kryon', str(kryon)], check=True)
+    # Wurm uses the canonical host, so existing generated projects must also
+    # receive Kryon's clipboard, keyboard and document-picker integrations.
+    activity = ROOT / 'droid/app/src/main/java/xyz/waozi/wurm/MainActivity.java'
+    activity.write_text((kryon / 'templates/droid/droid/app/src/main/java/__PACKAGE_PATH__/__ACTIVITY__.java')
+                        .read_text().replace('__PACKAGE__', 'xyz.waozi.wurm').replace('__ACTIVITY__', 'MainActivity'))
     # The install ID may differ while the Java/JNI activity remains the same.
     # Apply this to the app's generated scaffold, never to a package checkout.
     gradle = ROOT / 'droid/app/build.gradle'
@@ -62,6 +67,10 @@ def main():
         text = text.replace('    <application', '    <uses-permission android:name="android.permission.INTERNET" />\n\n    <application', 1)
     if 'android:icon=' not in text:
         text = text.replace('    <application', '    <application\n        android:icon="@mipmap/ic_launcher"\n        android:roundIcon="@mipmap/ic_launcher"', 1)
+    text = re.sub(r'\s+android:usesCleartextTraffic="[^"]*"', '', text)
+    if args.verification:
+        # The Moto fixture connects only to its private localhost Daochi node.
+        text = text.replace('    <application', '    <application android:usesCleartextTraffic="true"', 1)
     manifest.write_text(text)
     install_icon(ROOT)
     # The account provider uses the same native cryptography on both ABIs.

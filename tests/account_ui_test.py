@@ -86,7 +86,7 @@ def main():
                 from PIL import Image
                 picture = Image.open(OUT / ('title-' + size + '.png')).convert('RGB')
                 assert len(picture.getcolors(picture.width * picture.height) or []) > 1000, 'Title artwork is missing'
-                for name, box in [('profile', (298, 20, 319, 48)), ('dew', (219, 20, 244, 48))]:
+                for name, box in [('profile', (250, 20, 271, 48)), ('dew', (171, 20, 196, 48))]:
                     cropped = picture.crop(box)
                     assert sum(min(cropped.getpixel((x, y))) > 130 for x in range(cropped.width) for y in range(cropped.height)) >= 12, name + ' icon is missing'
             press('Choose level')
@@ -99,11 +99,23 @@ def main():
             press('Back')
             press('Settings')
             nodes = tree('settings-' + size)
-            assert all(label in [node['label'] for node in nodes] for label in ('Dusk', 'Forest', 'Sage', 'Swipe', 'Direction pad'))
-            press('Forest')
-            assert (fixture / 'levels/appearance.dat').read_bytes() == b'\x01'
+            version = json.loads((ROOT / 'version.json').read_text())['version']
+            assert all(label in [node['label'] for node in nodes] for label in ('Appearance', 'Swipe', 'Direction pad', 'Version', version))
             capture('settings-' + size)
+            press('Appearance')
+            nodes = tree('appearance-' + size)
+            assert all(label in [node['label'] for node in nodes] for label in ('System', 'Light', 'Dark', 'Accent', 'Material'))
+            press('Dark')
             press('Back')
+            nodes = tree('appearance-return-' + size)
+            assert 'Version' in [node['label'] for node in nodes], 'Appearance Back must return to Settings'
+            press('Back')
+            press('Leaderboard')
+            nodes = tree('leaderboard-' + size)
+            assert 'Leaderboard' in [node['label'] for node in nodes]
+            press('Back')
+            nodes = tree('leaderboard-return-' + size)
+            assert 'Choose level' in [node['label'] for node in nodes], 'Title leaderboard Back must return to title'
             press('Skin shop')
             nodes = tree('shop-' + size)
             assert 'Mint' in [node['label'] for node in nodes]
@@ -130,7 +142,7 @@ def main():
             app.wait(timeout=5)
             app = None
         (OUT / 'result.json').write_text(json.dumps({'passed': True, 'private_display': env['DISPLAY'],
-            'behaviors': ['title-only account/shop/settings actions', 'dimmer persisted themes', 'skin catalog',
+            'behaviors': ['title-only account/shop/settings actions', 'shared appearance options and version', 'title leaderboard Back returns to title', 'skin catalog',
                           'explicit purchase confirmation', 'sign-in instead of guest debit', 'shared Profile in both orientations']}, indent=2))
         print('Account UI local tests passed in portrait and landscape on private Xvfb.')
     finally:

@@ -1,7 +1,21 @@
 // The browser plays this game's fixed score/effects as ordinary HTML audio.
 #import "std/web"
+#import, file "audio_volume.zi";
 ready: bool;
 muted: bool;
+volume: s32 = 100;
+CanSetVolume :: () -> bool { return true }
+SetVolume :: (value: s32) {
+    volume = ClampVolume(value)
+    Ensure()
+    mark := WebScope()
+    for index: 0..4 {
+        gain := cast(float64)volume / 100.0
+        if index == 4 { gain *= 0.4 }
+        WebSet(sounds[index],WebName("volume"),WebNumber(gain))
+    }
+    WebEnd(mark)
+}
 sounds: [5]s32;
 ignore_play_failure: s32;
 previous_level: s32 = -1;
@@ -23,7 +37,11 @@ Ensure :: () {
         sounds[index] = WebKeep(WebNew(constructor,*args[0],1))
     }
     WebSet(sounds[4],WebName("loop"),WebBool(true))
-    WebSet(sounds[4],WebName("volume"),WebNumber(0.4))
+    for index: 0..4 {
+        gain := cast(float64)volume / 100.0
+        if index == 4 { gain *= 0.4 }
+        WebSet(sounds[index],WebName("volume"),WebNumber(gain))
+    }
     ignore_play_failure = WebFunction(IgnorePlayFailure,0)
     WebEnd(mark)
 }

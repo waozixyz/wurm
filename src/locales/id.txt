@@ -121,3 +121,33 @@ Selesai
 [wurm_ui_39]
 Pilih level
 ---
+
+---
+[wurm_version]
+Versi
+
+---
+[wurm_leaderboard]
+Papan peringkat
+
+---
+[wurm_moon_dragon]
+Naga bulan
+
+---
+[wurm_winter_cheer]
+Keceriaan Natal
+
+---
+[wurm_christmas_free]
+Gratis · Desember 2026
+
+---
+[wurm_claim]
+Klaim
+
+[Volume]
+Volume
+[wurm_level_start]
+Mulai level
+---

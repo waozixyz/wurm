@@ -121,3 +121,33 @@ waozi.xyz 방문
 [wurm_ui_39]
 레벨 선택
 ---
+
+---
+[wurm_version]
+버전
+
+---
+[wurm_leaderboard]
+순위표
+
+---
+[wurm_moon_dragon]
+달빛 용
+
+---
+[wurm_winter_cheer]
+크리스마스의 기쁨
+
+---
+[wurm_christmas_free]
+무료 · 2026년 12월
+
+---
+[wurm_claim]
+받기
+
+[Volume]
+음량
+[wurm_level_start]
+레벨 시작
+---

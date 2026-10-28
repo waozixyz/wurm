@@ -11,6 +11,8 @@
 #import "std/vec"
 #import "std/c_string"
 Portable :: #import, file "../src/portable.zi";
+App :: #import, file "../src/app.zi";
+Game :: #import, file "../src/game.zi";
 Account :: #import, file "../src/account.zi";
 Progress :: #import, file "../src/progress.zi";
 using WidgetKind;
@@ -141,6 +143,28 @@ main :: () -> s32 {
         unused Portable.Main()
         Expect(message.succeeded, "shop Back returns inside the game")
         Draw()
+    }
+    for portrait: 0..1 {
+        frame.width = ifx portrait == 1 then 390 else 844
+        frame.height = ifx portrait == 1 then 844 else 390
+        App.game_portrait = portrait == 1
+        App.StartLevel(11, 0, 1)
+        App.game.lives = 5
+        App.game.score = 120
+        App.game.mode = Game.MODE_FINISHED
+        Draw()
+        Expect(App.game.mode == Game.MODE_READY && App.game.level == 12 &&
+            App.game.lives == 5 && App.game.score == 120, "hosted next level waits and carries the run")
+        Expect(Find("Start level") >= 0, "hosted Start level action is available")
+        App.HandleInput(KeyUp, 100000)
+        Draw()
+        Expect(App.game.mode == Game.MODE_READY, "hosted steering cannot skip the preview")
+        Click("Start level")
+        Expect(App.game.mode == Game.MODE_PLAYING, "hosted Start level button starts play")
+        App.game.mode = Game.MODE_READY
+        message.action = APP_BACK
+        unused Portable.Main()
+        Expect(message.succeeded && App.game.mode == Game.MODE_STAGES, "hosted Back leaves the preview inside the game")
     }
     Expect(Progress.Begin(57, 6, 123456), "connected hosted run saves within host record limits")
     Progress.Complete(56)

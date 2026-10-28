@@ -121,3 +121,33 @@ Dokončeno
 [wurm_ui_39]
 Vybrat úroveň
 ---
+
+---
+[wurm_version]
+Verze
+
+---
+[wurm_leaderboard]
+Žebříček
+
+---
+[wurm_moon_dragon]
+Měsíční drak
+
+---
+[wurm_winter_cheer]
+Vánoční radost
+
+---
+[wurm_christmas_free]
+Zdarma · prosinec 2026
+
+---
+[wurm_claim]
+Získat
+
+[Volume]
+Hlasitost
+[wurm_level_start]
+Spustit úroveň
+---

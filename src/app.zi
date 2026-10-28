@@ -17,6 +17,10 @@
     #import "kryon/pointer_input"
     #import "kryon/input_protocol"
     #import "kryon/tree"
+    #import "kryon/overlay_widget"
+    #import "kryon/overlay_props"
+    #import "kryon/slider_widget"
+    #import "kryon/slider_props"
 } else {
     using UI :: #import "kryon/Widgets";
 }
@@ -28,6 +32,7 @@ Appearance :: #import, file "appearance.zi";
 Account :: #import, file "account.zi";
 Wardrobe :: #import, file "wardrobe.zi";
 Locale :: #import, file "localization.zi";
+Version :: #import, file "version.zi";
 #import "kryon/widget_palette"
 #import "std/json_scan"
 #import "entity/dew_model"
@@ -232,8 +237,8 @@ PreferencesPump :: (now: s64) {
     preferences_poll = now + 5000
     if preferences_dirty {
         out: Vec(u8)
-        BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"wurm-settings\",\"id\":\"00000000000000000000000000000001\",\"schema\":\"wurm.settings.v1\",\"document\":{\"theme\":%,\"pad\":%,\"muted\":%,\"skin\":%}}",
-            Appearance.mode, Controls.Pad(), Audio.muted, Wardrobe.skin)
+        BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"wurm-settings\",\"id\":\"00000000000000000000000000000001\",\"schema\":\"wurm.settings.v1\",\"document\":{\"theme\":%,\"pad\":%,\"muted\":%,\"skin\":%,\"volume\":%}}",
+            Appearance.mode, Controls.Pad(), Audio.muted, Wardrobe.skin, Audio.volume)
         answer := Account.Service("entity.records", TextView(VecSlice(out, 0, out.count)))
         done: [16]u8
         preferences_dirty = ReadStringText(answer, FieldAt(answer, 0, "status"), done[:]) < 0 || TextUntilNul(done[:]) != "done"
@@ -244,7 +249,7 @@ PreferencesPump :: (now: s64) {
     document := FieldAt(reply, 0, "document")
     if document < 0 { return }
     theme := ReadNumber(reply, FieldAt(reply, document, "theme"))
-    if theme.valid && theme.value >= 0.0 && theme.value <= 2.0 && theme.value == cast(float64)cast(s32)theme.value &&
+    if Account.SharedTheme() < 0 && theme.valid && theme.value >= 0.0 && theme.value <= 2.0 && theme.value == cast(float64)cast(s32)theme.value &&
     cast(s32)theme.value != Appearance.mode { Appearance.Set(cast(s32)theme.value) }
     pad := FieldAt(reply, document, "pad")
     if pad >= 0 && (reply[pad] == #char "t" || reply[pad] == #char "f") {
@@ -254,8 +259,12 @@ PreferencesPump :: (now: s64) {
     sound := FieldAt(reply, document, "muted")
     if sound >= 0 && (reply[sound] == #char "t" || reply[sound] == #char "f") &&
     Audio.muted != (reply[sound] == #char "t") { Audio.ToggleMute() }
+    gain := ReadNumber(reply,FieldAt(reply,document,"volume"))
+    if gain.valid && gain.value >= 0.0 && gain.value <= 100.0 && gain.value == cast(float64)cast(s32)gain.value {
+        Audio.SetVolume(cast(s32)gain.value)
+    }
     chosen := ReadNumber(reply, FieldAt(reply, document, "skin"))
-    if chosen.valid && chosen.value >= 0.0 && chosen.value <= 6.0 && chosen.value == cast(float64)cast(s32)chosen.value &&
+    if chosen.valid && chosen.value >= 0.0 && chosen.value <= 8.0 && chosen.value == cast(float64)cast(s32)chosen.value &&
     Wardrobe.Available(cast(s32)chosen.value) {
         Wardrobe.skin = cast(s32)chosen.value
         Wardrobe.Save()
@@ -265,14 +274,52 @@ LoadSound :: () {
     if sound_loaded { return }
     sound_loaded = true
     bytes: [2]u8
-    if Controls.ReadRecord("sound.dat", bytes[:]) == 1 && bytes[0] == 1 && !Audio.muted { Audio.ToggleMute() }
+    count := Controls.ReadRecord("sound.dat", bytes[:])
+    if count >= 1 && bytes[0] == 1 && !Audio.muted { Audio.ToggleMute() }
+    if count == 2 && bytes[1] <= 100 { Audio.SetVolume(cast(s32)bytes[1]) }
+}
+SaveSound :: () {
+    bytes: [2]u8 = .[ifx Audio.muted then cast(u8)1 else cast(u8)0,cast(u8)Audio.volume]
+    unused Controls.WriteRecord("sound.dat", bytes[:])
+    PreferencesChanged()
 }
 ToggleSound :: () {
     LoadSound()
-    Audio.ToggleMute()
-    bytes: [1]u8 = .[ifx Audio.muted then cast(u8)1 else cast(u8)0]
-    unused Controls.WriteRecord("sound.dat", bytes[:])
-    PreferencesChanged()
+    if Audio.volume == 0 {
+        Audio.SetVolume(100)
+        if Audio.muted { Audio.ToggleMute() }
+    } else { Audio.ToggleMute() }
+    SaveSound()
+}
+sound_popup: bool;
+sound_percent: [24]u8;
+DrawSoundPopup :: (session: Session, hud: Rectangle, trigger: Rectangle) {
+    if !sound_popup { return }
+    width: float32 = 248.0
+    if width > hud.width - 16.0 { width = hud.width - 16.0 }
+    left := trigger.x + trigger.width - width
+    if left < hud.x + 8.0 { left = hud.x + 8.0 }
+    panel := Rectangle.{left,trigger.y + trigger.height + 8.0,width,140.0}
+    popup := Popup(session,PopupProps.{.key=24100,.bounds=panel,.keep_bounds=trigger})
+    if popup.closed { sound_popup = false; return }
+    if popup.panel_node < 0 || !TreePushScope(session,popup.panel_node) { return }
+    unused Box(session,BoxProps.{.key=24101,.bounds=panel,.fill=Appearance.Surface(),.border=Appearance.Border(),.radius=12.0})
+    GameText(session,24102,Locale.Text("Sound"),Rectangle.{panel.x+16.0,panel.y+14.0,panel.width-120.0,32.0},16)
+    if Button(session,ButtonProps.{.key=24103,.bounds=Rectangle.{panel.x+panel.width-96.0,panel.y+10.0,80.0,40.0},
+        .label=Locale.Text(ifx Audio.muted || Audio.volume == 0 then "Off" else "On"),.selected=!Audio.muted && Audio.volume>0}) != 0 { ToggleSound() }
+    if Audio.CanSetVolume() {
+        text := FormatInteger(cast(s64)Audio.volume,sound_percent[:])
+        result := Slider(session,SliderProps.{.key=24104,.id=24104,
+            .bounds=Rectangle.{panel.x+16.0,panel.y+66.0,panel.width-32.0,58.0},
+            .label=Locale.Text("Volume"),.value_text=text,.semantic_label=Locale.Text("Volume"),
+            .value=cast(float32)Audio.volume,.min=0.0,.max=100.0})
+        if result.changed {
+            Audio.SetVolume(cast(s32)(result.value+0.5))
+            if Audio.volume > 0 && Audio.muted { Audio.ToggleMute() }
+            SaveSound()
+        }
+    }
+    unused End(session)
 }
 dew_text: [32]u8;
 skin_price_text: [64]u8;
@@ -295,7 +342,7 @@ DewText :: () -> string {
 TitleActions :: (session: Session, area: Rectangle) {
     right := area.x + area.width - 12.0
     top := area.y + 12.0
-    shop_right := right - 176.0
+    shop_right := right - 224.0
     #if #defined(WURM_PORTABLE) {
         // Embedded games use the enclosing host's navigation and account UI.
         shop_right = right - 48.0
@@ -304,12 +351,15 @@ TitleActions :: (session: Session, area: Rectangle) {
             .label = Locale.Text("Skin shop"), .icon_only = true, .icon_shape = "S1.8rr:M5 8H19L20 21H4ZM8 8V6C8 1 16 1 16 6V8",
             .class_name = 11}) != 0 { game.mode = MODE_SHOP; Wardrobe.poll_at = 0; unused Account.Service("entity.game-shop", "refresh") }
     #if !#defined(WURM_PORTABLE) {
-        if Button(session, ButtonProps.{.key = 28001, .bounds = Rectangle.{right - 168.0, top, 68.0, 44.0},
+        if Button(session, ButtonProps.{.key = 28001, .bounds = Rectangle.{right - 216.0, top, 68.0, 44.0},
                 .label = DewText(), .icon_shape = DewIcon.Shape,
-                .class_name = 11}) != 0 { Account.OpenProfile() }
-        if Button(session, ButtonProps.{.key = 28002, .bounds = Rectangle.{right - 92.0, top, 44.0, 44.0},
+                .class_name = 11}) != 0 { Account.OpenDew() }
+        if Button(session, ButtonProps.{.key = 28002, .bounds = Rectangle.{right - 140.0, top, 44.0, 44.0},
                 .label = Locale.Text("Profile"), .icon_only = true, .icon_shape = ProfileIcon.Shape,
                 .class_name = 11}) != 0 { Account.OpenProfile() }
+        if Button(session, ButtonProps.{.key = 28004, .bounds = Rectangle.{right - 92.0, top, 44.0, 44.0},
+                .label = Locale.Text("Leaderboard"), .icon_only = true, .icon_shape = "S1.8rr:M4 21V13H8V21M10 21V4H14V21M16 21V9H20V21",
+                .class_name = 11}) != 0 { Account.OpenLeaderboard() }
     }
     if Button(session, ButtonProps.{.key = 28003, .bounds = Rectangle.{right - 44.0, top, 44.0, 44.0},
             .label = Locale.Text("Settings"), .icon_only = true, .icon_shape = "S1.8rr:M4 6H20M4 12H20M4 18H20M8 3V9M16 9V15M10 15V21",
@@ -332,15 +382,8 @@ DrawSettings :: (session: Session, area: Rectangle) {
     settings_scroll = scroller.scroll_offset
     if !scroller.opened { return }
     x := scroller.content.x; y := scroller.content.y; width = scroller.content.width
-    GameText(session, 28201, "Appearance", Rectangle.{x, y, width, 28.0}, 20)
-    GameText(session, 28202, "Softer colours for your apple adventure.", Rectangle.{x, y + 32.0, width, 24.0}, 14, true)
-    button_width := (width - 16.0) / 3.0
-    for mode: 0..2 {
-        label := ifx mode == 0 then "Dusk" else ifx mode == 1 then "Forest" else "Sage"
-        if Button(session, ButtonProps.{.key = 28210 + cast(u64)mode,
-                .bounds = Rectangle.{x + cast(float32)mode * (button_width + 8.0), y + 70.0, button_width, 52.0},
-                .label = Locale.Text(label), .selected = Appearance.mode == mode, .class_name = 11}) != 0 { Appearance.Set(cast(s32)mode); PreferencesChanged() }
-    }
+    if Button(session, ButtonProps.{.key = 28201, .bounds = Rectangle.{x, y, width, 60.0},
+            .label = Locale.Text("Appearance"), .class_name = 11}) != 0 { Account.OpenAppearance() }
     GameText(session, 28220, "Controls", Rectangle.{x, y + 150.0, width, 28.0}, 20)
     half := (width - 8.0) / 2.0
     if Button(session, ButtonProps.{.key = 28221, .bounds = Rectangle.{x, y + 188.0, half, 52.0},
@@ -350,6 +393,8 @@ DrawSettings :: (session: Session, area: Rectangle) {
     GameText(session, 28230, "Sound", Rectangle.{x, y + 270.0, width - 104.0, 32.0}, 20)
     if Button(session, ButtonProps.{.key = 28231, .bounds = Rectangle.{x + width - 100.0, y + 260.0, 100.0, 52.0},
             .label = Locale.Text(ifx Audio.muted then "Off" else "On"), .selected = !Audio.muted, .class_name = 11}) != 0 { ToggleSound() }
+    GameText(session, 28240, "Version", Rectangle.{x, y + 332.0, width - 104.0, 24.0}, 14, true)
+    GameText(session, 28241, Version.AppVersion, Rectangle.{x + width - 100.0, y + 332.0, 100.0, 24.0}, 14, true)
     unused End(session)
 }
 
@@ -524,6 +569,27 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     if Button(session, ButtonProps.{.key = 58,
             .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 60.0, card.width - 40.0, 48.0},
             .label = Locale.Text("Back to title"), .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { LeavePlay() }
+}
+
+// Keep the next board readable while its worm and enemies wait for Start.
+DrawLevelReady :: (session: Session, area: Rectangle) {
+    unused Box(session, BoxProps.{.key = 24200, .bounds = area, .fill = Color.{0, 0, 0, 64}})
+    width := area.width - 32.0
+    if width > 320.0 { width = 320.0 }
+    height: float32 = ifx area.height < 180.0 then 132.0 else 164.0
+    card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0, width, height}
+    unused Box(session, BoxProps.{.key = 24201, .bounds = card, .fill = Appearance.Surface(),
+        .border = Appearance.Border(), .radius = 24.0})
+    CentreText(session, 24202, "Level", Rectangle.{card.x + 12.0, card.y + 12.0, width - 24.0, 22.0}, 16)
+    digits: [21]u8
+    number := FormatInteger(cast(s64)game.level + 1, digits[:])
+    CentreText(session, 24203, number, Rectangle.{card.x + 12.0, card.y + 36.0, width - 24.0, 32.0}, 28)
+    if Button(session, ButtonProps.{.key = 24204,
+        .bounds = Rectangle.{card.x + 20.0, card.y + height - 64.0, width - 40.0, 48.0},
+        .label = Locale.Text("Start level"), .class_name = 10,
+        .tone = ButtonTone.ButtonToneSuccess, .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
+        HandleInput(Input.KeyEnter, Timer.MonotonicMilliseconds())
+    }
 }
 
 // A logical-pixel sprite square on the live board.
@@ -1458,10 +1524,12 @@ HandleInput :: (key: s32, now: s64) {
         unused ApplyInput(*game, key)
         if game.mode == MODE_PLAYING { game.next_step = now + TickInterval(game.level) }
         if game.mode == MODE_STAGES { LeavePlay() }
-    } else if game.mode == MODE_FINISHED {
-        // Landscapes follow one another; lives and score carry on.
-        ReloadLevel(game.level + 1, now)
-        if !editor.playtest { unused Progress.Begin(game.level, game.lives, game.score) }
+    } else if game.mode == MODE_READY {
+        if key == Input.KeyEnter || key == 32 {
+            game.mode = MODE_PLAYING
+            game.next_step = now + TickInterval(game.level)
+            touch_steering.active = false
+        } else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_DIED {
         if key == Input.KeyEnter || key == 32 {
             if editor.playtest { StartLevel(game.level, now, 1) }
@@ -1584,11 +1652,17 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
     StatusChip(session, 19, Rectangle.{group_x + chip_width + 8.0, chip_y, chip_width, chip_height}, AppleIcon.Shape, Color.{210, 78, 65, 255}, apples_text)
     StatusChip(session, 21, Rectangle.{group_x + (chip_width + 8.0) * 2.0, chip_y, chip_width, chip_height}, StarIcon.Shape, Color.{210, 152, 46, 255}, score_text)
     if game.mode == MODE_PLAYING {
+        sound_bounds := Rectangle.{hud.x+hud.width-116.0,hud.y+8.0,48.0,48.0}
+        if Button(session,ButtonProps.{.key=24110,.bounds=sound_bounds,
+            .label=Locale.Text("Volume"),.icon_only=true,.class_name=10,
+            .icon_shape="S1.8rr:M4 9H8L13 5V19L8 15H4ZM16 8C19 10 19 14 16 16M19 5C24 9 24 15 19 19",
+            .tone=ButtonTone.ButtonToneSuccess,.emphasis=ButtonEmphasis.ButtonEmphasisFilled}) != 0 { sound_popup = !sound_popup }
         if Button(session, ButtonProps.{.key = 59,
                 .bounds = Rectangle.{hud.x + hud.width - 60.0, hud.y + 8.0, 48.0, 48.0},
                 .label = Locale.Text("Pause"), .icon_only = true, .class_name = 10,
                 .icon_shape = "F:M7 5H10V19H7ZM14 5H17V19H14Z", .tone = ButtonTone.ButtonToneSuccess,
                 .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { HandleInput(Input.KeyEscape, Timer.MonotonicMilliseconds()) }
+        DrawSoundPopup(session,hud,sound_bounds)
     }
 }
 
@@ -1609,6 +1683,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     }
     now := Timer.MonotonicMilliseconds()
     Account.Pump()
+    Appearance.ApplyShared(Account.SharedTheme(), Account.SharedAccent(), Account.SharedMaterial(), Account.SystemDark())
+    unused WidgetPaletteUse(session, Appearance.Palette())
     LoadSound()
     if Account.ProfileVisible() {
         profile_key: s32
@@ -1616,14 +1692,14 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
             profile_key = KeyboardTake(session)
         }
         unused Box(session, BoxProps.{.key = 29000, .bounds = viewport, .fill = Appearance.Canvas()})
-        GameText(session, 29001, "Profile", Rectangle.{viewport.x + 100.0, viewport.y + 14.0, viewport.width - 112.0, 32.0}, 22)
+        GameText(session, 29001, Account.ProfileTitle(), Rectangle.{viewport.x + 100.0, viewport.y + 14.0, viewport.width - 112.0, 32.0}, 22)
         Account.DrawProfile(session, Rectangle.{viewport.x, viewport.y + 64.0, viewport.width, viewport.height - 64.0}, profile_key, Appearance.mode != 2)
         if Button(session, ButtonProps.{.key = 29002, .bounds = Rectangle.{viewport.x + 12.0, viewport.y + 8.0, 76.0, 44.0}, .label = Locale.Text("Back")}) != 0 || profile_key == Input.KeyEscape { Account.Back(); Progress.poll_at = 0; Wardrobe.poll_at = 0 }
         return 0
     }
     if Progress.Pump(now) {
         Wardrobe.Reset(); preferences_poll = 0; preferences_dirty = false
-        if game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_FINISHED || game.mode == MODE_DIED || game.mode == MODE_VICTORY {
+        if game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY || game.mode == MODE_FINISHED || game.mode == MODE_DIED || game.mode == MODE_VICTORY {
             game.mode = MODE_STAGES
             touch_steering.active = false
         }
@@ -1635,10 +1711,10 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     if !game.started {
         game.started = true
         OpenStages()
-    } else if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED) {
-        paused := game.mode == MODE_PAUSED
+    } else if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY) {
+        previous_mode := game.mode
         ReloadLevel(game.level,now)
-        if paused { game.mode = MODE_PAUSED }
+        game.mode = previous_mode
     }
     water_frame = cast(s32)((now / 130) % 3)
     enemy_frame = cast(s32)((now / 110) % 4)
@@ -1650,6 +1726,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     }
     // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
+    if sound_popup && key == Input.KeyEscape { sound_popup = false; key = 0 }
+    if game.mode != MODE_PLAYING { sound_popup = false }
     HandleInput(key, now)
     unused Box(session, BoxProps.{.key = 1, .bounds = viewport, .fill = Appearance.Canvas()})
     // The stages screen is one full-bleed cover; every other mode carries the
@@ -1669,7 +1747,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // already use this frame's direction. SwipeArea supplies captured contact;
     // its release-only swipe result is deliberately unused.
     contact: SwipeAreaResult
-    if game.mode == MODE_PLAYING && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
+    if game.mode == MODE_PLAYING && !sound_popup && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
         contact = SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
             .label = Locale.Text("Steer the worm"), .now = cast(float64)now / 1000.0,
             .min_distance = 6.0})
@@ -1683,6 +1761,12 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         Progress.Complete(game.level)
         if Progress.Begin(game.level + 1, game.lives, game.score) { recorded_level = game.level }
         Progress.RecordRun(game.level + 2, game.score)
+    }
+    if game.mode == MODE_FINISHED {
+        // Load after saving completion, then wait indefinitely for Start.
+        // No simulation or stale steering can cross into this new board.
+        ReloadLevel(game.level + 1, now)
+        game.mode = MODE_READY
     }
     // The run keeps each lost life; a game over or the finished journey
     // starts the next run at level one.
@@ -1732,7 +1816,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         }
     }
     if showing_bar { DrawTopBar(session, hud) }
-    if game.mode == MODE_PAUSED { Overlay(session, viewport, "Paused", "Your worm is waiting.") }
+    if game.mode == MODE_READY { DrawLevelReady(session, stage) }
+    else if game.mode == MODE_PAUSED { Overlay(session, viewport, "Paused", "Your worm is waiting.") }
     else if game.mode == MODE_DIED { Overlay(session, viewport, "Game over", "Another apple adventure?", game.score) }
     else if game.mode == MODE_VICTORY { Overlay(session, viewport, "You did it!", "You reached the mountain!", game.score) }
     return 0

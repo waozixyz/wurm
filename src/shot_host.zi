@@ -93,6 +93,14 @@ main :: () -> s32 {
         for i: 0..31 { Game.Tick(*App.game) }
         App.game.mode = Game.MODE_PAUSED
     }
+    unused CopyCString("WORM_SHOT_BOARD", name[:])
+    if GetEnvironment(*name[0]) != null {
+        App.game.started = true
+        App.game.mode = Game.MODE_PLAYING
+        App.game.next_step = 9223372036854775000
+    }
+    unused CopyCString("WORM_SHOT_VOLUME", name[:])
+    if GetEnvironment(*name[0]) != null { App.sound_popup = true }
     unused CopyCString("WORM_SHOT_STAGES", name[:])
     if GetEnvironment(*name[0]) != null {
         App.game.started = true
@@ -113,10 +121,17 @@ main :: () -> s32 {
     session := SessionOpen()
     if !SessionValid(session) { return 2 }
     defer { PixmapCloseWorkers(); CloseSession(session) }
-    viewport := Rectangle.{0.0, 0.0, cast(float32)PixmapWidth, cast(float32)PixmapHeight}
+    width: s32 = PixmapWidth
+    height: s32 = PixmapHeight
+    unused CopyCString("WORM_SHOT_PORTRAIT", name[:])
+    portrait := GetEnvironment(*name[0]) != null
+    if portrait { width = 390; height = 780 }
+    pixels: [390 * 780]u32
+    viewport := Rectangle.{0.0, 0.0, cast(float32)width, cast(float32)height}
     frame: s32 = 0
     while frame < 2 {
-        PixmapBegin(cast(u32)PixmapBackground)
+        if portrait { unused PixmapBeginInto(cast(u32)PixmapBackground, width, height, pixels[:]) }
+        else { PixmapBegin(cast(u32)PixmapBackground) }
         if cast(s32)BeginFrame(session, 1, viewport) != 0 { return 3 }
         if App.Frame(session, viewport) != 0 { return 4 }
         if cast(s32)EndFrame(session) != 0 { return 5 }

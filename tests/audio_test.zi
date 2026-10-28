@@ -1,4 +1,5 @@
 Audio :: #import, file "../src/audio.zi";
+Volume :: #import, file "../src/audio_volume.zi";
 File :: #import "std/file_linux";
 sdl :: #system_library "SDL2";
 CloseDevice :: (device: u32) #foreign sdl "SDL_CloseAudioDevice";
@@ -27,6 +28,17 @@ main :: () -> s32 {
     heard := false
     for index: 0..2047 { if Audio.mixed[index] != 0 { heard = true } }
     if !heard { return 6 }
+    if Volume.VolumeSample(12000,25) != 3000 || Volume.VolumeSample(-12000,50) != -6000 { return 13 }
+    if Volume.VolumeSample(90000,100) != 32767 || Volume.VolumeSample(12000,0) != 0 { return 14 }
+    Audio.SetVolume(0)
+    Clear(Audio.device)
+    Audio.PumpAudio()
+    muted_index: s32 = 0
+    while muted_index < 2048 {
+        if Audio.mixed[muted_index] != 0 { return 15 }
+        muted_index += 1
+    }
+    Audio.SetVolume(100)
     // Force a loop seam in the middle of a block and compare every byte:
     // no zero padding and no skipped or duplicated samples.
     expected: [4096]u8

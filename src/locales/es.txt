@@ -121,3 +121,33 @@ Completado
 [wurm_ui_39]
 Elegir nivel
 ---
+
+---
+[wurm_version]
+Versión
+
+---
+[wurm_leaderboard]
+Clasificación
+
+---
+[wurm_moon_dragon]
+Dragón lunar
+
+---
+[wurm_winter_cheer]
+Alegría navideña
+
+---
+[wurm_christmas_free]
+Gratis · diciembre de 2026
+
+---
+[wurm_claim]
+Reclamar
+
+[Volume]
+Volumen
+[wurm_level_start]
+Empezar nivel
+---

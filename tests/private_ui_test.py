@@ -112,6 +112,12 @@ def main():
         pointer(480, 530)
         assert not (level_directory / "controls.dat").exists(), "the desktop asked for controls"
         time.sleep(0.2)
+        pointer(868, 32)  # Volume is immediately left of Pause.
+        capture("volume-dropdown")
+        pointer(720, 180)  # Lower the real slider.
+        sound = (level_directory / "sound.dat").read_bytes()
+        assert len(sound) == 2 and 0 < sound[1] < 100, "Volume slider did not save its gain"
+        key("Escape")  # Dismiss the dropdown without pausing the level.
         key("space")
         time.sleep(0.15)
         capture("level-01")
@@ -281,14 +287,14 @@ def main():
         # Each dialog is exercised in a narrow phone portrait and a short
         # phone landscape window. The probe is a separate, uninstalled host.
         for width, height in ((320, 568), (640, 360)):
-            for mode, label in ((2, "paused"), (3, "game-over"), (5, "complete")):
+            for mode, label in ((2, "paused"), (3, "game-over"), (5, "complete"), (11, "ready")):
                 stop(app)
                 name = f"{width}x{height}-{label}"
                 log = OUT / (name + ".log")
                 if mode == 3:
                     (level_directory / "run.dat").write_bytes(bytes([0, 3, 0, 0, 0, 0]))
                     (level_directory / "unlocked.dat").write_bytes(bytes([57]))
-                env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height), WURM_PROBE_MODE=str(mode))
+                env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height), WURM_PROBE_MODE=str(mode), WURM_PROBE_LEVEL="12" if mode == 11 else "0")
                 app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
                                        stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
                 for attempt in range(100):
@@ -313,12 +319,24 @@ def main():
                     card_height += 56
                 card_top = (height - card_height) / 2
                 primary_y = round(card_top + card_height - (152 if mode == 2 else 96))
+                if mode == 11:
+                    # Start is centered on the playable board, below the HUD.
+                    hud_height = 104 if width < 520 else 72
+                    board_height = min(height - hud_height, width * (4 / 3 if height > width else 3 / 4))
+                    ready_height = 132 if board_height < 180 else 164
+                    primary_y = round((height + hud_height) / 2 + ready_height / 2 - 40)
+                    time.sleep(1.1)
+                    assert "mode=1 lives=" not in log.read_text(), "next level started without consent"
+                    key("Up")
+                    assert "mode=1 lives=" not in log.read_text(), "steering started the level"
+                    assert "mode=11 lives=3 level=12 score=1234" in log.read_text(), "preview is not level 13"
+                    capture(name + "-waiting")
                 secondary_y = round(card_top + card_height - 36)
                 assert 24 < primary_y < secondary_y < height - 24, name
                 # Exercise each primary action and require a real state change.
                 pointer(width // 2, primary_y)
                 for attempt in range(30):
-                    if "mode=1" in log.read_text():
+                    if "mode=1 lives=" in log.read_text():
                         break
                     time.sleep(.05)
                 else:
@@ -336,7 +354,7 @@ def main():
                     time.sleep(.05)
                 else:
                     raise AssertionError(name + " Back to title action failed")
-        print("Private UI local test: all three dialogs fit portrait/landscape; all primary and title actions worked.")
+        print("Private UI local test: pause, game-over, victory and next-level Start fit portrait/landscape; waiting and steering stay paused, Start and title actions worked.")
         for width, height in ((320, 568), (360, 800), (800, 360)):
             stop(app)
             # A previous-version save unlocks its reached level on relaunch.

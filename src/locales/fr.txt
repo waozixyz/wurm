@@ -121,3 +121,33 @@ Terminé
 [wurm_ui_39]
 Choisir un niveau
 ---
+
+---
+[wurm_version]
+Version
+
+---
+[wurm_leaderboard]
+Classement
+
+---
+[wurm_moon_dragon]
+Dragon lunaire
+
+---
+[wurm_winter_cheer]
+Joie de Noël
+
+---
+[wurm_christmas_free]
+Gratuit · décembre 2026
+
+---
+[wurm_claim]
+Obtenir
+
+[Volume]
+Volume
+[wurm_level_start]
+Commencer le niveau
+---

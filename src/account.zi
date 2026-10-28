@@ -22,6 +22,14 @@
     }
     Pump :: () {}
     OpenProfile :: () { unused Service("entity.profile", "open") }
+    OpenLeaderboard :: () { unused Service("entity.profile", "leaderboard") }
+    OpenDew :: () { unused Service("entity.profile", "dew") }
+    OpenAppearance :: () { unused Service("entity.profile", "appearance") }
+    ProfileTitle :: () -> string { return "Profile" }
+    SharedTheme :: () -> s32 { return -1 }
+    SharedAccent :: () -> s32 { return 0 }
+    SharedMaterial :: () -> bool { return false }
+    SystemDark :: () -> bool { return true }
     ProfileVisible :: () -> bool { return false }
     DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {}
     Back :: () {}
@@ -45,12 +53,15 @@
     #import "kryon/open_uri"
     #if #defined(ANDROID_BUILD) {
         #import "kryon/android_jni"
+        Device :: #import "kryon/android_device";
         Assets :: #import "kryon/app_asset";
     }
     started: bool;
     ready: bool;
     visible: bool;
+    profile_title: string = "Profile";
     profile_bytes: string;
+    InstalledGame :: (id: string) -> bool { return id == "xyz.waozi.wurm" }
     Root :: (output: []u8) -> string {
         #if #defined(PLATFORM_WEB) {
             return "/kryon-apps/wurm-profile"
@@ -77,6 +88,8 @@
                 if found { profile_bytes = bytes }
             }
             root: [4096]u8
+            Leaderboard.leaderboard_installed = InstalledGame
+            Entity.EntityHostProfileSections(10)
             if profile_bytes != "" { ready = Entity.EntityHostOpen(profile_bytes, Root(root[:]), "arcade", true) }
         }
         if ready { Entity.EntityHostPump() }
@@ -97,14 +110,28 @@
     // The Profile always opens. One that could not start tries again and,
     // if it still cannot, says why instead of doing nothing.
     OpenProfile :: () {
+        profile_title = "Profile"
         if !ready && started && profile_bytes != "" {
             root: [4096]u8
             ready = Entity.EntityHostOpen(profile_bytes, Root(root[:]), "arcade", true)
         }
-        if ready { Entity.EntityHostReload() }
+        if ready { Entity.EntityHostReload(); unused Entity.EntityHostPage("profile") }
         visible = true
     }
     ProfileVisible :: () -> bool { return visible }
+    OpenLeaderboard :: () { OpenProfile(); profile_title = "Leaderboard"; if ready { unused Entity.EntityHostLeaderboard() } }
+    OpenDew :: () { OpenProfile(); profile_title = "Dew"; if ready { unused Entity.EntityHostPage("dew") } }
+    OpenAppearance :: () { OpenProfile(); profile_title = "Appearance"; if ready { unused Entity.EntityHostPage("appearance") } }
+    ProfileTitle :: () -> string { return profile_title }
+    SharedTheme :: () -> s32 { return ifx ready then Entity.EntityHostAppearance().theme else -1 }
+    SharedAccent :: () -> s32 { return ifx ready then Entity.EntityHostAppearance().accent else 0 }
+    SharedMaterial :: () -> bool { return ready && Entity.EntityHostAppearance().material }
+    SystemDark :: () -> bool {
+        #if #defined(ANDROID_BUILD) {
+            return Device.AndroidSystemDark() != 0
+        }
+        return true
+    }
     DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {
         if !ready {
             problem := Entity.EntityHostProblem()
@@ -128,6 +155,14 @@
     Service :: (name: string, request: string) -> string { unused name; unused request; return "" }
     Pump :: () {}
     OpenProfile :: () {}
+    OpenLeaderboard :: () {}
+    OpenDew :: () {}
+    OpenAppearance :: () {}
+    ProfileTitle :: () -> string { return "Profile" }
+    SharedTheme :: () -> s32 { return -1 }
+    SharedAccent :: () -> s32 { return 0 }
+    SharedMaterial :: () -> bool { return false }
+    SystemDark :: () -> bool { return true }
     ProfileVisible :: () -> bool { return false }
     DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {}
     Back :: () {}

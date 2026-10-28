@@ -121,3 +121,33 @@
 [wurm_ui_39]
 Выбрать уровень
 ---
+
+---
+[wurm_version]
+Версия
+
+---
+[wurm_leaderboard]
+Таблица лидеров
+
+---
+[wurm_moon_dragon]
+Лунный дракон
+
+---
+[wurm_winter_cheer]
+Рождественская радость
+
+---
+[wurm_christmas_free]
+Бесплатно · декабрь 2026
+
+---
+[wurm_claim]
+Получить
+
+[Volume]
+Громкость
+[wurm_level_start]
+Начать уровень
+---

@@ -121,3 +121,33 @@ Abgeschlossen
 [wurm_ui_39]
 Level wählen
 ---
+
+---
+[wurm_version]
+Version
+
+---
+[wurm_leaderboard]
+Bestenliste
+
+---
+[wurm_moon_dragon]
+Monddrache
+
+---
+[wurm_winter_cheer]
+Weihnachtsfreude
+
+---
+[wurm_christmas_free]
+Kostenlos · Dezember 2026
+
+---
+[wurm_claim]
+Abholen
+
+[Volume]
+Lautstärke
+[wurm_level_start]
+Level starten
+---
