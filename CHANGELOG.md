@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.14] - 2026-10-28
+
+- Include the latest saved Meadow layouts for levels 3, 13 and 35.
+
 ## [0.2.13] - 2026-10-28
 
 - Play the updated editor-made campaign layouts, including readable YUM hedges in level 14.
