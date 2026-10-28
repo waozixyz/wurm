@@ -166,11 +166,47 @@ OpenEntrance :: (game: *Game) {
     game.board[Index(half, board_rows - 1)] = game.board[Index(half, board_rows - 2)] & 127
 }
 CloseEntrance :: (game: *Game) { game.board[Index(board_columns / 2, board_rows - 1)] = 20 }
+// About one second of straight travel at the fastest campaign pace, with
+// room to take either first corner. Keep this relative to the live layout
+// so portrait starts receive the same clearance as landscape starts.
+START_CLEAR_ROWS :: 8;
+START_CLEAR_HALF_WIDTH :: 2;
+StartClearance :: (x: s32, y: s32) -> bool {
+    return Abs(x - board_columns / 2) <= START_CLEAR_HALF_WIDTH &&
+        y >= board_rows - 1 - START_CLEAR_ROWS && y < board_rows - 1
+}
+
+ClearStart :: (game: *Game) {
+    half := board_columns / 2
+    for y: board_rows - 1 - START_CLEAR_ROWS..board_rows - 2 {
+        for x: half - START_CLEAR_HALF_WIDTH..half + START_CLEAR_HALF_WIDTH {
+            at := Index(x, y)
+            if game.board[at] >= 20 { game.board[at] = 0 }
+            game.objects[at] = 0
+        }
+    }
+    // A nearby chaser can cover several cells while the head enters. Keep
+    // that approach clear too, including on a later life, rather than
+    // requiring an immediate reversal to escape a creature at the gate.
+    kept: s32 = 0
+    for index: 0..game.monster_count - 1 {
+        monster := game.monsters[index]
+        near_start := Abs(monster.position.x / 16 - half) <= START_CLEAR_HALF_WIDTH + 3 &&
+            monster.position.y / 16 >= board_rows - 1 - START_CLEAR_ROWS - 3
+        if !near_start {
+            game.monsters[kept] = monster
+            kept += 1
+        }
+    }
+    game.monster_count = kept
+}
+
 OpenExit :: (game: *Game) {
     half := board_columns / 2
     game.board[Index(half, 0)] = game.board[Index(half, 1)] & 127
 }
 Respawn :: (game: *Game) {
+    ClearStart(game)
     game.length = 1
     game.target_length = 2
     game.direction = DIR_UP
@@ -361,7 +397,8 @@ DoorwaySpan :: (game: *Game, x: s32, y: s32, dx: s32, dy: s32) -> s32 {
     for span: 1..4 {
         cx := x + dx * cast(s32)(span - 1)
         cy := y + dy * cast(s32)(span - 1)
-        if cy < 2 || cy > board_rows - 4 || (Abs(cx - half) <= 3 && (cy <= 3 || cy >= board_rows - 4)) { return 0 }
+        if cy < 2 || cy > board_rows - 4 || StartClearance(cx, cy) ||
+        (Abs(cx - half) <= 3 && (cy <= 3 || cy >= board_rows - 4)) { return 0 }
         if !Floor(game, cx, cy) || !Floor(game, cx - dy, cy - dx) || !Floor(game, cx + dy, cy + dx) { return 0 }
         if Solid(game, cx + dx, cy + dy) { return cast(s32)span }
     }
@@ -443,7 +480,8 @@ OpenSpots :: (game: *Game, reached: []bool, side: s32, output: []s32, loose: boo
     half := board_columns / 2
     for y: 3..board_rows - 4 {
         for x: 2..board_columns - 3 {
-            if Abs(cast(s32)x - half) <= 2 && (y <= 5 || y >= board_rows - 6) { continue }
+            if StartClearance(cast(s32)x, cast(s32)y) ||
+            (Abs(cast(s32)x - half) <= 2 && (y <= 5 || y >= board_rows - 6)) { continue }
             if !OpenAround(game, cast(s32)x, cast(s32)y) && !(loose && InCorridor(game, cast(s32)x, cast(s32)y)) { continue }
             at := Index(x, y)
             if side >= 0 && reached[at] != (side == 1) { continue }

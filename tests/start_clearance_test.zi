@@ -1,0 +1,63 @@
+#import, file "../src/game.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value {
+        print("FAIL: %\n", message)
+        failures += 1
+    }
+}
+
+CheckStart :: (level: s32, portrait: bool, key: s32) {
+    board: [CELLS]u8
+    objects: [CELLS]u8
+    // Published boards only: this test never reads or writes editor drafts.
+    Custom.DefaultBoard(level, board[:], portrait)
+    columns: s32 = ifx portrait then ROWS else COLUMNS
+    rows: s32 = ifx portrait then COLUMNS else ROWS
+    game: Game
+    game.lives = 3
+    game.random = 17
+    LoadLevelData(*game, level, 0, board[:], 5, columns, rows, objects[:])
+    for y: rows - 1 - START_CLEAR_ROWS..rows - 2 {
+        for x: columns / 2 - START_CLEAR_HALF_WIDTH..columns / 2 + START_CLEAR_HALF_WIDTH {
+            Expect(!WallAt(*game, Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8}), "the entrance has a clear approach and turning area")
+        }
+    }
+    for tick: 0..39 { Tick(*game) }
+    if game.death_ticks != 0 || game.lives != 3 {
+        print("Unsafe start: level %, portrait %\n", level + 1, portrait)
+        failures += 1
+        return
+    }
+    Expect(ApplyInput(*game, key), "the first left or right turn is accepted")
+    for tick: 0..7 { Tick(*game) }
+    if game.death_ticks != 0 || game.lives != 3 {
+        print("Unsafe first corner: level %, portrait %, key %\n", level + 1, portrait, key)
+        failures += 1
+    }
+}
+
+#program_export
+main :: () -> s32 {
+    for level: 0..LEVEL_COUNT - 1 {
+        CheckStart(cast(s32)level, false, 262)
+        CheckStart(cast(s32)level, false, 263)
+        CheckStart(cast(s32)level, true, 262)
+        CheckStart(cast(s32)level, true, 263)
+    }
+    BoardSize(COLUMNS, ROWS)
+    game: Game
+    game.board[Index(4, 25)] = 21
+    game.board[Index(20, 27)] = 21
+    game.monster_count = 2
+    game.monsters[0].position = Point.{328, 440}
+    game.monsters[1].position = Point.{72, 72}
+    Respawn(*game)
+    Expect(game.board[Index(4, 25)] == 21, "terrain outside the entrance area is preserved")
+    Expect(game.board[Index(20, 27)] == 0, "a later life has the same clear start")
+    Expect(game.monster_count == 1 && game.monsters[0].position.x == 72, "nearby starting hazards are cleared while distant enemies remain")
+    print("Mobile start clearance: % failures across 200 levels and both layouts\n", failures)
+    return ifx failures == 0 then 0 else 1
+}

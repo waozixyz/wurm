@@ -24,6 +24,8 @@ ziran build $lock --project --root tests --target=c --entry game_test:main --exe
 build/game-test/game_test
 ziran build $lock --project --root tests --target=c --entry steering_test:main --exe -o build/steering-test tests/steering_test.zi
 build/steering-test/steering_test
+ziran build $lock --project --root tests --target=c --entry start_clearance_test:main --exe -o build/start-clearance-test tests/start_clearance_test.zi
+build/start-clearance-test/start_clearance_test
 ziran build $lock --project --root tests --target=c --entry campaign_replay:main --exe -o build/campaign-replay tests/campaign_replay.zi
 build/campaign-replay/campaign_replay
 ziran build $lock --project --root tests --target=c --entry progress_test:main --exe -o build/progress-test tests/progress_test.zi
