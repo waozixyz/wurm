@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import wave
 from account_build import profile, libraries
 
@@ -54,18 +55,37 @@ def main():
     shutil.rmtree(art / 'previews', ignore_errors=True)
     emcc = (env.get('EMCC') or shutil.which('emcc', path=env.get('PATH'))
             or str(Path.home() / 'emsdk/upstream/emscripten/emcc'))
+    # Pages limits each file, not the whole game. Keep complete artwork and
+    # previews in separate SDK asset bundles rather than one oversized data file.
+    packager = Path(emcc).resolve().parent / 'tools/file_packager.py'
+    preload_scripts = []
+    for name, source, virtual, excludes in (
+            ('art', art, '/assets/art', ['--exclude', '*/campaign-previews/*']),
+            ('previews', art / 'campaign-previews', '/assets/art/campaign-previews', [])):
+        loader = OUT / (name + '-preload.js')
+        subprocess.run([sys.executable, str(packager), name + '.data', '--preload',
+                        str(source) + '@' + virtual, *excludes, '--js-output=' + loader.name],
+                       cwd=OUT, env=env, check=True)
+        preload_scripts.append(loader)
+    with (OUT / 'asset-preloads.js').open('wb') as output:
+        for loader in preload_scripts:
+            with loader.open('rb') as source:
+                shutil.copyfileobj(source, output)
+            output.write(b'\n')
     subprocess.run([emcc, '-O2', '-Wno-parentheses-equality', '-I' + str(compiler / 'include'),
                     '-iquote', str(code), *map(str, code.glob('*.c')),
                     *account_libraries, '-sUSE_ZLIB=1',
                     '--js-library', str(compiler / 'web/ziran_web.js'),
-                    '-sEXPORTED_RUNTIME_METHODS=FS', '-sFORCE_FILESYSTEM=1', '-lidbfs.js',
+                    '-sEXPORTED_RUNTIME_METHODS=FS,FS_createPath,FS_createDataFile,addRunDependency,removeRunDependency',
+                    '-sFORCE_FILESYSTEM=1', '-lidbfs.js',
                     '-sALLOW_MEMORY_GROWTH=1', '-sASYNCIFY', '-sENVIRONMENT=web',
                     '-sSTACK_SIZE=8388608', '-sASYNCIFY_STACK_SIZE=1048576',
                     '--preload-file', str(kryon / 'assets/fonts/LiberationSans-Regular.ttf') + '@/kryon-font.ttf',
-                    '--preload-file', str(art) + '@/assets/art',
                     '--preload-file', str(profile_bundle) + '@/assets/entity.zx',
                     '-o', str(OUT / 'game.js')], cwd=ROOT, env=env, check=True)
-    assert (OUT / 'game.data').stat().st_size <= 25 * 1024 * 1024, 'Browser asset preload exceeds Pages limit'
+    for name in ('game.data', 'art.data', 'previews.data'):
+        size = (OUT / name).stat().st_size
+        assert size <= 25 * 1024 * 1024, f'{name} exceeds Pages limit ({size} bytes)'
     sounds = OUT / 'assets/sounds'
     sounds.mkdir(parents=True, exist_ok=True)
     for name in ('start', 'pickup', 'lose', 'exit'):

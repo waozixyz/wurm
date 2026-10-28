@@ -54,6 +54,13 @@ def libraries(web=False):
     config = ['cmake', '-S', str(oqs), '-B', str(work / 'oqs'), '-DCMAKE_BUILD_TYPE=MinSizeRel',
               '-DBUILD_SHARED_LIBS=OFF', '-DOQS_BUILD_ONLY_LIB=ON', '-DOQS_USE_OPENSSL=OFF',
               '-DOQS_DIST_BUILD=OFF', '-DOQS_OPT_TARGET=generic', '-DOQS_MINIMAL_BUILD=SIG_ml_dsa_44']
+    cache = work / 'oqs/CMakeCache.txt'
+    if cache.exists():
+        with cache.open() as source:
+            cached_root = next((line.strip().split('=', 1)[1] for line in source
+                                if line.startswith('CMAKE_HOME_DIRECTORY:INTERNAL=')), '')
+        if cached_root and Path(cached_root).resolve() != oqs.resolve():
+            config.insert(1, '--fresh')
     if web:
         config.insert(0, str(Path(emcc).with_name('emcmake')))
     subprocess.run(config, cwd=ROOT, env=env, check=True)

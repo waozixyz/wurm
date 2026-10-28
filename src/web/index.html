@@ -28,9 +28,16 @@
       function start() {
         if (started) return;
         started = true;
-        var game = document.createElement('script');
-        game.src = 'game.js';
-        document.body.appendChild(game);
+        var assets = document.createElement('script');
+        assets.src = 'asset-preloads.js';
+        assets.onload = function () {
+          var game = document.createElement('script');
+          game.src = 'game.js';
+          game.onerror = Module.onAbort;
+          document.body.appendChild(game);
+        };
+        assets.onerror = Module.onAbort;
+        document.body.appendChild(assets);
       }
       var shared = document.createElement('script');
       shared.src = 'https://account.waozi.xyz/share.js';
