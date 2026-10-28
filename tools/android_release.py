@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sign and verify both Apfelwurm Android download names and the Google Play bundle, as Shovey does."""
+"""Sign and verify Google-free Android downloads and the separate Google Play APK and bundle."""
 import argparse
 import hashlib
 import json
@@ -22,7 +22,34 @@ def build_tools():
     return tools
 
 
-def verify(apk):
+def verify_edition(archive, edition, bundle=False):
+    """Inspect every DEX, including multidex, without loading the whole archive."""
+    markers = {
+        'Google': b'Lcom/google/',
+        'Play Billing': b'Lcom/android/billingclient/',
+        'Play Store': b'Lcom/android/vending/',
+        'Play bridge': b'Lorg/kryonlabs/play/PlayBilling;',
+    }
+    found = set()
+    overlap = max(map(len, markers.values())) - 1
+    pattern = r'base/dex/classes(?:\d+)?\.dex' if bundle else r'classes(?:\d+)?\.dex'
+    dex_names = [name for name in archive.namelist() if re.fullmatch(pattern, name)]
+    assert dex_names, 'Android releases must include DEX code'
+    for name in dex_names:
+        tail = b''
+        with archive.open(name) as dex:
+            while chunk := dex.read(1024 * 1024):
+                data = tail + chunk
+                found.update(label for label, marker in markers.items() if marker in data)
+                tail = data[-overlap:]
+    if edition == 'gplay':
+        assert {'Play Billing', 'Play bridge'} <= found, 'The Google Play edition must include Play Billing and its bridge'
+    else:
+        assert edition == 'direct', 'Unknown Android edition'
+        assert not found, 'Standard and F-Droid APKs must exclude Google libraries: ' + ', '.join(sorted(found))
+
+
+def verify(apk, edition='direct'):
     version = json.loads((ROOT / 'version.json').read_text())
     tools = build_tools()
     badging = subprocess.check_output([str(tools / 'aapt'), 'dump', 'badging', str(apk)], text=True)
@@ -31,6 +58,7 @@ def verify(apk):
     assert int(package[2]) == version['version_code']
     assert 'application-debuggable' not in badging, 'A debug APK cannot be released'
     assert 'android.permission.INTERNET' in badging, 'Optional account sync and Dew require network access'
+    assert ('com.android.vending.BILLING' in badging) == (edition == 'gplay'), 'Play Billing permission must match the edition'
     certificate = subprocess.check_output(['openssl', 'x509', '-in', str(ROOT / 'packaging/android/certificate.pem'), '-outform', 'DER'])
     expected = hashlib.sha256(certificate).hexdigest()
     signature = subprocess.check_output([str(tools / 'apksigner'), 'verify', '--verbose', '--print-certs', str(apk)], text=True)
@@ -38,6 +66,7 @@ def verify(apk):
     assert 'Number of signers: 1' in signature and set(actual) == {expected}, 'Unexpected release certificate'
     subprocess.run([str(tools / 'zipalign'), '-c', '-P', '16', '4', str(apk)], check=True, capture_output=True)
     with zipfile.ZipFile(apk) as archive:
+        verify_edition(archive, edition)
         abis = sorted(p.split('/')[1] for p in archive.namelist() if re.fullmatch(r'lib/[^/]+/libmain\.so', p))
         assert abis == ['arm64-v8a', 'armeabi-v7a'], 'Both ARM architectures are required'
         with tempfile.TemporaryDirectory(dir=ROOT / 'build') as directory:
@@ -63,7 +92,7 @@ def verify(apk):
             assert archive.read('assets/' + name) == (ROOT / name).read_bytes(), name
         assert archive.read('assets/assets/sounds/garden.pcm') == (ROOT / 'assets/sounds/garden.pcm').read_bytes()
         assert archive.read('assets/assets/entity.zx') == (ROOT / 'build/profile/entity.zx').read_bytes(), 'The shared Profile must be packaged'
-    return dict(version=version['version'], version_code=version['version_code'], package=package[1], abis=abis,
+    return dict(version=version['version'], version_code=version['version_code'], edition=edition, package=package[1], abis=abis,
                 sha256=hashlib.sha256(apk.read_bytes()).hexdigest(), certificate_sha256=expected)
 
 
@@ -102,8 +131,7 @@ def verify_bundle(bundle, bundletool):
             assert archive.read('base/assets/assets/art/' + name) == (ROOT / 'assets/art' / name).read_bytes(), name
         assert not any(name.startswith('base/assets/assets/campaign-levels/') for name in archive.namelist()), 'Personal campaign edits must stay private'
         assert archive.read('base/assets/assets/entity.zx') == (ROOT / 'build/profile/entity.zx').read_bytes(), 'The shared Profile must be packaged'
-        dex = b''.join(archive.read(name) for name in archive.namelist() if name.startswith('base/dex/'))
-        assert b'Lorg/kryonlabs/play/PlayBilling;' in dex, 'The Google Play edition must include Play Billing'
+        verify_edition(archive, 'gplay', bundle=True)
     return dict(version=version['version'], version_code=version['version_code'], package='xyz.waozi.wurm', abis=abis,
                 sha256=hashlib.sha256(bundle.read_bytes()).hexdigest(), certificate_sha256=expected)
 
@@ -116,8 +144,11 @@ def main():
     parser.add_argument('--password-file', type=Path, default=ROOT / 'backup/android-signing/password')
     parser.add_argument('--output', type=Path, default=ROOT / 'build/downloads')
     parser.add_argument('--bundletool', type=Path, help='Google bundletool JAR, required for .aab files')
+    parser.add_argument('--edition', choices=('direct', 'gplay'),
+                        help='direct (default for APKs) or gplay; App Bundles always use gplay')
     args = parser.parse_args()
     if args.apk.suffix == '.aab':
+        assert args.edition != 'direct', 'App Bundles require the gplay edition'
         assert args.bundletool, '--bundletool is required for a Google Play bundle'
         bundle = args.apk.resolve(strict=True)
         if args.action == 'sign':
@@ -141,32 +172,35 @@ def main():
         print(f'Apfelwurm {result["version"]} ({result["version_code"]}): Google Play bundle identity, version, '
               'both ARM architectures, upload signature, alignment and current assets verified.')
         return
+    edition = args.edition or 'direct'
     if args.action == 'verify':
-        verify(args.apk)
+        verify(args.apk, edition)
     else:
         args.output.mkdir(parents=True, exist_ok=True)
         version = json.loads((ROOT / 'version.json').read_text())['version']
         tools = build_tools()
-        aligned = args.output / 'aligned-unsigned.apk'
-        temporary = args.output / 'wurm.new.apk'
-        target = args.output / f'wurm-v{version}.apk'
+        suffix = '-gplay' if edition == 'gplay' else ''
+        aligned = args.output / f'aligned{suffix}-unsigned.apk'
+        temporary = args.output / f'wurm{suffix}.new.apk'
+        target = args.output / f'wurm-v{version}{suffix}.apk'
         fdroid = args.output / f'wurm-{version}-fdroid.apk'
         try:
             subprocess.run([str(tools / 'zipalign'), '-P', '16', '-f', '4', str(args.apk.resolve()), str(aligned)], check=True)
             subprocess.run([str(tools / 'apksigner'), 'sign', '--alignment-preserved', '--ks', str(args.keystore.resolve(strict=True)),
                             '--ks-key-alias', 'wurm', '--ks-pass', 'file:' + str(args.password_file.resolve(strict=True)),
                             '--out', str(temporary), str(aligned)], check=True)
-            result = verify(temporary)
+            result = verify(temporary, edition)
             temporary.replace(target)
-            shutil.copyfile(target, fdroid)
-            assert verify(fdroid) == result
+            if edition == 'direct':
+                shutil.copyfile(target, fdroid)
+                assert verify(fdroid) == result
             records = ROOT / 'backup/android-release'
             records.mkdir(parents=True, exist_ok=True)
-            (records / 'verification.json').write_text(json.dumps(result, indent=2) + '\n')
+            (records / ('gplay-verification.json' if edition == 'gplay' else 'verification.json')).write_text(json.dumps(result, indent=2) + '\n')
         finally:
             aligned.unlink(missing_ok=True)
             temporary.unlink(missing_ok=True)
-    print('Apfelwurm release APK: identity, version, both ARM architectures, signature, alignment and current assets verified.')
+    print(f'Apfelwurm {edition} release APK: edition, identity, version, both ARM architectures, signature, alignment and current assets verified.')
 
 
 if __name__ == '__main__':

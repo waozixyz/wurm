@@ -21,6 +21,10 @@ acoustic soundtrack and controls that respond while your finger stays down.
 Free to play. All 200 levels can be unlocked through play. No ads. An optional account keeps your
 progress and character choices in sync, with cosmetic skins available for Dew.
 
+The standard Android APK and the `-fdroid.apk` download exclude Google libraries.
+Choose the separate `-gplay.apk` for Google Play Billing. The standard and
+F-Droid editions use Monero for Dew top-ups.
+
 ## Five landscapes. Forty levels each.
 
 - **Meadow:** find your rhythm among grass, hedges and orchard paths, with a slower opening pace.

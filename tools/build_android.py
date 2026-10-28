@@ -26,9 +26,14 @@ def main():
     parser.add_argument('--release', action='store_true', help='build the unsigned production APK for signing')
     parser.add_argument('--bundle', action='store_true',
                         help="build the unsigned Google Play edition's App Bundle for signing")
+    parser.add_argument('--edition', choices=('direct', 'gplay'),
+                        help='direct (default) excludes Google libraries; gplay includes Play Billing')
     parser.add_argument('--verification', action='store_true',
                         help='build a separate test install without replacing the normal game')
     args = parser.parse_args()
+    edition = args.edition or ('gplay' if args.bundle else 'direct')
+    if args.bundle and edition != 'gplay':
+        parser.error('--bundle requires the gplay edition')
     version = json.loads((ROOT / 'version.json').read_text())
     current = re.search(r'^## \[([0-9.]+)\]', (ROOT / 'CHANGELOG.md').read_text(), re.M)
     assert current and current[1] == version['version'], 'Run update_version.sh first'
@@ -104,11 +109,11 @@ target_link_libraries(main oqs)
     task = 'bundleRelease' if args.bundle else 'assembleRelease' if args.release else 'assembleDebug'
     command = ['sh', 'droid/gradlew', '-p', 'droid', '--no-daemon', '--max-workers=1', task,
                '-Pkryon.dir=' + str(kryon), '-Pziran.dir=' + str(ziran), '-Praylib.dir=' + str(raylib / 'src'),
-               '-Papp.abis=' + abis, '-Papp.minSdk=21', '-Papp.codegen=c99',
+               '-Papp.abis=' + abis, '-Papp.minSdk=21', '-Papp.codegen=c99', '-Papp.edition=' + edition,
                '-Pandroid.aapt2FromMavenOverride=' + str(aapt)]
     # Kryon's Google Play edition adds Play Billing, so Dew is bought through Play.
-    if args.bundle:
-        command += ['-Papp.edition=gplay', '-Pandroid.useAndroidX=true']
+    if edition == 'gplay':
+        command += ['-Pandroid.useAndroidX=true']
     install_id = 'xyz.waozi.wurm.verification' if args.verification else 'xyz.waozi.wurm'
     command.append('-Papp.installId=' + install_id)
     subprocess.run(command, cwd=ROOT, env=environment, check=True)
@@ -121,7 +126,7 @@ target_link_libraries(main oqs)
     label = 'Apfelwurm-verification-' if args.verification else 'Apfelwurm-'
     variant = 'release' if args.release else 'debug'
     suffix = '-release-unsigned.apk' if args.release else '-debug.apk'
-    target = ROOT / 'build/android' / (label + args.abi + suffix)
+    target = ROOT / 'build/android' / (label + args.abi + ('-gplay' if edition == 'gplay' else '') + suffix)
     target.parent.mkdir(parents=True, exist_ok=True)
     source = 'app-release-unsigned.apk' if args.release else 'app-debug.apk'
     shutil.copy2(ROOT / 'droid/app/build/outputs/apk' / variant / source, target)

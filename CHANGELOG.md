@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.12] - 2026-10-28
+
+- Download the Google Play edition as a separate `-gplay.apk`. The standard and F-Droid APKs exclude Google libraries and keep Monero top-ups.
+
 ## [0.2.11] - 2026-10-28
 
 - Buy a small 10 Dew pack in the Google Play edition and see each larger pack’s savings per Dew.

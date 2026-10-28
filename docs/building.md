@@ -174,12 +174,25 @@ Signing uses the preserved private key in ignored `backup/android-signing/`.
 Only its public certificate is tracked in `packaging/android/certificate.pem`.
 The signing tool verifies the package, version, certificate, both ARM native
 libraries, 16 KB ZIP alignment and current game assets. It produces identical
-signed `wurm-v<VERSION>.apk` and `wurm-<VERSION>-fdroid.apk` downloads, following
-Shovey's naming format. The F-Droid filename is a source-build distribution
+signed `wurm-v<VERSION>.apk` and `wurm-<VERSION>-fdroid.apk` downloads. Both exclude
+Google libraries, and verification rejects Google or Play Billing classes and
+the Play Billing permission in these APKs. The F-Droid filename is a source-build distribution
 artifact; it does not imply a listing or approval in the F-Droid catalog.
 
+Build and sign the separate Google Play APK with:
+
+```sh
+python3 tools/build_android.py --release --abi universal --edition gplay
+python3 tools/android_release.py sign build/android/Apfelwurm-universal-gplay-release-unsigned.apk --edition gplay
+```
+
+This produces `wurm-v<VERSION>-gplay.apk`, with Play Billing for Dew purchases.
+It never replaces either Google-free download. `--bundle` still builds the
+Google Play App Bundle; the separate Google Play bundle workflow signs it for
+upload to the Play Console.
+
 On every push to master, the Downloads workflow runs the game and private
-display tests, builds a production APK and signs both names using repository
+display tests, builds both Android editions and signs all three names using repository
 secrets `WURM_ANDROID_KEYSTORE` and `WURM_ANDROID_KEYSTORE_PASSWORD`. A new
 changelog version is published only after those jobs succeed. Tags are created
 by that workflow. Publishing uploads directly from the verified build to
