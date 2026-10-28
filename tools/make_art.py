@@ -113,6 +113,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
+    save(Image.open(SOURCE / 'water-field.png').convert('RGBA'), ART / 'water-field.png', args.check)
     terrain = cells(SOURCE / 'terrain.png', 4, 3)
     sprites = cells(SOURCE / 'sprites.png', 4, 4)
     # Only replace the seven worm cells; other creatures retain their art.

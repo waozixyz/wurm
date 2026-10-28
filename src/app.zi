@@ -81,6 +81,7 @@ Custom :: #import, file "custom_levels.zi";
     ART_TITLE_PORTRAIT :: "assets/wurm/art/title-portrait.png";
     ART_PREVIEWS :: "assets/wurm/art/campaign-previews/";
     ART_GROUND :: "assets/wurm/art/ground-meadow.png";
+    ART_WATER :: "assets/wurm/art/water-field.png";
 } else {
     ART_MEADOW :: "assets/art/campaign-meadow.png";
     ART_LEAFWOOD :: "assets/art/campaign-leafwood.png";
@@ -93,6 +94,7 @@ Custom :: #import, file "custom_levels.zi";
     ART_TITLE_PORTRAIT :: "assets/art/title-portrait.png";
     ART_PREVIEWS :: "assets/art/campaign-previews/";
     ART_GROUND :: "assets/art/ground-meadow.png";
+    ART_WATER :: "assets/art/water-field.png";
 }
 
 PLAY_STEERING_KEY :: 100000;
@@ -114,6 +116,7 @@ apple_digits: [21]u8;
 EDITOR_PANEL_WIDTH :: 248.0;
 // Brush values: 0..127 paint tiles; 128 is the smart hedge.
 BRUSH_SMART_WALL :: 128;
+EditorInput :: #import, file "editor_input.zi";
 EditorState :: struct {
     level: s32
     board: [CELLS]u8
@@ -127,6 +130,7 @@ EditorState :: struct {
     playtest: bool
     browsing: bool
     turned: bool
+    stroke: EditorInput.StrokeState
 }
 editor: EditorState;
 editor_digits: [21]u8;
@@ -633,6 +637,16 @@ MeadowGround :: (session: Session, key: u64, bounds: Rectangle, x: s32, y: s32) 
 Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string) {
     bounds := TileBounds(stage, x, y)
     kind := tile & 127
+    if kind == 22 {
+        // One field spans the board. Touching water cells sample touching
+        // regions, so painting a lake never repeats a shoreline per tile.
+        width := 1448.0 / cast(float32)board_columns
+        height := 1086.0 / cast(float32)board_rows
+        unused Image(session, ImageProps.{.key = key, .asset_path = ART_WATER, .bounds = bounds,
+            .source = Rectangle.{cast(float32)x * width,cast(float32)y * height,width,height},
+            .smooth = true, .alt_text = "Continuous water"})
+        return
+    }
     if kind >= 40 && kind <= 45 {
         if sheet == Sheet(0) { MeadowGround(session, key, bounds, x, y) }
         else { Picture(session, key, sheet, bounds, Rectangle.{0.0, 0.0, 16.0, 16.0}) }
@@ -868,6 +882,7 @@ OpenEditor :: (level: s32) {
     editor.level = level
     editor.reset_armed = false
     editor.save_failed = false
+    EditorInput.StrokeReset(*editor.stroke)
     game.mode = MODE_EDITOR
 }
 
@@ -877,6 +892,7 @@ EditorTurn :: () {
     EditorSave()
     if editor.save_failed { return }
     editor.turned = !editor.turned
+    EditorInput.StrokeReset(*editor.stroke)
     EditorLoad(editor.level)
     editor.dirty = false
     editor.reset_armed = false
@@ -1054,13 +1070,14 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
 
     pointer := GamePointer(session)
     secondary := GameSecondaryPointer(session)
+    stroke := EditorInput.StrokeUpdate(*editor.stroke,pointer,secondary,stage)
     scale := stage.width / (cast(float32)board_columns * 16.0)
-    if (pointer.down || secondary.down) && Input.PointInBounds(pointer.x, pointer.y, stage) {
+    if stroke != 0 {
         cell_x := cast(s32)((pointer.x - stage.x) / (16.0 * scale))
         cell_y := cast(s32)((pointer.y - stage.y) / (16.0 * scale))
         if Inside(cell_x, cell_y) {
             at := Index(cell_x, cell_y)
-            if pointer.down {
+            if (stroke & 1) != 0 {
                 if editor.brush == BRUSH_SMART_WALL {
                     ApplyWallBrush(editor.board[:], cell_x, cell_y)
                     editor.dirty = true
@@ -1069,22 +1086,13 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
                     editor.dirty = true
                 }
             }
-            if secondary.down {
+            if (stroke & 2) != 0 {
                 if editor.objects[at] != 0 {
                     editor.objects[at] = 0
                     editor.dirty = true
                 } else {
                     default_board: [CELLS]u8
-                    if editor.turned {
-                        landscape: [CELLS]u8
-                        Custom.EffectiveBoard(editor.level,landscape[:])
-                        if Custom.HasCustomLevel(editor.level) { GuessPortrait(landscape[:],default_board[:]) }
-                        else { PortraitBoard(editor.level,landscape[:],default_board[:]) }
-                    } else {
-                        for y: 0..ROWS - 1 {
-                            for x: 0..COLUMNS - 1 { default_board[y * COLUMNS + x] = BaseTile(editor.level,cast(s32)x,cast(s32)y) }
-                        }
-                    }
+                    Custom.DefaultBoard(editor.level,default_board[:],editor.turned)
                     original := default_board[at]
                     if editor.board[at] != original {
                         editor.board[at] = original
@@ -1151,7 +1159,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     TextLine(session, 8210, "BRUSH", Rectangle.{panel.x + 56.0, panel.y + 34.0, 70.0, 18.0}, 13)
     brush_text := FormatInteger(cast(s64)editor.brush, brush_digits[:])
     TextLine(session, 8211, brush_text, Rectangle.{panel.x + 56.0, panel.y + 54.0, 40.0, 18.0}, 13)
-    if editor.turned && !Custom.HasCustomLevel(editor.level,true) && (!HasPortraitDesign(editor.level) || Custom.HasCustomLevel(editor.level)) {
+    if editor.turned && !Custom.HasCustomLevel(editor.level,true) && !Custom.HasAuthoredLevel(editor.level,true) && (!HasPortraitDesign(editor.level) || Custom.HasCustomLevel(editor.level)) {
         TextLine(session,8224,"Best guess — edit and save",Rectangle.{panel.x + 8.0,panel.y + 80.0,232.0,20.0},12)
     }
     blocked := LevelBlockages(editor.board[:])
@@ -1169,12 +1177,13 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
         .scroll_offset = editor.palette_scroll})
     editor.palette_scroll = palette.scroll_offset
     if palette.opened {
+        palette_press := pointer.pressed && Input.PointInBounds(pointer.x,pointer.y,inner)
         cursor := DrawPalettePart(session, 8300, palette.content, 6, "FLOOR", floor_entries[:], tiles,
-            pointer.x, pointer.y, pointer.pressed)
+            pointer.x, pointer.y, palette_press)
         cursor = DrawPalettePart(session, 8400, palette.content, cursor, "OBSTACLES", wall_entries[:], tiles,
-            pointer.x, pointer.y, pointer.pressed)
+            pointer.x, pointer.y, palette_press)
         cursor = DrawPalettePart(session, 8500, palette.content, cursor, "ENEMIES", enemy_entries[:], tiles,
-            pointer.x, pointer.y, pointer.pressed)
+            pointer.x, pointer.y, palette_press)
         unused End(session)
     }
 

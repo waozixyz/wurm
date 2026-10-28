@@ -1,0 +1,9 @@
+{
+  "source": "/home/wao/.codex/generated_images/01a18385-718a-7a20-b897-3f36ab938b70/exec-a6318dc8-fc89-433a-a7cc-80f189e0f86f.png",
+  "prompt": "Create a game texture bitmap: a large uninterrupted top-down surface of calm shallow turquoise pond water, matching a cozy illustrated mobile game with softly painted natural colors. Entire image is ONLY water edge to edge. Absolutely no shoreline, land, rocks, borders, tile outlines, grid, framed cells, text, plants, objects or perspective. Even medium teal/aqua base, subtle broad soft currents, sparse delicate pale turquoise curved ripples and soft underwater mottling. Flat overhead view, gentle non-directional lighting with no edge vignettes. Fairly low contrast, no bright white highlights or glossy bevels. This will be sampled once across an entire 40-by-30-cell game board and masked by terrain cells, so all touching cells must show continuous flowing water, never individual puddles. Landscape 4:3 composition, high resolution.",
+  "transparent_background": false,
+  "size": [
+    1448,
+    1086
+  ]
+}

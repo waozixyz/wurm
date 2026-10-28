@@ -1,0 +1,34 @@
+#import "kryon/input_protocol"
+#import "kryon/geometry"
+
+StrokeState :: struct {
+    wait_release: bool
+    painting: bool
+    erasing: bool
+}
+
+StrokeReset :: (state: *StrokeState) {
+    state.wait_release = true
+    state.painting = false
+    state.erasing = false
+}
+
+// A stroke belongs to the surface where its press began. Opening a board
+// consumes the selector's held press; a palette drag cannot paint the board.
+StrokeUpdate :: (state: *StrokeState, pointer: PointerFrame, secondary: SecondaryPointerFrame,
+        canvas: Rectangle) -> s32 {
+    if state.wait_release {
+        if !pointer.down && !secondary.down { state.wait_release = false }
+        return 0
+    }
+    inside := PointInBounds(pointer.x,pointer.y,canvas)
+    if pointer.pressed { state.painting = inside }
+    else if !pointer.down { state.painting = false }
+    if secondary.pressed { state.erasing = inside }
+    else if !secondary.down { state.erasing = false }
+    if !inside { return 0 }
+    result: s32
+    if state.painting && (pointer.pressed || pointer.down) { result |= 1 }
+    if state.erasing && (secondary.pressed || secondary.down) { result |= 2 }
+    return result
+}

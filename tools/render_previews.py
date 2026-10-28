@@ -19,6 +19,7 @@ def main():
     arguments = parser.parse_args()
 
     changed = 0
+    water = Image.open(ROOT / 'assets/art/water-field.png').convert('RGBA')
     destination = ROOT / "assets/art/campaign-previews"
     if not arguments.check:
         destination.mkdir(parents=True, exist_ok=True)
@@ -28,7 +29,8 @@ def main():
         ground = Image.open(ROOT / 'assets/art/ground-meadow.png').convert('RGBA') if stage == 'meadow' else None
         for number in range(1, end - first + 1):
             designed = ROOT / "build/designed" / f"level{first + number}.dat"
-            raw_path = designed
+            published = ROOT / 'assets/authored-levels' / designed.name
+            raw_path = published if published.exists() else designed
             raw = raw_path.read_bytes()
             tiles = raw[1:1201] if len(raw) > 1201 else raw[1:]
             for portrait in (False,True):
@@ -36,7 +38,8 @@ def main():
                 width,height=(150,200) if portrait else (200,150)
                 board={(x,y):tiles[x*30+y] for x in range(40) for y in range(30)}
                 if portrait:
-                    authored=ROOT/'build/designed'/f"level{first+number}-portrait.dat"
+                    authored=ROOT/'assets/authored-levels'/f"level{first+number}-portrait.dat"
+                    if not authored.exists():authored=ROOT/'build/designed'/authored.name
                     if authored.exists():
                         data=authored.read_bytes()
                         board={(x,y):data[1+x*40+y] for x in range(30) for y in range(40)}
@@ -55,6 +58,9 @@ def main():
                         if ground is not None and tile in (0,3,4,5,6,15,16,17,19):
                             source=ground.crop((x*ground.width/columns,y*ground.height/rows,
                                                (x+1)*ground.width/columns,(y+1)*ground.height/rows))
+                        if tile == 22:
+                            source=water.crop((x*water.width/columns,y*water.height/rows,
+                                               (x+1)*water.width/columns,(y+1)*water.height/rows))
                         if enemy is not None:
                             column=6 if enemy==40 else enemy-40
                             source=source.copy()

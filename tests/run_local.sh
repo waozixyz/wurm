@@ -15,6 +15,7 @@ fi
 python3 tests/recovery_test.py "${1:-/mnt/storage/Games/The-Worm_Win_EN}"
 python3 tools/design_levels.py --check
 python3 tests/campaign_design_test.py
+python3 tests/authored_design_test.py
 python3 tools/locales.py --check
 python3 tools/make_art.py --check
 python3 tools/render_previews.py --check
@@ -32,6 +33,8 @@ build/account-test/account_test
 python3 tests/hosted_test.py
 ziran build $lock --project --root tests --target=c --entry editor_test:main --exe -o build/editor-test tests/editor_test.zi
 build/editor-test/editor_test
+ziran build $lock --project --root tests --target=c --entry authored_levels_test:main --exe -o build/authored-levels-test tests/authored_levels_test.zi
+build/authored-levels-test/authored_levels_test
 ziran build $lock --project --root tests --target=c --entry level_probe:main --exe -o build/level-probe tests/level_probe.zi
 build/level-probe/level_probe > build/research/native-levels.txt
 python3 - <<'PY'

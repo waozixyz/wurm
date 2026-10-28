@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 import random
 import struct
+from authored_levels import generate as generate_authored
 
 ROOT=Path(__file__).resolve().parents[1]
 COLUMNS,ROWS=40,30
@@ -159,6 +160,15 @@ def layout(stage,within,attempt):
         # become, not whether the same layout is repeated.
         if stage==3:walls={p:(21 if v==21 else 22) for p,v in walls.items()}
         elif stage==4:walls={p:(22 if v==22 and (p[0]+p[1])%3==0 else 21 if v==21 else 20) for p,v in walls.items()}
+    if stage == 0 and within == 9 and attempt == 0:
+        # Tall Aisles: four-cell lanes leave room for touch steering while
+        # retaining the two tall hedges and the lower courtyard.
+        walls = {(4, y): 20 for y in range(1, 9)}
+        walls.update({(14, y): 20 for y in range(9)})
+        walls.update({(x, y): 20 for x in (7, 11) for y in range(3, 9)})
+        walls.update({(x, 8): 20 for x in range(7, 15)})
+        walls.update({(x, y): 20 for x in (5, 13) for y in range(9, 12)})
+        walls.update({(x, 10): 20 for x in (5, 6, 7, 8, 11, 12, 13)})
     walls=join_floor(walls)
     if stage==0 and within<6 and attempt==0:return source,accent,walls
     return source,accent,walls
@@ -280,6 +290,7 @@ def encode(levels):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--check',action='store_true');args=parser.parse_args()
+    generate_authored(args.check)
     levels=campaign();source=encode(levels);path=ROOT/'src/designed_levels.zi'
     cases=json.loads((ROOT/'tests/campaign_cases.json').read_text())
     assert len(cases)==200 and all(len(pair)==2 for pair in cases)

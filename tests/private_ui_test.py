@@ -152,9 +152,27 @@ def main():
         index = 13
         card_x = 8 + (index % columns) * (item_w + 8) + item_w / 2
         card_y = 42 + 56 + (index // columns) * (item_h + 8) + item_h / 2
-        pointer(int(card_x), int(card_y))
+        subprocess.run(['xdotool','mousemove','--window',window,'--sync',str(int(card_x)),str(int(card_y)),
+                        'mousedown','1'],env=env,check=True)
+        time.sleep(0.25)
+        subprocess.run(['xdotool','mousemove','--window',window,'--sync','210','250'],env=env,check=True)
+        time.sleep(0.25)
+        subprocess.run(['xdotool','mouseup','1'],env=env,check=True)
         time.sleep(0.3)
         capture("editor-open")
+        pointer(775,518)
+        assert not (level_directory/'level14.dat').exists(), 'selecting a level painted the board'
+
+        # Picking a brush owns that press until release, even if it is dragged
+        # across the canvas. A subsequent independent click paints normally.
+        subprocess.run(['xdotool','mousemove','--window',window,'--sync','737','195',
+                        'mousedown','1'],env=env,check=True)
+        time.sleep(0.2)
+        subprocess.run(['xdotool','mousemove','--window',window,'--sync','210','250'],env=env,check=True)
+        time.sleep(0.2)
+        subprocess.run(['xdotool','mouseup','1'],env=env,check=True)
+        pointer(775,518)
+        assert not (level_directory/'level14.dat').exists(), 'a palette drag painted the board'
 
         # The editor canvas on the chosen level: the pointer picks the
         # first floor swatch and paints it over the top-left wall, and Save

@@ -117,6 +117,14 @@ marker) are carved at runtime from the tiles above and below the edges; the
 editor warns when a level could not be entered or left. `WURM_LEVEL_DIR`
 redirects where overrides are read and written.
 
+Published editor layouts live in `assets/authored-levels/`, separate from
+personal saves. To publish a saved board, copy only its `level<N>.dat` or
+`level<N>-portrait.dat` file there, then run `python3 tools/authored_levels.py`
+and `python3 tools/render_previews.py`. The generated boards are compiled
+into desktop, Android, browser and Arcade editions. Personal progress,
+wardrobes and other save records are never included. Reset restores the
+published board; a new personal edit takes precedence over it.
+
 ## Build
 
 Arcade builds `catalog.json`'s portable entry from this repository and offers

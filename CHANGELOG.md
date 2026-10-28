@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.13] - 2026-10-28
+
+- Play the updated editor-made campaign layouts, including readable YUM hedges in level 14.
+- Paint connected water with a continuous surface and shorelines only along its outside edges.
+- Choose a level or brush without accidentally painting the board; click or drag on the board to paint.
+
 ## [0.2.12] - 2026-10-28
 
 - Download the Google Play edition as a separate `-gplay.apk`. The standard and F-Droid APKs exclude Google libraries and keep Monero top-ups.

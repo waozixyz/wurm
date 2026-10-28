@@ -3,6 +3,7 @@
 // Both contain an apple count and tile/object planes. Missing portrait
 // records use an authored variant or a best guess from the landscape.
 #import, file "game.zi";
+#import, file "authored_levels.zi";
 #if #defined(PLATFORM_WEB) {
     BrowserStorage :: #import "kryon/bundle_storage_web";
 }
@@ -161,8 +162,35 @@ HasCustomLevel :: (level: s32, portrait: bool = false) -> bool {
 EffectiveApples :: (level: s32, portrait: bool = false) -> s32 {
     EnsureLoaded()
     if HasCustomLevel(level, portrait) { return custom_apples[Slot(level, portrait)] }
+    authored := AuthoredApples(level,portrait)
+    if authored >= 0 { return authored }
     if portrait && HasCustomLevel(level) { return custom_apples[level] }
+    authored = AuthoredApples(level,false)
+    if authored >= 0 { return authored }
     return BaseApples(level)
+}
+HasAuthoredLevel :: (level: s32, portrait: bool = false) -> bool {
+    return AuthoredTiles(level,portrait).count == CELLS
+}
+// The published campaign is separate from each player's editable overrides.
+DefaultBoard :: (level: s32, board: []u8, portrait: bool = false) {
+    text := AuthoredTiles(level,portrait)
+    columns := ifx portrait then ROWS else COLUMNS
+    rows := ifx portrait then COLUMNS else ROWS
+    if text.count == CELLS {
+        for x: 0..columns - 1 {
+            for y: 0..rows - 1 { board[y * columns + x] = AuthoredDecode(text[x * rows + y]) }
+        }
+    } else if portrait {
+        landscape: [CELLS]u8
+        DefaultBoard(level,landscape[:])
+        if HasAuthoredLevel(level) { GuessPortrait(landscape[:],board) }
+        else { PortraitBoard(level,landscape[:],board) }
+    } else {
+        for y: 0..ROWS - 1 {
+            for x: 0..COLUMNS - 1 { board[y * COLUMNS + x] = BaseTile(level,cast(s32)x,cast(s32)y) }
+        }
+    }
 }
 EffectiveBoard :: (level: s32, board: []u8, portrait: bool = false) {
     EnsureLoaded()
@@ -175,15 +203,12 @@ EffectiveBoard :: (level: s32, board: []u8, portrait: bool = false) {
         for at: 0..CELLS - 1 { board[at] = custom_boards[slot][at] }
         return
     }
-    if portrait {
+    if portrait && !HasAuthoredLevel(level,true) && HasCustomLevel(level) {
         landscape: [CELLS]u8
         EffectiveBoard(level, landscape[:])
-        if HasCustomLevel(level) { GuessPortrait(landscape[:], board) }
-        else { PortraitBoard(level,landscape[:],board) }
+        GuessPortrait(landscape[:], board)
     } else {
-        for y: 0..ROWS - 1 {
-            for x: 0..COLUMNS - 1 { board[At(x,y)] = BaseTile(level, cast(s32)x, cast(s32)y) }
-        }
+        DefaultBoard(level,board,portrait)
     }
 }
 EffectiveTile :: (level: s32, x: s32, y: s32, portrait: bool = false) -> u8 {
@@ -196,6 +221,15 @@ EffectiveObjects :: (level: s32, objects: []u8, portrait: bool = false) {
     if HasCustomLevel(level, portrait) {
         slot := Slot(level,portrait)
         for at: 0..CELLS - 1 { objects[at] = custom_objects[slot][at] }
+    } else if HasAuthoredLevel(level,portrait) {
+        text := AuthoredObjects(level,portrait)
+        columns := ifx portrait then ROWS else COLUMNS
+        rows := ifx portrait then COLUMNS else ROWS
+        for x: 0..columns - 1 {
+            for y: 0..rows - 1 {
+                objects[y * columns + x] = ifx text.count == CELLS then AuthoredDecode(text[x * rows + y]) else 0
+            }
+        }
     } else if portrait {
         landscape: [CELLS]u8
         EffectiveObjects(level,landscape[:])

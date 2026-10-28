@@ -71,6 +71,8 @@ main :: () -> s32 {
     forest_canopy, forest_canopy_w, forest_canopy_h := ReadPicture("assets/art/forest-canopy.argb")
     forest_canopy_portrait, forest_canopy_portrait_w, forest_canopy_portrait_h := ReadPicture("assets/art/forest-canopy-portrait.argb")
     ground, ground_w, ground_h := ReadPicture("assets/art/ground-meadow.argb")
+    water, water_w, water_h := ReadPicture("assets/art/water-field.argb")
+    if !PixmapSetImage(12, "assets/art/water-field.png", water_w, water_h, VecSlice(water, 0, water.count)) { return 1 }
     if !PixmapSetImage(11, "assets/art/ground-meadow.png", ground_w, ground_h, VecSlice(ground, 0, ground.count)) { return 1 }
     if !PixmapSetImage(0, "assets/art/garden.png", garden_w, garden_h, VecSlice(garden, 0, garden.count)) ||
         !PixmapSetImage(1, "assets/art/campaign-meadow.png", campaign_meadow_w, campaign_meadow_h, VecSlice(campaign_meadow, 0, campaign_meadow.count)) ||

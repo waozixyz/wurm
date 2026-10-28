@@ -1,0 +1,57 @@
+#import, file "../src/game.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+File :: #import "std/file_linux";
+#import "std/number_text"
+#import "std/text_buffer"
+
+path_buffer: [160]u8;
+RecordPath :: (level: s32, portrait: bool) -> string {
+    digits: [16]u8
+    at := Custom.CopyText(path_buffer[:],0,"assets/authored-levels/level")
+    at = Custom.CopyText(path_buffer[:],at,FormatInteger(cast(s64)(level + 1),digits[:]))
+    if portrait { at = Custom.CopyText(path_buffer[:],at,"-portrait") }
+    at = Custom.CopyText(path_buffer[:],at,".dat")
+    return Custom.BufferText(path_buffer[:],at)
+}
+
+#program_export
+main :: () -> s32 {
+    if !Custom.CustomSetRoot("build/test-authored-private/") { return 1 }
+    count: s32
+    for level: 0..LEVEL_COUNT - 1 {
+        for orientation: 0..1 {
+            portrait := orientation == 1
+            if !Custom.HasAuthoredLevel(cast(s32)level,portrait) { continue }
+            path := RecordPath(cast(s32)level,portrait)
+            file := File.OpenRead(path)
+            if !file.valid { print("Missing published record %\n",path); return 1 }
+            bytes: [2401]u8
+            size := File.ReadAt(file,bytes[:],0)
+            File.CloseFile(file)
+            if size != 1201 && size != 2401 { return 1 }
+            board: [CELLS]u8
+            objects: [CELLS]u8
+            Custom.EffectiveBoard(cast(s32)level,board[:],portrait)
+            Custom.EffectiveObjects(cast(s32)level,objects[:],portrait)
+            columns: s32 = ifx portrait then ROWS else COLUMNS
+            rows: s32 = ifx portrait then COLUMNS else ROWS
+            BoardSize(columns,rows)
+            if Custom.EffectiveApples(cast(s32)level,portrait) != cast(s32)bytes[0] { return 1 }
+            for x: 0..columns - 1 {
+                for y: 0..rows - 1 {
+                    if board[y * columns + x] != bytes[1 + x * rows + y] { return 1 }
+                    if size == 2401 && objects[y * columns + x] != bytes[1201 + x * rows + y] { return 1 }
+                }
+            }
+            if LevelBlockages(board[:]) != 0 { print("Blocked published level %\n",level + 1); return 1 }
+            game: Game
+            StartGameData(*game,cast(s32)level,0,1,board[:],cast(s32)bytes[0],columns,rows,objects[:])
+            for tick: 0..7 { Tick(*game) }
+            if game.death_ticks != 0 || game.lives != 3 { print("Unsafe published entrance %\n",level + 1); return 1 }
+            count += 1
+        }
+    }
+    if count == 0 { return 1 }
+    print("Published campaign local test: % editor layouts retain every tile, object and apple goal, with clear playable entrances.\n",count)
+    return 0
+}

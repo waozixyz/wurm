@@ -3,6 +3,9 @@
 #import, file "../src/designed_levels.zi";
 Custom :: #import, file "../src/custom_levels.zi";
 File :: #import "std/file_linux";
+EditorInput :: #import, file "../src/editor_input.zi";
+Input :: #import "kryon/input_protocol";
+Geometry :: #import "kryon/geometry";
 
 failures: s32;
 Expect :: (value: bool, message: string) {
@@ -11,6 +14,30 @@ Expect :: (value: bool, message: string) {
 
 #program_export
 main :: () -> s32 {
+    stroke: EditorInput.StrokeState
+    canvas := Geometry.Rectangle.{0.0,0.0,100.0,100.0}
+    primary := Input.PointerFrame.{.x=20.0,.y=20.0,.down=true,.pressed=true}
+    secondary: Input.SecondaryPointerFrame
+    EditorInput.StrokeReset(*stroke)
+    Expect(EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas) == 0,"selecting a board does not paint it")
+    primary.pressed = false
+    Expect(EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas) == 0,"holding the selector press cannot paint")
+    primary.down = false
+    unused EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas)
+    primary.down = true; primary.pressed = true
+    Expect(EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas) == 1,"a fresh board click paints")
+    primary.pressed = false; primary.x = 40.0
+    Expect(EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas) == 1,"a board stroke continues while held")
+    primary.down = false
+    unused EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas)
+    primary.x = 120.0; primary.down = true; primary.pressed = true
+    Expect(EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas) == 0,"selecting a palette brush is not a stroke")
+    primary.x = 20.0; primary.pressed = false
+    Expect(EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas) == 0,"dragging a palette press onto the board does not paint")
+    primary.down = false
+    unused EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas)
+    secondary.down = true; secondary.pressed = true
+    Expect(EditorInput.StrokeUpdate(*stroke,primary,secondary,canvas) == 2,"a fresh secondary click restores a tile")
     game: Game
     // A private root keeps the test's overrides out of the repository assets.
     Expect(Custom.CustomSetRoot("build/test-levels/"), "test root accepted")
