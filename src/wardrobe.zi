@@ -17,6 +17,7 @@ poll_at: s64;
 loaded: bool;
 dirty: bool;
 status: [24]u8;
+reported_skin: s32 = -1;
 Load :: () {
     if loaded { return }
     loaded = true
@@ -41,7 +42,7 @@ Save :: () {
 Reset :: () {
     loaded = false; skin = 0; owned = 0; played = 0; other_played = 0; visited = false
     device = .{}; dirty = false; poll_at = 0; last_frame = 0
-    status = .{}
+    status = .{}; reported_skin = -1
     Load()
 }
 Available :: (id: s32) -> bool {
@@ -54,8 +55,17 @@ Available :: (id: s32) -> bool {
 }
 Select :: (id: s32) { if Available(id) { skin = id; dirty = true; Save() } }
 Visit :: () { visited = true; dirty = true; Save(); poll_at = 0 }
+Report :: () {
+    if skin < 0 || skin > 6 || skin == reported_skin || Progress.best_level == 0 { return }
+    out: Vec(u8)
+    BuilderPrint(*out, "skin %", skin)
+    reply := Account.Service("leaderboard", TextView(VecSlice(out, 0, out.count)))
+    if reply == "saved" { reported_skin = skin }
+    VecFree(out)
+}
 Pump :: (now: s64, playing: bool) {
     Load()
+    Report()
     if last_frame > 0 && playing {
         elapsed := now - last_frame
         // Pauses, suspended tabs and background stalls do not earn playtime.

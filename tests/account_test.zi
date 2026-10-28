@@ -18,6 +18,8 @@ last_owner: string;
 answer: [8192]u8;
 other_time: s64;
 writes: s32;
+skin_reports: s32;
+reported_skin: [32]u8;
 Text :: (out: Vec(u8)) -> string {
     text := BuilderFinish(out)
     unused CopyCString(text, answer[:])
@@ -26,6 +28,13 @@ Text :: (out: Vec(u8)) -> string {
 #program_export
 WurmAccountService :: (name: string, request: string) -> string {
     out: Vec(u8)
+    if name == "leaderboard" {
+        if request.count > 5 && request[:5] == "skin " {
+            skin_reports += 1
+            unused CopyCString(request, reported_skin[:])
+        }
+        return "saved"
+    }
     if name == "entity.game-shop" {
         BuilderPrint(*out, "{\"device\":\"%\",\"owned\":0,\"status\":\"done\"}", device)
         return Text(out)
@@ -141,6 +150,15 @@ main :: () -> s32 {
     Wardrobe.Pump(2000000, false)
     Expect(Wardrobe.Available(4), "playtime from different devices is added")
     Expect(!Wardrobe.Available(1) && !Wardrobe.Available(2) && !Wardrobe.Available(3), "paid skins require confirmed ownership")
+    skin_reports = 0
+    Progress.best_level = 1
+    Wardrobe.reported_skin = -1; Wardrobe.skin = 0
+    Wardrobe.Report(); Wardrobe.Report()
+    Expect(skin_reports == 1 && TextUntilNul(reported_skin[:]) == "skin 0", "publish the equipped base skin once")
+    Wardrobe.Select(6); Wardrobe.Report()
+    Expect(skin_reports == 2 && TextUntilNul(reported_skin[:]) == "skin 6", "publish the selected unlocked skin without changing the score")
+    Wardrobe.Reset(); Wardrobe.Report()
+    Expect(skin_reports == 3, "account reload republishes its own saved skin")
     print("Account and wardrobe local test failures: %\n", failures)
     return failures
 }
