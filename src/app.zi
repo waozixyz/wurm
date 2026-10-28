@@ -1869,8 +1869,8 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         Progress.RecordRun(LEVEL_COUNT, game.score)
         if Progress.Restart() { recorded_level = game.level }
     }
-    Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || (game.mode == MODE_READY && Audio.was_playing),
-        game.level, game.apples, game.death_ticks, game.transition_ticks, game.mode != MODE_READY)
+    Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED,
+        game.level, game.apples, game.death_ticks, game.transition_ticks)
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         action := DrawTitle(session, area, stage_key)
