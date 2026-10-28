@@ -153,3 +153,6 @@ Hlasitost
 [wurm_level_start]
 Spustit úroveň
 ---
+---
+[wurm_meadow_portal_hint]
+Stejné kruhy vás přenesou.

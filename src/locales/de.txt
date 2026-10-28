@@ -153,3 +153,6 @@ Lautstärke
 [wurm_level_start]
 Level starten
 ---
+---
+[wurm_meadow_portal_hint]
+Gleiche Ringe teleportieren dich.

@@ -10,6 +10,7 @@ Timer :: #import "std/timer_linux";
 App :: #import "app";
 Progress :: #import, file "progress.zi";
 Controls :: #import, file "controls.zi";
+Wardrobe :: #import, file "wardrobe.zi";
 Input :: #import "kryon/input_protocol";
 #import, file "game.zi";
 libc :: #system_library "libc";
@@ -103,10 +104,17 @@ ProgressProbe :: (session: Session) -> s32 {
     App.Play(now)
     if App.game.level != 0 || Progress.unlocked != 40 { return 38 }
     if !Progress.Begin(199, 7, 220) { return 39 }
+    Wardrobe.owned |= 512
     App.StartRun(now)
     App.game.transition_ticks = 1
     App.game.next_step = 0
-    if !ProbeFrame(session) || App.game.mode != MODE_VICTORY || Progress.level != 0 || Progress.unlocked != 199 { return 40 }
+    if !ProbeFrame(session) || App.game.mode != MODE_VICTORY || Progress.level != 0 || Progress.unlocked != 40 { return 40 }
+    Progress.unlocked = 0
+    Wardrobe.owned = 0
+    if App.LevelAvailable(160) || App.LevelAvailable(199) { return 55 }
+    Wardrobe.owned = 512
+    if !App.LevelAvailable(160) || !App.LevelAvailable(199) || App.LevelAvailable(79) ||
+    !Progress.Select(160, true) || Progress.unlocked != 0 { return 56 }
     print("Application progress local test: goal 12 to ready 13, frozen worm/enemies, deliberate start, carried stats, restart, editor isolation, game-over retry, locked levels, selected controls, Continue, Play and victory passed.\n")
     return 0
 }
@@ -210,7 +218,7 @@ main :: () -> s32 {
     if steering {
         // Input probes make rapid successive turns; keep the test worm short
         // so its own tail cannot kill it before the next pointer assertion.
-        state.length = 1
+        state.length = 8
         state.target_length = 1
         state.direction = 1
         state.next_direction = 1
@@ -227,10 +235,15 @@ main :: () -> s32 {
         if board_columns != (ifx layout == 1 then 30 else 40) || board_rows != (ifx layout == 1 then 40 else 30) { return 20 }
         state.next_step = Timer.MonotonicMilliseconds() + 600000
     }
+    Wardrobe.skin = Number("WURM_PROBE_SKIN", Wardrobe.skin)
+    Wardrobe.loaded = true
+    state.direction = Number("WURM_PROBE_DIRECTION", state.direction)
+    state.death_ticks = Number("WURM_PROBE_DEATH", state.death_ticks)
     previous_columns: s32 = -1
     previous_rows: s32 = -1
     previous: s32 = -1
     previous_direction: s32 = -1
+    previous_contact: bool;
     while PollDesktop() {
         BeginDesktopFrame()
         TreePointerUpdate(session, PollPointer())
@@ -250,11 +263,12 @@ main :: () -> s32 {
             print("mode=% lives=% level=% score=%\n", previous, state.lives, state.level, state.score)
             unused Flush(null)
         }
-        if steering && previous_direction != state.direction {
+        pointer := PointerSample(session)
+        if steering && (previous_direction != state.direction || previous_contact != pointer.down) {
             previous_direction = state.direction
-            pointer := PointerSample(session)
-            print("steering=% touch=% x=% y=%\n", state.direction,
-                ifx pointer.down then 1 else 0, state.worm[0].x, state.worm[0].y)
+            previous_contact = pointer.down
+            print("steering=% touch=% x=% y=% pad=% pointer=%,%\n", state.direction,
+                ifx pointer.down then 1 else 0, state.worm[0].x, state.worm[0].y, ifx Controls.Pad() then 1 else 0, pointer.x, pointer.y)
             unused Flush(null)
         }
         PauseDesktop()

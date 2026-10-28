@@ -153,3 +153,6 @@ Volume
 [wurm_level_start]
 Mulai level
 ---
+---
+[wurm_meadow_portal_hint]
+Cincin yang sama memindahkanmu.

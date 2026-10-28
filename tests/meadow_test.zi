@@ -1,0 +1,76 @@
+#import, file "../src/game.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: %\n", message); failures += 1 }
+}
+
+CheckGarden :: (level: s32, portrait: bool) {
+    board: [CELLS]u8
+    objects: [CELLS]u8
+    Custom.EffectiveBoard(level, board[:], portrait)
+    Custom.EffectiveObjects(level, objects[:], portrait)
+    columns: s32 = ifx portrait then 30 else 40
+    rows: s32 = ifx portrait then 40 else 30
+    game: Game
+    StartGameData(*game, level, 0, 17, board[:], Custom.EffectiveApples(level, portrait), columns, rows, objects[:])
+    floor: s32 = 0
+    for tile: game.board { if tile < 20 { floor += 1 } }
+    Expect(floor >= 760, "Meadow keeps generous open floor")
+    Expect(game.apples >= 5 && game.apples <= 6, "Meadow has a short apple goal")
+    Expect(game.monster_count <= 1, "at most one predictable Meadow patrol")
+    if level < 20 { Expect(game.monster_count == 0, "first half has no moving enemies") }
+    if !MeadowPortalLevel(level) {
+        Expect(game.portal_count == 0 && game.feature == FEATURE_NONE, "ordinary Meadow gardens have no surprise puzzle")
+        return
+    }
+    Expect(game.portal_count == 1 && game.feature == FEATURE_PORTALS, "portal lesson has one pair")
+    Expect(game.monster_count == 0, "portal lessons have no moving enemies")
+    if game.portal_count != 1 { return }
+    portal := game.portals[0]
+    for end: 0..1 {
+        entrance := ifx end == 0 then portal.a else portal.b
+        exit := ifx end == 0 then portal.b else portal.a
+        Expect(MeadowPortalSpace(*game, entrance.x / 16, entrance.y / 16), "portal has room to approach and turn")
+        Expect(!Near(game.apple, entrance, 12), "apples stay off portal rings")
+        for direction: 0..3 {
+            trial := game
+            trial.length = 1
+            trial.target_length = 2
+            trial.worm[0] = entrance
+            trial.direction = cast(s32)direction
+            trial.next_direction = cast(s32)direction
+            dx: s32 = ifx direction == DIR_LEFT then -4 else ifx direction == DIR_RIGHT then 4 else 0
+            dy: s32 = ifx direction == DIR_UP then -4 else ifx direction == DIR_DOWN then 4 else 0
+            trial.worm[0].x -= dx
+            trial.worm[0].y -= dy
+            Tick(*trial)
+            Expect(trial.worm[0].x == exit.x && trial.worm[0].y == exit.y, "either ring exits through its partner")
+            for tick: 0..11 { Tick(*trial) }
+            Expect(trial.death_ticks == 0 && trial.lives == 3 && trial.direction == direction,
+                "every portal exit keeps its direction and a safe straight approach")
+        }
+    }
+}
+
+#program_export
+main :: () -> s32 {
+    Expect(Custom.CustomSetRoot("build/meadow-test/private-levels/"), "private editor fixture")
+    for level: 0..39 {
+        CheckGarden(cast(s32)level, false)
+        CheckGarden(cast(s32)level, true)
+    }
+    BoardSize(COLUMNS, ROWS)
+    board: [CELLS]u8
+    objects: [CELLS]u8
+    Custom.DefaultBoard(9, board[:])
+    board[5 * COLUMNS + 5] = 21
+    Expect(Custom.SaveCustomLevel(9, board[:], objects[:], 7), "save a private personal layout")
+    Expect(Custom.EffectiveTile(9, 5, 5) == 21 && Custom.EffectiveApples(9) == 7,
+        "personal editor layouts and apple goals keep priority")
+    Expect(Custom.EffectiveApples(9, true) == 5, "published portrait remains independent")
+    Expect(Custom.ClearCustomLevel(9), "remove only the test's private override")
+    print("Meadow engine local test: % failures across 40 gardens, both layouts and every portal direction\n", failures)
+    return ifx failures == 0 then 0 else 1
+}

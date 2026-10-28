@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.18] - 2026-10-28
+
+- Keep every Meadow level at the same slower pace.
+- Bring Moon dragon segments together, turn its head with steering and fade every skin smoothly when a life is lost.
+- Buy Mountains for 20 Dew and play its levels without finishing earlier stages.
+- Show friends' pictures and Wurm skins, with the default worm when no skin is selected.
+- Save alias display capitals directly and show when the leaderboard is loading.
+- Keep the skin shop minimal and hide prices and unlock requirements for owned skins.
+
+## [0.2.17] - 2026-10-28
+
+- Explore easier Meadow gardens with wider routes and landscape layouts inspired by their portrait versions.
+- Start with 20 enemy-free levels, short apple goals and only occasional simple patrols afterward.
+- Learn matching portal rings on level 10 and revisit them in five later Meadow puzzles, with clear exits and a translated hint.
+- Keep personal editor layouts, saved progress and every level's clear starting area.
+
 ## [0.2.16] - 2026-10-28
 
 - Start the next level from a dedicated preview dialog when you are ready.

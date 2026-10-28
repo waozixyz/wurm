@@ -46,8 +46,9 @@ def main():
                                    "-nolisten", "tcp", "-noreset"], env=env, pass_fds=(write_fd,),
                                   stdout=subprocess.DEVNULL, stderr=open(OUT / "xvfb.log", "wb"), start_new_session=True)
         os.close(write_fd)
-        if not select.select([read_fd], [], [], 10)[0]:
-            raise RuntimeError("Private Xvfb did not provide a display")
+        if not select.select([read_fd], [], [], 30)[0]:
+            details = (OUT / "xvfb.log").read_text(errors="replace")[-1200:]
+            raise RuntimeError("Private Xvfb did not provide a display: " + details)
         number = os.read(read_fd, 64).decode().strip()
         if not number.isdecimal() or server.poll() is not None:
             raise RuntimeError("Private Xvfb failed to create its own display socket")
@@ -287,14 +288,15 @@ def main():
         # Each dialog is exercised in a narrow phone portrait and a short
         # phone landscape window. The probe is a separate, uninstalled host.
         for width, height in ((320, 568), (640, 360)):
-            for mode, label in ((2, "paused"), (3, "game-over"), (5, "complete"), (11, "ready")):
+            for mode, label in ((2, "paused"), (3, "game-over"), (5, "complete"), (11, "ready"), (11, "portal-ready")):
                 stop(app)
                 name = f"{width}x{height}-{label}"
                 log = OUT / (name + ".log")
                 if mode == 3:
                     (level_directory / "run.dat").write_bytes(bytes([0, 3, 0, 0, 0, 0]))
                     (level_directory / "unlocked.dat").write_bytes(bytes([57]))
-                env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height), WURM_PROBE_MODE=str(mode), WURM_PROBE_LEVEL="12" if mode == 11 else "0")
+                preview_level = 9 if label == "portal-ready" else 12
+                env.update(WURM_PROBE_WIDTH=str(width), WURM_PROBE_HEIGHT=str(height), WURM_PROBE_MODE=str(mode), WURM_PROBE_LEVEL=str(preview_level) if mode == 11 else "0")
                 app = subprocess.Popen([str(ROOT / "build/Apfelwurm-modal-test")], cwd=ROOT, env=env,
                                        stdout=open(log, "wb"), stderr=subprocess.STDOUT, start_new_session=True)
                 for attempt in range(100):
@@ -324,12 +326,14 @@ def main():
                     hud_height = 104 if width < 520 else 72
                     board_height = min(height - hud_height, width * (4 / 3 if height > width else 3 / 4))
                     ready_height = 132 if board_height < 180 else 164
+                    if label == "portal-ready" and board_height >= 216:
+                        ready_height += 40
                     primary_y = round((height + hud_height) / 2 + ready_height / 2 - 40)
                     time.sleep(1.1)
                     assert "mode=1 lives=" not in log.read_text(), "next level started without consent"
                     key("Up")
                     assert "mode=1 lives=" not in log.read_text(), "steering started the level"
-                    assert "mode=11 lives=3 level=12 score=1234" in log.read_text(), "preview is not level 13"
+                    assert f"mode=11 lives=3 level={preview_level} score=1234" in log.read_text(), "preview is not the selected level"
                     capture(name + "-waiting")
                 secondary_y = round(card_top + card_height - 36)
                 assert 24 < primary_y < secondary_y < height - 24, name
@@ -435,7 +439,12 @@ def main():
                 time.sleep(.05)
             else:
                 raise RuntimeError("No owned steering probe")
-            time.sleep(.15)
+            subprocess.run(["xdotool", "windowfocus", "--sync", window], env=env, check=True)
+            deadline = time.monotonic() + 10
+            while "steering=" not in log.read_text():
+                assert app.poll() is None, "Steering probe exited before its first frame"
+                assert time.monotonic() < deadline, "Steering probe did not finish its first frame"
+                time.sleep(.05)
             x, y = width // 2, height // 2
             subprocess.run(["xdotool", "mousemove", "--window", window, "--sync", str(x), str(y),
                             "mousedown", "1"], env=env, check=True)

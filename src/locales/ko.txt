@@ -153,3 +153,6 @@ waozi.xyz 방문
 [wurm_level_start]
 레벨 시작
 ---
+---
+[wurm_meadow_portal_hint]
+같은 고리를 통해 순간 이동해요.

@@ -15,6 +15,7 @@ fi
 python3 tests/recovery_test.py "${1:-/mnt/storage/Games/The-Worm_Win_EN}"
 python3 tools/design_levels.py --check
 python3 tests/campaign_design_test.py
+python3 tests/meadow_design_test.py
 python3 tests/authored_design_test.py
 python3 tools/locales.py --check
 python3 tools/make_art.py --check
@@ -26,6 +27,8 @@ ziran build $lock --project --root tests --target=c --entry steering_test:main -
 build/steering-test/steering_test
 ziran build $lock --project --root tests --target=c --entry start_clearance_test:main --exe -o build/start-clearance-test tests/start_clearance_test.zi
 build/start-clearance-test/start_clearance_test
+ziran build $lock --project --root tests --target=c --entry meadow_test:main --exe -o build/meadow-test tests/meadow_test.zi
+build/meadow-test/meadow_test
 ziran build $lock --project --root tests --target=c --entry campaign_replay:main --exe -o build/campaign-replay tests/campaign_replay.zi
 build/campaign-replay/campaign_replay
 ziran build $lock --project --root tests --target=c --entry progress_test:main --exe -o build/progress-test tests/progress_test.zi

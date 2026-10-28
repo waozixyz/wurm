@@ -153,3 +153,6 @@ Volume
 [wurm_level_start]
 Iniciar nível
 ---
+---
+[wurm_meadow_portal_hint]
+Anéis iguais teletransportam você.

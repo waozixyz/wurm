@@ -153,3 +153,6 @@
 [wurm_level_start]
 开始关卡
 ---
+---
+[wurm_meadow_portal_hint]
+相同的圆环可以传送你。

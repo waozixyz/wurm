@@ -11,8 +11,13 @@ deciduous Leafwood, coniferous Pinewood, Lake and Mountains.
 Rooms, spirals, crossings, islands and narrow passes draw from 83 recovered
 layouts. The six original enemy types include wandering fire, bouncing
 patrols and chasing creatures. Enemy counts and apple goals increase across
-stages, while the first six levels introduce movement without enemies.
-Opening Meadow levels move more slowly before reaching the original pace.
+stages. Meadow has wider routes, five apples on most boards, no enemies for its
+first 20 levels and at most one predictable patrol afterward. Landscape boards
+follow the portrait gardens rather than rotating their obstacles.
+One pair of portal rings introduces a simple optional shortcut on levels 10,
+12, 16, 23, 31 and 38. Their exits have room to turn, and those lessons have no
+moving enemies. The ready dialog explains the rings. Later chapters retain
+their existing puzzle progression. Personal editor layouts remain unchanged.
 Levels follow in order through every landscape. After each goal, the next
 board opens dimmed and waits for **Start level** (or Enter/Space). Movement
 and enemies stay paused until then; lives and score carry over. Choose level offers a

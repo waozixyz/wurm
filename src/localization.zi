@@ -84,6 +84,7 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "Získat" }
         if source == "Volume" { return "Hlasitost" }
         if source == "Start level" { return "Spustit úroveň" }
+        if source == "Matching rings teleport you." { return "Stejné kruhy vás přenesou." }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
@@ -133,6 +134,7 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "Abholen" }
         if source == "Volume" { return "Lautstärke" }
         if source == "Start level" { return "Level starten" }
+        if source == "Matching rings teleport you." { return "Gleiche Ringe teleportieren dich." }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
@@ -184,6 +186,7 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "Reclamar" }
         if source == "Volume" { return "Volumen" }
         if source == "Start level" { return "Empezar nivel" }
+        if source == "Matching rings teleport you." { return "Los anillos iguales te teletransportan." }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
@@ -232,6 +235,7 @@ Text :: (source: string) -> string {
         if source == "Free · December 2026" { return "Gratuit · décembre 2026" }
         if source == "Claim" { return "Obtenir" }
         if source == "Start level" { return "Commencer le niveau" }
+        if source == "Matching rings teleport you." { return "Les anneaux identiques vous téléportent." }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
@@ -280,6 +284,7 @@ Text :: (source: string) -> string {
         if source == "Free · December 2026" { return "Gratis · Desember 2026" }
         if source == "Claim" { return "Klaim" }
         if source == "Start level" { return "Mulai level" }
+        if source == "Matching rings teleport you." { return "Cincin yang sama memindahkanmu." }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
@@ -330,6 +335,7 @@ Text :: (source: string) -> string {
         if source == "Free · December 2026" { return "Gratis · dicembre 2026" }
         if source == "Claim" { return "Riscatta" }
         if source == "Start level" { return "Inizia livello" }
+        if source == "Matching rings teleport you." { return "Gli anelli uguali ti teletrasportano." }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
@@ -381,6 +387,7 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "受け取る" }
         if source == "Volume" { return "音量" }
         if source == "Start level" { return "レベルを開始" }
+        if source == "Matching rings teleport you." { return "同じ輪に入るとワープします。" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
@@ -432,6 +439,7 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "받기" }
         if source == "Volume" { return "음량" }
         if source == "Start level" { return "레벨 시작" }
+        if source == "Matching rings teleport you." { return "같은 고리를 통해 순간 이동해요." }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
@@ -482,6 +490,7 @@ Text :: (source: string) -> string {
         if source == "Free · December 2026" { return "Grátis · dezembro de 2026" }
         if source == "Claim" { return "Resgatar" }
         if source == "Start level" { return "Iniciar nível" }
+        if source == "Matching rings teleport you." { return "Anéis iguais teletransportam você." }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
@@ -533,6 +542,7 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "Получить" }
         if source == "Volume" { return "Громкость" }
         if source == "Start level" { return "Начать уровень" }
+        if source == "Matching rings teleport you." { return "Одинаковые кольца телепортируют вас." }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
@@ -584,6 +594,7 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "领取" }
         if source == "Volume" { return "音量" }
         if source == "Start level" { return "开始关卡" }
+        if source == "Matching rings teleport you." { return "相同的圆环可以传送你。" }
     }
     return source
 }

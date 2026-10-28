@@ -27,7 +27,7 @@ F-Droid editions use Monero for Dew top-ups.
 
 ## Five landscapes. Forty levels each.
 
-- **Meadow:** find your rhythm among grass, hedges and orchard paths, with a slower opening pace.
+- **Meadow:** learn at a gentle pace on spacious orchard paths. The first 20 levels have no moving enemies; matching portal rings introduce a simple shortcut from level 10.
 - **Leafwood:** weave through leafy rooms, mossy courtyards and branching trails.
 - **Pinewood:** follow fir-lined passages and watch the patrols around the next corner.
 - **Lake:** cross the shores, channels and islands without running out of room.
@@ -36,6 +36,10 @@ F-Droid editions use Monero for Dew top-ups.
 Layouts take inspiration from the recovered original game's rooms, spirals
 and crossings. Wandering fire, bouncing patrols and chasing enemies make the
 journey more demanding as you climb.
+
+Meadow's landscape boards follow the portrait gardens' hedges and clear routes.
+Portal lessons appear on levels 10, 12, 16, 23, 31 and 38, with open exits and no
+moving enemies. Personal editor layouts keep priority over the new defaults.
 
 Press **Play** and you are straight in the game. The levels follow one after
 another through all five landscapes. After each goal, preview the next board

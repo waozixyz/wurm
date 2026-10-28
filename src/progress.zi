@@ -61,7 +61,7 @@ Load :: () {
             lives = cast(s32)bytes[1]
             score = saved
             has_run = true
-            if level > unlocked { unlocked = level }
+            if level > unlocked && level < 160 { unlocked = level }
         }
     }
     // Import both older save formats without letting a newer run erase unlocks.
@@ -111,7 +111,7 @@ RecordRun :: (reached: s32, run_score: s32) {
 
 // "run LEVEL SCORE" to the host's leaderboard, once per change.
 Report :: () {
-    if best_level == 0 || (best_level == reported_level && best_score == reported_score) { return }
+    if best_level == reported_level && best_score == reported_score { return }
     shown := ifx best_score > 100000 then 100000 else best_score
     out: Vec(u8)
     BuilderPrint(*out, "run % %", best_level, shown)
@@ -147,7 +147,7 @@ Begin :: (at: s32, carried_lives: s32, carried_score: s32) -> bool {
     level = at
     lives = carried_lives
     score = carried_score
-    if at > unlocked { unlocked = at }
+    if at > unlocked && at < 160 { unlocked = at }
     return Save()
 }
 
@@ -161,9 +161,9 @@ LoseLife :: () -> bool {
 
 Restart :: () -> bool { return Begin(0, START_LIVES, 0) }
 Continue :: () -> bool { Load(); return Begin(unlocked, START_LIVES, 0) }
-Select :: (at: s32) -> bool {
+Select :: (at: s32, mountains: bool = false) -> bool {
     Load()
-    if at < 0 || at > unlocked || at >= LEVELS { return false }
+    if at < 0 || at >= LEVELS || (at >= 160 && !mountains) || (at < 160 && at > unlocked) { return false }
     return Begin(at, START_LIVES, 0)
 }
 
@@ -187,7 +187,6 @@ Pump :: (now: s64) -> bool {
     poll_at = now + 5000
     // A best run recorded before the leaderboard could take it goes now.
     Load()
-    Report()
     status := Account.Service("entity.records", "{\"operation\":\"status\"}")
     current: [65]u8
     if ReadStringText(status, FieldAt(status, 0, "account"), current[:]) < 0 { return false }
@@ -201,6 +200,9 @@ Pump :: (now: s64) -> bool {
         dirty = false
         Load()
     }
+    // Register even a fresh zero-score player, after selecting this account's
+    // local save so another account's best run cannot enter its leaderboard.
+    Report()
     if current[0] == 0 { return changed }
     reply := Account.Service("entity.records", "{\"operation\":\"get\",\"kind\":\"game-progress\",\"game\":\"wurm\"}")
     at := FieldAt(reply, 0, "document")
@@ -224,7 +226,7 @@ Pump :: (now: s64) -> bool {
     record.unlocked = unlocked + 1
     for index: 0..199 {
         record.completed[index] = ifx completed[index] == 1 then #char "1" else #char "0"
-        if completed[index] == 1 && cast(s32)index + 2 > record.unlocked {
+        if index < 159 && completed[index] == 1 && cast(s32)index + 2 > record.unlocked {
             record.unlocked = cast(s32)index + 2
         }
     }

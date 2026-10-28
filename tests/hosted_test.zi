@@ -172,6 +172,24 @@ main :: () -> s32 {
         message.action = APP_BACK
         unused Portable.Main()
         Expect(message.succeeded && App.game.mode == Game.MODE_STAGES, "hosted Back leaves the preview inside the game")
+        App.StartLevel(9, 0, 1)
+        App.game.mode = Game.MODE_READY
+        Draw()
+        hint: s32 = -1
+        for index: cast(s32)0..TreeCount(frame.session) - 1 {
+            if TreeNodeAt(frame.session, index).key == 24205 { hint = index }
+        }
+        Expect(hint >= 0, "portal preview explains matching rings in either orientation")
+        if hint >= 0 {
+            hint_bounds := TreeNodeAt(frame.session, hint).bounds
+            start := Find("Start level")
+            Expect(start >= 0 && hint_bounds.y + hint_bounds.height <= TreeNodeAt(frame.session, start).bounds.y,
+                "portal hint stays above the Start action")
+        }
+        Expect(App.game.portal_count == 1 && App.game.mode == Game.MODE_READY,
+            "portal lesson waits for the player to start")
+        Click("Start level")
+        Expect(App.game.mode == Game.MODE_PLAYING, "portal lesson starts through its modal action")
     }
     Expect(Progress.Begin(57, 6, 123456), "connected hosted run saves within host record limits")
     Progress.Complete(56)

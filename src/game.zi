@@ -46,7 +46,7 @@ BaseTickInterval :: (level: s32) -> s64 {
     return cast(s64)interval
 }
 TickInterval :: (level: s32) -> s64 {
-    if level < 40 { return (BaseTickInterval(level) * 3 + 1) / 2 }
+    if level < 40 { return 48 }
     return (BaseTickInterval(level) * 9 + 4) / 8
 }
 
@@ -263,8 +263,8 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     game.multiplier = LevelMultiplier(game)
 }
 
-// New ideas arrive one at a time, about twenty levels apart, and keep coming
-// back afterwards in a clean mix: squirrels from level 45, portals from 61,
+// Meadow introduces a few spacious portal pairs before the later chapters
+// build a regular mix: squirrels from level 45, regular portals from 61,
 // hedgehogs from 85, keys and gates from 101, frogs from 125, switch stones
 // from 141, rolling stones from 165 and portal rooms from 181. A board's ideas
 // follow from its number and layout alone, so every player meets the same.
@@ -309,6 +309,9 @@ IdeasMet :: (level: s32) -> s32 {
     return count
 }
 BoardFeature :: (level: s32) -> s32 {
+    if level < DesignedStageStarts[1] {
+        return ifx MeadowPortalLevel(level) then FEATURE_PORTALS else FEATURE_NONE
+    }
     count := IdeasMet(level)
     if count == 0 { return FEATURE_NONE }
     newest := IdeaIntros[count - 1]
@@ -317,6 +320,10 @@ BoardFeature :: (level: s32) -> s32 {
     plain := Mix(cast(s64)level) % 10 < 4
     if plain && !(PlainMix(level - 1) && PlainMix(level - 2)) { return FEATURE_NONE }
     return 1 + Mix(cast(s64)level * 7 + 3) % count
+}
+MeadowPortalLevel :: (level: s32) -> bool {
+    for introduced: DesignedMeadowPortals { if level == introduced { return true } }
+    return false
 }
 PlainMix :: (level: s32) -> bool {
     count := IdeasMet(level)
@@ -471,6 +478,15 @@ OpenAround :: (game: *Game, x: s32, y: s32) -> bool {
     return true
 }
 OpenFloor :: (game: *Game, x: s32, y: s32) -> bool { return Inside(x, y) && game.board[Index(x, y)] < 20 }
+MeadowPortalSpace :: (game: *Game, x: s32, y: s32) -> bool {
+    // A beginner can continue straight or take either corner after a jump.
+    for dy: -3..3 {
+        for dx: -3..3 {
+            if !OpenFloor(game, x + cast(s32)dx, y + cast(s32)dy) { return false }
+        }
+    }
+    return true
+}
 InCorridor :: (game: *Game, x: s32, y: s32) -> bool {
     if !OpenFloor(game, x, y) { return false }
     open: s32 = 0
@@ -489,6 +505,8 @@ OpenSpots :: (game: *Game, reached: []bool, side: s32, output: []s32, loose: boo
             if StartClearance(cast(s32)x, cast(s32)y) ||
             (Abs(cast(s32)x - half) <= 2 && (y <= 5 || y >= board_rows - 6)) { continue }
             if !OpenAround(game, cast(s32)x, cast(s32)y) && !(loose && InCorridor(game, cast(s32)x, cast(s32)y)) { continue }
+            if game.level < DesignedStageStarts[1] && !loose &&
+            !MeadowPortalSpace(game, cast(s32)x, cast(s32)y) { continue }
             at := Index(x, y)
             if side >= 0 && reached[at] != (side == 1) { continue }
             centre := Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8}

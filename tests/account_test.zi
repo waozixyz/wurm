@@ -20,6 +20,9 @@ other_time: s64;
 writes: s32;
 skin_reports: s32;
 reported_skin: [32]u8;
+run_reports: s32;
+reported_run: [32]u8;
+reported_run_owner: string;
 Text :: (out: Vec(u8)) -> string {
     text := BuilderFinish(out)
     unused CopyCString(text, answer[:])
@@ -29,6 +32,11 @@ Text :: (out: Vec(u8)) -> string {
 WurmAccountService :: (name: string, request: string) -> string {
     out: Vec(u8)
     if name == "leaderboard" {
+        if request.count > 4 && request[:4] == "run " {
+            run_reports += 1
+            unused CopyCString(request, reported_run[:])
+            reported_run_owner = owner
+        }
         if request.count > 5 && request[:5] == "skin " {
             skin_reports += 1
             unused CopyCString(request, reported_skin[:])
@@ -72,7 +80,7 @@ main :: () -> s32 {
     unused File.CreateDirectory("build/account-test-data")
     Expect(Custom.CustomSetRoot("build/account-test-data/"), "isolated account records")
     owners: [3]string = .["", alice, bob]
-    names: [5]string = .["run.dat", "unlocked.dat", "completed.dat", "progress-pending.dat", "wardrobe.dat"]
+    names: [6]string = .["run.dat", "unlocked.dat", "completed.dat", "progress-pending.dat", "wardrobe.dat", "best.dat"]
     for identity: owners {
         for name: names {
             path: Vec(u8)
@@ -85,11 +93,15 @@ main :: () -> s32 {
     }
     owner = ""
     Progress.Load()
+    unused Progress.Pump(0)
+    Expect(run_reports == 1 && TextUntilNul(reported_run[:]) == "run 0 0", "fresh guest registers its own zero-score leaderboard row")
     Progress.Complete(99)
     Expect(Progress.Completed(99), "guest progress is retained locally")
+    Progress.RecordRun(100, 700)
     owner = alice
     remote = "{\"game\":\"wurm\",\"unlocked\":4,\"completed\":\"101\"}"
     Expect(Progress.Pump(10000), "account sign in reloads scoped progress")
+    Expect(reported_run_owner == alice && TextUntilNul(reported_run[:]) == "run 0 0", "new account registers its own row without the guest's best run")
     Expect(Progress.Completed(0) && Progress.Completed(2) && !Progress.Completed(99), "remote marks merge without importing guest progress")
     Expect(writes == 0, "signing in never publishes the guest save")
     Expect(!Progress.Select(199), "future levels stay locked behind play")

@@ -33,7 +33,7 @@ Load :: () {
         if played > 315576000000 { played = 0 }
         if count >= 11 { owned = cast(s32)bytes[10] }
         if count == 12 { owned |= cast(s32)bytes[11] << 8 }
-        owned &= 398
+        owned &= 910
     }
 }
 Save :: () {
@@ -59,10 +59,11 @@ Available :: (id: s32) -> bool {
     if id == 6 { return visited }
     return false
 }
+MountainsAvailable :: () -> bool { return (owned & 512) != 0 }
 Select :: (id: s32) { if Available(id) { skin = id; dirty = true; Save() } }
 Visit :: () { visited = true; dirty = true; Save(); poll_at = 0 }
 Report :: () {
-    if skin < 0 || skin > 8 || skin == reported_skin || Progress.best_level == 0 { return }
+    if skin < 0 || skin > 8 || skin == reported_skin { return }
     out: Vec(u8)
     BuilderPrint(*out, "skin %", skin)
     reply := Account.Service("leaderboard", TextView(VecSlice(out, 0, out.count)))
@@ -85,7 +86,7 @@ Pump :: (now: s64, playing: bool) {
     unused ReadStringText(shop, FieldAt(shop, 0, "status"), status[:])
     unused ReadStringText(shop, FieldAt(shop, 0, "device"), device[:])
     value := ReadNumber(shop, FieldAt(shop, 0, "owned"))
-    if value.valid && value.value >= 0.0 && value.value <= 398.0 { owned = cast(s32)value.value }
+    if value.valid && value.value >= 0.0 && value.value <= 910.0 { owned = cast(s32)value.value & 910 }
     christmas_claimable = MatchLiteral(shop, FieldAt(shop, 0, "christmas_claimable"), "true")
     special_supported = MatchLiteral(shop, FieldAt(shop, 0, "special_skins"), "true")
     if Progress.owner[0] == 0 || device[0] == 0 { return }

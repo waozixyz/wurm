@@ -153,3 +153,6 @@ waozi.xyzを訪問
 [wurm_level_start]
 レベルを開始
 ---
+---
+[wurm_meadow_portal_hint]
+同じ輪に入るとワープします。

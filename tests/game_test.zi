@@ -17,7 +17,8 @@ main :: () -> s32 {
         Expect(game.apple.x >= 0 && game.apple.y >= 0 && TileAt(*game, game.apple) < 20, "apple in permitted terrain")
         Expect(game.monster_count <= MONSTER_LIMIT, "monsters fit original limit")
     }
-    Expect(TickInterval(0) == 48 && TickInterval(10) == 41 && TickInterval(39) == 38 && TickInterval(40) == 28, "Meadow gives beginners more time while later stages retain their gentler pace")
+    Expect(TickInterval(0) == 48 && TickInterval(10) == 48 && TickInterval(39) == 48 && TickInterval(40) == 28, "all Meadow levels keep the same slower pace while later stages retain their gentler pace")
+    for meadow: 0..39 { Expect(TickInterval(cast(s32)meadow) == 48, "Meadow never accelerates between levels") }
     Expect(BaseTickInterval(0) == 32 && BaseTickInterval(10) == 27 && BaseTickInterval(40) == 25, "movement slowdown preserves the scoring difficulty curve")
     StartGame(*game, 0, 100)
     Expect(game.apples == 5 && game.monster_count == 0, "gentle first level with five apples and no moving hazards")
@@ -125,7 +126,10 @@ main :: () -> s32 {
     Expect(game.lives == 3 && game.worm[0].y == 496, "death consumes a life and respawns")
 
     // New ideas open one at a time and come back in a mix.
-    for level: 0..IDEA_PORTALS - 1 { Expect(BoardFeature(cast(s32)level) == FEATURE_NONE, "no puzzle idea before level 61") }
+    for level: 0..IDEA_PORTALS - 1 {
+        expected := ifx MeadowPortalLevel(cast(s32)level) then FEATURE_PORTALS else FEATURE_NONE
+        Expect(BoardFeature(cast(s32)level) == expected, "only gentle Meadow portal lessons before the later idea mix")
+    }
     Expect(BoardFeature(IDEA_PORTALS) == FEATURE_PORTALS && BoardFeature(IDEA_PORTALS + 1) == FEATURE_NONE &&
         BoardFeature(IDEA_KEY) == FEATURE_KEY && BoardFeature(IDEA_SWITCH) == FEATURE_SWITCH &&
         BoardFeature(IDEA_PORTAL_ROOM) == FEATURE_PORTAL_ROOM, "each puzzle idea opens on its own board")
