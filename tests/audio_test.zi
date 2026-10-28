@@ -1,5 +1,6 @@
 Audio :: #import, file "../src/audio.zi";
 Volume :: #import, file "../src/audio_volume.zi";
+Score :: #import, file "../src/audio_score.zi";
 File :: #import "std/file_linux";
 sdl :: #system_library "SDL2";
 CloseDevice :: (device: u32) #foreign sdl "SDL_CloseAudioDevice";
@@ -10,51 +11,93 @@ Queued :: (device: u32) -> u32 #foreign sdl "SDL_GetQueuedAudioSize";
 
 #program_export
 main :: () -> s32 {
-    // Run only with SDL_VIDEODRIVER=dummy and SDL_AUDIODRIVER=dummy.
+    // No real sound device or owner desktop: SDL's dummy drivers only.
     if Init(32) != 0 { return 1 }
     defer Quit()
     Audio.EnsureAudio()
     if Audio.device == 0 { return 2 }
     defer CloseDevice(Audio.device)
+    defer Audio.CloseMusic()
     for index: 0..3 { if Audio.effects[index].count <= 0 { return 3 } }
-    for track: 1..1 {
-        Audio.ChangeMusic(1)
-        if Audio.music_bytes < 44100 { return 4 }
+    for track: 1..3 {
+        Audio.CloseMusic()
+        Audio.ChangeMusic(cast(s32)track)
+        current := *Audio.music[Audio.music_current]
+        if current.bytes != Score.MusicFrames(cast(s32)track) * 2 || current.track != track { return 4 }
         Audio.PlayEffect(3)
         Clear(Audio.device)
         Audio.PumpAudio()
-        if Audio.music_position == 0 || Queued(Audio.device) == 0 { return 5 }
+        if current.position == 0 || Queued(Audio.device) == 0 { return 5 }
+        heard := false
+        for index: 0..2047 { if Audio.mixed[index] != 0 { heard = true } }
+        if !heard { return 6 }
     }
-    heard := false
-    for index: 0..2047 { if Audio.mixed[index] != 0 { heard = true } }
-    if !heard { return 6 }
-    if Volume.VolumeSample(12000,25) != 3000 || Volume.VolumeSample(-12000,50) != -6000 { return 13 }
-    if Volume.VolumeSample(90000,100) != 32767 || Volume.VolumeSample(12000,0) != 0 { return 14 }
+    if Volume.VolumeSample(12000, 25) != 3000 || Volume.VolumeSample(-12000, 50) != -6000 { return 13 }
+    if Volume.VolumeSample(90000, 100) != 32767 || Volume.VolumeSample(12000, 0) != 0 { return 14 }
     Audio.SetVolume(0)
     Clear(Audio.device)
     Audio.PumpAudio()
-    muted_index: s32 = 0
-    while muted_index < 2048 {
-        if Audio.mixed[muted_index] != 0 { return 15 }
-        muted_index += 1
-    }
+    for index: 0..2047 { if Audio.mixed[index] != 0 { return 15 } }
     Audio.SetVolume(100)
-    // Force a loop seam in the middle of a block and compare every byte:
-    // no zero padding and no skipped or duplicated samples.
+    Audio.CloseMusic()
+    Audio.ChangeMusic(1)
+    current := *Audio.music[Audio.music_current]
+    // A short final read fills the rest from the start, with no silence.
     expected: [4096]u8
-    start := Audio.music_bytes - 14
-    if File.ReadAt(Audio.music_file, expected[0:14], start) != 14 { return 8 }
-    if File.ReadAt(Audio.music_file, expected[14:4096], 0) != 4082 { return 9 }
-    Audio.music_position = start
-    Audio.ReadMusicSamples()
-    for at: 0..4095 { if Audio.music_samples[at] != expected[at] { return 10 } }
-    if Audio.music_position != 4082 { return 11 }
+    start := current.bytes - 14
+    if File.ReadAt(current.file, expected[0:14], start) != 14 { return 8 }
+    if File.ReadAt(current.file, expected[14:4096], 0) != 4082 { return 9 }
+    current.position = start
+    if !Audio.ReadMusicLoop(current, Audio.music_raw[:]) { return 10 }
+    for at: 0..4095 { if Audio.music_raw[at] != expected[at] { return 11 } }
+    if current.position != 4082 { return 12 }
+    if Score.MusicForLevel(0) != 1 || Score.MusicForLevel(4) != 2 || Score.MusicForLevel(8) != 3 || Score.MusicForLevel(12) != 1 { return 16 }
+    if Score.MusicBlend(10000, -10000, 0) != 10000 || Score.MusicBlend(10000, -10000, Score.MUSIC_FADE_FRAMES) != -10000 { return 17 }
+    if Score.MusicBlend(10000, -10000, Score.MUSIC_FADE_FRAMES / 2) != 0 { return 18 }
+    // Finishing level four enters Ready, keeps advancing the existing song,
+    // and reserves the start cue for the actual Start action.
     Audio.was_playing = true
-    Audio.previous_level = 13
-    Audio.UpdateAudio(true, 14, 5, 0, 0)
-    if Audio.music_position < 4082 { return 12 }
+    Audio.was_active = true
+    Audio.previous_level = 3
+    Audio.effects[0].playing = false
+    Clear(Audio.device)
+    Audio.UpdateAudio(true, 4, 5, 0, 0, false)
+    if current.position <= 4082 || Audio.effects[0].playing || Audio.was_active { return 19 }
+    if Audio.music_requested != 2 || Audio.music_incoming >= 0 { return 20 }
+    // The request waits until the next phrase, and blends actual PCM from
+    // both recordings. Its first sample is exactly the outgoing recording.
+    current.position = Audio.music_change_at * 2
+    unused File.ReadAt(current.file, expected[:], current.position)
+    Audio.ReadMusicSamples()
+    if Audio.music_incoming < 0 || Audio.music_samples[0] != expected[0] || Audio.music_samples[1] != expected[1] { return 21 }
+    incoming := *Audio.music[Audio.music_incoming]
+    if incoming.track != 2 || current.position == 0 || incoming.position != 4096 { return 22 }
+    Audio.ChangeMusic(3) // A later level queues safely while this fade finishes.
+    blocks: s32 = 0
+    while Audio.music_incoming >= 0 && blocks < 60 {
+        Audio.ReadMusicSamples()
+        blocks += 1
+    }
+    current = *Audio.music[Audio.music_current]
+    if Audio.music_incoming >= 0 || current.track != 2 || current.position <= 4096 || Audio.music_requested != 3 { return 23 }
+    Audio.effects[0].playing = false
+    Clear(Audio.device)
+    Audio.UpdateAudio(true, 4, 5, 0, 0, true)
+    if !Audio.effects[0].playing || !Audio.was_active { return 24 }
+    // Leaving gameplay pauses, then resumes without closing or rewinding.
+    Audio.UpdateAudio(false, 4, 5, 0, 0)
+    kept := current.position
+    Audio.UpdateAudio(true, 4, 5, 0, 0)
+    if current.position < kept || current.bytes == 0 { return 25 }
+    // Long levels rotate too, before a track reaches its end.
+    Audio.CloseMusic()
+    Audio.ChangeMusic(3)
+    current = *Audio.music[Audio.music_current]
+    current.position = current.bytes - Score.MUSIC_FADE_FRAMES * 2
+    Audio.ReadMusicSamples()
+    if Audio.music_incoming < 0 || Audio.music[Audio.music_incoming].track != 1 { return 26 }
     Audio.ToggleMute()
     if !Audio.muted { return 7 }
-    print("Audio local test: four effects, continuous acoustic score, exact loop seam and no chapter rewind.\n")
+    print("Audio local tests: three scores, phrase-scheduled PCM crossfades, queued changes, exact loop seam, Ready continuity and volume.\n")
     return 0
 }

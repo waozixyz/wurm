@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.19] - 2026-10-28
+
+- Hear three related calm scores rotate as levels progress, with phrase-aligned 4.8-second crossfades.
+- Keep the score playing through Ready and blend cleanly between levels instead of restarting the same tune.
+
 ## [0.2.18] - 2026-10-28
 
 - Keep every Meadow level at the same slower pace.

@@ -233,10 +233,15 @@ the five landscape materials; its built-in image-generation prompt is recorded
 in `assets/art/title.json`. The same golden orange worm and red apples appear
 throughout the journey. `assets/sounds/sounds.json` records the OpenRouter model and prompt
 of every sound. The current acoustic garden score was AI-generated with
-Lyria; it is not the recovered original MIDI. It plays continuously through
-level and landscape transitions. Loop reads wrap without padding silence,
-and the native mixer buffers enough audio to tolerate slower phone frames.
-The soundtrack itself is preserved; this update repairs playback.
+Lyria; it is not the recovered original MIDI. Garden, factory and space now
+form a rotating score. Every four levels requests another piece; long levels
+also advance before the current piece ends. Changes wait for a musical phrase
+and blend over 4.8 seconds instead of cutting or rewinding. The Ready screen
+keeps the score playing between levels, with the start cue reserved for Start.
+Loop reads wrap without padding silence, and the native mixer buffers enough
+audio to tolerate slower phone frames. The browser uses the same pieces and
+fade timing. The packed Arcade host continues to supply its own background
+audio and receives the game's effects.
 
 ## Recover the assets again
 

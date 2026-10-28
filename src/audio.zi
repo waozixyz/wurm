@@ -2,9 +2,9 @@
 File :: #import "std/file_linux";
 Output :: #import, file "audio_output.zi";
 #import, file "audio_volume.zi";
+#import, file "audio_score.zi";
 #if #defined(ANDROID_BUILD) {
     Assets :: #import "kryon/app_asset";
-    music_data: string;
 }
 
 Effect :: struct { bytes: [65536]u8; count: s32; position: s32; playing: bool; }
@@ -18,10 +18,15 @@ SetVolume :: (value: s32) {
     if device != 0 { Output.Clear(device) }
 }
 effects: [4]Effect;
-music_file: File.FileHandle;
-music_bytes: s64;
-music_position: s64;
-music_track: s32;
+MusicStream :: struct { file: File.FileHandle; data: string; bytes: s64; position: s64; track: s32; }
+music: [2]MusicStream;
+music_current: s32;
+music_incoming: s32 = -1;
+music_requested: s32;
+music_change_at: s64;
+music_fade: s64;
+music_raw: [4096]u8;
+music_next_raw: [4096]u8;
 music_samples: [4096]u8;
 mixed: [2048]s16;
 previous_level: s32 = -1;
@@ -29,6 +34,7 @@ previous_apples: s32;
 previous_death: s32;
 previous_transition: s32;
 was_playing: bool;
+was_active: bool;
 
 SignedSample :: (low: u8, high: u8) -> s32 {
     value := cast(s32)low | (cast(s32)high << 8)
@@ -45,28 +51,27 @@ SignedSample :: (low: u8, high: u8) -> s32 {
         effects[index].count = cast(s32)data.count
     }
 
-    ChangeMusic :: (track: s32) {
-        if music_track == track && music_data.count > 0 { return }
-        Assets.FreeAppAsset(music_data)
-        path := "assets/sounds/garden.pcm"
-        music_data = Assets.ReadAppAsset(path)
-        music_bytes = music_data.count
-        music_track = track
-        music_position = 0
+    OpenMusic :: (stream: *MusicStream, track: s32) -> bool {
+        stream.data = Assets.ReadAppAsset(MusicPath(track))
+        stream.bytes = stream.data.count
+        stream.track = track
+        stream.position = 0
+        return stream.bytes >= 2
     }
 
-    ReadMusicSamples :: () {
-        if music_bytes <= 0 { return }
-        for at: 0..4095 {
-            music_samples[at] = music_data[music_position]
-            music_position = (music_position + 1) % music_bytes
+    ReadMusicLoop :: (stream: *MusicStream, output: []u8) -> bool {
+        if stream.bytes < 2 { return false }
+        for at: 0..output.count - 1 {
+            output[at] = stream.data[stream.position]
+            stream.position = (stream.position + 1) % stream.bytes
         }
+        return true
     }
 
-    CloseMusic :: () {
-        Assets.FreeAppAsset(music_data)
-        music_data = ""
-        music_bytes = 0
+    CloseStream :: (stream: *MusicStream) {
+        Assets.FreeAppAsset(stream.data)
+        stream.data = ""
+        stream.bytes = 0
     }
 } else {
     LoadEffect :: (index: s32, path: string) {
@@ -77,33 +82,103 @@ SignedSample :: (low: u8, high: u8) -> s32 {
         if count > 0 && count <= 65536 { effects[index].count = cast(s32)count }
     }
 
-    ChangeMusic :: (track: s32) {
-        if music_track == track && music_file.valid { return }
-        if music_file.valid { File.CloseFile(music_file) }
-        music_track = track
-        music_position = 0
-        music_file = File.OpenRead("assets/sounds/garden.pcm")
-        music_bytes = ifx music_file.valid then File.FileSize(music_file) else 0
+    OpenMusic :: (stream: *MusicStream, track: s32) -> bool {
+        stream.file = File.OpenRead(MusicPath(track))
+        stream.bytes = ifx stream.file.valid then File.FileSize(stream.file) else 0
+        stream.track = track
+        stream.position = 0
+        return stream.bytes >= 2
     }
 
-    ReadMusicSamples :: () {
-        if !music_file.valid || music_bytes <= 0 { return }
+    ReadMusicLoop :: (stream: *MusicStream, output: []u8) -> bool {
+        if !stream.file.valid || stream.bytes < 2 { return false }
         // Fill the entire block across the loop boundary. A short final
         // read must not insert silence before the music starts again.
         filled: s64 = 0
-        while filled < music_samples.count {
-            count := File.ReadAt(music_file, music_samples[filled:music_samples.count], music_position)
-            if count <= 0 { return }
+        while filled < output.count {
+            count := File.ReadAt(stream.file, output[filled:output.count], stream.position)
+            if count <= 0 { return false }
             filled += count
-            music_position = (music_position + count) % music_bytes
+            stream.position = (stream.position + count) % stream.bytes
         }
+        return true
     }
 
-    CloseMusic :: () {
-        if music_file.valid { File.CloseFile(music_file) }
-        music_file.valid = false
-        music_bytes = 0
+    CloseStream :: (stream: *MusicStream) {
+        if stream.file.valid { File.CloseFile(stream.file) }
+        stream.file.valid = false
+        stream.bytes = 0
     }
+}
+
+ScheduleMusic :: () {
+    current := *music[music_current]
+    phrase := MusicPhraseFrames(current.track)
+    music_change_at = (current.position / 2 / phrase + 1) * phrase
+    if current.bytes - current.position <= MUSIC_FADE_FRAMES * 2 { music_change_at = current.position / 2 }
+}
+
+ChangeMusic :: (track: s32) {
+    if track < 1 || track > 3 { return }
+    if music[music_current].bytes == 0 {
+        unused OpenMusic(*music[music_current], track)
+        music_requested = track
+        return
+    }
+    if music_requested == track { return }
+    music_requested = track
+    if music_incoming < 0 { ScheduleMusic() }
+}
+
+BeginMusicChange :: () {
+    next := 1 - music_current
+    CloseStream(*music[next])
+    if !OpenMusic(*music[next], music_requested) {
+        CloseStream(*music[next])
+        music_requested = music[music_current].track
+        return
+    }
+    music_incoming = next
+    music_fade = 0
+}
+
+ReadMusicSamples :: () {
+    current := *music[music_current]
+    if current.bytes < 2 { return }
+    if music_incoming < 0 {
+        if music_requested != current.track && current.position / 2 >= music_change_at { BeginMusicChange() }
+        else if current.bytes - current.position <= MUSIC_FADE_FRAMES * 2 {
+            if music_requested == current.track { music_requested = NextMusic(current.track) }
+            BeginMusicChange()
+        }
+    }
+    if !ReadMusicLoop(current, music_raw[:]) { return }
+    if music_incoming < 0 {
+        for at: 0..4095 { music_samples[at] = music_raw[at] }
+        return
+    }
+    if !ReadMusicLoop(*music[music_incoming], music_next_raw[:]) { return }
+    for frame: 0..2047 {
+        at := frame * 2
+        outgoing := SignedSample(music_raw[at], music_raw[at + 1])
+        incoming := SignedSample(music_next_raw[at], music_next_raw[at + 1])
+        value := cast(u16)cast(s16)MusicBlend(outgoing, incoming, music_fade)
+        music_samples[at] = cast(u8)(value & 255)
+        music_samples[at + 1] = cast(u8)(value >> 8)
+        music_fade += 1
+    }
+    if music_fade >= MUSIC_FADE_FRAMES {
+        CloseStream(current)
+        music_current = music_incoming
+        music_incoming = -1
+        if music_requested != music[music_current].track { ScheduleMusic() }
+    }
+}
+
+CloseMusic :: () {
+    for index: 0..1 { CloseStream(*music[index]) }
+    music_incoming = -1
+    music_requested = 0
 }
 
 EnsureAudio :: () {
@@ -149,16 +224,14 @@ PumpAudio :: () {
     }
 }
 
-UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: s32) {
+UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: s32, active: bool = true) {
     EnsureAudio()
     if device == 0 { return }
     if playing {
-        if !was_playing || level != previous_level {
-            // One acoustic score accompanies the whole journey. New levels
-            // play their cue without rewinding the same recording.
-            ChangeMusic(1)
+        if !was_playing || level / 4 != previous_level / 4 { ChangeMusic(MusicForLevel(level)) }
+        if active && (!was_active || level != previous_level) {
             PlayEffect(0)
-        } else {
+        } else if active {
             if apples < previous_apples { PlayEffect(3) }
             if death > 0 && previous_death == 0 { PlayEffect(2) }
             if death == 0 && previous_death > 0 { PlayEffect(0) }
@@ -167,10 +240,10 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
         PumpAudio()
     } else if was_playing {
         Output.Clear(device)
-        CloseMusic()
         for index: 0..3 { effects[index].playing = false }
     }
     was_playing = playing
+    was_active = playing && active
     previous_level = level
     previous_apples = apples
     previous_death = death

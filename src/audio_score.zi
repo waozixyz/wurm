@@ -1,0 +1,31 @@
+// Related, calm pieces form a repeating journey. Level boundaries request a
+// change; the mixer waits for a phrase and blends instead of restarting.
+MUSIC_RATE :: 22050;
+MUSIC_FADE_FRAMES :: 105840; // Two bars, with a gentle slope at either end.
+MusicPhraseFrames :: (track: s32) -> s64 {
+    // Four bars at each source score's documented tempo: 100, 105, 90 BPM.
+    if track == 2 { return 201600 }
+    if track == 3 { return 235200 }
+    return 211680
+}
+MusicPath :: (track: s32) -> string {
+    if track == 2 { return "assets/sounds/factory.pcm" }
+    if track == 3 { return "assets/sounds/space.pcm" }
+    return "assets/sounds/garden.pcm"
+}
+MusicForLevel :: (level: s32) -> s32 { return 1 + (level / 4) % 3 }
+NextMusic :: (track: s32) -> s32 { return 1 + track % 3 }
+MusicFrames :: (track: s32) -> s64 {
+    // Exact PCM lengths; streaming browsers can overestimate Ogg duration.
+    // The audio local test verifies these against the source recordings.
+    if track == 2 { return 3642470 }
+    if track == 3 { return 3297575 }
+    return 3521395
+}
+MusicBlend :: (outgoing: s32, incoming: s32, frame: s64) -> s32 {
+    if frame <= 0 { return outgoing }
+    if frame >= MUSIC_FADE_FRAMES { return incoming }
+    length := cast(s64)MUSIC_FADE_FRAMES
+    weight := frame * frame * (3 * length - 2 * frame) / (length * length)
+    return cast(s32)((cast(s64)outgoing * (length - weight) + cast(s64)incoming * weight) / length)
+}

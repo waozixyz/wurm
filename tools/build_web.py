@@ -92,9 +92,10 @@ def main():
         with wave.open(str(sounds / (name + '.wav')), 'wb') as output:
             output.setnchannels(1); output.setsampwidth(2); output.setframerate(22050)
             output.writeframes((ROOT / 'assets/sounds' / (name + '.pcm')).read_bytes())
-    subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 's16le', '-ar', '22050',
-                    '-ac', '1', '-i', str(ROOT / 'assets/sounds/garden.pcm'), '-c:a', 'libvorbis', '-q:a', '4',
-                    str(sounds / 'garden.ogg')], env=env, check=True)
+    for name in ('garden', 'factory', 'space'):
+        subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 's16le', '-ar', '22050',
+                        '-ac', '1', '-i', str(ROOT / 'assets/sounds' / (name + '.pcm')), '-c:a', 'libvorbis', '-q:a', '4',
+                        str(sounds / (name + '.ogg'))], env=env, check=True)
     for source in (ROOT / 'src/web').iterdir():
         if source.is_file():
             shutil.copy2(source, OUT / source.name)

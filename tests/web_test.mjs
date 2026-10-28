@@ -22,7 +22,10 @@ try{
  browser=spawn('xvfb-run',['-a',process.env.CHROMIUM||'chromium','--headless','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--disable-background-networking','--mute-audio','--remote-debugging-port=0','--user-data-dir='+profile,'about:blank'],{env,detached:true,stdio:['ignore','ignore','pipe']});browser.stderr.on('data',d=>stderr=(stderr+d).slice(-4000));
  let port;for(let i=0;i<800;i++){try{port=(await readFile(join(profile,'DevToolsActivePort'),'utf8')).split('\n')[0];break;}catch{}if(browser.exitCode!==null)throw new Error('Private Chromium exited with '+browser.exitCode+': '+stderr);await delay(50);}if(!port)throw new Error('Private Chromium did not publish its debugging port within 40 seconds: '+stderr);
  const targets=await(await fetch('http://127.0.0.1:'+port+'/json/list')).json();socket=new WebSocket(targets.find(x=>x.type==='page').webSocketDebuggerUrl);await new Promise((r,j)=>{socket.onopen=r;socket.onerror=j;});socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.method==='Runtime.exceptionThrown')errors.push(m.params.exceptionDetails);const p=pending.get(m.id);if(!p)return;pending.delete(m.id);clearTimeout(p.timer);m.error?p.reject(new Error(JSON.stringify(m.error))):p.resolve(m.result);};
- await command('Runtime.enable');await command('Page.enable');await command('Emulation.setDeviceMetricsOverride',{width:1100,height:900,deviceScaleFactor:1,mobile:false});await command('Page.navigate',{url});
+ await command('Runtime.enable');await command('Page.enable');
+ // Observe real HTML audio in this disposable browser without adding app hooks.
+ await command('Page.addScriptToEvaluateOnNewDocument',{source:"window.__wurmAudio=[];window.__wurmAudioErrors=[];window.Audio=new Proxy(window.Audio,{construct(target,args){const audio=Reflect.construct(target,args),play=audio.play.bind(audio);audio.play=()=>{const p=play();p.catch(e=>window.__wurmAudioErrors.push({src:audio.src,error:String(e)}));return p};window.__wurmAudio.push(audio);return audio;}});"});
+ await command('Emulation.setDeviceMetricsOverride',{width:1100,height:900,deviceScaleFactor:1,mobile:false});await command('Page.navigate',{url});
  const click=async(x,y)=>{await command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y});await delay(80);await command('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});await delay(80);await command('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});await delay(180);};
  await until("typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden");await until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()");await delay(1800);await capture('title');
  const colorful=await evaluate("(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data,s=new Set();for(let i=0;i<p.length;i+=80)s.add(p[i]+','+p[i+1]+','+p[i+2]);return s.size})()");if(colorful<200)throw new Error('Title artwork did not render: '+colorful);
@@ -30,6 +33,14 @@ try{
  await click(1066,34);await delay(200);await capture('settings');await key('Escape',27);
  await key('Enter',13);await delay(200);await capture('controls');await key('1',49);await until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/controls.dat')[0]===0}catch{return false}})()");await delay(300);await capture('level-1');
  await key('ArrowRight',39);await delay(150);await key(' ',32);await capture('playing');
+ // Run a real recording quickly to its end. The next must start before the
+ // old one stops, with complementary gains, then finish the fade on its own.
+ await until("window.__wurmAudio.length===7 && window.__wurmAudio.slice(4).some(a=>!a.paused && a.currentTime>0 && Number.isFinite(a.duration))");
+ await evaluate("(()=>{window.__outgoing=window.__wurmAudio.slice(4).find(a=>!a.paused);window.__outgoing.playbackRate=16;return true})()");
+ await until("window.__wurmAudio.slice(4).filter(a=>!a.paused).length===2");
+ await evaluate("window.__outgoing.playbackRate=1");await delay(750);
+ if(!await evaluate("(()=>{const playing=window.__wurmAudio.slice(4).filter(a=>!a.paused);return playing.length===2 && playing.every(a=>a.volume>0 && a.volume<0.4) && Math.abs(playing.reduce((s,a)=>s+a.volume,0)-0.4)<0.001})()"))throw new Error('Music did not blend the two real recordings');
+ await until("window.__outgoing.paused && window.__wurmAudio.slice(4).filter(a=>!a.paused).length===1");
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await delay(400);await capture('portrait');
  await command('Page.reload');await until("typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden");await delay(1200);await until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/controls.dat')[0]===0}catch{return false}})()");await key('Enter',13);await delay(300);await capture('playing-portrait');
  // The real touch path paints Kryon's feedback above the board, then removes
@@ -85,4 +96,7 @@ try{
  if(errors.length)throw new Error(JSON.stringify(errors));
  await writeFile(join(out,'result.json'),JSON.stringify({passed:true,url,behaviors:['shared touch feedback and release','mobile pad placement and held highlight in both orientations','rendered title artwork','control choice','straight into level 1','keyboard steering','pause','portrait resize','durable saves after reload','old run migration','Continue highest level with fresh stats','Play from start preserves unlocks','Continue after browser reload','landscape level selector','touch scrolling without starting a level','locked levels show only locks','unlocked level selection starts fresh','selector keyboard back'],colorful,errors},null,2)+'\n');
  console.log('Browser local test: touch feedback and release, mobile pad placement and highlight, controls, play, portrait, durable progress and unlocked-level selection passed.');
-}catch(error){await writeFile(join(out,'failure.txt'),String(error)+'\n'+stderr);throw error;}finally{socket?.close();stop(browser);stop(server);await delay(300);await rm(profile,{recursive:true,force:true});}
+}catch(error){
+ try{await writeFile(join(out,'audio-failure.json'),JSON.stringify(await evaluate("({audio:(window.__wurmAudio||[]).map(a=>({src:a.src,paused:a.paused,time:a.currentTime,duration:a.duration,volume:a.volume,ready:a.readyState,error:a.error?.code})),errors:window.__wurmAudioErrors})"),null,2));await capture('failure');}catch{}
+ await writeFile(join(out,'failure.txt'),String(error)+'\n'+stderr);throw error;
+}finally{socket?.close();stop(browser);stop(server);await delay(300);await rm(profile,{recursive:true,force:true});}
