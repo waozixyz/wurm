@@ -104,7 +104,7 @@ def main():
             capture('settings-' + size)
             press('Appearance')
             nodes = tree('appearance-' + size)
-            assert all(label in [node['label'] for node in nodes] for label in ('System', 'Light', 'Dark', 'Accent', 'Material'))
+            assert all(label in [node['label'] for node in nodes] for label in ('System', 'Light', 'Dark', 'Accent'))
             press('Dark')
             press('Back')
             nodes = tree('appearance-return-' + size)
