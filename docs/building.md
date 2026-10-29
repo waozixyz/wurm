@@ -157,17 +157,8 @@ It never uses the owner's desktop. The audio
 test uses SDL's dummy drivers and verifies that all effects and scores mix.
 
 The Android debug APK is written to `build/android/`. Use `--abi armeabi-v7a`
-for the development Moto. `tests/android_controls_test.py APK` verifies touch
-start, pause, resume, steering and return to the title on that USB device.
-Use `--verification` on both commands for the separate
+for the development Moto, and `--verification` for the separate
 `xyz.waozi.wurm.verification` install, preserving the normal game and data.
-The device test leaves its own game open on the title. To win every level
-with the unchanged game engine on the physical USB Moto, run
-`python3 tests/android_campaign_test.py`. It builds an ARMv7 test executable,
-replays all 400 level/orientation cases with normal steering and collisions,
-and saves per-level results under `build/android-campaign/`. It uses its own
-`/data/local/tmp` directory and preserves the normal game process and saves.
-`--build-only` prepares the runner without claiming any device test result.
 On phones, keep your finger down and move it in the direction you want to
 turn. You can make successive corners without lifting or returning to the
 press position; a small movement is enough, and lifting makes no extra turn.
@@ -247,7 +238,6 @@ audio and receives the game's effects.
 
 ```sh
 python3 tools/extract_original.py /mnt/storage/Games/The-Worm_Win_EN
-python3 tools/render_music.py
 ```
 
 The extractor validates the complete archive, preserves every packed file,
