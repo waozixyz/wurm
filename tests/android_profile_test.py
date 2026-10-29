@@ -9,6 +9,7 @@ import shlex
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import urllib.request
 
@@ -22,6 +23,7 @@ DRIVER = 'files/kryon-test-driver'
 
 
 def main():
+    leaderboard_only = "--leaderboard-only" in sys.argv
     OUT.mkdir(parents=True, exist_ok=True)
     apk = ROOT / 'build/android/Apfelwurm-verification-armeabi-v7a-debug.apk'
     adb = ['adb', '-s', SERIAL]
@@ -64,7 +66,7 @@ def main():
     node_env = dict(env, DAOCHI_ADDR=f'127.0.0.1:{port}', DAOCHI_DB=str(node_folder / 'node.db'),
                     DAOCHI_BASE_URL=node_url, DAOCHI_LAN_DISCOVERY='0', DAOCHI_ALLOW_EPHEMERAL_TOKEN_SECRET='1')
     rotation = {key: shell('settings', 'get', 'system', key).stdout.decode().strip()
-                for key in ('accelerometer_rotation', 'user_rotation')}
+                for key in (() if leaderboard_only else ('accelerometer_rotation', 'user_rotation'))}
     receipt = {'serial': SERIAL, 'package': PACKAGE, 'passed': False, 'behaviors': []}
     sequence = 0
 
@@ -143,6 +145,12 @@ def main():
             for name in ('account.key', 'entity.json'):
                 shell('run-as', PACKAGE, 'sh', '-c', 'mkdir -p files/profile; cat > files/profile/' + name,
                       data=(fixture / name).read_bytes())
+            if leaderboard_only:
+                owner = json.loads((fixture / 'entity.json').read_text())['owner_id']
+                assert re.fullmatch('[0-9a-f]{64}', owner)
+                shell('run-as', PACKAGE, 'sh', '-c',
+                      'mkdir -p files/campaign-levels; cat > files/campaign-levels/' + owner + '.wardrobe.dat',
+                      data=bytes([7, 0] + [0] * 8 + [128, 0]))
             shell('run-as', PACKAGE, 'sh', '-c', f'rm -rf {DRIVER}; mkdir -p {DRIVER}')
             run('reverse', f'tcp:{port}', f'tcp:{port}')
             shell('input', 'keyevent', 'KEYCODE_WAKEUP')
@@ -150,11 +158,11 @@ def main():
             shell('am', 'start', '-n', PACKAGE + '/xyz.waozi.wurm.MainActivity')
             previous.write_bytes(pid(PACKAGE))
             wait('Settings', 'button')
-            orient(0)
+            if not leaderboard_only: orient(0)
             press('Settings', role='button')
             wait('Version')
             wait(json.loads((ROOT / 'version.json').read_text())['version'])
-            capture('settings')
+            if not leaderboard_only: capture('settings')
             back()
             wait('Play', 'button')
             receipt['behaviors'].append('app version and OS Back from Settings')
@@ -169,6 +177,14 @@ def main():
             assert command('find', key=55403, visible=1).get('nodes'), 'Reopened leaderboard must draw its score row'
             back()
             wait('Play', 'button')
+            if leaderboard_only:
+                atlas = shell('run-as', PACKAGE, 'stat', '-c', '%s', 'files/profile/assets/entity/wurm-special-skins.png')
+                assert int(atlas.stdout) > 0, 'Special skins atlas was not extracted'
+                assert pid('xyz.waozi.wurm') == owner_pid, 'Normal game process changed'
+                receipt['behaviors'].append('special Wurm skin leaderboard draws score and reopens on Android')
+                receipt['passed'] = True
+                print('USB Moto leaderboard local tests passed')
+                return
             command('press', key=28001, visible=1)
             wait('Dew', 'text')
             capture('dew-page')

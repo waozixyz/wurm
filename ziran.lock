@@ -10,9 +10,9 @@
       "url": "https://github.com/waozixyz/apps.git"
     },
     {
-      "commit": "3a42a897c443e9d008406cca34525373088d5ae4",
+      "commit": "d8996893ddc6c2bdfa334f99a41b1db6db900491",
       "dependencies": {"daochi_client": "pf7b24c15869d6839", "kryon": "p77028198b0e09537", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
-      "id": "p0bf36f16ae804efb",
+      "id": "p193d41674d9daa1c",
       "name": "Entity",
       "ref": "master",
       "url": "https://github.com/waozixyz/entity.git"
@@ -94,7 +94,7 @@
     }
   ],
   "root": {
-    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "p0bf36f16ae804efb", "kryon": "p77028198b0e09537", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "p193d41674d9daa1c", "kryon": "p77028198b0e09537", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {

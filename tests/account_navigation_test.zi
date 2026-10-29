@@ -58,6 +58,13 @@ main :: () -> s32 {
     Account.OpenLeaderboard()
     Draw(session, 390.0, 780.0)
     Expect(HasLabel(session, 55402, "local") && HasLabel(session, 55403, "0"), "guest score row is drawn")
+    // Every released skin must remain inside the host's trusted image set.
+    skins: [9]string = .["skin 0", "skin 1", "skin 2", "skin 3", "skin 4", "skin 5", "skin 6", "skin 7", "skin 8"]
+    for skin: skins {
+        Expect(Account.Service("leaderboard", skin) == "saved", "save leaderboard skin")
+        Draw(session, 390.0, 780.0)
+        Expect(HasLabel(session, 55403, "0"), "score row survives every Wurm skin")
+    }
     page: Model.ProfileLeaderboard
     Expect(Model.ProfileLeaderboardDecode(Board.EntityLeaderboardAnswer(""), *page) &&
         page.board_count == 1 && page.row_count == 1, "guest leaderboard has its actual score row")

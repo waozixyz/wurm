@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.22] - 2026-10-28
+
+- Keep the leaderboard visible when you or a friend uses a special Wurm skin.
+
 ## [0.2.21] - 2026-10-28
 
 - Keep Leaderboard rows visible when an account finishes changing while the board is open.
