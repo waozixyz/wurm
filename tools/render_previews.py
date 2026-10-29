@@ -3,6 +3,7 @@
 level selector. The pictures show the playable base level on each stage's
 sheet; rerun after changing level data or tile art."""
 import argparse
+import hashlib
 from pathlib import Path
 
 from PIL import Image
@@ -69,8 +70,17 @@ def main():
                 suffix='-portrait' if portrait else ''
                 path=destination/f"{stage}-{number}{suffix}.png"
                 if arguments.check:
-                    if not path.exists() or Image.open(path).tobytes()!=preview.tobytes():
-                        raise SystemExit(f"{path} does not match regeneration; rerun tools/render_previews.py")
+                    actual=Image.open(path) if path.exists() else None
+                    actual_bytes=actual.tobytes() if actual is not None else b''
+                    expected_bytes=preview.tobytes()
+                    if actual_bytes!=expected_bytes:
+                        differences=[]
+                        for index,(left,right) in enumerate(zip(actual_bytes,expected_bytes)):
+                            if left!=right:
+                                pixel=index//3
+                                differences.append((pixel%width,pixel//width,left,right))
+                                if len(differences)>=20: break
+                        raise SystemExit(f"{path} does not match regeneration; actual sha256={hashlib.sha256(actual_bytes).hexdigest()}, expected sha256={hashlib.sha256(expected_bytes).hexdigest()}, first differences={differences}")
                 elif not path.exists() or Image.open(path).tobytes()!=preview.tobytes():
                     preview.save(path);changed+=1
     if arguments.check:
