@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.21] - 2026-10-28
+
+- Keep Leaderboard rows visible when an account finishes changing while the board is open.
+- Leave Apfelwurm reliably with Android Back from the title.
+
 ## [0.2.20] - 2026-10-28
 
 - Open Leaderboard repeatedly without a black board or losing Android Back.

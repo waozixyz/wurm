@@ -34,6 +34,7 @@ ziran build $lock --project --root tests --target=c --entry progress_test:main -
 build/progress-test/progress_test
 ziran build $lock --project --root tests --define WURM_ACCOUNT_TEST --target=c --entry account_test:main --exe -o build/account-test tests/account_test.zi
 build/account-test/account_test
+python3 tests/account_navigation_test.py
 python3 tests/hosted_test.py
 ziran build $lock --project --root tests --target=c --entry editor_test:main --exe -o build/editor-test tests/editor_test.zi
 build/editor-test/editor_test

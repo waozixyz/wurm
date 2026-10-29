@@ -31,6 +31,7 @@
     SharedMaterial :: () -> bool { return false }
     SystemDark :: () -> bool { return true }
     ProfileVisible :: () -> bool { return false }
+    RefreshProfile :: () {}
     DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {}
     Back :: () {}
     VisitWebsite :: () -> bool { return Service("entity.game-shop", "visit") == "queued" }
@@ -120,6 +121,18 @@
         visible = true
     }
     ProfileVisible :: () -> bool { return visible }
+    // Only an account change invalidates the open Profile's loaded owner.
+    // Preserve a direct title destination when refreshing its saved state.
+    RefreshProfile :: () {
+        if !ready { return }
+        Entity.EntityHostReload()
+        if !visible { return }
+        page := "profile"
+        if profile_title == "Leaderboard" { page = "leaderboard" }
+        else if profile_title == "Dew" { page = "dew" }
+        else if profile_title == "Appearance" { page = "appearance" }
+        unused Entity.EntityHostPage(page)
+    }
     OpenLeaderboard :: () { OpenProfile(); profile_title = "Leaderboard"; if ready { unused Entity.EntityHostLeaderboard() } }
     OpenDew :: () { OpenProfile(); profile_title = "Dew"; if ready { unused Entity.EntityHostPage("dew") } }
     OpenAppearance :: () { OpenProfile(); profile_title = "Appearance"; if ready { unused Entity.EntityHostPage("appearance") } }
@@ -165,6 +178,7 @@
     SharedMaterial :: () -> bool { return false }
     SystemDark :: () -> bool { return true }
     ProfileVisible :: () -> bool { return false }
+    RefreshProfile :: () {}
     DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {}
     Back :: () {}
     VisitWebsite :: () -> bool { return OpenUri("https://waozi.xyz/") }

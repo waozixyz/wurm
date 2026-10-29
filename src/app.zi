@@ -1770,6 +1770,16 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     Appearance.ApplyShared(Account.SharedTheme(), Account.SharedAccent(), Account.SharedMaterial(), Account.SystemDark())
     unused WidgetPaletteUse(session, Appearance.Palette())
     LoadSound()
+    // Account changes can finish while Profile or Leaderboard is open. Keep
+    // the game records and that account's board current before drawing it.
+    if Progress.Pump(now) {
+        Wardrobe.Reset(); preferences_poll = 0; preferences_dirty = false
+        Account.RefreshProfile()
+        if game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY || game.mode == MODE_FINISHED || game.mode == MODE_DIED || game.mode == MODE_VICTORY {
+            game.mode = MODE_STAGES
+            touch_steering.active = false
+        }
+    }
     if Account.ProfileVisible() {
         profile_key: s32
         #if !#defined(WURM_PORTABLE) {
@@ -1780,13 +1790,6 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         Account.DrawProfile(session, Rectangle.{viewport.x, viewport.y + 64.0, viewport.width, viewport.height - 64.0}, profile_key, Appearance.mode != 2)
         if Button(session, ButtonProps.{.key = 29002, .bounds = Rectangle.{viewport.x + 12.0, viewport.y + 8.0, 76.0, 44.0}, .label = Locale.Text("Back")}) != 0 || profile_key == Input.KeyEscape { Account.Back(); Progress.poll_at = 0; Wardrobe.poll_at = 0 }
         return 0
-    }
-    if Progress.Pump(now) {
-        Wardrobe.Reset(); preferences_poll = 0; preferences_dirty = false
-        if game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY || game.mode == MODE_FINISHED || game.mode == MODE_DIED || game.mode == MODE_VICTORY {
-            game.mode = MODE_STAGES
-            touch_steering.active = false
-        }
     }
     PreferencesPump(now)
     Wardrobe.Pump(now, game.mode == MODE_PLAYING && !editor.playtest && game.death_ticks == 0 && game.transition_ticks == 0)
@@ -1812,7 +1815,14 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     stage_key := ifx game.mode == MODE_STAGES then key else 0
     if sound_popup && key == Input.KeyEscape { sound_popup = false; key = 0 }
     if game.mode != MODE_PLAYING { sound_popup = false }
-    HandleInput(key, now)
+    if key == Input.KeyEscape {
+        if !NavigateBack(now) {
+            #if #defined(ANDROID_BUILD) {
+                // The Android host finishes the activity for unused Back.
+                unused KeyboardSend(session, key)
+            }
+        }
+    } else { HandleInput(key, now) }
     unused Box(session, BoxProps.{.key = 1, .bounds = viewport, .fill = Appearance.Canvas()})
     // The stages screen is one full-bleed cover; every other mode carries the
     // green icon bar across the top with the board letterboxed below it, so

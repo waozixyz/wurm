@@ -1,0 +1,123 @@
+// Exercise the real Wurm frame and Entity provider with private local data.
+App :: #import, file "../src/app.zi";
+Game :: #import, file "../src/game.zi";
+Account :: #import, file "../src/account.zi";
+Progress :: #import, file "../src/progress.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+Entity :: #import "entity/native_host";
+EntityModel :: #import "entity/model";
+Management :: #import "entity/management";
+Board :: #import "entity/leaderboard_native";
+Model :: #import "entity/leaderboard_model";
+#import "kryon/pixmap"
+#import "kryon/session"
+#import "kryon/tree"
+#import "kryon/tree_input"
+#import "kryon/tree_draw"
+#import "kryon/geometry"
+#import "kryon/hosted_values"
+#import "std/c_string"
+#import "std/text_buffer"
+#import "std/json_scan"
+#import "std/bundle_host"
+File :: #import "std/file";
+
+failures: s32;
+Expect :: (ok: bool, reason: string) {
+    if !ok { print("FAIL: %\n", reason); failures += 1 }
+}
+Draw :: (session: Session, width: float32, height: float32) {
+    bounds := Rectangle.{0.0, 0.0, width, height}
+    PixmapBegin(cast(u32)PixmapBackground)
+    Expect(cast(s32)BeginFrame(session, 1, bounds) == 0, "begin account frame")
+    Expect(App.Frame(session, bounds) == 0, "compose account frame")
+    Expect(cast(s32)EndFrame(session) == 0, "finish account frame")
+}
+HasLabel :: (session: Session, key: u64, label: string) -> bool {
+    for index: cast(s32)0..TreeCount(session) - 1 {
+        node := TreeNodeAt(session, index)
+        if node.key == key && node.semantic_label == label { return true }
+    }
+    return false
+}
+
+#program_export
+main :: () -> s32 {
+    Expect(Custom.CustomSetRoot("work/account-navigation/levels/"), "private game records")
+    state := EntityModel.EntityDefault()
+    unused CopyCString("http://127.0.0.1:9", state.nodes[0][:])
+    document := EntityModel.EntityEncode(state)
+    Expect(File.WriteEntireFile("work/account-navigation/profile/entity.json", document), "private offline provider")
+    EntityModel.EntityFree(document)
+    session := SessionOpen()
+    Expect(SessionValid(session), "open private session")
+    defer { PixmapCloseWorkers(); CloseSession(session) }
+    App.sound_loaded = true
+    Draw(session, 390.0, 780.0)
+    Expect(Account.ready, "open the real Profile bundle")
+    Account.OpenLeaderboard()
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 55402, "local") && HasLabel(session, 55403, "0"), "guest score row is drawn")
+    page: Model.ProfileLeaderboard
+    Expect(Model.ProfileLeaderboardDecode(Board.EntityLeaderboardAnswer(""), *page) &&
+        page.board_count == 1 && page.row_count == 1, "guest leaderboard has its actual score row")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(!Account.ProfileVisible(), "leaderboard Back returns to the game")
+    Account.OpenLeaderboard()
+    Draw(session, 844.0, 390.0)
+    Expect(HasLabel(session, 55403, "0"), "reopened score row is drawn in landscape")
+    Expect(Model.ProfileLeaderboardDecode(Board.EntityLeaderboardAnswer(""), *page) &&
+        page.row_count == 1, "reopened leaderboard keeps drawing its row")
+
+    // A provider can finish an account change while an overlay is open.
+    // The new account must get its own board without closing that overlay.
+    request := Management.ManagementRequest.{.sequence = 1, .choice = 1}
+    unused CopyCString("create", request.operation[:])
+    command := Management.ManagementRequestEncode(request)
+    arguments: [2]HostValue = .[Entity.EntityHostText("entity.management"), Entity.EntityHostText(command)]
+    module: [16]u8
+    function: [32]u8
+    unused CopyCString("app_context", module[:])
+    unused CopyCString("AppServiceHost", function[:])
+    answer: HostValue
+    Expect(Entity.EntityHostServices(null, *module[0], *function[0], *arguments[0], 2, *answer) == 1, "queue a private test account")
+    EntityModel.EntityFree(command)
+    Progress.poll_at = 0
+    Draw(session, 390.0, 780.0)
+    current: [65]u8
+    status := Account.Service("entity.records", "{\"operation\":\"status\"}")
+    Expect(ReadStringText(status, FieldAt(status, 0, "account"), current[:]) == 64, "provider finished the private account change")
+    Expect(TextUntilNul(Progress.owner[:]) == TextUntilNul(current[:]), "open overlay follows the provider account")
+    Expect(Model.ProfileLeaderboardDecode(Board.EntityLeaderboardAnswer(""), *page) &&
+        page.board_count == 1 && page.row_count == 1 && page.rows[0].own &&
+        TextUntilNul(page.rows[0].value[:]) == "0", "new account gets its own zero-score leaderboard row")
+    Expect(HasLabel(session, 55403, "0") && HasLabel(session, 55210, "Score"), "new account score row is drawn")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(!Account.ProfileVisible(), "Back still returns after an account change")
+    // A closed direct board must not be reopened behind a later Profile.
+    request.sequence = 2
+    request.owner_id = current
+    unused CopyCString("logout", request.operation[:])
+    command = Management.ManagementRequestEncode(request)
+    arguments[1] = Entity.EntityHostText(command)
+    Expect(Entity.EntityHostServices(null, *module[0], *function[0], *arguments[0], 2, *answer) == 1, "queue fixture logout")
+    EntityModel.EntityFree(command)
+    Progress.poll_at = 0
+    Draw(session, 390.0, 780.0)
+    Expect(Progress.owner[0] == 0, "closed overlay follows logout")
+    Account.OpenProfile()
+    Draw(session, 390.0, 780.0)
+    Expect(!HasLabel(session, 55210, "Score"), "Profile does not reopen the previous leaderboard")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(!Account.ProfileVisible(), "Profile Back returns after logout")
+    App.game.mode = Game.MODE_SETTINGS
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.game.mode == Game.MODE_STAGES && KeyboardTake(session) == 0, "Settings consumes Back before returning to the title")
+    Expect(!App.NavigateBack(0), "title has no in-app Back destination")
+    print("Account navigation local test failures: %\n", failures)
+    return failures
+}

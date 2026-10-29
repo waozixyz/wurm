@@ -160,6 +160,13 @@ def main():
             receipt['behaviors'].append('app version and OS Back from Settings')
             press('Leaderboard', role='button')
             wait('Leaderboard', 'text')
+            wait('Score')
+            assert command('find', key=55403, visible=1).get('nodes'), 'Leaderboard must draw a score row'
+            back()
+            wait('Play', 'button')
+            press('Leaderboard', role='button')
+            wait('Score')
+            assert command('find', key=55403, visible=1).get('nodes'), 'Reopened leaderboard must draw its score row'
             back()
             wait('Play', 'button')
             command('press', key=28001, visible=1)
@@ -259,6 +266,16 @@ def main():
                 back()
             receipt['behaviors'].append('Android key import and export document pickers open and cancel safely')
             receipt['behaviors'].append('Friends page, Alias keyboard and real Android text input')
+            for attempt in range(4):
+                if command('find', label='Play', role='button', visible=1).get('nodes'):
+                    break
+                back()
+            wait('Play', 'button')
+            back()
+            activity = shell('dumpsys', 'activity', 'activities').stdout.decode()
+            resumed = [line for line in activity.splitlines() if 'mResumedActivity' in line]
+            assert resumed and all(PACKAGE not in line for line in resumed), 'Android Back from title must leave the activity'
+            receipt['behaviors'].append('Android Back from title leaves the test activity')
             assert pid('xyz.waozi.wurm') == owner_pid, 'Normal game process changed'
             receipt['passed'] = True
         finally:

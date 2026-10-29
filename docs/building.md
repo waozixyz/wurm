@@ -309,3 +309,12 @@ account build on its own verified Xvfb display in both orientations. Entity's
 node spending, retry deduplication, fresh-device restore and isolation with
 throwaway accounts and Dew. GitHub Actions and live deployment are verified
 separately from these local tests.
+
+`python3 tests/account_navigation_test.py` exercises the real Wurm frame and
+Entity provider without a display, using an isolated account under ignored
+`work/account-navigation/`. It verifies actual leaderboard score rows, repeated
+opening in both orientations, and Back after an account changes while the
+leaderboard is open. It preserves the desktop executable and installed apps.
+The USB Moto Profile test also checks repeated score rows and leaving the
+activity with Android Back from the title; that device test requires its
+verification APK to be installed.
