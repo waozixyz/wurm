@@ -9,6 +9,7 @@
 - Play local desktop rounds with two to four players, separate bottom entrances and four keyboard control sets.
 - Play every level in the same layout in portrait and landscape, shaped after the portrait, with roomier portrait boards.
 - Your own portrait level now also shapes its landscape until you save a landscape of your own.
+- On a computer, play starts without asking how to steer, also inside Breeze and Arcade.
 
 ## [0.2.26] - 2026-10-29
 
