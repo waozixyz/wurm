@@ -44,14 +44,6 @@
       "url": "https://github.com/ziranlang/oqs.git"
     },
     {
-      "commit": "e29ac2c29860bdacf725133159d5adbfe80f0089",
-      "dependencies": {"daochi_client": "p7de54c8ad98fe034", "kryon": "p90e41bf3b3f07588", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
-      "id": "p765c6f5aa32805cd",
-      "name": "Entity",
-      "ref": "master",
-      "url": "https://github.com/waozixyz/entity.git"
-    },
-    {
       "commit": "8250ece58a03f4d9c07cd8434780d659b54f5d7f",
       "dependencies": {"crypto": "pc23fbf455e97614d", "oqs": "p7098ac9cd92f7e5f"},
       "id": "p7de54c8ad98fe034",
@@ -91,14 +83,22 @@
       "name": "mingcute",
       "ref": "master",
       "url": "https://github.com/kryonlabs/mingcute.git"
+    },
+    {
+      "commit": "6d54b9a1e87052e947ef32db1712dfd302d66385",
+      "dependencies": {"daochi_client": "p7de54c8ad98fe034", "kryon": "p90e41bf3b3f07588", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
+      "id": "pfed93ebbf687d016",
+      "name": "Entity",
+      "ref": "master",
+      "url": "https://github.com/waozixyz/entity.git"
     }
   ],
   "root": {
-    "dependencies": {"apps": "p1065a3c915ffa1e1", "crypto": "pc23fbf455e97614d", "entity": "p765c6f5aa32805cd", "kryon": "p90e41bf3b3f07588", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "p1065a3c915ffa1e1", "crypto": "pc23fbf455e97614d", "entity": "pfed93ebbf687d016", "kryon": "p90e41bf3b3f07588", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {
-    "commit": "ad4cdcdebbe7f72be101e88f50db0c2d4cb2c088",
+    "commit": "68e76ca202cc4080a5d2b4996756370314d80e8c",
     "ref": "master",
     "url": "https://github.com/ziranlang/ziran.git"
   }
