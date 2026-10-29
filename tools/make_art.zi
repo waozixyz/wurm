@@ -1,0 +1,309 @@
+// Fits the generated cartoon atlases in assets/art-source to the game's
+// stable tile and sprite coordinates. This only crops, resizes and packs that
+// art; all gameplay tile IDs and collision rules stay unchanged. With --check
+// the committed atlases and their .argb mirrors must already match.
+//
+//     LDLIBS=-lz ziran run --target=c tools/make_art.zi -- [--check]
+#import "std/file"
+#import "std/format"
+#import "std/byte_text_linux"
+#import "std/image"
+#import "std/png_linux"
+
+CELL :: 32
+
+checking: bool;
+problems: s32;
+
+Fail :: (message: string) -> s32 {
+    print("tools/make_art: %\n", message)
+    return 1
+}
+
+// Python's round(): halves go to the even neighbour.
+Round :: (value: float64) -> s32 {
+    whole := cast(s64)value
+    fraction := value - cast(float64)whole
+    if fraction > 0.5 || (fraction == 0.5 && whole % 2 == 1) { whole += 1 }
+    return cast(s32)whole
+}
+
+Load :: (name: string) -> Image {
+    path: Vec(u8)
+    BuilderPrint(*path, "assets/art-source/%.png", name)
+    return ReadPNGFile(BuilderFinish(path))
+}
+
+// Whether a source sheet's COLUMNS x ROWS cells are square.
+Square :: (image: *Image, columns: s32, rows: s32) -> bool {
+    if !ImageValid(image) { return false }
+    width := cast(float64)image.width / cast(float64)columns
+    height := cast(float64)image.height / cast(float64)rows
+    larger := ifx width > height then width else height
+    return (ifx width > height then width - height else height - width) < larger * 0.03
+}
+
+// Cell INDEX (row by row) of a COLUMNS x ROWS source sheet, resized to a tile.
+Cell :: (image: *Image, columns: s32, rows: s32, index: s32) -> Image {
+    width := cast(float64)image.width / cast(float64)columns
+    height := cast(float64)image.height / cast(float64)rows
+    x := index % columns; y := index / columns
+    part := CropImage(image, Round(cast(float64)x * width), Round(cast(float64)y * height),
+        Round(cast(float64)(x + 1) * width), Round(cast(float64)(y + 1) * height))
+    return ResizeLanczos(*part, CELL, CELL)
+}
+
+// The source sheets, and the worm head profile at tile size.
+Sources :: struct {
+    terrain: Image
+    sprites: Image
+    worm: Image
+    details: Image
+    journey: Image
+    fire: Image
+    creatures: Image
+    profile: Image
+}
+
+Terrain :: (sources: *Sources, index: s32) -> Image { return Cell(*sources.terrain, 4, 3, index) }
+Detail :: (sources: *Sources, index: s32) -> Image { return Cell(*sources.details, 2, 1, index) }
+JourneyCell :: (sources: *Sources, index: s32) -> Image { return Cell(*sources.journey, 4, 5, index) }
+
+// Sprite cells, with the worm's seven cells replacing the old worm and the
+// four head turns: left, up, right and down, the engine's directions.
+Sprite :: (sources: *Sources, index: s32) -> Image {
+    if index == 0 { return RotateHalf(*sources.profile) }
+    if index == 1 { return RotateLeft(*sources.profile) }
+    if index == 2 { return CopyImage(*sources.profile) }
+    if index == 3 { return RotateRight(*sources.profile) }
+    if index < 7 { return Cell(*sources.worm, 4, 4, index) }
+    return Cell(*sources.sprites, 4, 4, index)
+}
+
+Place :: (sheet: *Image, image: *Image, column: s32, row: s32) { PasteImage(sheet, image, column * CELL, row * CELL) }
+
+// Width and height, then BGRA rows: the native mirror of a picture.
+Mirror :: (image: *Image) -> string {
+    bytes: Vec(u8)
+    for shift: 0..3 { unused VecPush(bytes, cast(u8)((image.width >> cast(s32)(shift * 8)) & 255)) }
+    for shift: 0..3 { unused VecPush(bytes, cast(u8)((image.height >> cast(s32)(shift * 8)) & 255)) }
+    for i: 0..cast(s64)image.width * cast(s64)image.height - 1 {
+        unused VecPush(bytes, image.pixels[i * 4 + 2]); unused VecPush(bytes, image.pixels[i * 4 + 1])
+        unused VecPush(bytes, image.pixels[i * 4]); unused VecPush(bytes, image.pixels[i * 4 + 3])
+    }
+    return BuilderFinish(bytes)
+}
+
+ArgbPath :: (name: string) -> string {
+    path: Vec(u8)
+    BuilderPrint(*path, "assets/art/%.argb", name)
+    return BuilderFinish(path)
+}
+
+// Writes assets/art/NAME.png and its .argb mirror, or checks them.
+Save :: (image: *Image, name: string) {
+    path: Vec(u8)
+    BuilderPrint(*path, "assets/art/%.png", name)
+    png := BuilderFinish(path)
+    if checking {
+        committed := ReadPNGFile(png)
+        same := ImageValid(*committed) && committed.width == image.width && committed.height == image.height
+        if same { for i: 0..image.pixels.count - 1 { if committed.pixels[i] != image.pixels[i] { same = false; break } } }
+        mirror, found := ReadEntireFile(ArgbPath(name))
+        if !same || !found || mirror != Mirror(image) { print("tools/make_art: % does not match regeneration\n", name); problems += 1 }
+        return
+    }
+    if !WritePNGFile(png, image) || !WriteEntireFile(ArgbPath(name), Mirror(image)) {
+        print("tools/make_art: cannot write %\n", name); problems += 1
+    }
+}
+
+// The decorations row: details are -1 and -2, the rest sprite cells.
+DetailOrSprite :: (sources: *Sources, index: s32) -> Image {
+    if index == -1 { return Detail(sources, 0) }
+    if index == -2 { return Detail(sources, 1) }
+    return Sprite(sources, index)
+}
+
+Build :: (forest: bool, sources: *Sources) -> Image {
+    sheet := NewImage(640, 480)
+    grass: s32 = ifx forest then 8 else 0
+    variation: s32 = ifx forest then 9 else 1
+    hedge: s32 = ifx forest then 10 else 4
+    trunk: s32 = ifx forest then 11 else 5
+    for tile: 0..19 {
+        source := ifx tile == 1 then cast(s32)2 else ifx tile == 2 then cast(s32)3 else grass
+        if forest && tile == 1 { source = 9 }
+        cell := Terrain(sources, source)
+        Place(*sheet, *cell, cast(s32)tile, 0)
+    }
+    for tile: 0..19 {
+        source := ifx tile == 2 then cast(s32)6 else ifx tile == 1 then trunk else hedge
+        cell := Terrain(sources, source)
+        Place(*sheet, *cell, cast(s32)tile, 1)
+    }
+    // Smart hedge edges retain grass on the open sides of a painted wall.
+    lawn := Terrain(sources, grass)
+    boxes: [16]s32 = .[0, 0, 32, 3, 29, 0, 32, 32, 0, 29, 32, 32, 0, 0, 3, 32]
+    for piece: 0..8 {
+        cell := Terrain(sources, hedge)
+        edges: [4]bool = .[piece == 1 || piece == 5 || piece == 6, piece == 2 || piece == 5 || piece == 7,
+            piece == 3 || piece == 7 || piece == 8, piece == 4 || piece == 6 || piece == 8]
+        for edge: 0..3 {
+            if !edges[edge] { continue }
+            strip := CropImage(*lawn, boxes[edge * 4], boxes[edge * 4 + 1], boxes[edge * 4 + 2], boxes[edge * 4 + 3])
+            PasteImage(*cell, *strip, boxes[edge * 4], boxes[edge * 4 + 1])
+        }
+        Place(*sheet, *cell, cast(s32)(10 + piece), 2)
+    }
+    exit := Sprite(sources, 8)
+    gate := Sprite(sources, 9)
+    gate_right := RotateRight(*gate)
+    gate_half := RotateHalf(*gate)
+    gate_left := RotateLeft(*gate)
+    stone := Sprite(sources, 10)
+    Place(*sheet, *exit, 0, 2); Place(*sheet, *gate, 1, 2); Place(*sheet, *gate_right, 2, 2)
+    Place(*sheet, *gate_half, 3, 2); Place(*sheet, *gate_left, 4, 2); Place(*sheet, *stone, 5, 2)
+    for column: 0..6 {
+        worm := Sprite(sources, cast(s32)column)
+        Place(*sheet, *worm, cast(s32)column, 3)
+    }
+    apple := Sprite(sources, 7)
+    Place(*sheet, *apple, 0, 7)
+    body := Sprite(sources, 4)
+    sparkle := Sprite(sources, 11)
+    for frame: 0..5 {
+        amount := cast(s32)(28 - frame * 4)
+        cell := NewImage(CELL, CELL)
+        shrunk := ResizeLanczos(*body, amount, amount)
+        PasteImage(*cell, *shrunk, (CELL - amount) / 2, (CELL - amount) / 2)
+        Place(*sheet, *cell, cast(s32)frame, 9)
+        grow := cast(s32)(8 + frame * 4)
+        burst := NewImage(CELL, CELL)
+        grown := ResizeLanczos(*sparkle, grow, grow)
+        PasteImage(*burst, *grown, (CELL - grow) / 2, (CELL - grow) / 2)
+        Place(*sheet, *burst, cast(s32)frame, 10)
+    }
+    for frame: 0..2 {
+        water := Terrain(sources, cast(s32)(6 + frame % 2))
+        Place(*sheet, *water, cast(s32)frame, 11)
+    }
+    for variant: 0..3 {
+        floor := Terrain(sources, ifx variant == 3 then variation else grass)
+        Place(*sheet, *floor, cast(s32)(4 + variant), 11)
+    }
+    row: [8]s32 = .[13, 11, 12, 14, 15, 15, -1, -2]
+    for column: 0..7 {
+        index := row[column]
+        cell := DetailOrSprite(sources, index)
+        if column == 5 { flipped := FlipLeftRight(*cell); Place(*sheet, *flipped, 5, 13) }
+        else { Place(*sheet, *cell, cast(s32)column, 13) }
+    }
+    return sheet
+}
+
+// Generated terrain on the existing collision and sprite coordinates.
+Journey :: (base: *Image, sources: *Sources, row: s32) -> Image {
+    sheet := CopyImage(base)
+    floor := JourneyCell(sources, row * 4)
+    wall := JourneyCell(sources, row * 4 + 1)
+    stone := JourneyCell(sources, row * 4 + 2)
+    water := JourneyCell(sources, row * 4 + 3)
+    for tile: 0..19 {
+        PasteImage(*sheet, *floor, cast(s32)tile * CELL, 0)
+        PasteImage(*sheet, ifx tile == 1 then *stone else ifx tile == 2 then *water else *wall, cast(s32)tile * CELL, CELL)
+    }
+    for piece: 0..8 { PasteImage(*sheet, *wall, cast(s32)(10 + piece) * CELL, 2 * CELL) }
+    for frame: 0..2 { PasteImage(*sheet, *water, cast(s32)frame * CELL, 11 * CELL) }
+    for variant: 0..3 { PasteImage(*sheet, *floor, cast(s32)(4 + variant) * CELL, 11 * CELL) }
+    return sheet
+}
+
+TransparentSomewhere :: (image: *Image) -> bool {
+    for i: 0..cast(s64)image.width * cast(s64)image.height - 1 { if image.pixels[i * 4 + 3] == 0 { return true } }
+    return false
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    checking = argc > 1 && TextFromCString(argv[1]) == "--check"
+    water := Load("water-field")
+    Save(*water, "water-field")
+    // The mouth is on the leading edge, viewed from above. One profile turns
+    // to the engine's four directions. Its 30-pixel thumbnail is a direct
+    // Lanczos resize of the visible part.
+    head := Load("head-profile")
+    x0, y0, x1, y1 := AlphaBounds(*head)
+    if x1 == 0 { return Fail("head alpha missing") }
+    visible := CropImage(*head, x0, y0, x1, y1)
+    width: s32 = 30; height: s32 = 30
+    if visible.width > visible.height { height = Round(30.0 * cast(float64)visible.height / cast(float64)visible.width) }
+    else { width = Round(30.0 * cast(float64)visible.width / cast(float64)visible.height) }
+    if width < 1 { width = 1 }
+    if height < 1 { height = 1 }
+    small := ResizeLanczos(*visible, width, height)
+    profile := NewImage(CELL, CELL)
+    PasteImage(*profile, *small, (CELL - width) / 2, (CELL - height) / 2)
+    terrain := Load("terrain"); sprites := Load("sprites"); worm := Load("worm"); details := Load("details")
+    journey := Load("journey-terrain"); fire := Load("fire"); creatures := Load("journey-creatures")
+    sources := Sources.{terrain, sprites, worm, details, journey, fire, creatures, profile}
+    if !Square(*sources.terrain, 4, 3) || !Square(*sources.sprites, 4, 4) || !Square(*sources.worm, 4, 4) ||
+       !Square(*sources.details, 2, 1) || !Square(*sources.journey, 4, 5) || !Square(*sources.fire, 2, 2) ||
+       !Square(*sources.creatures, 4, 3) { return Fail("an art source is missing or not square") }
+    if !TransparentSomewhere(*sources.sprites) { return Fail("sprite alpha missing") }
+    if !TransparentSomewhere(*sources.fire) || !TransparentSomewhere(*sources.creatures) { return Fail("creature alpha missing") }
+    garden := Build(false, *sources)
+    forest := Build(true, *sources)
+    Save(*garden, "garden")
+    Save(*forest, "forest")
+    stages: [5]string = .["meadow", "leafwood", "pinewood", "lake", "mountains"]
+    for row: 0..4 {
+        sheet := Journey(*garden, *sources, cast(s32)row)
+        Save(*sheet, stages[row])
+    }
+    // New campaign sheets use distinct paths, so an open editor keeps the
+    // previous campaign and its cached art while development runs.
+    // Row four: squirrel, hedgehog, frog and rolling stone frames, then the
+    // key, the switch stone off and on, and the gate across and down.
+    for row: 0..4 {
+        sheet := Journey(*garden, *sources, cast(s32)row)
+        first_fire := Cell(*sources.fire, 2, 2, 0)
+        PasteImage(*sheet, *first_fire, 0, 2 * CELL)
+        for frame: 0..3 {
+            flame := Cell(*sources.fire, 2, 2, cast(s32)frame)
+            PasteImage(*sheet, *flame, cast(s32)(6 + frame) * CELL, 2 * CELL)
+        }
+        for column: 0..11 {
+            creature := Cell(*sources.creatures, 4, 3, cast(s32)column)
+            PasteImage(*sheet, *creature, cast(s32)column * CELL, 4 * CELL)
+        }
+        last := Cell(*sources.creatures, 4, 3, 11)
+        down := RotateLeft(*last)
+        PasteImage(*sheet, *down, 12 * CELL, 4 * CELL)
+        name: Vec(u8)
+        BuilderPrint(*name, "campaign-%", stages[row])
+        Save(*sheet, BuilderFinish(name))
+    }
+    covers_source := Load("stage-covers")
+    covers := ResizeLanczos(*covers_source, 960, 1600)
+    Save(*covers, "stage-covers")
+    canopy_source := Load("forest-canopy")
+    canopy := ResizeLanczos(*canopy_source, 40 * CELL, 30 * CELL)
+    Save(*canopy, "forest-canopy")
+    turned := RotateRight(*canopy)
+    Save(*turned, "forest-canopy-portrait")
+    mirrors: [3]string = .["title", "title-portrait", "ground-meadow"]
+    for name: mirrors {
+        path: Vec(u8)
+        BuilderPrint(*path, "assets/art/%.png", name)
+        image := ReadPNGFile(BuilderFinish(path))
+        if !ImageValid(*image) { return Fail(name) }
+        if checking {
+            mirror, found := ReadEntireFile(ArgbPath(name))
+            if !found || mirror != Mirror(*image) { print("tools/make_art: %.argb does not match\n", name); problems += 1 }
+        } else if !WriteEntireFile(ArgbPath(name), Mirror(*image)) { return Fail(name) }
+    }
+    if problems > 0 { return 1 }
+    print("Five journey atlases, reference art and title mirrors %.\n", ifx checking then "verified" else "packed")
+    return 0
+}

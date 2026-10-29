@@ -1,0 +1,133 @@
+// Renders each level's board to a small preview picture for the editor's
+// level selector: the playable base level on its stage's sheet, 200x150 and
+// 150x200. Rerun after changing level data or tile art; build/designed comes
+// from tools/design_levels.zi. With --check the committed previews must match.
+//
+//     LDLIBS=-lz ziran run --target=c tools/render_previews.zi -- [--check]
+#import "std/file"
+#import "std/format"
+#import "std/byte_text_linux"
+#import "std/image"
+#import "std/png_linux"
+
+// The source pixel a preview pixel samples: five per tile each way.
+Sample :: (source: *Image, x: s32, y: s32) -> s64 {
+    sx := cast(s32)((cast(float64)x + 0.5) * cast(float64)source.width / 5.0)
+    sy := cast(s32)((cast(float64)y + 0.5) * cast(float64)source.height / 5.0)
+    if sx > source.width - 1 { sx = source.width - 1 }
+    if sy > source.height - 1 { sy = source.height - 1 }
+    return (cast(s64)sy * source.width + sx) * 4
+}
+
+Art :: (name: string) -> Image {
+    path: Vec(u8)
+    BuilderPrint(*path, "assets/art/%.png", name)
+    return ReadPNGFile(BuilderFinish(path))
+}
+
+// A level record: the published editor board when there is one.
+Board :: (number: s64, suffix: string) -> (raw: string, found: bool) {
+    path: Vec(u8)
+    BuilderPrint(*path, "assets/authored-levels/level%", number)
+    Append(*path, suffix)
+    raw, found := ReadEntireFile(BuilderFinish(path))
+    if found { return raw, true }
+    designed: Vec(u8)
+    BuilderPrint(*designed, "build/designed/level%", number)
+    Append(*designed, suffix)
+    text, has := ReadEntireFile(BuilderFinish(designed))
+    return text, has
+}
+
+// The picture a tile shows in the preview, before any creature on it.
+TileSource :: (sheet: *Image, field: *Image, ground: *Image, water: *Image, stage: s64, tile: s32,
+    x: s32, y: s32, columns: s32, rows: s32) -> Image {
+    if tile == 22 {
+        return CropImage(water, x * water.width / columns, y * water.height / rows, (x + 1) * water.width / columns, (y + 1) * water.height / rows)
+    }
+    if stage == 0 && (tile == 0 || tile == 3 || tile == 4 || tile == 5 || tile == 6 || tile == 15 || tile == 16 || tile == 17 || tile == 19) {
+        return CropImage(ground, x * ground.width / columns, y * ground.height / rows, (x + 1) * ground.width / columns, (y + 1) * ground.height / rows)
+    }
+    if stage == 1 && (tile == 20 || (tile >= 50 && tile <= 58)) {
+        return CropImage(field, x * 32, y * 32, (x + 1) * 32, (y + 1) * 32)
+    }
+    return CropImage(sheet, (tile % 20) * 32, (tile / 20) * 32, (tile % 20) * 32 + 32, (tile / 20) * 32 + 32)
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    check := argc > 1 && TextFromCString(argv[1]) == "--check"
+    water := Art("water-field")
+    canopy := Art("forest-canopy")
+    canopy_portrait := Art("forest-canopy-portrait")
+    ground := Art("ground-meadow")
+    stages: [5]string = .["meadow", "leafwood", "pinewood", "lake", "mountains"]
+    changed: s32
+    for stage: 0..4 {
+        name: Vec(u8)
+        BuilderPrint(*name, "campaign-%", stages[stage])
+        sheet := Art(BuilderFinish(name))
+        if !ImageValid(*sheet) || !ImageValid(*water) { print("tools/render_previews: art is missing\n"); return 1 }
+        for number: 1..40 {
+            level := cast(s64)stage * 40 + number
+            raw, found := Board(level, ".dat")
+            if !found { print("tools/render_previews: level % is missing; run tools/design_levels.zi\n", level); return 1 }
+            for orientation: 0..1 {
+                portrait := orientation == 1
+                columns: s32 = ifx portrait then 30 else 40
+                rows: s32 = ifx portrait then 40 else 30
+                board: [1200]u8
+                for x: 0..39 { for y: 0..29 { board[x * 30 + y] = raw[1 + x * 30 + y] } }
+                if portrait {
+                    data, authored := Board(level, "-portrait.dat")
+                    if authored {
+                        for x: 0..29 { for y: 0..39 { board[x * 40 + y] = data[1 + x * 40 + y] } }
+                    } else {
+                        // A quarter turn: landscape (x, y) shows at (29 - y, x).
+                        for x: 0..39 { for y: 0..29 { board[(29 - y) * 40 + x] = raw[1 + x * 30 + y] } }
+                    }
+                }
+                field := ifx portrait then *canopy_portrait else *canopy
+                preview := NewImage(columns * 5, rows * 5, 0, 0, 0, 255)
+                for y: 0..rows - 1 {
+                    for x: 0..columns - 1 {
+                        tile := cast(s32)(board[x * rows + y] & 127)
+                        enemy: s32 = -1
+                        if tile >= 40 && tile <= 45 { enemy = tile; tile = 0 }
+                        source := TileSource(*sheet, field, *ground, *water, cast(s64)stage, tile, cast(s32)x, cast(s32)y, columns, rows)
+                        if enemy >= 0 {
+                            column: s32 = ifx enemy == 40 then 6 else enemy - 40
+                            AlphaComposite(*source, *sheet, 0, 0, column * 32, 64, 32, 32)
+                        }
+                        for py: 0..4 {
+                            for px: 0..4 {
+                                from := Sample(*source, cast(s32)px, cast(s32)py)
+                                to := ((cast(s64)y * 5 + py) * preview.width + cast(s64)x * 5 + px) * 4
+                                for channel: 0..2 { preview.pixels[to + channel] = source.pixels[from + channel] }
+                            }
+                        }
+                    }
+                }
+                path: Vec(u8)
+                BuilderPrint(*path, "assets/art/campaign-previews/%-%", stages[stage], number)
+                Append(*path, ifx portrait then "-portrait.png" else ".png")
+                file := BuilderFinish(path)
+                committed := ReadPNGFile(file)
+                same := ImageValid(*committed) && committed.width == preview.width && committed.height == preview.height
+                if same {
+                    for i: 0..cast(s64)preview.width * preview.height - 1 {
+                        for channel: 0..2 { if committed.pixels[i * 4 + channel] != preview.pixels[i * 4 + channel] { same = false } }
+                    }
+                }
+                if check {
+                    if !same { print("tools/render_previews: % does not match regeneration\n", file); return 1 }
+                } else if !same {
+                    if !WritePNGFile(file, *preview, false) { print("tools/render_previews: cannot write %\n", file); return 1 }
+                    changed += 1
+                }
+            }
+        }
+    }
+    if check { print("Preview pictures match regeneration.\n") } else { print("Previews written: % changed, 400 total.\n", changed) }
+    return 0
+}
