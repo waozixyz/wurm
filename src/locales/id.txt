@@ -162,3 +162,6 @@ Level sebelumnya
 ---
 [wurm_editor_next_level]
 Level berikutnya
+---
+[wurm_profile_stopped]
+Profil berhenti berfungsi. Tutup lalu buka lagi.

@@ -87,6 +87,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "Stejné kruhy vás přenesou." }
         if source == "Previous level" { return "Předchozí úroveň" }
         if source == "Next level" { return "Další úroveň" }
+        if source == "The profile stopped working. Close it and open it again." { return "Profil přestal fungovat. Zavři ho a otevři znovu." }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
@@ -139,6 +140,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "Gleiche Ringe teleportieren dich." }
         if source == "Previous level" { return "Vorheriges Level" }
         if source == "Next level" { return "Nächstes Level" }
+        if source == "The profile stopped working. Close it and open it again." { return "Das Profil funktioniert nicht mehr. Schließe es und öffne es erneut." }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
@@ -193,6 +195,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "Los anillos iguales te teletransportan." }
         if source == "Previous level" { return "Nivel anterior" }
         if source == "Next level" { return "Nivel siguiente" }
+        if source == "The profile stopped working. Close it and open it again." { return "El perfil dejó de funcionar. Ciérralo y vuelve a abrirlo." }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
@@ -244,6 +247,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "Les anneaux identiques vous téléportent." }
         if source == "Previous level" { return "Niveau précédent" }
         if source == "Next level" { return "Niveau suivant" }
+        if source == "The profile stopped working. Close it and open it again." { return "Le profil a cessé de fonctionner. Fermez-le et rouvrez-le." }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
@@ -295,6 +299,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "Cincin yang sama memindahkanmu." }
         if source == "Previous level" { return "Level sebelumnya" }
         if source == "Next level" { return "Level berikutnya" }
+        if source == "The profile stopped working. Close it and open it again." { return "Profil berhenti berfungsi. Tutup lalu buka lagi." }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
@@ -348,6 +353,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "Gli anelli uguali ti teletrasportano." }
         if source == "Previous level" { return "Livello precedente" }
         if source == "Next level" { return "Livello successivo" }
+        if source == "The profile stopped working. Close it and open it again." { return "Il profilo ha smesso di funzionare. Chiudilo e riaprilo." }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
@@ -402,6 +408,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "同じ輪に入るとワープします。" }
         if source == "Previous level" { return "前のレベル" }
         if source == "Next level" { return "次のレベル" }
+        if source == "The profile stopped working. Close it and open it again." { return "プロフィールが動作を停止しました。閉じてからもう一度開いてください。" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
@@ -456,6 +463,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "같은 고리를 통해 순간 이동해요." }
         if source == "Previous level" { return "이전 레벨" }
         if source == "Next level" { return "다음 레벨" }
+        if source == "The profile stopped working. Close it and open it again." { return "프로필이 작동을 멈췄습니다. 닫았다가 다시 열어 주세요." }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
@@ -509,6 +517,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "Anéis iguais teletransportam você." }
         if source == "Previous level" { return "Nível anterior" }
         if source == "Next level" { return "Nível seguinte" }
+        if source == "The profile stopped working. Close it and open it again." { return "O perfil parou de funcionar. Feche-o e abra-o novamente." }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
@@ -563,6 +572,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "Одинаковые кольца телепортируют вас." }
         if source == "Previous level" { return "Предыдущий уровень" }
         if source == "Next level" { return "Следующий уровень" }
+        if source == "The profile stopped working. Close it and open it again." { return "Профиль перестал работать. Закройте его и откройте снова." }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
@@ -617,6 +627,7 @@ Text :: (source: string) -> string {
         if source == "Matching rings teleport you." { return "相同的圆环可以传送你。" }
         if source == "Previous level" { return "上一关" }
         if source == "Next level" { return "下一关" }
+        if source == "The profile stopped working. Close it and open it again." { return "个人资料已停止运行。请关闭后重新打开。" }
     }
     return source
 }

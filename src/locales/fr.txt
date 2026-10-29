@@ -162,3 +162,6 @@ Niveau précédent
 ---
 [wurm_editor_next_level]
 Niveau suivant
+---
+[wurm_profile_stopped]
+Le profil a cessé de fonctionner. Fermez-le et rouvrez-le.

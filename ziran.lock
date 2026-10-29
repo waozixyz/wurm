@@ -10,14 +10,6 @@
       "url": "https://github.com/waozixyz/apps.git"
     },
     {
-      "commit": "d8996893ddc6c2bdfa334f99a41b1db6db900491",
-      "dependencies": {"daochi_client": "pf7b24c15869d6839", "kryon": "p77028198b0e09537", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
-      "id": "p193d41674d9daa1c",
-      "name": "Entity",
-      "ref": "master",
-      "url": "https://github.com/waozixyz/entity.git"
-    },
-    {
       "commit": "2944b2e668e735438d8ce24e47a39be3f5c36af5",
       "dependencies": {},
       "id": "p0dfa70137405b096",
@@ -60,6 +52,14 @@
       "url": "https://github.com/LoupVaillant/Monocypher.git"
     },
     {
+      "commit": "74229f6d61260c65c73b32edf2921885d08ffc02",
+      "dependencies": {"daochi_client": "pf7b24c15869d6839", "kryon": "p77028198b0e09537", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
+      "id": "p9e47632a2df70833",
+      "name": "Entity",
+      "ref": "master",
+      "url": "https://github.com/waozixyz/entity.git"
+    },
+    {
       "commit": "944826f70779a6b6cd53f6b06a75b36f4d8a2558",
       "dependencies": {},
       "id": "pc23fbf455e97614d",
@@ -94,7 +94,7 @@
     }
   ],
   "root": {
-    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "p193d41674d9daa1c", "kryon": "p77028198b0e09537", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "p00b93f1ddcd2802f", "entity": "p9e47632a2df70833", "kryon": "p77028198b0e09537", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {

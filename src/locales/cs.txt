@@ -162,3 +162,6 @@ Předchozí úroveň
 ---
 [wurm_editor_next_level]
 Další úroveň
+---
+[wurm_profile_stopped]
+Profil přestal fungovat. Zavři ho a otevři znovu.

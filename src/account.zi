@@ -43,6 +43,7 @@
     Leaderboard :: #import "entity/leaderboard_native";
     Files :: #import "entity/native_files";
     File :: #import "std/file";
+    Locale :: #import, file "localization.zi";
     #import "std/text_buffer"
     #import "kryon/app_files"
     #import "kryon/tree_input"
@@ -146,18 +147,20 @@
         }
         return true
     }
+    // A Profile that stops starts again by itself; when it cannot, say why
+    // instead of leaving the page blank.
     DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {
-        if !ready {
-            problem := Entity.EntityHostProblem()
-            if problem == "" { problem = "The profile could not start. Reload the page to try again." }
-            unused Text(session, TextProps.{.key = 29010, .text = problem, .font = 18, .wrap = TextWrap.TextWrapAuto,
-                    .align = TextAlign.TextAlignCenter,
-                    .bounds = Rectangle.{bounds.x + 24.0, bounds.y + 48.0, bounds.width - 48.0, 120.0}})
-            return
+        if ready {
+            typed: [1024]u8
+            input := TextFieldInputFor(key, KeyboardModifiers(session), TypedTextTake(session, typed[:]))
+            if Entity.EntityHostFrame(session, bounds, key, KeyboardModifiers(session), input, dark) { return }
         }
-        typed: [1024]u8
-        input := TextFieldInputFor(key, KeyboardModifiers(session), TypedTextTake(session, typed[:]))
-        unused Entity.EntityHostFrame(session, bounds, key, KeyboardModifiers(session), input, dark)
+        problem := Entity.EntityHostProblem()
+        if !ready && problem == "" { problem = "The profile could not start. Reload the page to try again." }
+        if problem == "" { return }
+        unused Text(session, TextProps.{.key = 29010, .text = Locale.Text(problem), .font = 18, .wrap = TextWrap.TextWrapAuto,
+                .align = TextAlign.TextAlignCenter,
+                .bounds = Rectangle.{bounds.x + 24.0, bounds.y + 48.0, bounds.width - 48.0, 120.0}})
     }
     Back :: () {
         if !ready { visible = false; return }

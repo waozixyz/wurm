@@ -9,6 +9,42 @@ Expect :: (value: bool, message: string) {
     }
 }
 
+NoEnemyAtEntrance :: (game: *Game, level: s32, portrait: bool) {
+    for index: 0..game.monster_count - 1 {
+        if EnemyFreeZone(game.monsters[index].position) {
+            print("Enemy at the entrance: level %, portrait %\n", level + 1, portrait)
+            failures += 1
+            return
+        }
+    }
+}
+
+// Play on with lost lives: enemies keep out of the entrance area, so a new
+// life never removes one.
+CheckLives :: (level: s32, portrait: bool) {
+    board: [CELLS]u8
+    objects: [CELLS]u8
+    Custom.DefaultBoard(level, board[:], portrait)
+    columns: s32 = ifx portrait then ROWS else COLUMNS
+    rows: s32 = ifx portrait then COLUMNS else ROWS
+    game: Game
+    game.lives = 20
+    game.random = 29 + cast(u32)level
+    LoadLevelData(*game, level, 0, board[:], 5, columns, rows, objects[:])
+    count := game.monster_count
+    for tick: 0..3999 {
+        if game.mode != MODE_PLAYING { break }
+        if tick % 9 == 0 { unused ApplyInput(*game, 262 + Random(*game, 4)) }
+        Tick(*game)
+        NoEnemyAtEntrance(*game, level, portrait)
+        if game.monster_count != count {
+            print("A lost life removed an enemy: level %, portrait %\n", level + 1, portrait)
+            failures += 1
+            return
+        }
+    }
+}
+
 CheckStart :: (level: s32, portrait: bool, key: s32) {
     board: [CELLS]u8
     objects: [CELLS]u8
@@ -26,6 +62,7 @@ CheckStart :: (level: s32, portrait: bool, key: s32) {
         }
     }
     for tick: 0..39 { Tick(*game) }
+    NoEnemyAtEntrance(*game, level, portrait)
     if game.death_ticks != 0 || game.lives != 3 {
         print("Unsafe start: level %, portrait %\n", level + 1, portrait)
         failures += 1
@@ -46,6 +83,8 @@ main :: () -> s32 {
         CheckStart(cast(s32)level, false, 263)
         CheckStart(cast(s32)level, true, 262)
         CheckStart(cast(s32)level, true, 263)
+        CheckLives(cast(s32)level, false)
+        CheckLives(cast(s32)level, true)
     }
     BoardSize(COLUMNS, ROWS)
     game: Game
@@ -58,6 +97,12 @@ main :: () -> s32 {
     Expect(game.board[Index(4, 25)] == 21, "terrain outside the entrance area is preserved")
     Expect(game.board[Index(20, 27)] == 0, "a later life has the same clear start")
     Expect(game.monster_count == 1 && game.monsters[0].position.x == 72, "nearby starting hazards are cleared while distant enemies remain")
+    // A wandering enemy walking at the entrance area turns away at its edge.
+    game.monsters[0] = Monster.{Point.{(COLUMNS / 2 + START_CLEAR_HALF_WIDTH + 4) * 16 + 8, (ROWS - 3) * 16 + 8}, 3, 3, 0, 0}
+    for tick: 0..63 {
+        MoveMonster(*game, 0)
+        Expect(!EnemyFreeZone(game.monsters[0].position), "an enemy never walks into the entrance area")
+    }
     print("Mobile start clearance: % failures across 200 levels and both layouts\n", failures)
     return ifx failures == 0 then 0 else 1
 }

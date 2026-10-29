@@ -162,3 +162,6 @@ waozi.xyzを訪問
 ---
 [wurm_editor_next_level]
 次のレベル
+---
+[wurm_profile_stopped]
+プロフィールが動作を停止しました。閉じてからもう一度開いてください。

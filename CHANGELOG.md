@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.24] - 2026-10-29
+
+- Keep the entrance area free of enemies: none start there or wander in, so nothing vanishes when you lose a life.
+- Restart Profile and Leaderboard by themselves if they stop, or say why instead of showing an empty page.
+
 ## [0.2.23] - 2026-10-29
 
 - Move a little faster throughout the campaign, with a consistent pace across Meadow.

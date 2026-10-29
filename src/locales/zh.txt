@@ -162,3 +162,6 @@
 ---
 [wurm_editor_next_level]
 下一关
+---
+[wurm_profile_stopped]
+个人资料已停止运行。请关闭后重新打开。

@@ -183,6 +183,14 @@ StartClearance :: (x: s32, y: s32) -> bool {
         y >= board_rows - 1 - START_CLEAR_ROWS && y < board_rows - 1
 }
 
+// The entrance area belongs to the worm: no enemy starts there or ever
+// enters it. It spans the clear approach plus the few cells a chaser covers
+// while the head comes in, so no life begins beside a creature.
+EnemyFreeZone :: (position: Point) -> bool {
+    return Abs(position.x / 16 - board_columns / 2) <= START_CLEAR_HALF_WIDTH + 3 &&
+        position.y / 16 >= board_rows - 1 - START_CLEAR_ROWS - 3
+}
+
 ClearStart :: (game: *Game) {
     half := board_columns / 2
     for y: board_rows - 1 - START_CLEAR_ROWS..board_rows - 2 {
@@ -192,15 +200,12 @@ ClearStart :: (game: *Game) {
             game.objects[at] = 0
         }
     }
-    // A nearby chaser can cover several cells while the head enters. Keep
-    // that approach clear too, including on a later life, rather than
-    // requiring an immediate reversal to escape a creature at the gate.
+    // Enemies placed in the entrance area never appear; once play starts
+    // none can walk in, so a lost life removes nothing.
     kept: s32 = 0
     for index: 0..game.monster_count - 1 {
         monster := game.monsters[index]
-        near_start := Abs(monster.position.x / 16 - half) <= START_CLEAR_HALF_WIDTH + 3 &&
-            monster.position.y / 16 >= board_rows - 1 - START_CLEAR_ROWS - 3
-        if !near_start {
+        if !EnemyFreeZone(monster.position) {
             game.monsters[kept] = monster
             kept += 1
         }
@@ -916,7 +921,7 @@ LevelBlockages :: (board: []u8) -> s32 {
     return result
 }
 MonsterBlocked :: (game: *Game, index: s32, position: Point) -> bool {
-    if WallAt(game, position) || WormNear(game, position, 0, 10) { return true }
+    if WallAt(game, position) || WormNear(game, position, 0, 10) || EnemyFreeZone(position) { return true }
     for other: 0..game.monster_count - 1 {
         if other != index && Near(position, game.monsters[other].position, 8) { return true }
     }
