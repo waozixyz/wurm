@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.23] - 2026-10-29
+
+- Move a little faster throughout the campaign, with a consistent pace across Meadow.
+
 ## [0.2.22] - 2026-10-28
 
 - Keep the leaderboard visible when you or a friend uses a special Wurm skin.

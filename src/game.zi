@@ -46,8 +46,9 @@ BaseTickInterval :: (level: s32) -> s64 {
     return cast(s64)interval
 }
 TickInterval :: (level: s32) -> s64 {
-    if level < 40 { return 48 }
-    return (BaseTickInterval(level) * 9 + 4) / 8
+    // A small pace increase keeps Meadow steady and the scoring curve intact.
+    interval := ifx level < 40 then 48 else (BaseTickInterval(level) * 9 + 4) / 8
+    return (interval * 9 + 5) / 10
 }
 
 Point :: struct { x: s32; y: s32; }

@@ -21,8 +21,7 @@ def main():
     env = environment()
     env.update(WURM_PROFILE_DIR=str(fixture / 'profile'), XDG_DATA_HOME=str(fixture / 'data'),
                SDL_AUDIODRIVER='dummy', SDL_VIDEODRIVER='dummy')
-    if not (ROOT / 'assets/entity.zx').exists():
-        shutil.copy2(profile(), ROOT / 'assets/entity.zx')
+    shutil.copy2(profile(), ROOT / 'assets/entity.zx')
     command = ['ziran', 'build', '--project', *lock(), '--root', 'tests', '--target=c', '--define', 'PLATFORM_DESKTOP',
                '--define', 'WURM_ACCOUNTS', '--entry', 'account_navigation_test:main', '-o', str(output),
                'tests/account_navigation_test.zi']
