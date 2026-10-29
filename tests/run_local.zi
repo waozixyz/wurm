@@ -83,9 +83,9 @@ none: [0]string;
 
 // The real account frames headlessly, with a private profile under work/.
 AccountNavigation :: () -> bool {
+    unused RemoveTree("work/account-navigation")
+    if !CreateDirectories("work/account-navigation/levels") || !CreateDirectories("work/account-navigation/profile") { return false }
     fixture := ResolvePath("work/account-navigation")
-    unused RemoveTree(fixture)
-    if !CreateDirectories(JoinPath(fixture, "levels")) || !CreateDirectories(JoinPath(fixture, "profile")) { return false }
     profile := BuildProfile()
     if profile.count == 0 || !CopyFile(profile, "assets/entity.zx") { return false }
     output := "build/account-navigation-test"
@@ -124,6 +124,7 @@ Hosted :: () -> bool {
     for i: 0..paths.count - 1 { VecPush(command, "--module-path"); VecPush(command, paths[i]) }
     rest: [9]string = .["--define", "WURM_PORTABLE", "--target=c", "--entry", "hosted_test:main", "--exe", "-o", "", ""]
     for i: 0..6 { VecPush(command, rest[i]) }
+    if !CreateDirectories("build/hosted-test") { return false }
     VecPush(command, ResolvePath("build/hosted-test"))
     VecPush(command, ResolvePath("tests/hosted_test.zi"))
     if !Run(VecSlice(command, 0, command.count), none[:]) { return false }

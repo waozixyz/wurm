@@ -74,8 +74,10 @@ BuildProfile :: () -> string {
 AccountLibraries :: (web: bool, output: *Vec(string)) -> bool {
     compiler := PackagePath("ziran"); oqs := PackagePath("liboqs"); mono := PackagePath("monocypher")
     if compiler.count == 0 || oqs.count == 0 || mono.count == 0 { return false }
-    work := ResolvePath(ifx web then "build/account-web" else "build/account-native")
-    unused CreateDirectories(work)
+    // ResolvePath needs an existing folder; on a fresh checkout create it first.
+    relative := ifx web then "build/account-web" else "build/account-native"
+    if !CreateDirectories(relative) { return false }
+    work := ResolvePath(relative)
     // One runtime folder per toolchain checkout: make keeps objects that are
     // newer than another toolchain's sources, which mixes saved IR formats.
     runtime_folder: Vec(u8)
