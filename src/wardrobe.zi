@@ -1,5 +1,6 @@
 Account :: #import, file "account.zi";
 Progress :: #import, file "progress.zi";
+Rewards :: #import, file "rewards.zi";
 Records :: #import, file "controls.zi";
 #import "std/json_scan"
 #import "std/text_buffer"
@@ -20,13 +21,14 @@ loaded: bool;
 dirty: bool;
 status: [24]u8;
 reported_skin: s32 = -1;
+reported_replays: s64 = -1;
 Load :: () {
     if loaded { return }
     loaded = true
     bytes: [12]u8
     count := Records.ReadRecord(Progress.RecordName("wardrobe.dat"), bytes[:])
     if count == 10 || count == 11 || count == 12 {
-        skin = ifx bytes[0] < 9 then cast(s32)bytes[0] else 0
+        skin = ifx bytes[0] < Rewards.SKIN_COUNT then cast(s32)bytes[0] else 0
         visited = bytes[1] == 1
         played = 0
         for index: 0..7 { played |= cast(s64)(bytes[index + 2] & (ifx index == 7 then 127 else 255)) << (index * 8) }
@@ -47,9 +49,10 @@ Save :: () {
 Reset :: () {
     loaded = false; skin = 0; owned = 0; played = 0; other_played = 0; visited = false
     device = .{}; dirty = false; poll_at = 0; last_frame = 0
-    status = .{}; reported_skin = -1
+    status = .{}; reported_skin = -1; reported_replays = -1
     christmas_claimable = false; special_supported = false
     Load()
+    Rewards.Reset()
 }
 Available :: (id: s32) -> bool {
     if id == 0 { return true }
@@ -57,7 +60,7 @@ Available :: (id: s32) -> bool {
     if id == 4 { return played + other_played >= 18000000 }
     if id == 5 { return Progress.unlocked >= 39 }
     if id == 6 { return visited }
-    return false
+    return Rewards.Owns(id)
 }
 MountainsAvailable :: () -> bool { return (owned & 512) != 0 }
 Select :: (id: s32) {
@@ -70,7 +73,7 @@ Select :: (id: s32) {
 }
 Visit :: () { visited = true; dirty = true; Save(); poll_at = 0 }
 Report :: () {
-    if skin < 0 || skin > 8 || skin == reported_skin { return }
+    if skin < 0 || skin >= Rewards.SKIN_COUNT || skin == reported_skin { return }
     out: Vec(u8)
     BuilderPrint(*out, "skin %", skin)
     reply := Account.Service("leaderboard", TextView(VecSlice(out, 0, out.count)))
@@ -80,6 +83,7 @@ Report :: () {
 Pump :: (now: s64, playing: bool) {
     Load()
     Report()
+    Rewards.Pump(now)
     if last_frame > 0 && playing {
         elapsed := now - last_frame
         // Pauses, suspended tabs and background stalls do not earn playtime.
@@ -97,10 +101,11 @@ Pump :: (now: s64, playing: bool) {
     christmas_claimable = MatchLiteral(shop, FieldAt(shop, 0, "christmas_claimable"), "true")
     special_supported = MatchLiteral(shop, FieldAt(shop, 0, "special_skins"), "true")
     if Progress.owner[0] == 0 || device[0] == 0 { return }
-    reply := Account.Service("entity.records", "{\"operation\":\"list\",\"kind\":\"wurm-player\",\"fields\":[\"played_ms\",\"visited\",\"skin\"]}")
+    reply := Account.Service("entity.records", "{\"operation\":\"list\",\"kind\":\"wurm-player\",\"fields\":[\"played_ms\",\"visited\",\"skin\",\"replays\"]}")
     records := FieldAt(reply, 0, "records")
     if records >= 0 {
         other_played = 0
+        other_replays: s64 = 0
         index: s32 = 0
         while true {
             at := ElementAt(reply, records, index)
@@ -114,8 +119,11 @@ Pump :: (now: s64, playing: bool) {
                     if cast(s64)duration.value > played { played = cast(s64)duration.value }
                 } else { other_played += cast(s64)duration.value }
             }
+            replayed := ReadNumber(reply, FieldAt(reply, at, "replays"))
+            if TextUntilNul(id[:]) != TextUntilNul(device[:]) && replayed.valid && replayed.value >= 0.0 &&
+            replayed.value <= 100000000.0 { other_replays += cast(s64)replayed.value }
             if !dirty && TextUntilNul(id[:]) == TextUntilNul(device[:]) &&
-            chosen.valid && chosen.value >= 0.0 && chosen.value <= 8.0 &&
+            chosen.valid && chosen.value >= 0.0 && chosen.value < cast(float64)Rewards.SKIN_COUNT &&
             chosen.value == cast(float64)cast(s32)chosen.value && Available(cast(s32)chosen.value) {
                 skin = cast(s32)chosen.value
                 Save()
@@ -124,13 +132,16 @@ Pump :: (now: s64, playing: bool) {
             if flag >= 0 && reply[flag] == #char "t" { visited = true }
             index += 1
         }
+        Rewards.other_replays = other_replays
     }
+    if Progress.replays != reported_replays { dirty = true }
     if !dirty { return }
     out: Vec(u8)
-    BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"wurm-player\",\"schema\":\"wurm.player.v1\",\"id\":\"%\",\"document\":{\"played_ms\":%,\"visited\":%,\"skin\":%}}",
-        TextUntilNul(device[:]), played, visited, skin)
+    BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"wurm-player\",\"schema\":\"wurm.player.v1\",\"id\":\"%\",\"document\":{\"played_ms\":%,\"visited\":%,\"skin\":%,\"replays\":%}}",
+        TextUntilNul(device[:]), played, visited, skin, Progress.replays)
     answer := Account.Service("entity.records", TextView(VecSlice(out, 0, out.count)))
     done: [16]u8
     dirty = ReadStringText(answer, FieldAt(answer, 0, "status"), done[:]) < 0 || TextUntilNul(done[:]) != "done"
+    if !dirty { reported_replays = Progress.replays }
     VecFree(out)
 }

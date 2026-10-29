@@ -25,6 +25,20 @@ best_level: s32;
 best_score: s32;
 reported_level: s32 = -1;
 reported_score: s32 = -1;
+// Finished levels that were already completed earn replay coins, counted
+// once per level attempt. Each device keeps its own count for the account.
+replays: s64;
+attempt: s32;
+rewarded_attempt: s32 = -1;
+// Each rewarded finish, and whether it was the level's first completion.
+clear_events: s32;
+clear_first: bool;
+clear_first_count: s32;
+clear_replay_count: s32;
+// Failed local writes stay pending, without advertising spendable coins.
+// Several finishes can merge while storage recovers.
+pending_completed: [200]bool;
+pending_replays: s64;
 RecordName :: (name: string) -> string {
     if owner[0] == 0 { return name }
     at: s64 = 0
@@ -46,6 +60,8 @@ Load :: () {
     if loaded { return }
     loaded = true
     completed = .{}
+    pending_completed = .{}; pending_replays = 0
+    rewarded_attempt = -1
     pending: [2]u8
     if Records.ReadRecord(RecordName("progress-pending.dat"), pending[:]) == 1 { dirty = pending[0] == 1 }
     furthest: [2]u8
@@ -86,6 +102,12 @@ Load :: () {
     earned: [201]u8
     if Records.ReadRecord(RecordName("completed.dat"), earned[:]) == 200 {
         for index: 0..199 { completed[index] = ifx earned[index] == 1 then 1 else 0 }
+    }
+    counted: [9]u8
+    if Records.ReadRecord(RecordName("replays.dat"), counted[:]) == 8 {
+        replays = 0
+        for index: 0..7 { replays |= cast(s64)(counted[index] & (ifx index == 7 then 127 else 255)) << (index * 8) }
+        if replays > 100000000 { replays = 0 }
     }
     best: [9]u8
     if Records.ReadRecord(RecordName("best.dat"), best[:]) == 8 {
@@ -147,6 +169,7 @@ Begin :: (at: s32, carried_lives: s32, carried_score: s32) -> bool {
     level = at
     lives = carried_lives
     score = carried_score
+    attempt += 1
     if at > unlocked && at < 160 { unlocked = at }
     return Save()
 }
@@ -168,18 +191,46 @@ Select :: (at: s32, mountains: bool = false) -> bool {
 }
 
 Completed :: (at: s32) -> bool { return at >= 0 && at < LEVELS && completed[at] == 1 }
+FlushCompletions :: () -> bool {
+    candidate := completed
+    first: s32
+    for at: 0..LEVELS - 1 {
+        if pending_completed[at] && candidate[at] != 1 { candidate[at] = 1; first += 1 }
+    }
+    if first == 0 && pending_replays == 0 { return true }
+    pending: [1]u8 = .[1]
+    if !Records.WriteRecord(RecordName("progress-pending.dat"), pending[:]) { return false }
+    if first > 0 && !Records.WriteRecord(RecordName("completed.dat"), candidate[:]) { return false }
+    total_replays := replays + pending_replays
+    if pending_replays > 0 {
+        counted: [8]u8
+        for index: 0..7 { counted[index] = cast(u8)((total_replays >> (index * 8)) & 255) }
+        if !Records.WriteRecord(RecordName("replays.dat"), counted[:]) { return false }
+    }
+    completed = candidate
+    replays = total_replays
+    clear_first = first > 0
+    clear_first_count = first
+    clear_replay_count = cast(s32)pending_replays
+    clear_events += 1
+    pending_completed = .{}; pending_replays = 0
+    dirty = true
+    return true
+}
 Complete :: (at: s32) {
+    Load()
     if at < 0 || at >= LEVELS { return }
     // A completion belongs to the account that started this game.
     status := Account.Service("entity.records", "{\"operation\":\"status\"}")
     current: [65]u8
     if ReadStringText(status, FieldAt(status, 0, "account"), current[:]) >= 0 &&
     TextUntilNul(current[:]) != TextUntilNul(owner[:]) { return }
-    completed[at] = 1
-    unused Records.WriteRecord(RecordName("completed.dat"), completed[:])
+    if rewarded_attempt == attempt { return }
+    rewarded_attempt = attempt
+    if completed[at] != 1 && !pending_completed[at] { pending_completed[at] = true }
+    else { pending_replays += 1 }
     dirty = true
-    pending: [1]u8 = .[1]
-    unused Records.WriteRecord(RecordName("progress-pending.dat"), pending[:])
+    unused FlushCompletions()
     poll_at = 0
 }
 Pump :: (now: s64) -> bool {
@@ -194,12 +245,13 @@ Pump :: (now: s64) -> bool {
     if changed {
         owner = current
         loaded = false
-        level = 0; lives = START_LIVES; score = 0; unlocked = 0
+        level = 0; lives = START_LIVES; score = 0; unlocked = 0; replays = 0
         best_level = 0; best_score = 0; reported_level = -1; reported_score = -1
         completed = .{}
         dirty = false
         Load()
     }
+    if !changed { unused FlushCompletions() }
     // Register even a fresh zero-score player, after selecting this account's
     // local save so another account's best run cannot enter its leaderboard.
     Report()

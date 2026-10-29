@@ -165,3 +165,81 @@ Nível seguinte
 ---
 [wurm_profile_stopped]
 O perfil parou de funcionar. Feche-o e abra-o novamente.
+---
+[wurm_feature_0]
+Editor de níveis
+---
+[wurm_feature_1]
+Recompensas diárias
+---
+[wurm_feature_2]
+Moedas
+---
+[wurm_feature_3]
+Recompensa do dia 30
+---
+[wurm_feature_4]
+Recebendo…
+---
+[wurm_feature_5]
+Musgo
+---
+[wurm_feature_6]
+Rio
+---
+[wurm_feature_7]
+Cogumelo
+---
+[wurm_feature_8]
+Aurora
+---
+[wurm_feature_9]
+Multijogador local
+---
+[wurm_feature_10]
+Jogadores
+---
+[wurm_feature_11]
+Jogador
+---
+[wurm_feature_12]
+Teclas de seta
+---
+[wurm_feature_13]
+Teclado numérico 8 4 5 6
+---
+[wurm_feature_14]
+O último verme vence. Todos entram por baixo.
+---
+[wurm_feature_15]
+Iniciar rodada
+---
+[wurm_feature_16]
+Eliminado
+---
+[wurm_feature_17]
+Pausar
+---
+[wurm_feature_18]
+Pausado
+---
+[wurm_feature_19]
+Empate
+---
+[wurm_feature_20]
+Vencedor
+---
+[wurm_feature_21]
+Continuar
+---
+[wurm_feature_22]
+Jogar novamente
+---
+[wurm_feature_23]
+Voltar ao início
+---
+[wurm_feature_24]
+Experimente o direcional
+---
+[wurm_feature_25]
+Volte amanhã

@@ -83,6 +83,32 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "Předchozí úroveň" }
         if source == "Next level" { return "Další úroveň" }
         if source == "The profile stopped working. Close it and open it again." { return "Profil přestal fungovat. Zavři ho a otevři znovu." }
+        if source == "Level editor" { return "Editor úrovní" }
+        if source == "Daily rewards" { return "Denní odměny" }
+        if source == "Coins" { return "Mince" }
+        if source == "Day 30 reward" { return "Odměna za 30. den" }
+        if source == "Collecting…" { return "Vyzvedávání…" }
+        if source == "Moss" { return "Mech" }
+        if source == "River" { return "Řeka" }
+        if source == "Mushroom" { return "Houba" }
+        if source == "Aurora" { return "Polární záře" }
+        if source == "Local multiplayer" { return "Místní hra více hráčů" }
+        if source == "Players" { return "Hráči" }
+        if source == "Player" { return "Hráč" }
+        if source == "Arrow keys" { return "Šipky" }
+        if source == "Numpad 8 4 5 6" { return "Číselný blok 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "Poslední červ vyhrává. Všichni vstupují zdola." }
+        if source == "Start round" { return "Spustit kolo" }
+        if source == "Out" { return "Vyřazen" }
+        if source == "Pause" { return "Pozastavit" }
+        if source == "Paused" { return "Pozastaveno" }
+        if source == "Draw" { return "Remíza" }
+        if source == "Winner" { return "Vítěz" }
+        if source == "Resume" { return "Pokračovat" }
+        if source == "Play again" { return "Hrát znovu" }
+        if source == "Back to title" { return "Zpět na úvod" }
+        if source == "Try the direction pad" { return "Vyzkoušet směrový ovladač" }
+        if source == "Come back tomorrow" { return "Vrať se zítra" }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
@@ -136,6 +162,31 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "Vorheriges Level" }
         if source == "Next level" { return "Nächstes Level" }
         if source == "The profile stopped working. Close it and open it again." { return "Das Profil funktioniert nicht mehr. Schließe es und öffne es erneut." }
+        if source == "Level editor" { return "Leveleditor" }
+        if source == "Daily rewards" { return "Tägliche Belohnungen" }
+        if source == "Coins" { return "Münzen" }
+        if source == "Day 30 reward" { return "Belohnung an Tag 30" }
+        if source == "Collecting…" { return "Wird abgeholt…" }
+        if source == "Moss" { return "Moos" }
+        if source == "River" { return "Fluss" }
+        if source == "Mushroom" { return "Pilz" }
+        if source == "Aurora" { return "Polarlicht" }
+        if source == "Local multiplayer" { return "Lokaler Mehrspieler" }
+        if source == "Players" { return "Spieler" }
+        if source == "Player" { return "Spieler" }
+        if source == "Arrow keys" { return "Pfeiltasten" }
+        if source == "Numpad 8 4 5 6" { return "Ziffernblock 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "Der letzte Wurm gewinnt. Alle starten unten." }
+        if source == "Start round" { return "Runde starten" }
+        if source == "Out" { return "Ausgeschieden" }
+        if source == "Paused" { return "Pausiert" }
+        if source == "Draw" { return "Unentschieden" }
+        if source == "Winner" { return "Gewinner" }
+        if source == "Resume" { return "Fortsetzen" }
+        if source == "Play again" { return "Erneut spielen" }
+        if source == "Back to title" { return "Zurück zum Titel" }
+        if source == "Try the direction pad" { return "Steuerkreuz ausprobieren" }
+        if source == "Come back tomorrow" { return "Komm morgen wieder" }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
@@ -191,6 +242,31 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "Nivel anterior" }
         if source == "Next level" { return "Nivel siguiente" }
         if source == "The profile stopped working. Close it and open it again." { return "El perfil dejó de funcionar. Ciérralo y vuelve a abrirlo." }
+        if source == "Level editor" { return "Editor de niveles" }
+        if source == "Daily rewards" { return "Recompensas diarias" }
+        if source == "Coins" { return "Monedas" }
+        if source == "Day 30 reward" { return "Recompensa del día 30" }
+        if source == "Collecting…" { return "Recogiendo…" }
+        if source == "Moss" { return "Musgo" }
+        if source == "River" { return "Río" }
+        if source == "Mushroom" { return "Seta" }
+        if source == "Local multiplayer" { return "Multijugador local" }
+        if source == "Players" { return "Jugadores" }
+        if source == "Player" { return "Jugador" }
+        if source == "Arrow keys" { return "Teclas de flecha" }
+        if source == "Numpad 8 4 5 6" { return "Teclado numérico 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "Gana el último gusano. Todos entran por abajo." }
+        if source == "Start round" { return "Iniciar ronda" }
+        if source == "Out" { return "Eliminado" }
+        if source == "Pause" { return "Pausa" }
+        if source == "Paused" { return "En pausa" }
+        if source == "Draw" { return "Empate" }
+        if source == "Winner" { return "Ganador" }
+        if source == "Resume" { return "Continuar" }
+        if source == "Play again" { return "Volver a jugar" }
+        if source == "Back to title" { return "Volver al inicio" }
+        if source == "Try the direction pad" { return "Prueba el mando direccional" }
+        if source == "Come back tomorrow" { return "Vuelve mañana" }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
@@ -243,6 +319,31 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "Niveau précédent" }
         if source == "Next level" { return "Niveau suivant" }
         if source == "The profile stopped working. Close it and open it again." { return "Le profil a cessé de fonctionner. Fermez-le et rouvrez-le." }
+        if source == "Level editor" { return "Éditeur de niveaux" }
+        if source == "Daily rewards" { return "Récompenses quotidiennes" }
+        if source == "Coins" { return "Pièces" }
+        if source == "Day 30 reward" { return "Récompense du jour 30" }
+        if source == "Collecting…" { return "Récupération…" }
+        if source == "Moss" { return "Mousse" }
+        if source == "River" { return "Rivière" }
+        if source == "Mushroom" { return "Champignon" }
+        if source == "Aurora" { return "Aurore" }
+        if source == "Local multiplayer" { return "Multijoueur local" }
+        if source == "Players" { return "Joueurs" }
+        if source == "Player" { return "Joueur" }
+        if source == "Arrow keys" { return "Touches fléchées" }
+        if source == "Numpad 8 4 5 6" { return "Pavé numérique 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "Le dernier ver gagne. Tous entrent par le bas." }
+        if source == "Start round" { return "Lancer la manche" }
+        if source == "Out" { return "Éliminé" }
+        if source == "Paused" { return "En pause" }
+        if source == "Draw" { return "Égalité" }
+        if source == "Winner" { return "Vainqueur" }
+        if source == "Resume" { return "Reprendre" }
+        if source == "Play again" { return "Rejouer" }
+        if source == "Back to title" { return "Retour au titre" }
+        if source == "Try the direction pad" { return "Essayer la croix directionnelle" }
+        if source == "Come back tomorrow" { return "Reviens demain" }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
@@ -295,6 +396,31 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "Level sebelumnya" }
         if source == "Next level" { return "Level berikutnya" }
         if source == "The profile stopped working. Close it and open it again." { return "Profil berhenti berfungsi. Tutup lalu buka lagi." }
+        if source == "Level editor" { return "Editor level" }
+        if source == "Daily rewards" { return "Hadiah harian" }
+        if source == "Coins" { return "Koin" }
+        if source == "Day 30 reward" { return "Hadiah hari ke-30" }
+        if source == "Collecting…" { return "Mengambil…" }
+        if source == "Moss" { return "Lumut" }
+        if source == "River" { return "Sungai" }
+        if source == "Mushroom" { return "Jamur" }
+        if source == "Local multiplayer" { return "Multipemain lokal" }
+        if source == "Players" { return "Pemain" }
+        if source == "Player" { return "Pemain" }
+        if source == "Arrow keys" { return "Tombol panah" }
+        if source == "Numpad 8 4 5 6" { return "Tombol angka 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "Cacing terakhir menang. Semua masuk dari bawah." }
+        if source == "Start round" { return "Mulai ronde" }
+        if source == "Out" { return "Gugur" }
+        if source == "Pause" { return "Jeda" }
+        if source == "Paused" { return "Dijeda" }
+        if source == "Draw" { return "Seri" }
+        if source == "Winner" { return "Pemenang" }
+        if source == "Resume" { return "Lanjutkan" }
+        if source == "Play again" { return "Main lagi" }
+        if source == "Back to title" { return "Kembali ke judul" }
+        if source == "Try the direction pad" { return "Coba tombol arah" }
+        if source == "Come back tomorrow" { return "Kembali besok" }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
@@ -349,6 +475,31 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "Livello precedente" }
         if source == "Next level" { return "Livello successivo" }
         if source == "The profile stopped working. Close it and open it again." { return "Il profilo ha smesso di funzionare. Chiudilo e riaprilo." }
+        if source == "Level editor" { return "Editor dei livelli" }
+        if source == "Daily rewards" { return "Premi giornalieri" }
+        if source == "Coins" { return "Monete" }
+        if source == "Day 30 reward" { return "Premio del giorno 30" }
+        if source == "Collecting…" { return "Riscossione…" }
+        if source == "Moss" { return "Muschio" }
+        if source == "River" { return "Fiume" }
+        if source == "Mushroom" { return "Fungo" }
+        if source == "Local multiplayer" { return "Multigiocatore locale" }
+        if source == "Players" { return "Giocatori" }
+        if source == "Player" { return "Giocatore" }
+        if source == "Arrow keys" { return "Tasti freccia" }
+        if source == "Numpad 8 4 5 6" { return "Tastierino 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "Vince l’ultimo verme. Tutti entrano dal basso." }
+        if source == "Start round" { return "Avvia turno" }
+        if source == "Out" { return "Eliminato" }
+        if source == "Pause" { return "Pausa" }
+        if source == "Paused" { return "In pausa" }
+        if source == "Draw" { return "Pareggio" }
+        if source == "Winner" { return "Vincitore" }
+        if source == "Resume" { return "Riprendi" }
+        if source == "Play again" { return "Gioca ancora" }
+        if source == "Back to title" { return "Torna al titolo" }
+        if source == "Try the direction pad" { return "Prova il pad direzionale" }
+        if source == "Come back tomorrow" { return "Torna domani" }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
@@ -404,6 +555,32 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "前のレベル" }
         if source == "Next level" { return "次のレベル" }
         if source == "The profile stopped working. Close it and open it again." { return "プロフィールが動作を停止しました。閉じてからもう一度開いてください。" }
+        if source == "Level editor" { return "レベルエディター" }
+        if source == "Daily rewards" { return "毎日の報酬" }
+        if source == "Coins" { return "コイン" }
+        if source == "Day 30 reward" { return "30日目の報酬" }
+        if source == "Collecting…" { return "受け取り中…" }
+        if source == "Moss" { return "コケ" }
+        if source == "River" { return "川" }
+        if source == "Mushroom" { return "キノコ" }
+        if source == "Aurora" { return "オーロラ" }
+        if source == "Local multiplayer" { return "ローカル対戦" }
+        if source == "Players" { return "プレイヤー数" }
+        if source == "Player" { return "プレイヤー" }
+        if source == "Arrow keys" { return "矢印キー" }
+        if source == "Numpad 8 4 5 6" { return "テンキー 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "最後に残ったワームの勝ち。全員が下から入ります。" }
+        if source == "Start round" { return "ラウンド開始" }
+        if source == "Out" { return "脱落" }
+        if source == "Pause" { return "一時停止" }
+        if source == "Paused" { return "一時停止中" }
+        if source == "Draw" { return "引き分け" }
+        if source == "Winner" { return "勝者" }
+        if source == "Resume" { return "再開" }
+        if source == "Play again" { return "もう一度遊ぶ" }
+        if source == "Back to title" { return "タイトルに戻る" }
+        if source == "Try the direction pad" { return "方向パッドを試す" }
+        if source == "Come back tomorrow" { return "また明日" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
@@ -459,6 +636,32 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "이전 레벨" }
         if source == "Next level" { return "다음 레벨" }
         if source == "The profile stopped working. Close it and open it again." { return "프로필이 작동을 멈췄습니다. 닫았다가 다시 열어 주세요." }
+        if source == "Level editor" { return "레벨 편집기" }
+        if source == "Daily rewards" { return "일일 보상" }
+        if source == "Coins" { return "코인" }
+        if source == "Day 30 reward" { return "30일차 보상" }
+        if source == "Collecting…" { return "받는 중…" }
+        if source == "Moss" { return "이끼" }
+        if source == "River" { return "강" }
+        if source == "Mushroom" { return "버섯" }
+        if source == "Aurora" { return "오로라" }
+        if source == "Local multiplayer" { return "로컬 멀티플레이" }
+        if source == "Players" { return "플레이어 수" }
+        if source == "Player" { return "플레이어" }
+        if source == "Arrow keys" { return "방향키" }
+        if source == "Numpad 8 4 5 6" { return "숫자 패드 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "마지막 웜이 승리합니다. 모두 아래에서 시작합니다." }
+        if source == "Start round" { return "라운드 시작" }
+        if source == "Out" { return "탈락" }
+        if source == "Pause" { return "일시 정지" }
+        if source == "Paused" { return "일시 정지됨" }
+        if source == "Draw" { return "무승부" }
+        if source == "Winner" { return "승자" }
+        if source == "Resume" { return "계속하기" }
+        if source == "Play again" { return "다시 플레이" }
+        if source == "Back to title" { return "타이틀로 돌아가기" }
+        if source == "Try the direction pad" { return "방향 패드 체험" }
+        if source == "Come back tomorrow" { return "내일 다시 오세요" }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
@@ -513,6 +716,31 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "Nível anterior" }
         if source == "Next level" { return "Nível seguinte" }
         if source == "The profile stopped working. Close it and open it again." { return "O perfil parou de funcionar. Feche-o e abra-o novamente." }
+        if source == "Level editor" { return "Editor de níveis" }
+        if source == "Daily rewards" { return "Recompensas diárias" }
+        if source == "Coins" { return "Moedas" }
+        if source == "Day 30 reward" { return "Recompensa do dia 30" }
+        if source == "Collecting…" { return "Recebendo…" }
+        if source == "Moss" { return "Musgo" }
+        if source == "River" { return "Rio" }
+        if source == "Mushroom" { return "Cogumelo" }
+        if source == "Local multiplayer" { return "Multijogador local" }
+        if source == "Players" { return "Jogadores" }
+        if source == "Player" { return "Jogador" }
+        if source == "Arrow keys" { return "Teclas de seta" }
+        if source == "Numpad 8 4 5 6" { return "Teclado numérico 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "O último verme vence. Todos entram por baixo." }
+        if source == "Start round" { return "Iniciar rodada" }
+        if source == "Out" { return "Eliminado" }
+        if source == "Pause" { return "Pausar" }
+        if source == "Paused" { return "Pausado" }
+        if source == "Draw" { return "Empate" }
+        if source == "Winner" { return "Vencedor" }
+        if source == "Resume" { return "Continuar" }
+        if source == "Play again" { return "Jogar novamente" }
+        if source == "Back to title" { return "Voltar ao início" }
+        if source == "Try the direction pad" { return "Experimente o direcional" }
+        if source == "Come back tomorrow" { return "Volte amanhã" }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
@@ -568,6 +796,32 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "Предыдущий уровень" }
         if source == "Next level" { return "Следующий уровень" }
         if source == "The profile stopped working. Close it and open it again." { return "Профиль перестал работать. Закройте его и откройте снова." }
+        if source == "Level editor" { return "Редактор уровней" }
+        if source == "Daily rewards" { return "Ежедневные награды" }
+        if source == "Coins" { return "Монеты" }
+        if source == "Day 30 reward" { return "Награда за 30-й день" }
+        if source == "Collecting…" { return "Получение…" }
+        if source == "Moss" { return "Мох" }
+        if source == "River" { return "Река" }
+        if source == "Mushroom" { return "Гриб" }
+        if source == "Aurora" { return "Сияние" }
+        if source == "Local multiplayer" { return "Локальная игра" }
+        if source == "Players" { return "Игроки" }
+        if source == "Player" { return "Игрок" }
+        if source == "Arrow keys" { return "Клавиши со стрелками" }
+        if source == "Numpad 8 4 5 6" { return "Цифровой блок 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "Побеждает последний червяк. Все входят снизу." }
+        if source == "Start round" { return "Начать раунд" }
+        if source == "Out" { return "Выбыл" }
+        if source == "Pause" { return "Пауза" }
+        if source == "Paused" { return "На паузе" }
+        if source == "Draw" { return "Ничья" }
+        if source == "Winner" { return "Победитель" }
+        if source == "Resume" { return "Продолжить" }
+        if source == "Play again" { return "Играть снова" }
+        if source == "Back to title" { return "На главный экран" }
+        if source == "Try the direction pad" { return "Попробуйте крестовину" }
+        if source == "Come back tomorrow" { return "Возвращайтесь завтра" }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
@@ -623,6 +877,32 @@ Text :: (source: string) -> string {
         if source == "Previous level" { return "上一关" }
         if source == "Next level" { return "下一关" }
         if source == "The profile stopped working. Close it and open it again." { return "个人资料已停止运行。请关闭后重新打开。" }
+        if source == "Level editor" { return "关卡编辑器" }
+        if source == "Daily rewards" { return "每日奖励" }
+        if source == "Coins" { return "金币" }
+        if source == "Day 30 reward" { return "第30天奖励" }
+        if source == "Collecting…" { return "领取中…" }
+        if source == "Moss" { return "苔藓" }
+        if source == "River" { return "河流" }
+        if source == "Mushroom" { return "蘑菇" }
+        if source == "Aurora" { return "极光" }
+        if source == "Local multiplayer" { return "本地多人游戏" }
+        if source == "Players" { return "玩家人数" }
+        if source == "Player" { return "玩家" }
+        if source == "Arrow keys" { return "方向键" }
+        if source == "Numpad 8 4 5 6" { return "数字键盘 8 4 5 6" }
+        if source == "Last worm wins. Everyone enters from the bottom." { return "最后存活的虫虫获胜。所有玩家从底部进入。" }
+        if source == "Start round" { return "开始回合" }
+        if source == "Out" { return "出局" }
+        if source == "Pause" { return "暂停" }
+        if source == "Paused" { return "已暂停" }
+        if source == "Draw" { return "平局" }
+        if source == "Winner" { return "获胜者" }
+        if source == "Resume" { return "继续" }
+        if source == "Play again" { return "再玩一次" }
+        if source == "Back to title" { return "返回标题画面" }
+        if source == "Try the direction pad" { return "试用方向键" }
+        if source == "Come back tomorrow" { return "明天再来" }
     }
     return source
 }

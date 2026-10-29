@@ -165,3 +165,81 @@ Livello successivo
 ---
 [wurm_profile_stopped]
 Il profilo ha smesso di funzionare. Chiudilo e riaprilo.
+---
+[wurm_feature_0]
+Editor dei livelli
+---
+[wurm_feature_1]
+Premi giornalieri
+---
+[wurm_feature_2]
+Monete
+---
+[wurm_feature_3]
+Premio del giorno 30
+---
+[wurm_feature_4]
+Riscossione…
+---
+[wurm_feature_5]
+Muschio
+---
+[wurm_feature_6]
+Fiume
+---
+[wurm_feature_7]
+Fungo
+---
+[wurm_feature_8]
+Aurora
+---
+[wurm_feature_9]
+Multigiocatore locale
+---
+[wurm_feature_10]
+Giocatori
+---
+[wurm_feature_11]
+Giocatore
+---
+[wurm_feature_12]
+Tasti freccia
+---
+[wurm_feature_13]
+Tastierino 8 4 5 6
+---
+[wurm_feature_14]
+Vince l’ultimo verme. Tutti entrano dal basso.
+---
+[wurm_feature_15]
+Avvia turno
+---
+[wurm_feature_16]
+Eliminato
+---
+[wurm_feature_17]
+Pausa
+---
+[wurm_feature_18]
+In pausa
+---
+[wurm_feature_19]
+Pareggio
+---
+[wurm_feature_20]
+Vincitore
+---
+[wurm_feature_21]
+Riprendi
+---
+[wurm_feature_22]
+Gioca ancora
+---
+[wurm_feature_23]
+Torna al titolo
+---
+[wurm_feature_24]
+Prova il pad direzionale
+---
+[wurm_feature_25]
+Torna domani

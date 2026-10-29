@@ -1,0 +1,158 @@
+// One keyboard, one shared arena. Movement and collision decisions use one
+// snapshot so head-on crashes never depend on player update order.
+#import, file "game.zi";
+
+MAX_PLAYERS :: 4;
+SETUP :: 0;
+PLAYING :: 1;
+PAUSED :: 2;
+FINISHED :: 3;
+Player :: struct {
+    worm: [WORM_LIMIT]Point
+    length: s32
+    target: s32
+    direction: s32
+    next_direction: s32
+    alive: bool
+    score: s32
+}
+Round :: struct {
+    players: [MAX_PLAYERS]Player
+    count: s32
+    phase: s32
+    winner: s32
+    apple: Point
+    random: u32
+    next_step: s64
+}
+
+Start :: (round: *Round, count: s32, now: s64, seed: u32 = 1) -> bool {
+    if count < 2 || count > MAX_PLAYERS { return false }
+    round.* = .{}
+    round.count = count
+    round.phase = PLAYING
+    round.winner = -1
+    round.random = seed
+    round.next_step = now + 44
+    for id: 0..count - 1 {
+        player := *round.players[id]
+        column := COLUMNS * (cast(s32)id + 1) / (count + 1)
+        player.length = 24
+        player.target = 64
+        player.direction = DIR_UP
+        player.next_direction = DIR_UP
+        player.alive = true
+        for i: 0..WORM_LIMIT - 1 {
+            player.worm[i] = Point.{column * 16 + 8, (ROWS - 2) * 16 + 8 + cast(s32)i * 4}
+        }
+    }
+    Spawn(round)
+    return true
+}
+
+BodyAt :: (round: *Round, at: Point, skip: s32 = -1) -> bool {
+    for id: 0..round.count - 1 {
+        player := *round.players[id]
+        if !player.alive { continue }
+        index: s32 = ifx id == skip then 8 else 0
+        while index < player.length - 4 {
+            if Near(at, player.worm[index], 10) { return true }
+            index += 4
+        }
+    }
+    return false
+}
+
+Spawn :: (round: *Round) {
+    // A bounded scan after a random start finds an unoccupied apple.
+    round.random = cast(u32)((cast(u64)round.random * 1103515245 + 12345) & 4294967295)
+    start := cast(s32)((round.random >> 16) % cast(u32)((COLUMNS - 4) * (ROWS - 10)))
+    for n: 0..(COLUMNS - 4) * (ROWS - 10) - 1 {
+        cell := (start + cast(s32)n) % ((COLUMNS - 4) * (ROWS - 10))
+        point := Point.{(2 + cell % (COLUMNS - 4)) * 16 + 8, (2 + cell / (COLUMNS - 4)) * 16 + 8}
+        if !BodyAt(round, point) { round.apple = point; return }
+    }
+    round.apple = Point.{-1, -1}
+}
+
+// P1 arrows; P2 WASD; P3 IJKL; P4 numeric keypad 8456.
+Input :: (round: *Round, key: s32) -> bool {
+    player: s32 = -1
+    direction: s32 = -1
+    if key == 263 { player = 0; direction = DIR_LEFT }
+    if key == 265 { player = 0; direction = DIR_UP }
+    if key == 262 { player = 0; direction = DIR_RIGHT }
+    if key == 264 { player = 0; direction = DIR_DOWN }
+    if key == 65 || key == 97 { player = 1; direction = DIR_LEFT }
+    if key == 87 || key == 119 { player = 1; direction = DIR_UP }
+    if key == 68 || key == 100 { player = 1; direction = DIR_RIGHT }
+    if key == 83 || key == 115 { player = 1; direction = DIR_DOWN }
+    if key == 74 || key == 106 { player = 2; direction = DIR_LEFT }
+    if key == 73 || key == 105 { player = 2; direction = DIR_UP }
+    if key == 76 || key == 108 { player = 2; direction = DIR_RIGHT }
+    if key == 75 || key == 107 { player = 2; direction = DIR_DOWN }
+    if key == 324 { player = 3; direction = DIR_LEFT }
+    if key == 328 { player = 3; direction = DIR_UP }
+    if key == 326 { player = 3; direction = DIR_RIGHT }
+    if key == 325 { player = 3; direction = DIR_DOWN }
+    if player < 0 || player >= round.count || round.phase != PLAYING || !round.players[player].alive { return false }
+    if direction == (round.players[player].direction + 2) % 4 { return false }
+    round.players[player].next_direction = direction
+    return true
+}
+
+TickRound :: (round: *Round) {
+    if round.phase != PLAYING { return }
+    next: [MAX_PLAYERS]Point
+    crashed: [MAX_PLAYERS]bool
+    for id: 0..round.count - 1 {
+        player := *round.players[id]
+        if !player.alive { continue }
+        at := player.worm[0]
+        d := player.next_direction
+        if d == DIR_LEFT { at.x -= 4 } else if d == DIR_RIGHT { at.x += 4 }
+        else if d == DIR_UP { at.y -= 4 } else { at.y += 4 }
+        next[id] = at
+        // Heads start inside. A tail may still enter through its opening,
+        // but a head can never leave through the bottom before it closes.
+        crashed[id] = at.x < 16 || at.x >= (COLUMNS - 1) * 16 || at.y < 16 ||
+            at.y >= (ROWS - 1) * 16 || BodyAt(round, at, cast(s32)id)
+    }
+    for id: 0..round.count - 1 {
+        if !round.players[id].alive { continue }
+        for other: id + 1..round.count - 1 {
+            if round.players[other].alive && Near(next[id], next[other], 10) {
+                crashed[id] = true; crashed[other] = true
+            }
+        }
+    }
+    eaten := false
+    for id: 0..round.count - 1 {
+        player := *round.players[id]
+        if !player.alive { continue }
+        if crashed[id] { player.alive = false; continue }
+        player.direction = player.next_direction
+        if Near(next[id], round.apple, 10) {
+            player.score += 1
+            player.target += 16
+            if player.target > WORM_LIMIT { player.target = WORM_LIMIT }
+            eaten = true
+        }
+        if player.length < player.target { player.length += 1 }
+        for < index: 1..player.length - 1 { player.worm[index] = player.worm[index - 1] }
+        player.worm[0] = next[id]
+    }
+    living: s32
+    for id: 0..round.count - 1 {
+        if round.players[id].alive { living += 1; round.winner = cast(s32)id }
+    }
+    if living <= 1 { round.phase = FINISHED; if living == 0 { round.winner = -1 } }
+    else if eaten { Spawn(round) }
+}
+
+Advance :: (round: *Round, now: s64) {
+    if round.phase != PLAYING || now < round.next_step { return }
+    ticks := (now - round.next_step) / 44 + 1
+    if ticks > 8 { ticks = 8; round.next_step = now - 7 * 44 }
+    for i: 0..ticks - 1 { TickRound(round); round.next_step += 44 }
+}

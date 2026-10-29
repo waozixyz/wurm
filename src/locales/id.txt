@@ -165,3 +165,81 @@ Level berikutnya
 ---
 [wurm_profile_stopped]
 Profil berhenti berfungsi. Tutup lalu buka lagi.
+---
+[wurm_feature_0]
+Editor level
+---
+[wurm_feature_1]
+Hadiah harian
+---
+[wurm_feature_2]
+Koin
+---
+[wurm_feature_3]
+Hadiah hari ke-30
+---
+[wurm_feature_4]
+Mengambil…
+---
+[wurm_feature_5]
+Lumut
+---
+[wurm_feature_6]
+Sungai
+---
+[wurm_feature_7]
+Jamur
+---
+[wurm_feature_8]
+Aurora
+---
+[wurm_feature_9]
+Multipemain lokal
+---
+[wurm_feature_10]
+Pemain
+---
+[wurm_feature_11]
+Pemain
+---
+[wurm_feature_12]
+Tombol panah
+---
+[wurm_feature_13]
+Tombol angka 8 4 5 6
+---
+[wurm_feature_14]
+Cacing terakhir menang. Semua masuk dari bawah.
+---
+[wurm_feature_15]
+Mulai ronde
+---
+[wurm_feature_16]
+Gugur
+---
+[wurm_feature_17]
+Jeda
+---
+[wurm_feature_18]
+Dijeda
+---
+[wurm_feature_19]
+Seri
+---
+[wurm_feature_20]
+Pemenang
+---
+[wurm_feature_21]
+Lanjutkan
+---
+[wurm_feature_22]
+Main lagi
+---
+[wurm_feature_23]
+Kembali ke judul
+---
+[wurm_feature_24]
+Coba tombol arah
+---
+[wurm_feature_25]
+Kembali besok

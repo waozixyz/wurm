@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+- Earn coins for every level you clear and spend them on new skins.
+- Claim a daily reward: 30 days of coins, Dew and two new skins.
+- Browse thirteen skins with slimmer, clearly spaced bodies and matching leaderboard pictures.
+- Open the level editor directly from the title, and preview both control styles in Settings.
+- Play local desktop rounds with two to four players, separate bottom entrances and four keyboard control sets.
+- Play every level in the same layout in portrait and landscape, shaped after the portrait, with roomier portrait boards.
+- Your own portrait level now also shapes its landscape until you save a landscape of your own.
+
 ## [0.2.26] - 2026-10-29
 
 - The new skins have calmer, plainer bodies.

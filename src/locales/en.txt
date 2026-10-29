@@ -165,3 +165,81 @@ Next level
 ---
 [wurm_profile_stopped]
 The profile stopped working. Close it and open it again.
+---
+[wurm_feature_0]
+Level editor
+---
+[wurm_feature_1]
+Daily rewards
+---
+[wurm_feature_2]
+Coins
+---
+[wurm_feature_3]
+Day 30 reward
+---
+[wurm_feature_4]
+Collecting…
+---
+[wurm_feature_5]
+Moss
+---
+[wurm_feature_6]
+River
+---
+[wurm_feature_7]
+Mushroom
+---
+[wurm_feature_8]
+Aurora
+---
+[wurm_feature_9]
+Local multiplayer
+---
+[wurm_feature_10]
+Players
+---
+[wurm_feature_11]
+Player
+---
+[wurm_feature_12]
+Arrow keys
+---
+[wurm_feature_13]
+Numpad 8 4 5 6
+---
+[wurm_feature_14]
+Last worm wins. Everyone enters from the bottom.
+---
+[wurm_feature_15]
+Start round
+---
+[wurm_feature_16]
+Out
+---
+[wurm_feature_17]
+Pause
+---
+[wurm_feature_18]
+Paused
+---
+[wurm_feature_19]
+Draw
+---
+[wurm_feature_20]
+Winner
+---
+[wurm_feature_21]
+Resume
+---
+[wurm_feature_22]
+Play again
+---
+[wurm_feature_23]
+Back to title
+---
+[wurm_feature_24]
+Try the direction pad
+---
+[wurm_feature_25]
+Come back tomorrow

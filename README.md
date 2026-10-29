@@ -65,18 +65,25 @@ the screen for the next corner. Change your choice from Pause at any time.
 On a keyboard, use the arrow keys or WASD. Space or Escape pauses; M mutes.
 Collect every apple, then leave through the opening at the top of the board.
 
+Desktop **Local multiplayer** puts two to four players on one keyboard. Everyone
+enters through a separate bottom lane. Collect the shared apples, grow, and stay
+clear of every worm: the last one alive wins. Player 1 uses the arrows, Player 2
+WASD, Player 3 IJKL, and Player 4 the numeric keypad's 8/4/5/6. Space or Escape
+pauses the round. Local rounds keep their own scores.
+
 Portrait and landscape use their own board layouts. Your unfinished run stays
 on this device. Android and the browser can play offline after their assets
 are loaded. Signing in syncs earned completion marks and preferences.
 
 ## Make a path of your own
 
-Open the level editor with **E** from the title. Browse all 200 boards,
+Open **Level editor** from the title, or press **E**. Browse all 200 boards,
 paint terrain and enemies, adjust the apple goal, then playtest from the entrance.
 
-**Landscape** and **Portrait** are independent editor modes. Start a missing
-portrait layout from a best guess, refine it, and save without changing the
-other version. Playtest always uses the selected layout.
+**Landscape** and **Portrait** are independent editor modes. A layout you
+have not saved shows the mirror of the other, so both play alike; refine it
+and save without changing the other version. Playtest always uses the
+selected layout.
 
 <p align="center"><img src="assets/marketing/editor.png" alt="The portrait level editor with separate Landscape and Portrait modes, terrain brushes and six enemies" width="85%"></p>
 
@@ -97,6 +104,15 @@ including from another device, cannot charge for that skin twice. Earn
 **Night owl** by playing actively for **5 hours**, **Golden apple** by
 reaching **level 40**, or **Explorer** by opening **waozi.xyz** from the shop.
 Levels unlock through play; Dew buys optional cosmetics.
+
+Earn **10 coins** for a level's first clear and **2 coins** when replaying it.
+Coins unlock **Moss** for 120, **River** for 240 and **Mushroom** for 360.
+The **Daily rewards** calendar gives mostly coins, Mushroom on day 7 and
+**Aurora** on day 30. A connected account can collect 1/2/2/2/3 Dew on days
+5/10/15/20/25, once the node has counted those daily check-ins. Guests receive
+coins on those days. Claims reset at midnight UTC; missing a day keeps your
+place. Later calendars give coins in place of Dew and skin gifts. Already-owned
+gift skins give 100 coins. Winter cheer remains claimable in December 2026.
 
 Account sync and Dew need a connection. There is no advertising or analytics,
 and personal editor records are kept out of published packages.

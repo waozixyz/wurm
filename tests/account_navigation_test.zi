@@ -59,7 +59,7 @@ main :: () -> s32 {
     Draw(session, 390.0, 780.0)
     Expect(HasLabel(session, 55402, "local") && HasLabel(session, 55403, "0"), "guest score row is drawn")
     // Every released skin must remain inside the host's trusted image set.
-    skins: [9]string = .["skin 0", "skin 1", "skin 2", "skin 3", "skin 4", "skin 5", "skin 6", "skin 7", "skin 8"]
+    skins: [13]string = .["skin 0", "skin 1", "skin 2", "skin 3", "skin 4", "skin 5", "skin 6", "skin 7", "skin 8", "skin 9", "skin 10", "skin 11", "skin 12"]
     for skin: skins {
         Expect(Account.Service("leaderboard", skin) == "saved", "save leaderboard skin")
         Draw(session, 390.0, 780.0)

@@ -1,0 +1,286 @@
+// Coins, coin skins and the daily plan against a simulated account and node:
+// the node counts one check-in per UTC day and credits each Dew day once.
+Progress :: #import, file "../src/progress.zi";
+Rewards :: #import, file "../src/rewards.zi";
+Wardrobe :: #import, file "../src/wardrobe.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+File :: #import "std/file";
+#import "std/file_tree_linux"
+#import "std/json_scan"
+#import "std/c_string"
+#import "std/text_buffer"
+#import "std/vec"
+
+device :: "0123456789abcdef0123456789abcdef";
+alice :: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+bob :: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+owner: string;
+// The account entity.records answers for; normally the signed-in owner.
+records_account: string;
+answer: [8192]u8;
+// The account's synced plan, and the other device's replays.
+plan: [512]u8;
+plan_owner: string;
+plan_puts: s32;
+other_replays: s32;
+// The node: check-in days and credited milestones, per account.
+checkins: [2][64]s64;
+checkin_count: [2]s32;
+credited: [2]s32;
+credits: s32;
+claims: s32;
+claim_answer: [256]u8;
+
+Text :: (out: Vec(u8)) -> string {
+    text := BuilderFinish(out)
+    unused CopyCString(text, answer[:])
+    return TextUntilNul(answer[:])
+}
+Holder :: () -> s32 { return ifx owner == alice then 0 else 1 }
+NodeClaim :: (reward: string) -> string {
+    claims += 1
+    holder := Holder()
+    day := Rewards.test_day
+    seen := false
+    for index: cast(s32)0..checkin_count[holder] - 1 { if checkins[holder][index] == day { seen = true } }
+    if !seen { checkins[holder][checkin_count[holder]] = day; checkin_count[holder] += 1 }
+    required: s32 = 0
+    index: s32 = -1
+    for milestone: cast(s32)0..4 {
+        if reward == Rewards.MilestoneReward(milestone) { required = (milestone + 1) * 5; index = milestone }
+    }
+    out: Vec(u8)
+    if index < 0 { BuilderPrint(*out, "{\"status\":\"failed\",\"reward\":\"%\"}", reward) }
+    else if checkin_count[holder] < required { BuilderPrint(*out, "{\"status\":\"ineligible\",\"reward\":\"%\"}", reward) }
+    else {
+        fresh := (credited[holder] & (1 << index)) == 0
+        credited[holder] |= 1 << index
+        if fresh { credits += 1 }
+        BuilderPrint(*out, "{\"status\":\"done\",\"reward\":\"%\",\"credited\":%,\"units\":1000000,\"balance\":1000000}", reward, fresh)
+    }
+    unused CopyCString(BuilderFinish(out), claim_answer[:])
+    return "{\"status\":\"pending\"}"
+}
+#program_export
+WurmAccountService :: (name: string, request: string) -> string {
+    out: Vec(u8)
+    if name == "leaderboard" { return "saved" }
+    if name == "entity.game-shop" {
+        BuilderPrint(*out, "{\"device\":\"%\",\"owned\":0,\"status\":\"done\"}", device)
+        return Text(out)
+    }
+    if name == "entity.dew" {
+        if owner == "" { return "{\"status\":\"signin\"}" }
+        if request.count > 6 && request[:6] == "claim:" { return NodeClaim(request[6:]) }
+        if request == "claim-status" { return TextUntilNul(claim_answer[:]) }
+        return "{\"status\":\"unknown\"}"
+    }
+    if name != "entity.records" { return "" }
+    operation: [24]u8
+    unused ReadStringText(request, FieldAt(request, 0, "operation"), operation[:])
+    op := TextUntilNul(operation[:])
+    kind: [32]u8
+    unused ReadStringText(request, FieldAt(request, 0, "kind"), kind[:])
+    if op == "status" {
+        BuilderPrint(*out, "{\"status\":\"done\",\"account\":\"%\",\"sync\":\"synced\"}", records_account)
+        return Text(out)
+    }
+    if op == "get" && TextUntilNul(kind[:]) == "wurm-cosmetics" {
+        if plan[0] == 0 || plan_owner != records_account { return "{\"status\":\"missing\"}" }
+        BuilderPrint(*out, "{\"status\":\"done\",\"id\":\"00000000000000000000000000000002\",\"document\":%}", TextUntilNul(plan[:]))
+        return Text(out)
+    }
+    if op == "put" && TextUntilNul(kind[:]) == "wurm-cosmetics" {
+        at := FieldAt(request, 0, "document")
+        id: [40]u8
+        unused ReadStringText(request, FieldAt(request, 0, "id"), id[:])
+        if at < 0 || TextUntilNul(id[:]) != "00000000000000000000000000000002" { return "{\"status\":\"rejected\"}" }
+        unused CopyCString(request[at:ValueEnd(request, at, 0)], plan[:])
+        plan_owner = records_account
+        plan_puts += 1
+        return "{\"status\":\"done\"}"
+    }
+    if op == "list" {
+        BuilderPrint(*out, "{\"status\":\"done\",\"records\":[{\"id\":\"ffffffffffffffffffffffffffffffff\",\"played_ms\":0,\"replays\":%}]}", other_replays)
+        return Text(out)
+    }
+    if op == "get" { return "{\"status\":\"missing\"}" }
+    if op == "put" { return "{\"status\":\"done\"}" }
+    return ""
+}
+
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: %\n", message); failures += 1 }
+}
+now: s64 = 100000;
+// Frames pass: claims answer, toasts appear and the plan syncs.
+Frames :: (count: s32) {
+    for frame: 1..count {
+        now += 11000
+        Rewards.Pump(now)
+    }
+}
+SignIn :: (account: string) {
+    owner = account; records_account = account
+    Progress.poll_at = 0
+    unused Progress.Pump(now)
+    Rewards.Load()
+}
+ClaimDay :: (day: s64) -> bool {
+    Rewards.test_day = day
+    claimed := Rewards.Claim()
+    Frames(3)
+    return claimed
+}
+
+#program_export
+main :: () -> s32 {
+    unused RemoveTree("build/rewards-test-data")
+    unused File.CreateDirectory("build/rewards-test-data")
+    Expect(Custom.CustomSetRoot("build/rewards-test-data/"), "private records")
+    owner = ""; records_account = ""
+    Progress.Load()
+    unused Progress.Pump(now)
+    Rewards.Load()
+    Expect(Rewards.Coins() == 0 && Rewards.Day() == 0, "a new guest has no coins and no claimed days")
+    // A failed durable save must not consume today's claim or coin balance.
+    Expect(File.CreateDirectory("build/rewards-test-data/rewards.dat"), "block only the private reward record")
+    Rewards.test_day = 19999
+    Expect(!Rewards.Claim() && Rewards.Day() == 0 && Rewards.ClaimReady(), "a failed save keeps the daily reward claimable")
+    unused RemoveTree("build/rewards-test-data/rewards.dat")
+
+    // Levels: ten for a first clear, two for a replay, once per attempt.
+    Frames(1)
+    serial := Rewards.toast_serial
+    unused Progress.Begin(0, 3, 0)
+    Expect(File.CreateDirectory("build/rewards-test-data/completed.dat"), "block only the private completion record")
+    Progress.Complete(0)
+    Frames(1)
+    Expect(Rewards.Coins() == 0 && Rewards.toast_serial == serial, "an unsaved first clear never advertises coins")
+    unused RemoveTree("build/rewards-test-data/completed.dat")
+    Progress.poll_at = 0; unused Progress.Pump(now)
+    Frames(1)
+    Expect(Rewards.Coins() == 10 && Rewards.toast_serial == serial + 1 && Rewards.toast_coins == 10, "a first clear shows and earns ten coins")
+    Progress.Complete(0)
+    Frames(1)
+    Expect(Rewards.Coins() == 10 && Rewards.toast_serial == serial + 1, "the same attempt is rewarded once")
+    unused Progress.Begin(0, 3, 0)
+    Expect(File.CreateDirectory("build/rewards-test-data/replays.dat"), "block only the private replay record")
+    Progress.Complete(0)
+    Frames(1)
+    Expect(Rewards.Coins() == 10 && Progress.replays == 0, "an unsaved replay never advertises coins")
+    unused RemoveTree("build/rewards-test-data/replays.dat")
+    Progress.poll_at = 0; unused Progress.Pump(now)
+    Frames(1)
+    Expect(Rewards.Coins() == 12 && Rewards.toast_coins == 2 && Progress.replays == 1, "a replay earns two coins")
+    Progress.loaded = false; Progress.replays = 0
+    Progress.Load()
+    Expect(Progress.replays == 1 && Rewards.Coins() == 12, "replays survive a restart")
+
+    // The plan: one claim per UTC day; a missed day keeps the plan going.
+    Rewards.test_day = 20000
+    Expect(Rewards.ClaimReady() && ClaimDay(20000), "claim the first day")
+    Expect(Rewards.Day() == 1 && Rewards.Coins() == 32 && Rewards.toast_coins == 20, "day one gives twenty coins")
+    Expect(!Rewards.ClaimReady() && !Rewards.Claim(), "a day is claimed once")
+    Expect(ClaimDay(20001) && ClaimDay(20004), "a missed day does not reset the plan")
+    Expect(Rewards.Day() == 3 && Rewards.Coins() == 32 + 25 + 30, "days two and three give their coins")
+    Rewards.test_day = 20003
+    Expect(!Rewards.ClaimReady(), "an earlier clock cannot claim again")
+    Expect(ClaimDay(20005) && ClaimDay(20006), "claim days four and five")
+    Expect(Rewards.DayDew(5) == 1 && Rewards.DewState(5) == 3 && Rewards.DayCoins(5) == 50, "a guest gets coins on a Dew day and is asked to sign in")
+    Expect(Rewards.Coins() == 32 + 25 + 30 + 35 + 50, "guest Dew day coins")
+    Expect(claims == 0, "a guest never claims Dew")
+    Expect(!Rewards.Owns(11) && !Wardrobe.Available(11), "the day-seven skin waits for day seven")
+    Expect(ClaimDay(20007) && ClaimDay(20008), "claim days six and seven")
+    Expect(Rewards.Owns(11) && Wardrobe.Available(11) && Rewards.DaySkin(7) == 11 && Rewards.DayCoins(7) == 0, "day seven gives Mushroom")
+    coins := Rewards.Coins()
+    Expect(coins == 32 + 25 + 30 + 35 + 50 + 40, "the gift skin day gives no coins")
+    Expect(File.RemoveFile("build/rewards-test-data/rewards.dat") && File.CreateDirectory("build/rewards-test-data/rewards.dat"), "block a private purchase save")
+    Expect(!Rewards.Buy(9) && Rewards.Coins() == coins && !Rewards.Owns(9), "a failed purchase save never charges coins")
+    unused RemoveTree("build/rewards-test-data/rewards.dat")
+    Expect(Rewards.Save(), "restore the test's reward record")
+
+    // Coin skins: bought once, owned at once, never charged twice.
+    Expect(!Rewards.Buy(12) && !Rewards.Buy(11) && !Rewards.Buy(4), "Aurora, owned and non-coin skins cannot be bought")
+    Expect(Rewards.Buy(9) && Rewards.Coins() == coins - 120 && Wardrobe.Available(9), "Moss costs 120 coins")
+    Expect(!Rewards.Buy(9) && Rewards.Coins() == coins - 120, "an owned skin is never bought twice")
+    Expect(!Rewards.Buy(10), "River needs 240 coins")
+    Wardrobe.Select(9)
+    Wardrobe.Reset()
+    Expect(Wardrobe.skin == 9 && Wardrobe.Available(9) && Rewards.Day() == 7 && Rewards.Coins() == coins - 120, "coin skins, the plan and the chosen skin survive a restart")
+
+    // A signed-in account starts its own plan; the node grants Dew days.
+    SignIn(alice)
+    Expect(Rewards.Day() == 0 && Rewards.Coins() == 0 && !Rewards.Owns(9) && !Rewards.Owns(11), "an account keeps its own plan, coins and skins")
+    Expect(ClaimDay(20010), "an account claims its first day")
+    Expect(claims == 1 && checkin_count[0] == 1 && credits == 0, "every signed-in claim checks in with the node")
+    Expect(Rewards.DewState(5) == 0, "the first Dew day is still ahead")
+    for day: cast(s64)20011..20014 { Expect(ClaimDay(day), "claim a day") }
+    Expect(Rewards.Day() == 5 && checkin_count[0] == 5 && credits == 1 && Rewards.DewState(5) == 2, "the node credits day five once it has counted five days")
+    Expect(Rewards.toast_dew == 1 && Rewards.DayCoins(5) == 0, "the account sees its Dew instead of coins")
+    Expect(Rewards.Coins() == 20 + 25 + 30 + 35, "an account's Dew day gives no coins")
+    claims_before := claims
+    Frames(5)
+    Expect(claims == claims_before, "no claim runs without a new day")
+    // A credit another device already received is not shown again.
+    Rewards.dew_done = 0; Rewards.checkin = true; Rewards.claim_at = 0
+    serial = Rewards.toast_serial
+    Frames(3)
+    Expect(credits == 1 && Rewards.DewState(5) == 2 && Rewards.toast_serial == serial, "a repeated Dew claim credits nothing")
+    Expect(plan_owner == alice && plan_puts > 0, "the account's plan syncs")
+    {
+        document := TextUntilNul(plan[:])
+        stored := ReadNumber(document, FieldAt(document, 0, "days"))
+        dew := ReadNumber(document, FieldAt(document, 0, "dew"))
+        Expect(stored.valid && stored.value == 5.0 && dew.valid && dew.value == 1.0, "the synced plan holds days and credited Dew")
+    }
+
+    // Offline days are counted by the node only when it is reached: the Dew
+    // waits as "collecting" until the node agrees.
+    SignIn(bob)
+    for day: cast(s64)20020..20024 {
+        records_account = bob
+        Rewards.test_day = day
+        Expect(Rewards.Claim(), "an offline claim")
+    }
+    Expect(Rewards.Day() == 5 && Rewards.DewState(5) == 1, "day five Dew is collecting")
+    Frames(3)
+    Expect(checkin_count[1] == 1 && credits == 1 && Rewards.DewState(5) == 1, "the node counted only the day it was reached")
+
+    // Another device's purchases and claims merge; nothing is lost.
+    SignIn(alice)
+    Expect(Rewards.Day() == 5, "alice's plan reloads")
+    unused CopyCString("{\"days\":9,\"last\":20030,\"skins\":1024,\"dew\":1}", plan[:])
+    plan_owner = alice
+    Rewards.poll_at = 0
+    Frames(1)
+    Expect(Rewards.Day() == 9 && Rewards.Owns(10) && Rewards.Owns(11), "a purchase and claims from another device arrive")
+    Rewards.test_day = 20030
+    Expect(!Rewards.ClaimReady(), "a day claimed on another device is not claimed again")
+    other_replays = 5
+    Wardrobe.poll_at = 0
+    Wardrobe.Pump(now, false)
+    Expect(Rewards.other_replays == 5, "replays on other devices count")
+    // A switched account never receives the previous account's plan.
+    records_account = bob
+    puts := plan_puts
+    Rewards.dirty = true; Rewards.poll_at = 0
+    Frames(2)
+    Expect(plan_puts == puts && plan_owner == alice, "a plan is never written to another account")
+
+    // The full plan: day 30 gives Aurora; later days give coins only.
+    records_account = alice
+    day := Rewards.Day()
+    test_day: s64 = 20031
+    while day < 29 { Expect(ClaimDay(test_day), "claim the rest of the plan"); test_day += 1; day += 1 }
+    Expect(!Rewards.Owns(12) && Rewards.DaySkin(30) == 12, "Aurora waits for day thirty")
+    Expect(ClaimDay(test_day) && Rewards.Owns(12) && Rewards.Day() == 30, "day thirty gives Aurora")
+    Expect(credits == 5 && credited[0] == 31, "every Dew day is credited once by the node")
+    Expect(Rewards.DayCoins(35) == 50 && Rewards.DayCoins(37) == 100 && Rewards.DayCoins(60) == 100 && Rewards.DayDew(35) == 0, "later plans give coins on Dew and skin days")
+    total: s32 = 0
+    for plan_day: cast(s32)1..30 { total += Rewards.PlanCoins(plan_day) }
+    Expect(total == 1130, "the first plan gives 1130 coins")
+    print("Rewards local test failures: %\n", failures)
+    return failures
+}

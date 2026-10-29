@@ -67,11 +67,24 @@ Input :: #import "kryon/input_protocol";
     ScrollDevice :: #import "kryon/scroll_device";
     TreeInput :: #import "kryon/tree_input";
 }
+#if !#defined(WURM_PORTABLE) && !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) {
+    DesktopInput :: #import "kryon/Desktop";
+}
 #import "std/number_text"
 #import "std/text_buffer"
 #import, file "game.zi";
 #import, file "original_levels.zi";
 Custom :: #import, file "custom_levels.zi";
+Local :: #import, file "multiplayer.zi";
+Rewards :: #import, file "rewards.zi";
+
+MODE_LOCAL :: 12;
+MODE_REWARDS :: 13;
+local_round: Local.Round;
+local_players: s32 = 2;
+daily_scroll: s32;
+reward_serial: s32;
+reward_until: s64;
 
 #if #defined(WURM_PORTABLE) {
     ART_MEADOW :: "assets/wurm/art/campaign-meadow.png";
@@ -86,6 +99,9 @@ Custom :: #import, file "custom_levels.zi";
     ART_PREVIEWS :: "assets/wurm/art/campaign-previews/";
     ART_GROUND :: "assets/wurm/art/ground-meadow.png";
     ART_WATER :: "assets/wurm/art/water-field.png";
+    ART_SKINS :: "assets/wurm/art/skins.png";
+    ART_SPECIAL_SKINS :: "assets/wurm/art/special-skins.png";
+    ART_REWARD_SKINS :: "assets/wurm/art/reward-skins.png";
 } else {
     ART_MEADOW :: "assets/art/campaign-meadow.png";
     ART_LEAFWOOD :: "assets/art/campaign-leafwood.png";
@@ -99,6 +115,9 @@ Custom :: #import, file "custom_levels.zi";
     ART_PREVIEWS :: "assets/art/campaign-previews/";
     ART_GROUND :: "assets/art/ground-meadow.png";
     ART_WATER :: "assets/art/water-field.png";
+    ART_SKINS :: "assets/art/skins.png";
+    ART_SPECIAL_SKINS :: "assets/art/special-skins.png";
+    ART_REWARD_SKINS :: "assets/art/reward-skins.png";
 }
 
 PLAY_STEERING_KEY :: 100000;
@@ -263,7 +282,7 @@ PreferencesPump :: (now: s64) {
         Audio.SetVolume(cast(s32)gain.value)
     }
     chosen := ReadNumber(reply, FieldAt(reply, document, "skin"))
-    if chosen.valid && chosen.value >= 0.0 && chosen.value <= 8.0 && chosen.value == cast(float64)cast(s32)chosen.value &&
+    if chosen.valid && chosen.value >= 0.0 && chosen.value <= 12.0 && chosen.value == cast(float64)cast(s32)chosen.value &&
     Wardrobe.Available(cast(s32)chosen.value) {
         Wardrobe.skin = cast(s32)chosen.value
         Wardrobe.Save()
@@ -323,6 +342,8 @@ DrawSoundPopup :: (session: Session, hud: Rectangle, trigger: Rectangle) {
 dew_text: [32]u8;
 skin_price_text: [64]u8;
 SkinPriceText :: (id: s32) -> string {
+    coin_price := Rewards.CoinPrice(id)
+    if coin_price > 0 { return CoinText(coin_price) }
     digits: [32]u8
     if !DewFormat(ShopModel.GameShopPrice(id), DewUnits, digits[:]) { return "" }
     at := CopyInto(skin_price_text[:], 0, TextUntilNul(digits[:]))
@@ -363,6 +384,18 @@ TitleActions :: (session: Session, area: Rectangle) {
     if Button(session, ButtonProps.{.key = 28003, .bounds = Rectangle.{right - 44.0, top, 44.0, 44.0},
             .label = Locale.Text("Settings"), .icon_only = true, .icon_shape = "S1.8rr:M4 6H20M4 12H20M4 18H20M8 3V9M16 9V15M10 15V21",
             .class_name = 11}) != 0 { game.mode = MODE_SETTINGS }
+    auxiliary_width := (area.width - 36.0) / 2.0
+    if auxiliary_width > 164.0 { auxiliary_width = 164.0 }
+    if Button(session, ButtonProps.{.key = 28005,
+            .bounds = Rectangle.{area.x + 12.0, top + 54.0, auxiliary_width, 40.0},
+            .label = Locale.Text("Daily rewards"), .class_name = 11}) != 0 { game.mode = MODE_REWARDS }
+    #if !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) && !#defined(WURM_PORTABLE) {
+        if Button(session, ButtonProps.{.key = 812,
+                .bounds = Rectangle.{area.x + area.width - 12.0 - auxiliary_width, top + 54.0, auxiliary_width, 40.0},
+                .label = Locale.Text("Local multiplayer"), .pill = true, .class_name = 11}) != 0 {
+            local_round.phase = Local.SETUP; game.mode = MODE_LOCAL
+        }
+    }
 }
 PageHeading :: (session: Session, area: Rectangle, title: string) {
     unused Box(session, BoxProps.{.key = 28100, .bounds = area, .fill = Appearance.Canvas()})
@@ -377,7 +410,7 @@ DrawSettings :: (session: Session, area: Rectangle) {
     if width > 540.0 { width = 540.0 }
     scroller := Scroll(session, ScrollProps.{.key = 28200,
         .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + 76.0, width, area.height - 88.0},
-        .content_height = 370, .scroll_offset = settings_scroll})
+        .content_height = 508, .scroll_offset = settings_scroll})
     settings_scroll = scroller.scroll_offset
     if !scroller.opened { return }
     x := scroller.content.x; y := scroller.content.y; width = scroller.content.width
@@ -385,15 +418,31 @@ DrawSettings :: (session: Session, area: Rectangle) {
             .label = Locale.Text("Appearance"), .class_name = 11}) != 0 { Account.OpenAppearance() }
     GameText(session, 28220, "Controls", Rectangle.{x, y + 150.0, width, 28.0}, 20)
     half := (width - 8.0) / 2.0
-    if Button(session, ButtonProps.{.key = 28221, .bounds = Rectangle.{x, y + 188.0, half, 52.0},
+    for choice: 0..1 {
+        preview := Rectangle.{x + cast(float32)choice * (half + 8.0), y + 186.0, half, 116.0}
+        unused Box(session, BoxProps.{.key = 28250 + cast(u64)choice, .bounds = preview,
+            .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 12.0})
+        side: float32 = 88.0
+        square := Rectangle.{preview.x + (preview.width - side) / 2.0, preview.y + 10.0, side, side}
+        if choice == 0 {
+            Character(session, 28260, Rectangle.{square.x + 4.0, square.y + 18.0, 46.0, 46.0}, Wardrobe.skin, true)
+            SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{square.x + 34.0, square.y + 32.0, 54.0, 54.0},
+                .shape = FingerSwipe.Shape, .color = Appearance.TextColor()})
+        } else {
+            pad := DirectionPad(session, DirectionPadProps.{.key = 28261, .bounds = square,
+                .label = Locale.Text("Try the direction pad"), .now = cast(float64)Timer.MonotonicMilliseconds() / 1000.0})
+            if pad.step { unused Controls.SetPad(true); PreferencesChanged() }
+        }
+    }
+    if Button(session, ButtonProps.{.key = 28221, .bounds = Rectangle.{x, y + 310.0, half, 52.0},
             .label = Locale.Text("Swipe"), .selected = !Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(false); PreferencesChanged() }
-    if Button(session, ButtonProps.{.key = 28222, .bounds = Rectangle.{x + half + 8.0, y + 188.0, half, 52.0},
+    if Button(session, ButtonProps.{.key = 28222, .bounds = Rectangle.{x + half + 8.0, y + 310.0, half, 52.0},
             .label = Locale.Text("Direction pad"), .selected = Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(true); PreferencesChanged() }
-    GameText(session, 28230, "Sound", Rectangle.{x, y + 270.0, width - 104.0, 32.0}, 20)
-    if Button(session, ButtonProps.{.key = 28231, .bounds = Rectangle.{x + width - 100.0, y + 260.0, 100.0, 52.0},
+    GameText(session, 28230, "Sound", Rectangle.{x, y + 402.0, width - 104.0, 32.0}, 20)
+    if Button(session, ButtonProps.{.key = 28231, .bounds = Rectangle.{x + width - 100.0, y + 392.0, 100.0, 52.0},
             .label = Locale.Text(ifx Audio.muted then "Off" else "On"), .selected = !Audio.muted, .class_name = 11}) != 0 { ToggleSound() }
-    GameText(session, 28240, "Version", Rectangle.{x, y + 332.0, width - 104.0, 24.0}, 14, true)
-    GameText(session, 28241, Version.AppVersion, Rectangle.{x + width - 100.0, y + 332.0, 100.0, 24.0}, 14, true)
+    GameText(session, 28240, "Version", Rectangle.{x, y + 470.0, width - 104.0, 24.0}, 14, true)
+    GameText(session, 28241, Version.AppVersion, Rectangle.{x + width - 100.0, y + 470.0, 100.0, 24.0}, 14, true)
     unused End(session)
 }
 
@@ -406,19 +455,22 @@ SkinName :: (id: s32) -> string {
     if id == 6 { return "Explorer" }
     if id == 7 { return "Moon dragon" }
     if id == 8 { return "Winter cheer" }
+    if id == 9 { return "Moss" }
+    if id == 10 { return "River" }
+    if id == 11 { return "Mushroom" }
+    if id == 12 { return "Aurora" }
     return "Apfelwurm"
 }
 CharacterPreview :: (session: Session, key: u64, bounds: Rectangle, id: s32) {
     for segment: 0..2 {
-        painted := id != 0
-        size := (ifx painted then 27.0 else 21.0) + cast(float32)segment * 4.0
-        x := bounds.x + cast(float32)segment * (ifx painted then 12.0 else 16.0)
+        size := 21.0 + cast(float32)segment * 2.0
+        x := bounds.x + cast(float32)segment * 20.0
         y := bounds.y + 22.0 - cast(float32)segment * 5.0
         Character(session, key + cast(u64)segment * 8, Rectangle.{x, y, size, size}, id, false)
     }
-    Character(session, key + 24, Rectangle.{bounds.x + 38.0, bounds.y + 1.0, 46.0, 46.0}, id, true, 2)
+    Character(session, key + 24, Rectangle.{bounds.x + 58.0, bounds.y + 2.0, 38.0, 38.0}, id, true, 2)
 }
-Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool, direction: s32 = 2, alpha: u8 = 255) {
+Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool, direction: s32 = 2, alpha: u8 = 255, clip: Rectangle = .{}) {
     if id == 0 {
         column := ifx head then direction else 4
         Picture(session, key, Sheet(0), bounds,
@@ -428,14 +480,18 @@ Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool
     // Every other skin is painted: a head facing right and a round body
     // segment. Skins 1-6 share skins.png in 180px cells, one row each; the
     // two specials keep their own sheet.
-    path := "assets/art/skins.png"
+    path := ART_SKINS
     source := Rectangle.{ifx head then 0.0 else 180.0, cast(float32)(id - 1) * 180.0, 180.0, 180.0}
+    if id >= 9 {
+        path = ART_REWARD_SKINS
+        source = Rectangle.{ifx head then 0.0 else 256.0, cast(float32)(id - 9) * 256.0, 256.0, 256.0}
+    }
     if id == 7 || id == 8 {
         column := ifx id == 7 then 0 else 2
         if !head { column += 1 }
-        crops: [4]Rectangle = .[Rectangle.{47.0, 81.0, 496.0, 627.0}, Rectangle.{543.0, 15.0, 543.0, 709.0},
-            Rectangle.{1086.0, 87.0, 524.0, 617.0}, Rectangle.{1638.0, 6.0, 498.0, 718.0}]
-        path = "assets/art/special-skins.png"
+        crops: [4]Rectangle = .[Rectangle.{79.0, 87.0, 464.0, 491.0}, Rectangle.{543.0, 155.0, 497.0, 429.0},
+            Rectangle.{1086.0, 105.0, 520.0, 534.0}, Rectangle.{1696.0, 182.0, 410.0, 405.0}]
+        path = ART_SPECIAL_SKINS
         source = crops[column]
     }
     height := bounds.height
@@ -453,7 +509,7 @@ Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool
         corners[corner] = Vector2.{cx + dx, cy + dy}
     }
     unused Image(session, ImageProps.{.key = key, .asset_path = path,
-        .bounds = bounds, .source = source, .mesh = ImageMesh.{2, 2, corners[:]},
+        .bounds = ifx clip.width > 0.0 then clip else bounds, .source = source, .mesh = ImageMesh.{2, 2, corners[:]},
         .tint = cast(u32)0xffffff00 | cast(u32)alpha, .smooth = true, .alt_text = Locale.Text(SkinName(id))})
 }
 shop_scroll: s32;
@@ -470,12 +526,16 @@ DrawShop :: (session: Session, area: Rectangle) {
         price := SkinPriceText(id)
         GameText(session, 28312, price, Rectangle.{x, y + 106.0, width, 24.0}, 18, false, true)
         pending := TextUntilNul(Wardrobe.status[:]) == "pending"
-        signin := Progress.owner[0] == 0 || TextUntilNul(Wardrobe.status[:]) == "signin"
+        coin_purchase := Rewards.CoinPrice(id) > 0
+        signin := !coin_purchase && (Progress.owner[0] == 0 || TextUntilNul(Wardrobe.status[:]) == "signin")
         if Wardrobe.Available(id) { buy_skin = 0; Wardrobe.Select(id); PreferencesChanged(); return }
         if Button(session, ButtonProps.{.key = 28313, .bounds = Rectangle.{x, y + 150.0, width, 48.0},
                 .label = Locale.Text(ifx signin then "Sign in" else ifx pending then "Please wait…" else "Confirm purchase"),
-                .disabled = pending && !signin, .class_name = 10}) != 0 {
+                .disabled = (pending && !signin && !coin_purchase) || (coin_purchase && Rewards.Coins() < Rewards.CoinPrice(id)), .class_name = 10}) != 0 {
             if signin { Account.OpenProfile() }
+            else if coin_purchase {
+                if Rewards.Buy(id) { buy_skin = 0; Wardrobe.Select(id); PreferencesChanged() }
+            }
             else {
                 product := ShopModel.GameShopProduct(id)
                 unused Account.Service("entity.game-shop", product)
@@ -488,10 +548,13 @@ DrawShop :: (session: Session, area: Rectangle) {
         Wardrobe.poll_at = 0
         return
     }
-    grid := Rectangle.{area.x + 16.0, area.y + 76.0, area.width - 32.0, area.height - 88.0}
+    GameText(session, 28330, CoinText(Rewards.Coins()), Rectangle.{area.x + 16.0, area.y + 84.0, area.width - 192.0, 28.0}, 18)
+    if Button(session, ButtonProps.{.key = 28331, .bounds = Rectangle.{area.x + area.width - 168.0, area.y + 76.0, 152.0, 44.0},
+            .label = Locale.Text("Daily rewards"), .class_name = 11}) != 0 { game.mode = MODE_REWARDS; return }
+    grid := Rectangle.{area.x + 16.0, area.y + 136.0, area.width - 32.0, area.height - 148.0}
     columns: s32 = ifx grid.width >= 650.0 then 3 else 2
     width := (grid.width - 16.0 - cast(float32)(columns - 1) * 12.0) / cast(float32)columns
-    skin_count: s32 = ifx Wardrobe.christmas_claimable || Wardrobe.Available(8) then 9 else ifx Wardrobe.special_supported || Wardrobe.Available(7) then 8 else 7
+    skin_count: s32 = 13
     rows := (skin_count + columns - 1) / columns
     scroller := Scroll(session, ScrollProps.{.key = 28400, .bounds = grid, .content_height = rows * 196, .scroll_offset = shop_scroll})
     shop_scroll = scroller.scroll_offset
@@ -501,19 +564,19 @@ DrawShop :: (session: Session, area: Rectangle) {
         y := scroller.content.y + cast(float32)(id / columns) * 196.0
         key := cast(u64)28500 + cast(u64)id * 100
         unused Box(session, BoxProps.{.key = key, .bounds = Rectangle.{x, y, width, 184.0}, .fill = Appearance.Surface(), .radius = 16.0})
-        CharacterPreview(session, key + 20, Rectangle.{x + width / 2.0 - 42.0, y + 10.0, 84.0, 50.0}, cast(s32)id)
+        CharacterPreview(session, key + 20, Rectangle.{x + width / 2.0 - 48.0, y + 10.0, 96.0, 50.0}, cast(s32)id)
         GameText(session, key + 8, SkinName(cast(s32)id), Rectangle.{x + 4.0, y + 68.0, width - 8.0, 24.0}, 17, false, true)
         available := Wardrobe.Available(cast(s32)id)
         if !available {
-            detail := ifx id <= 3 || id == 7 then SkinPriceText(cast(s32)id) else ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Reach level 40" else ifx id == 8 then "Free · December 2026" else "Visit waozi.xyz"
+            detail := ifx id <= 3 || id == 7 || Rewards.CoinPrice(cast(s32)id) > 0 then SkinPriceText(cast(s32)id) else ifx id == 12 then "Day 30 reward" else ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Reach level 40" else ifx id == 8 then "Free · December 2026" else "Visit waozi.xyz"
             GameText(session, key + 9, detail, Rectangle.{x + 4.0, y + 99.0, width - 8.0, 22.0}, 12, true, true)
         }
-        label := ifx Wardrobe.skin == id then "Wearing" else ifx available then "Wear" else ifx id <= 3 || id == 7 then "Buy" else ifx id == 8 then "Claim" else ifx id == 6 then "Visit" else "Locked"
+        label := ifx Wardrobe.skin == id then "Wearing" else ifx available then "Wear" else ifx id <= 3 || id == 7 || Rewards.CoinPrice(cast(s32)id) > 0 then "Buy" else ifx id == 8 && Wardrobe.christmas_claimable then "Claim" else ifx id == 6 then "Visit" else "Locked"
         if Button(session, ButtonProps.{.key = key + 10, .bounds = Rectangle.{x + 10.0, y + 132.0, width - 20.0, 42.0},
-                .label = Locale.Text(label), .disabled = Wardrobe.skin == id || (!available && (id == 4 || id == 5)),
+                .label = Locale.Text(label), .disabled = Wardrobe.skin == id || (!available && (id == 4 || id == 5 || id == 12 || (id == 8 && !Wardrobe.christmas_claimable))),
                 .selected = Wardrobe.skin == id, .class_name = 11}) != 0 {
             if available { Wardrobe.Select(cast(s32)id); PreferencesChanged() }
-            else if id <= 3 || id == 7 { buy_skin = cast(s32)id }
+            else if id <= 3 || id == 7 || Rewards.CoinPrice(cast(s32)id) > 0 { buy_skin = cast(s32)id }
             else if id == 8 { unused Account.Service("entity.game-shop", "wurm.christmas-2026"); Wardrobe.poll_at = 0 }
             else if id == 6 && Account.VisitWebsite() { Wardrobe.Visit(); Wardrobe.Select(6); PreferencesChanged() }
         }
@@ -635,7 +698,7 @@ Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source
         (clipped_bottom - clipped_top) / height * source.height}
     bounds := Rectangle.{clipped_left, clipped_top, clipped_right - clipped_left, clipped_bottom - clipped_top}
     if Wardrobe.skin > 0 && source.y == 48.0 && key >= 2000 && key < 3000 {
-        Character(session, key * 8 + 300000, bounds, Wardrobe.skin, key == 2000, game.direction, alpha)
+        Character(session, key * 8 + 300000, Rectangle.{left, top, width, height}, Wardrobe.skin, key == 2000, game.direction, alpha, bounds)
     } else { Picture(session, key, sheet, bounds, fragment, alpha) }
 }
 
@@ -862,11 +925,13 @@ DrawBoard :: (session: Session, stage: Rectangle) {
         Sprite(session, 1400, stage, game.apple, Rectangle.{0.0, 112.0, 16.0, 16.0}, sprites)
         AppleFlash(session, stage)
     }
-    // Follow the full movement history with overlapping segments. Drawing
-    // tail first leaves the larger face cleanly above the neck.
+    // Keep individual segments readable at the same spacing as the original.
+    // Painted art fills its cell, so it needs slimmer bounds than the sprite.
     fade: float32 = ifx game.death_ticks > 0 then cast(float32)game.death_ticks / 20.0 else 1.0
     alpha := cast(u8)(255.0 * fade * fade * (3.0 - 2.0 * fade))
-    draw_step: s32 = ifx Wardrobe.skin != 0 then 2 else WORM_DRAW_STEP
+    draw_step: s32 = WORM_DRAW_STEP
+    body_size: float32 = ifx Wardrobe.skin != 0 then 12.0 else WORM_BODY_SIZE
+    head_size: float32 = ifx Wardrobe.skin != 0 then 17.0 else WORM_HEAD_SIZE
     index := game.length - 1
     while index > 0 {
         column := 4
@@ -875,13 +940,13 @@ DrawBoard :: (session: Session, stage: Rectangle) {
         else if from_tail < 8 { column = 5 }
         if alpha > 0 {
             Sprite(session, 2000 + cast(u64)index, stage, game.worm[index],
-                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, WORM_BODY_SIZE, alpha)
+                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, body_size, alpha)
         }
         index -= draw_step
     }
     if game.length > 0 && alpha > 0 {
         Sprite(session, 2000, stage, game.worm[0],
-            Rectangle.{cast(float32)game.direction * 16.0, 48.0, 16.0, 16.0}, sprites, WORM_HEAD_SIZE, alpha)
+            Rectangle.{cast(float32)game.direction * 16.0, 48.0, 16.0, 16.0}, sprites, head_size, alpha)
     }
     for monster: 0..game.monster_count - 1 {
         creature := game.monsters[monster]
@@ -911,8 +976,8 @@ OpenStages :: () {
     game.mode = MODE_STAGES
 }
 
-// Play the selected layout from its own private override, authored board
-// or best guess. An explicit editor mode takes precedence over window shape.
+// Play the selected layout from its own private override, published board
+// or mirror. An explicit editor mode takes precedence over window shape.
 PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, layout: s32 = -1) {
     touch_steering.active = false
     recorded_level = -1
@@ -967,8 +1032,8 @@ OpenEditor :: (level: s32) {
     game.mode = MODE_EDITOR
 }
 
-// T switches independently saved layouts. An unsaved portrait starts from
-// a best guess; editing either layout never rotates changes into its sibling.
+// T switches independently saved layouts. A layout without its own record
+// starts as the mirror of the other; saving keeps it independent.
 EditorTurn :: () {
     EditorSave()
     if editor.save_failed { return }
@@ -1240,8 +1305,10 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     TextLine(session, 8210, "BRUSH", Rectangle.{panel.x + 56.0, panel.y + 34.0, 70.0, 18.0}, 13)
     brush_text := FormatInteger(cast(s64)editor.brush, brush_digits[:])
     TextLine(session, 8211, brush_text, Rectangle.{panel.x + 56.0, panel.y + 54.0, 40.0, 18.0}, 13)
-    if editor.turned && !Custom.HasCustomLevel(editor.level,true) && !Custom.HasAuthoredLevel(editor.level,true) && (!HasPortraitDesign(editor.level) || Custom.HasCustomLevel(editor.level)) {
-        TextLine(session,8224,"Best guess — edit and save",Rectangle.{panel.x + 8.0,panel.y + 80.0,232.0,20.0},12)
+    if Custom.IsMirroredLayout(editor.level,editor.turned) {
+        // A mirror that would lose a passage shows the fallback instead.
+        guessed := Custom.MirrorFallback(editor.level,editor.turned)
+        TextLine(session,8224,ifx guessed then "Best guess — edit and save" else "Mirrored — edit and save",Rectangle.{panel.x + 8.0,panel.y + 80.0,232.0,20.0},12)
     }
     blocked := LevelBlockages(editor.board[:])
     if blocked != 0 {
@@ -1299,8 +1366,206 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
             .label = Locale.Text("Title"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorExit() }
 }
 
+coin_text: [64]u8;
+CoinText :: (amount: s32) -> string {
+    digits: [21]u8
+    at := CopyInto(coin_text[:], 0, FormatInteger(cast(s64)amount, digits[:]))
+    at = CopyInto(coin_text[:], at, " ")
+    at = CopyInto(coin_text[:], at, Locale.Text("Coins"))
+    coin_text[at] = 0
+    return TextUntilNul(coin_text[:])
+}
+
+DrawDailyRewards :: (session: Session, area: Rectangle) {
+    PageHeading(session, area, "Daily rewards")
+    GameText(session, 29600, CoinText(Rewards.Coins()), Rectangle.{area.x + 16.0, area.y + 82.0, area.width - 32.0, 28.0}, 20)
+    ready := Rewards.ClaimReady()
+    if Button(session, ButtonProps.{.key = 29601,
+            .bounds = Rectangle.{area.x + 16.0, area.y + 122.0, area.width - 32.0, 44.0},
+            .label = Locale.Text(ifx ready then "Claim" else "Come back tomorrow"), .disabled = !ready,
+            .class_name = 10}) != 0 { unused Rewards.Claim() }
+    grid := Rectangle.{area.x + 12.0, area.y + 184.0, area.width - 24.0, area.height - 196.0}
+    columns: s32 = ifx area.width >= 650.0 then 6 else 5
+    width := (grid.width - cast(float32)(columns - 1) * 6.0 - 12.0) / cast(float32)columns
+    rows := (Rewards.DAILY_DAYS + columns - 1) / columns
+    scroll := Scroll(session, ScrollProps.{.key = 29602, .bounds = grid,
+        .content_height = rows * 108, .scroll_offset = daily_scroll})
+    daily_scroll = scroll.scroll_offset
+    if !scroll.opened { return }
+    for day: 1..Rewards.DAILY_DAYS {
+        id := cast(s32)day
+        key := cast(u64)(29700 + day * 10)
+        x := scroll.content.x + cast(float32)((day - 1) % columns) * (width + 6.0)
+        y := scroll.content.y + cast(float32)((day - 1) / columns) * 108.0
+        cycle_start := (ifx Rewards.Day() > 0 then (Rewards.Day() - 1) / Rewards.DAILY_DAYS else 0) * Rewards.DAILY_DAYS
+        absolute_day := cycle_start + id
+        claimed := absolute_day <= Rewards.Day()
+        unused Box(session, BoxProps.{.key = key, .bounds = Rectangle.{x, y, width, 100.0},
+            .fill = Appearance.Surface(), .border = ifx claimed then Color.{113,152,106,255} else Appearance.Border(), .radius = 10.0})
+        digits: [21]u8
+        GameText(session, key + 1, FormatInteger(day, digits[:]), Rectangle.{x + 2.0, y + 5.0, width - 4.0, 22.0}, 15, false, true)
+        skin := Rewards.DaySkin(absolute_day)
+        if skin > 0 {
+            Character(session, key + 2, Rectangle.{x + (width - 38.0) / 2.0, y + 29.0, 38.0, 38.0}, skin, true)
+            GameText(session, key + 3, SkinName(skin), Rectangle.{x + 2.0, y + 72.0, width - 4.0, 22.0}, 11, false, true)
+        } else {
+            dew := Rewards.DayDew(absolute_day)
+            amount := ifx dew > 0 then dew else Rewards.DayCoins(absolute_day)
+            GameText(session, key + 2, FormatInteger(cast(s64)amount, digits[:]), Rectangle.{x + 2.0, y + 34.0, width - 4.0, 28.0}, 22, false, true)
+            GameText(session, key + 3, ifx dew > 0 then "Dew" else "Coins", Rectangle.{x + 2.0, y + 70.0, width - 4.0, 22.0}, 12, true, true)
+            if dew > 0 {
+                status := Rewards.DewState(absolute_day)
+                if status == 3 || (claimed && status != 2) { GameText(session, key + 4, ifx status == 3 then "Sign in" else "Collecting…", Rectangle.{x + 2.0, y + 87.0, width - 4.0, 12.0}, 8, true, true) }
+            }
+        }
+    }
+    unused End(session)
+}
+
+LocalPlayerText :: (id: s32, output: []u8) -> string {
+    digits: [21]u8
+    at := CopyInto(output, 0, Locale.Text("Player"))
+    at = CopyInto(output, at, " ")
+    at = CopyInto(output, at, FormatInteger(cast(s64)(id + 1), digits[:]))
+    output[at] = 0
+    return TextUntilNul(output)
+}
+LocalControls :: (id: s32) -> string {
+    if id == 0 { return "Arrow keys" }
+    if id == 1 { return "W A S D" }
+    if id == 2 { return "I J K L" }
+    return "Numpad 8 4 5 6"
+}
+LocalColour :: (id: s32) -> u32 {
+    colours: [4]u32 = .[0xffffffff, 0xaaffddff, 0xaacfffff, 0xffaaccff]
+    return colours[id]
+}
+LocalKey :: (key: s32, now: s64) {
+    if key == 77 || key == 109 { ToggleSound(); return }
+    if key == Input.KeyEscape || key == 32 {
+        if local_round.phase == Local.PLAYING { local_round.phase = Local.PAUSED }
+        else if local_round.phase == Local.PAUSED { local_round.phase = Local.PLAYING; local_round.next_step = now + 44 }
+    } else { unused Local.Input(*local_round, key) }
+}
+DrawLocalPiece :: (session: Session, key: u64, stage: Rectangle, at: Point, id: s32, head: bool, direction: s32) {
+    scale := stage.width / 640.0
+    size: float32 = ifx head then (ifx id == 0 && Wardrobe.skin > 0 then 17.0 else 19.0) else 16.5
+    bounds := Rectangle.{stage.x + (cast(float32)at.x - size / 2.0) * scale,
+        stage.y + (cast(float32)at.y - size / 2.0) * scale, size * scale, size * scale}
+    if bounds.y < stage.y || bounds.y + bounds.height > stage.y + stage.height { return }
+    if id == 0 && Wardrobe.skin > 0 {
+        if !head { bounds.x += 2.25 * scale; bounds.y += 2.25 * scale; bounds.width = 12.0 * scale; bounds.height = bounds.width }
+        Character(session, key, bounds, Wardrobe.skin, head, direction)
+        return
+    }
+    source := Rectangle.{cast(float32)(ifx head then direction else 4) * 32.0, 96.0, 32.0, 32.0}
+    unused Image(session, ImageProps.{.key = key, .asset_path = Sheet(0), .bounds = bounds,
+        .source = source, .tint = LocalColour(id), .smooth = true, .alt_text = Locale.Text("Player")})
+}
+DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64) {
+    BoardSize(COLUMNS, ROWS)
+    unused Box(session, BoxProps.{.key = 31000, .bounds = area, .fill = Appearance.Canvas()})
+    if local_round.phase == Local.SETUP {
+        if key == Input.KeyEscape { OpenStages(); return }
+        PageHeading(session, area, "Local multiplayer")
+        CentreText(session, 31001, "Players", Rectangle.{area.x + 16.0, area.y + 82.0, area.width - 32.0, 30.0}, 20)
+        for count: 2..4 {
+            digits: [21]u8
+            x := area.x + area.width / 2.0 - 94.0 + cast(float32)(count - 2) * 64.0
+            if Button(session, ButtonProps.{.key = cast(u64)(31010 + count), .bounds = Rectangle.{x, area.y + 124.0, 60.0, 44.0},
+                    .label = FormatInteger(count, digits[:]), .selected = local_players == count}) != 0 { local_players = cast(s32)count }
+        }
+        for id: 0..local_players - 1 {
+            name: [48]u8
+            y := area.y + 188.0 + cast(float32)id * 36.0
+            GameText(session, cast(u64)(31020 + id), LocalPlayerText(cast(s32)id, name[:]), Rectangle.{area.x + 24.0, y, area.width / 2.0 - 24.0, 28.0}, 18)
+            GameText(session, cast(u64)(31030 + id), LocalControls(cast(s32)id), Rectangle.{area.x + area.width / 2.0, y, area.width / 2.0 - 24.0, 28.0}, 18)
+        }
+        CentreText(session, 31040, "Last worm wins. Everyone enters from the bottom.", Rectangle.{area.x + 16.0, area.y + area.height - 120.0, area.width - 32.0, 26.0}, 15)
+        if Button(session, ButtonProps.{.key = 31041,
+                .bounds = Rectangle.{area.x + (area.width - 240.0) / 2.0, area.y + area.height - 72.0, 240.0, 48.0},
+                .label = Locale.Text("Start round"), .class_name = 10}) != 0 || key == Input.KeyEnter {
+            unused Local.Start(*local_round, local_players, now, cast(u32)(now & 4294967295))
+        }
+        return
+    }
+    native_keys := false
+    first := key
+    #if !#defined(WURM_PORTABLE) && !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) {
+        next := DesktopInput.DesktopNextKey()
+        if next != 0 { native_keys = true; first = next }
+    }
+    LocalKey(first, now)
+    #if !#defined(WURM_PORTABLE) {
+        for pending: 0..31 {
+            next := KeyboardTake(session)
+            #if !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) {
+                if native_keys { next = DesktopInput.DesktopNextKey() }
+            }
+            if next == 0 { break }
+            LocalKey(next, now)
+        }
+    }
+    Local.Advance(*local_round, now)
+    header := Rectangle.{area.x, area.y, area.width, 72.0}
+    for id: 0..local_round.count - 1 {
+        name: [48]u8
+        width := (area.width - 100.0) / cast(float32)local_round.count
+        x := header.x + 8.0 + cast(float32)id * width
+        GameText(session, cast(u64)(31100 + id), LocalPlayerText(cast(s32)id, name[:]), Rectangle.{x, header.y + 6.0, width - 8.0, 24.0}, 16)
+        score: [21]u8
+        GameText(session, cast(u64)(31110 + id), ifx local_round.players[id].alive then FormatInteger(cast(s64)local_round.players[id].score, score[:]) else "Out",
+            Rectangle.{x, header.y + 34.0, width - 8.0, 24.0}, 16, !local_round.players[id].alive)
+    }
+    if Button(session, ButtonProps.{.key = 31120, .bounds = Rectangle.{area.x + area.width - 88.0, area.y + 14.0, 76.0, 42.0},
+            .label = Locale.Text("Pause"), .disabled = local_round.phase != Local.PLAYING}) != 0 {
+        local_round.phase = Local.PAUSED
+    }
+    stage := BoardIn(Rectangle.{area.x, area.y + 72.0, area.width, area.height - 72.0})
+    for y: 0..ROWS - 1 {
+        for x: 0..COLUMNS - 1 {
+            tile: s32 = ifx x == 0 || x == COLUMNS - 1 || y == 0 || y == ROWS - 1 then 20 else 0
+            if y == ROWS - 1 {
+                for id: 0..local_round.count - 1 {
+                    column := COLUMNS * (cast(s32)id + 1) / (local_round.count + 1)
+                    if x == column && local_round.players[id].worm[local_round.players[id].length - 1].y >= (ROWS - 1) * 16 { tile = 0 }
+                }
+            }
+            Tile(session, cast(u64)(31200 + y * COLUMNS + x), stage, cast(s32)x, cast(s32)y, tile, Sheet(0))
+        }
+    }
+    Sprite(session, 33000, stage, local_round.apple, Rectangle.{0.0,112.0,16.0,16.0}, Sheet(0))
+    for id: 0..local_round.count - 1 {
+        player := *local_round.players[id]
+        if !player.alive { continue }
+        index := player.length - 1
+        while index > 0 {
+            DrawLocalPiece(session, cast(u64)(34000 + id * 1100 + index), stage, player.worm[index], cast(s32)id, false, player.direction)
+            index -= 3
+        }
+        DrawLocalPiece(session, cast(u64)(34000 + id * 1100), stage, player.worm[0], cast(s32)id, true, player.direction)
+    }
+    if local_round.phase == Local.PAUSED || local_round.phase == Local.FINISHED {
+        panel := Rectangle.{area.x + (area.width - 300.0) / 2.0, area.y + (area.height - 236.0) / 2.0, 300.0, 236.0}
+        unused Box(session, BoxProps.{.key = 39000, .bounds = panel, .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 18.0})
+        title := ifx local_round.phase == Local.PAUSED then "Paused" else ifx local_round.winner < 0 then "Draw" else "Winner"
+        CentreText(session, 39001, title, Rectangle.{panel.x + 12.0, panel.y + 14.0, 276.0, 32.0}, 24)
+        if local_round.phase == Local.FINISHED && local_round.winner >= 0 {
+            name: [48]u8
+            CentreText(session, 39002, LocalPlayerText(local_round.winner, name[:]), Rectangle.{panel.x + 12.0, panel.y + 52.0, 276.0, 28.0}, 20)
+        }
+        if Button(session, ButtonProps.{.key = 39003, .bounds = Rectangle.{panel.x + 16.0, panel.y + 100.0, 268.0, 48.0},
+                .label = Locale.Text(ifx local_round.phase == Local.PAUSED then "Resume" else "Play again"), .class_name = 10}) != 0 {
+            if local_round.phase == Local.PAUSED { local_round.phase = Local.PLAYING; local_round.next_step = now + 44 }
+            else { unused Local.Start(*local_round, local_players, now, cast(u32)(now & 4294967295)) }
+        }
+        if Button(session, ButtonProps.{.key = 39004, .bounds = Rectangle.{panel.x + 16.0, panel.y + 164.0, 268.0, 48.0},
+                .label = Locale.Text("Back to title"), .class_name = 11}) != 0 { OpenStages() }
+    }
+}
+
 // Play starts a full run; Continue replays the furthest unlocked level.
-// Return 1 for Play, 2 for Continue and 3 for the level selector.
+// Return 1 for Play, 2 for Continue, 3 for levels, 4 for the editor.
 continue_label: [48]u8;
 DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = true) -> s32 {
     portrait := area.height > area.width
@@ -1323,10 +1588,17 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
     if !play_button { return 0 }
     Progress.Load()
     TitleActions(session, area)
+    footer_width := (area.width - 40.0) / 2.0
+    if footer_width > 164.0 { footer_width = 164.0 }
+    footer_x := area.x + (area.width - footer_width * 2.0 - 12.0) / 2.0
     if Button(session, ButtonProps.{.key = 810,
-            .bounds = Rectangle.{area.x + (area.width - 164.0) / 2.0, area.y + area.height - 56.0, 164.0, 40.0},
+            .bounds = Rectangle.{footer_x, area.y + area.height - 56.0, footer_width, 40.0},
             .label = Locale.Text("Choose level"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 76 || key == 108 { return 3 }
+    if Button(session, ButtonProps.{.key = 811,
+            .bounds = Rectangle.{footer_x + footer_width + 12.0, area.y + area.height - 56.0, footer_width, 40.0},
+            .label = Locale.Text("Level editor"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
+            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { return 4 }
     width := area.width - 48.0
     if width > 280.0 { width = 280.0 }
     if Progress.unlocked > 0 {
@@ -1399,13 +1671,6 @@ OpenLevels :: () {
     touch_steering.active = false
 }
 DrawLevels :: (session: Session, area: Rectangle, now: s64) {
-    #if !#defined(WURM_PORTABLE) {
-        // This game supplies its own frame loop on desktop. Feed Scroll's
-        // standard device from the same pointer and wheel as the board.
-        pointer := GamePointer(session)
-        ScrollDevice.BeginScrollFrame(session, Vector2.{pointer.x, pointer.y}, pointer.pressed,
-            pointer.down, pointer.released, TreeInput.PointerWheelTake(session, area), cast(float64)now / 1000.0)
-    }
     if Button(session, ButtonProps.{.key = 26001,
             .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 88.0, 48.0},
             .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenStages(); return }
@@ -1540,7 +1805,7 @@ DrawControls :: (session: Session, area: Rectangle, now: s64) {
 
 HandleInput :: (key: s32, now: s64) {
     if key == 77 || key == 109 { ToggleSound(); return }
-    if game.mode == MODE_SHOP || game.mode == MODE_SETTINGS {
+    if game.mode == MODE_SHOP || game.mode == MODE_SETTINGS || game.mode == MODE_REWARDS {
         if key == Input.KeyEscape { game.mode = MODE_STAGES; buy_skin = 0 }
         return
     }
@@ -1734,6 +1999,13 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         }
     }
     now := Timer.MonotonicMilliseconds()
+    #if !#defined(WURM_PORTABLE) {
+        // Every scrollable page shares the same input path, including the
+        // skin shop, calendar and settings on small windows and phones.
+        pointer := GamePointer(session)
+        ScrollDevice.BeginScrollFrame(session, Vector2.{pointer.x, pointer.y}, pointer.pressed,
+            pointer.down, pointer.released, TreeInput.PointerWheelTake(session, viewport), cast(float64)now / 1000.0)
+    }
     Account.Pump()
     Appearance.ApplyShared(Account.SharedTheme(), Account.SharedAccent(), Account.SharedMaterial(), Account.SystemDark())
     unused WidgetPaletteUse(session, Appearance.Palette())
@@ -1761,6 +2033,10 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     }
     PreferencesPump(now)
     Wardrobe.Pump(now, game.mode == MODE_PLAYING && !editor.playtest && game.death_ticks == 0 && game.transition_ticks == 0)
+    if reward_serial != Rewards.toast_serial {
+        reward_serial = Rewards.toast_serial
+        reward_until = now + 2500
+    }
     was_portrait := game_portrait
     game_portrait = viewport.height > viewport.width
     if !game.started {
@@ -1779,6 +2055,11 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     } else {
         key = KeyboardTake(session)
     }
+    if game.mode == MODE_LOCAL {
+        Audio.UpdateAudio(local_round.phase == Local.PLAYING || local_round.phase == Local.PAUSED, 0, 1, 0, 0)
+        DrawLocal(session, viewport, key, now)
+        return 0
+    }
     // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
     if sound_popup && key == Input.KeyEscape { sound_popup = false; key = 0 }
@@ -1796,7 +2077,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // green icon bar across the top with the board letterboxed below it, so
     // portrait and landscape both keep their proportions.
     showing_bar := game.mode != MODE_STAGES && game.mode != MODE_LEVELS &&
-        game.mode != MODE_SETTINGS && game.mode != MODE_SHOP &&
+        game.mode != MODE_SETTINGS && game.mode != MODE_SHOP && game.mode != MODE_REWARDS &&
         !(game.mode == MODE_CONTROLS && (controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS))
     bar_height: float32 = 0.0
     if showing_bar { bar_height = ifx viewport.width < 520.0 then 104.0 else 72.0 }
@@ -1859,11 +2140,15 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         action := DrawTitle(session, area, stage_key)
         if action == 3 { OpenLevels() }
+        else if action == 4 { editor.browsing = true; OpenEditor(game.level) }
+        else if action == 5 { local_round.phase = Local.SETUP; game.mode = MODE_LOCAL }
         else if action != 0 { Play(now, action == 2) }
     } else if game.mode == MODE_SHOP {
         DrawShop(session, viewport)
     } else if game.mode == MODE_SETTINGS {
         DrawSettings(session, viewport)
+    } else if game.mode == MODE_REWARDS {
+        DrawDailyRewards(session, viewport)
     } else if game.mode == MODE_LEVELS {
         DrawLevels(session, viewport, now)
     } else if game.mode == MODE_CONTROLS {
@@ -1891,5 +2176,13 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     else if game.mode == MODE_PAUSED { Overlay(session, viewport, "Paused", "Your worm is waiting.") }
     else if game.mode == MODE_DIED { Overlay(session, viewport, "Game over", "Another apple adventure?", game.score) }
     else if game.mode == MODE_VICTORY { Overlay(session, viewport, "You did it!", "You reached the mountain!", game.score) }
+    if now < reward_until && (Rewards.toast_coins > 0 || Rewards.toast_dew > 0) {
+        toast := Rectangle.{viewport.x + (viewport.width - 200.0) / 2.0, viewport.y + 116.0, 200.0, 44.0}
+        unused Box(session, BoxProps.{.key = 29990, .bounds = toast, .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 12.0})
+        text: Vec(u8)
+        if Rewards.toast_coins > 0 { BuilderPrint(*text, "+%", CoinText(Rewards.toast_coins)) }
+        else { BuilderPrint(*text, "+% Dew", Rewards.toast_dew) }
+        GameText(session, 29991, BuilderFinish(text), Rectangle.{toast.x + 8.0, toast.y + 8.0, 184.0, 28.0}, 20, false, true)
+    }
     return 0
 }

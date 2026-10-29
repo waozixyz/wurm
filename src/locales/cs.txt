@@ -165,3 +165,81 @@ Další úroveň
 ---
 [wurm_profile_stopped]
 Profil přestal fungovat. Zavři ho a otevři znovu.
+---
+[wurm_feature_0]
+Editor úrovní
+---
+[wurm_feature_1]
+Denní odměny
+---
+[wurm_feature_2]
+Mince
+---
+[wurm_feature_3]
+Odměna za 30. den
+---
+[wurm_feature_4]
+Vyzvedávání…
+---
+[wurm_feature_5]
+Mech
+---
+[wurm_feature_6]
+Řeka
+---
+[wurm_feature_7]
+Houba
+---
+[wurm_feature_8]
+Polární záře
+---
+[wurm_feature_9]
+Místní hra více hráčů
+---
+[wurm_feature_10]
+Hráči
+---
+[wurm_feature_11]
+Hráč
+---
+[wurm_feature_12]
+Šipky
+---
+[wurm_feature_13]
+Číselný blok 8 4 5 6
+---
+[wurm_feature_14]
+Poslední červ vyhrává. Všichni vstupují zdola.
+---
+[wurm_feature_15]
+Spustit kolo
+---
+[wurm_feature_16]
+Vyřazen
+---
+[wurm_feature_17]
+Pozastavit
+---
+[wurm_feature_18]
+Pozastaveno
+---
+[wurm_feature_19]
+Remíza
+---
+[wurm_feature_20]
+Vítěz
+---
+[wurm_feature_21]
+Pokračovat
+---
+[wurm_feature_22]
+Hrát znovu
+---
+[wurm_feature_23]
+Zpět na úvod
+---
+[wurm_feature_24]
+Vyzkoušet směrový ovladač
+---
+[wurm_feature_25]
+Vrať se zítra

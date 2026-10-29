@@ -165,3 +165,81 @@ Nächstes Level
 ---
 [wurm_profile_stopped]
 Das Profil funktioniert nicht mehr. Schließe es und öffne es erneut.
+---
+[wurm_feature_0]
+Leveleditor
+---
+[wurm_feature_1]
+Tägliche Belohnungen
+---
+[wurm_feature_2]
+Münzen
+---
+[wurm_feature_3]
+Belohnung an Tag 30
+---
+[wurm_feature_4]
+Wird abgeholt…
+---
+[wurm_feature_5]
+Moos
+---
+[wurm_feature_6]
+Fluss
+---
+[wurm_feature_7]
+Pilz
+---
+[wurm_feature_8]
+Polarlicht
+---
+[wurm_feature_9]
+Lokaler Mehrspieler
+---
+[wurm_feature_10]
+Spieler
+---
+[wurm_feature_11]
+Spieler
+---
+[wurm_feature_12]
+Pfeiltasten
+---
+[wurm_feature_13]
+Ziffernblock 8 4 5 6
+---
+[wurm_feature_14]
+Der letzte Wurm gewinnt. Alle starten unten.
+---
+[wurm_feature_15]
+Runde starten
+---
+[wurm_feature_16]
+Ausgeschieden
+---
+[wurm_feature_17]
+Pause
+---
+[wurm_feature_18]
+Pausiert
+---
+[wurm_feature_19]
+Unentschieden
+---
+[wurm_feature_20]
+Gewinner
+---
+[wurm_feature_21]
+Fortsetzen
+---
+[wurm_feature_22]
+Erneut spielen
+---
+[wurm_feature_23]
+Zurück zum Titel
+---
+[wurm_feature_24]
+Steuerkreuz ausprobieren
+---
+[wurm_feature_25]
+Komm morgen wieder

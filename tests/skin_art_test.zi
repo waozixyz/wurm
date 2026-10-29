@@ -1,0 +1,33 @@
+// The shared Profile and the game package the same art for each numeric ID.
+// Stream comparisons so atlases never become text or large in-memory logs.
+#import "std/file"
+#import "std/file_tree_linux"
+#import, file "../src/account_build.zi";
+
+Same :: (left: string, right: string) -> bool {
+    a := OpenRead(left); b := OpenRead(right)
+    if !a.valid || !b.valid { if a.valid { CloseFile(a) }; if b.valid { CloseFile(b) }; return false }
+    defer { CloseFile(a); CloseFile(b) }
+    if FileSize(a) != FileSize(b) { return false }
+    first: [4096]u8; second: [4096]u8
+    while true {
+        count := Read(a, first[:]); other := Read(b, second[:])
+        if count < 0 || count != other { return false }
+        if count == 0 { return true }
+        for i: 0..count - 1 { if first[i] != second[i] { return false } }
+    }
+    return false
+}
+#program_export
+main :: () -> s32 {
+    entity := PackagePath("entity")
+    sources: [4]string = .["campaign-meadow.png", "skins.png", "special-skins.png", "reward-skins.png"]
+    targets: [4]string = .["wurm-base.png", "wurm-skins.png", "wurm-special-skins.png", "wurm-reward-skins.png"]
+    for id: 0..3 {
+        if !Same(JoinPath("assets/art", sources[id]), JoinPath(JoinPath(entity, "assets/entity"), targets[id])) {
+            print("FAIL: leaderboard skin art differs from the game: %\n", sources[id]); return 1
+        }
+    }
+    print("Skin art local test: all thirteen IDs share identical game and leaderboard atlases.\n")
+    return 0
+}

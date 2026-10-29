@@ -165,3 +165,81 @@ Niveau suivant
 ---
 [wurm_profile_stopped]
 Le profil a cessé de fonctionner. Fermez-le et rouvrez-le.
+---
+[wurm_feature_0]
+Éditeur de niveaux
+---
+[wurm_feature_1]
+Récompenses quotidiennes
+---
+[wurm_feature_2]
+Pièces
+---
+[wurm_feature_3]
+Récompense du jour 30
+---
+[wurm_feature_4]
+Récupération…
+---
+[wurm_feature_5]
+Mousse
+---
+[wurm_feature_6]
+Rivière
+---
+[wurm_feature_7]
+Champignon
+---
+[wurm_feature_8]
+Aurore
+---
+[wurm_feature_9]
+Multijoueur local
+---
+[wurm_feature_10]
+Joueurs
+---
+[wurm_feature_11]
+Joueur
+---
+[wurm_feature_12]
+Touches fléchées
+---
+[wurm_feature_13]
+Pavé numérique 8 4 5 6
+---
+[wurm_feature_14]
+Le dernier ver gagne. Tous entrent par le bas.
+---
+[wurm_feature_15]
+Lancer la manche
+---
+[wurm_feature_16]
+Éliminé
+---
+[wurm_feature_17]
+Pause
+---
+[wurm_feature_18]
+En pause
+---
+[wurm_feature_19]
+Égalité
+---
+[wurm_feature_20]
+Vainqueur
+---
+[wurm_feature_21]
+Reprendre
+---
+[wurm_feature_22]
+Rejouer
+---
+[wurm_feature_23]
+Retour au titre
+---
+[wurm_feature_24]
+Essayer la croix directionnelle
+---
+[wurm_feature_25]
+Reviens demain

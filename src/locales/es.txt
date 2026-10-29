@@ -165,3 +165,81 @@ Nivel siguiente
 ---
 [wurm_profile_stopped]
 El perfil dejó de funcionar. Ciérralo y vuelve a abrirlo.
+---
+[wurm_feature_0]
+Editor de niveles
+---
+[wurm_feature_1]
+Recompensas diarias
+---
+[wurm_feature_2]
+Monedas
+---
+[wurm_feature_3]
+Recompensa del día 30
+---
+[wurm_feature_4]
+Recogiendo…
+---
+[wurm_feature_5]
+Musgo
+---
+[wurm_feature_6]
+Río
+---
+[wurm_feature_7]
+Seta
+---
+[wurm_feature_8]
+Aurora
+---
+[wurm_feature_9]
+Multijugador local
+---
+[wurm_feature_10]
+Jugadores
+---
+[wurm_feature_11]
+Jugador
+---
+[wurm_feature_12]
+Teclas de flecha
+---
+[wurm_feature_13]
+Teclado numérico 8 4 5 6
+---
+[wurm_feature_14]
+Gana el último gusano. Todos entran por abajo.
+---
+[wurm_feature_15]
+Iniciar ronda
+---
+[wurm_feature_16]
+Eliminado
+---
+[wurm_feature_17]
+Pausa
+---
+[wurm_feature_18]
+En pausa
+---
+[wurm_feature_19]
+Empate
+---
+[wurm_feature_20]
+Ganador
+---
+[wurm_feature_21]
+Continuar
+---
+[wurm_feature_22]
+Volver a jugar
+---
+[wurm_feature_23]
+Volver al inicio
+---
+[wurm_feature_24]
+Prueba el mando direccional
+---
+[wurm_feature_25]
+Vuelve mañana

@@ -217,14 +217,17 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !Test("android_release_test", "android-release-test", none[:], "-lz", none[:]) { return Fail("Android editions") }
     check: [1]string = .["check"]
     if !Ziran(check[:], none[:]) { return Fail("ziran check") }
-    engine: [7]string = .["game_test", "steering_test", "start_clearance_test", "meadow_test", "campaign_replay", "progress_test", "editor_test"]
-    folders: [7]string = .["game-test", "steering-test", "start-clearance-test", "meadow-test", "campaign-replay", "progress-test", "editor-test"]
-    for i: 0..6 { if !Test(engine[i], folders[i], none[:], "", none[:]) { return Fail(engine[i]) } }
+    engine: [8]string = .["game_test", "steering_test", "start_clearance_test", "meadow_test", "campaign_replay", "progress_test", "editor_test", "multiplayer_test"]
+    folders: [8]string = .["game-test", "steering-test", "start-clearance-test", "meadow-test", "campaign-replay", "progress-test", "editor-test", "multiplayer-test"]
+    for i: 0..7 { if !Test(engine[i], folders[i], none[:], "", none[:]) { return Fail(engine[i]) } }
     accounts: [1]string = .["WURM_ACCOUNT_TEST"]
     if !Test("account_test", "account-test", accounts[:], "", none[:]) { return Fail("account") }
+    if !Test("rewards_test", "rewards-test", accounts[:], "", none[:]) { return Fail("rewards") }
+    if !Test("skin_art_test", "skin-art-test", none[:], "-lz", none[:]) { return Fail("skin art parity") }
     if !AccountNavigation() { return Fail("account navigation") }
     if !Hosted() { return Fail("hosted") }
     if !Test("authored_levels_test", "authored-levels-test", none[:], "", none[:]) { return Fail("published campaign") }
+    if !Test("orientation_test", "orientation-test", none[:], "", none[:]) { return Fail("mirrored layouts") }
     sound: [2]string = .["SDL_VIDEODRIVER=dummy", "SDL_AUDIODRIVER=dummy"]
     if !Test("audio_test", "audio-test", none[:], "-lSDL2", sound[:]) { return Fail("audio") }
     finale: [1]string = .["WORM_SHOT_LEVEL=200"]

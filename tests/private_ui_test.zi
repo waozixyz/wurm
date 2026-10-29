@@ -805,8 +805,8 @@ OrangeRows :: (picture: *DisplayImage, patch: Patch) -> (count: s64, span: s64) 
 // Every skin but the original sprite is painted art: in play each draws
 // its own detailed head, never a flat coloured circle.
 Skins :: () -> bool {
-    heads: [9]DisplayImage
-    for id: 1..8 {
+    heads: [13]DisplayImage
+    for id: 0..12 {
         name: Vec(u8)
         BuilderPrint(*name, "skin-%", id)
         title := BuilderFinish(name)
@@ -824,14 +824,43 @@ Skins :: () -> bool {
         y := cast(s32)(top + (15.0 * 16.0 + 8.0) * scale)
         ImageRegion(*picture, x - 16, y - 16, 32, 32, *heads[id])
         if ImageColorCount(*heads[id]) < 60 { return Fail(Words(title, "draws a plain head instead of its art")) }
-        for other: 1..id - 1 {
+        for other: 0..id - 1 {
             same := true
             for i: 0..heads[id].pixels.count - 1 { if heads[id].pixels[i] != heads[other].pixels[i] { same = false; break } }
             if same { return Fail(Words(title, "looks the same as another skin")) }
         }
+        SetEnv("WURM_PROBE_WIDTH", "390"); SetEnv("WURM_PROBE_HEIGHT", "780")
+        if !Launch(modal_test, "", Out(Dash(title, "portrait"), ".log")) { return false }
+        Sleep(300)
+        if !Capture(Dash(title, "portrait"), *picture) { return false }
     }
     Unset("WURM_PROBE_SKIN")
-    print("Private UI local test: all eight bought or earned skins draw their own painted head in play.\n")
+    print("Private UI local test: all thirteen skins, including Winter cheer, draw their own head in play.\n")
+    return true
+}
+
+SettingsLocal :: () -> bool {
+    SetEnv("WURM_WINDOW", "960x600")
+    if !Launch(desktop, "build", Out("settings-local", ".log")) { return false }
+    Sleep(300)
+    image: DisplayImage
+    if !Click(926, 34) || !Capture("settings-controls", *image) { return false }
+    if !Click(608, 282) { return false }
+    pad: [1]u8 = .[1]
+    if !Record("controls.dat", pad[:]) { return Fail("settings pad preview does not select pad controls") }
+    if !Click(340, 412) { return false }
+    swipe: [1]u8 = .[0]
+    if !Record("controls.dat", swipe[:]) { return Fail("settings swipe action does not select swipe controls") }
+    if !Click(36, 34) || !Click(96, 86) || !Capture("daily-rewards", *image) { return false }
+    if !Click(480, 144) || !Capture("daily-reward-claimed", *image) { return false }
+    if !Click(36, 34) || !Click(568, 564) || !Capture("visible-level-editor", *image) { return false }
+    if !Key(DRIVER_KEY_ESCAPE) || !Key(DRIVER_KEY_ESCAPE) { return false }
+    if !Click(866, 86) || !Capture("local-multiplayer-setup", *image) { return false }
+    if !Click(544, 146) || !Key(DRIVER_KEY_ENTER) { return false }
+    Sleep(600)
+    if !Capture("local-multiplayer-four-players", *image) { return false }
+    if !Key(DRIVER_KEY_ESCAPE) || !Capture("local-multiplayer-paused", *image) { return false }
+    print("Private UI local test: visible editor, settings control previews and four-player local round opened.\n")
     return true
 }
 
@@ -844,7 +873,7 @@ Run :: () -> bool {
     if !HeldSteering(true) { return false }
     swipe: [1]u8 = .[0]
     unused WriteRecord("controls.dat", swipe[:])
-    return PlaytestLayouts() && Rotation() && Landscapes() && Gameplay() && Skins()
+    return PlaytestLayouts() && Rotation() && Landscapes() && Gameplay() && Skins() && SettingsLocal()
 }
 
 #program_export

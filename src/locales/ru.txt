@@ -165,3 +165,81 @@
 ---
 [wurm_profile_stopped]
 Профиль перестал работать. Закройте его и откройте снова.
+---
+[wurm_feature_0]
+Редактор уровней
+---
+[wurm_feature_1]
+Ежедневные награды
+---
+[wurm_feature_2]
+Монеты
+---
+[wurm_feature_3]
+Награда за 30-й день
+---
+[wurm_feature_4]
+Получение…
+---
+[wurm_feature_5]
+Мох
+---
+[wurm_feature_6]
+Река
+---
+[wurm_feature_7]
+Гриб
+---
+[wurm_feature_8]
+Сияние
+---
+[wurm_feature_9]
+Локальная игра
+---
+[wurm_feature_10]
+Игроки
+---
+[wurm_feature_11]
+Игрок
+---
+[wurm_feature_12]
+Клавиши со стрелками
+---
+[wurm_feature_13]
+Цифровой блок 8 4 5 6
+---
+[wurm_feature_14]
+Побеждает последний червяк. Все входят снизу.
+---
+[wurm_feature_15]
+Начать раунд
+---
+[wurm_feature_16]
+Выбыл
+---
+[wurm_feature_17]
+Пауза
+---
+[wurm_feature_18]
+На паузе
+---
+[wurm_feature_19]
+Ничья
+---
+[wurm_feature_20]
+Победитель
+---
+[wurm_feature_21]
+Продолжить
+---
+[wurm_feature_22]
+Играть снова
+---
+[wurm_feature_23]
+На главный экран
+---
+[wurm_feature_24]
+Попробуйте крестовину
+---
+[wurm_feature_25]
+Возвращайтесь завтра

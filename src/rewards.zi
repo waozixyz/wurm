@@ -1,0 +1,372 @@
+// Coins and the daily reward plan. Coins are cosmetic and follow from what
+// the player did: cleared levels, replays and claimed days, minus the skins
+// bought with them. Retrying, a restart or a second device therefore never
+// counts anything twice. Dew days are granted only by the node, once per
+// account: the game names the reward and shows what the node answered.
+Account :: #import, file "account.zi";
+Progress :: #import, file "progress.zi";
+Records :: #import, file "controls.zi";
+#if #defined(WURM_PORTABLE) {
+    // Seconds since 1970, from the collection's host.
+    host_api :: #system_library "host_api";
+    AppNowHost :: () -> float64 #foreign host_api;
+} else {
+    Clock :: #import "kryon/bundle_time";
+}
+#import "std/json_scan"
+#import "std/text_buffer"
+#import "std/vec"
+
+SKIN_COUNT :: 13;
+DAILY_DAYS :: 30;
+CLEAR_COINS :: 10;
+REPLAY_COINS :: 2;
+// A gift skin bought before its day, and every gift day after the first plan.
+GIFT_COINS :: 100;
+// Guests, and every Dew day after the first plan.
+DEW_DAY_COINS :: 50;
+// Skins 9 to 12, which coins can buy or the plan gives.
+REWARD_SKINS :: 7680;
+MILESTONES :: 5;
+// The account's plan shares the cosmetics kind; record 1 is the holiday claim.
+RECORD_ID :: "00000000000000000000000000000002";
+
+loaded: bool;
+owner: [65]u8;
+// Claimed days, and the UTC day of the latest claim (days since 1970).
+days: s32;
+last_day: s64 = -1;
+coin_skins: s32;
+// Bit N: the node credited Dew milestone N.
+dew_done: s32;
+// A claim since the node last counted a check-in.
+checkin: bool;
+dirty: bool;
+poll_at: s64;
+today: s64 = -1;
+today_at: s64;
+// Tests set the UTC day; -1 reads the clock.
+test_day: s64 = -1;
+// Replays on this account's other devices, summed by the wardrobe sync.
+other_replays: s64;
+// Each award a player should see: coins and whole Dew.
+toast_coins: s32;
+toast_dew: s32;
+toast_serial: s32;
+seen_clears: s32 = -1;
+claim_active: s32 = -1;
+claim_at: s64;
+
+PlanCoins :: (day: s32) -> s32 {
+    plan: [30]s32 = .[20, 25, 30, 35, 0, 40, 0, 30, 35, 0, 40, 45, 50, 75, 0,
+        40, 45, 50, 55, 0, 60, 50, 55, 60, 0, 65, 70, 75, 80, 0]
+    if day < 1 || day > DAILY_DAYS { return 0 }
+    return plan[day - 1]
+}
+// Dew days 5, 10, 15, 20 and 25 are milestones 0 to 4.
+Milestone :: (day: s32) -> s32 {
+    if day < 5 || day > 25 || day % 5 != 0 { return -1 }
+    return day / 5 - 1
+}
+MilestoneDew :: (index: s32) -> s32 {
+    if index == 0 { return 1 }
+    if index >= 1 && index <= 3 { return 2 }
+    if index == 4 { return 3 }
+    return 0
+}
+// The node's reward names; it alone sets their Dew.
+MilestoneReward :: (index: s32) -> string {
+    if index == 0 { return "wurm.daily-05" }
+    if index == 1 { return "wurm.daily-10" }
+    if index == 2 { return "wurm.daily-15" }
+    if index == 3 { return "wurm.daily-20" }
+    if index == 4 { return "wurm.daily-25" }
+    return ""
+}
+GiftSkin :: (day: s32) -> s32 {
+    if day == 7 { return 11 }
+    if day == 30 { return 12 }
+    return 0
+}
+CoinPrice :: (id: s32) -> s32 {
+    if id == 9 { return 120 }
+    if id == 10 { return 240 }
+    if id == 11 { return 360 }
+    return 0
+}
+SignedIn :: () -> bool { return Progress.owner[0] != 0 }
+
+// Each signed-in account and the guest keep their own plan and coins.
+Load :: () {
+    if loaded && TextUntilNul(owner[:]) == TextUntilNul(Progress.owner[:]) { return }
+    loaded = true
+    owner = Progress.owner
+    days = 0; last_day = -1; coin_skins = 0; dew_done = 0; checkin = false; dirty = false
+    other_replays = 0; poll_at = 0; claim_active = -1; claim_at = 0
+    bytes: [13]u8
+    if Records.ReadRecord(Progress.RecordName("rewards.dat"), bytes[:]) != 12 || bytes[0] != 1 { return }
+    days = cast(s32)bytes[1] | (cast(s32)bytes[2] << 8)
+    stored: s64 = 0
+    for index: 0..3 { stored |= cast(s64)bytes[index + 3] << (index * 8) }
+    last_day = ifx stored == 4294967295 then -1 else stored
+    coin_skins = (cast(s32)bytes[7] | (cast(s32)bytes[8] << 8)) & REWARD_SKINS
+    dew_done = cast(s32)bytes[9] & 31
+    dirty = (bytes[10] & 1) != 0
+    checkin = (bytes[10] & 2) != 0
+}
+Save :: () -> bool {
+    bytes: [12]u8
+    bytes[0] = 1
+    bytes[1] = cast(u8)(days & 255); bytes[2] = cast(u8)((days >> 8) & 255)
+    stored: s64 = ifx last_day < 0 then 4294967295 else last_day
+    for index: 0..3 { bytes[index + 3] = cast(u8)((stored >> (index * 8)) & 255) }
+    bytes[7] = cast(u8)(coin_skins & 255); bytes[8] = cast(u8)((coin_skins >> 8) & 255)
+    bytes[9] = cast(u8)dew_done
+    bytes[10] = cast(u8)((ifx dirty then 1 else 0) | (ifx checkin then 2 else 0))
+    return Records.WriteRecord(Progress.RecordName("rewards.dat"), bytes[:])
+}
+Reset :: () {
+    loaded = false
+    today = -1; today_at = 0
+    seen_clears = -1
+    Load()
+}
+
+// UTC days, the same boundary the node counts check-ins by.
+Today :: () -> s64 {
+    if test_day >= 0 { return test_day }
+    seconds: s64 = 0
+    #if #defined(WURM_PORTABLE) {
+        seconds = cast(s64)AppNowHost()
+    } else {
+        seconds = Clock.BundleUnixMilliseconds() / 1000
+    }
+    if seconds <= 0 { return -1 }
+    return seconds / 86400
+}
+CurrentDay :: () -> s64 {
+    if test_day >= 0 || today < 0 { today = Today() }
+    return today
+}
+
+// What a plan day gives. Days after the first plan give coins only.
+DayCoins :: (day: s32) -> s32 {
+    if day < 1 { return 0 }
+    cycle := (day - 1) % DAILY_DAYS + 1
+    first := day <= DAILY_DAYS
+    coins := PlanCoins(cycle)
+    if coins > 0 { return coins }
+    if Milestone(cycle) >= 0 { return ifx first && SignedIn() then 0 else DEW_DAY_COINS }
+    gift := GiftSkin(cycle)
+    if first && (coin_skins & (1 << gift)) == 0 { return 0 }
+    return GIFT_COINS
+}
+// Whole Dew a day offers; guests see it and sign in to receive it.
+DayDew :: (day: s32) -> s32 {
+    if day < 1 || day > DAILY_DAYS { return 0 }
+    return MilestoneDew(Milestone(day))
+}
+DaySkin :: (day: s32) -> s32 {
+    Load()
+    if day < 1 || day > DAILY_DAYS { return 0 }
+    gift := GiftSkin(day)
+    if gift == 0 || (coin_skins & (1 << gift)) != 0 { return 0 }
+    return gift
+}
+// 0 upcoming, 1 collecting from the node, 2 collected, 3 sign in.
+DewState :: (day: s32) -> s32 {
+    Load()
+    index := ifx day >= 1 && day <= DAILY_DAYS then Milestone(day) else -1
+    if index < 0 { return 0 }
+    if !SignedIn() { return 3 }
+    if (dew_done & (1 << index)) != 0 { return 2 }
+    return ifx day <= days then 1 else 0
+}
+
+Day :: () -> s32 { Load(); return days }
+ClaimReady :: () -> bool {
+    Load()
+    current := CurrentDay()
+    return current >= 0 && current > last_day && days < 65535
+}
+// Claims today's plan day. Coins and skins follow at once; on a Dew day the
+// node credits the Dew. Every signed-in claim also checks in with the node.
+Claim :: () -> bool {
+    if !ClaimReady() { return false }
+    previous_day := last_day
+    previous_dirty := dirty
+    previous_checkin := checkin
+    days += 1
+    last_day = CurrentDay()
+    if SignedIn() { dirty = true; checkin = true; claim_at = 0; poll_at = 0 }
+    if !Save() {
+        days -= 1; last_day = previous_day
+        dirty = previous_dirty; checkin = previous_checkin
+        return false
+    }
+    toast_coins = DayCoins(days)
+    toast_dew = 0
+    toast_serial += 1
+    return true
+}
+
+Owns :: (id: s32) -> bool {
+    Load()
+    if id < 9 || id >= SKIN_COUNT { return false }
+    if (coin_skins & (1 << id)) != 0 { return true }
+    if id == 11 { return days >= 7 }
+    if id == 12 { return days >= 30 }
+    return false
+}
+Coins :: () -> s32 {
+    Load()
+    Progress.Load()
+    earned: s64 = 0
+    for index: 0..Progress.LEVELS - 1 { if Progress.completed[index] == 1 { earned += CLEAR_COINS } }
+    earned += REPLAY_COINS * (Progress.replays + other_replays)
+    day: s32 = 1
+    while day <= days { earned += cast(s64)DayCoins(day); day += 1 }
+    for id: 9..11 { if (coin_skins & (1 << id)) != 0 { earned -= cast(s64)CoinPrice(cast(s32)id) } }
+    if earned < 0 { return 0 }
+    if earned > 2000000000 { return 2000000000 }
+    return cast(s32)earned
+}
+// Spends coins at once, even offline. An owned skin is never bought twice.
+Buy :: (id: s32) -> bool {
+    Load()
+    price := CoinPrice(id)
+    if price <= 0 || Owns(id) || Coins() < price { return false }
+    previous_dirty := dirty
+    coin_skins |= 1 << id
+    if SignedIn() { dirty = true; poll_at = 0 }
+    if !Save() { coin_skins &= ~(1 << id); dirty = previous_dirty; return false }
+    return true
+}
+
+Pump :: (now: s64) {
+    Load()
+    if now >= today_at { today = Today(); today_at = now + 5000 }
+    if seen_clears != Progress.clear_events {
+        if seen_clears >= 0 {
+            toast_coins = Progress.clear_first_count * CLEAR_COINS + Progress.clear_replay_count * REPLAY_COINS
+            toast_dew = 0
+            toast_serial += 1
+        }
+        seen_clears = Progress.clear_events
+    }
+    if !SignedIn() { return }
+    DewPump(now)
+    SyncPump(now)
+}
+
+// The current account, as entity.records sees it, must be this plan's owner.
+SameAccount :: () -> bool {
+    status := Account.Service("entity.records", "{\"operation\":\"status\"}")
+    current: [65]u8
+    return ReadStringText(status, FieldAt(status, 0, "account"), current[:]) >= 0 &&
+        TextUntilNul(current[:]) == TextUntilNul(owner[:])
+}
+
+// One claim at a time. The first uncredited milestone is claimed after each
+// signed-in claim: the node counts that UTC day as a check-in and answers
+// "ineligible" until it has counted enough days. A due milestone retries.
+DewPump :: (now: s64) {
+    if claim_active >= 0 {
+        reply := Account.Service("entity.dew", "claim-status")
+        status: [16]u8
+        unused ReadStringText(reply, FieldAt(reply, 0, "status"), status[:])
+        state := TextUntilNul(status[:])
+        if state == "pending" { return }
+        index := claim_active
+        claim_active = -1
+        reward: [80]u8
+        unused ReadStringText(reply, FieldAt(reply, 0, "reward"), reward[:])
+        if TextUntilNul(reward[:]) != MilestoneReward(index) { claim_at = now + 5000; return }
+        if state == "done" {
+            dew_done |= 1 << index
+            checkin = false
+            dirty = true; poll_at = 0
+            if MatchLiteral(reply, FieldAt(reply, 0, "credited"), "true") {
+                toast_coins = 0
+                toast_dew = MilestoneDew(index)
+                toast_serial += 1
+            }
+            claim_at = now
+        } else if state == "ineligible" {
+            checkin = false
+            claim_at = now + 1800000
+        } else { claim_at = now + 300000 }
+        unused Save()
+        return
+    }
+    if now < claim_at { return }
+    index: s32 = 0
+    while index < MILESTONES && (dew_done & (1 << index)) != 0 { index += 1 }
+    if index >= MILESTONES { checkin = false; return }
+    due := (index + 1) * 5 <= days
+    if !checkin && !due { return }
+    if !SameAccount() { claim_at = now + 5000; return }
+    request: [96]u8
+    out: Vec(u8)
+    BuilderPrint(*out, "claim:%", MilestoneReward(index))
+    unused CopyText(TextView(VecSlice(out, 0, out.count)), request[:])
+    VecFree(out)
+    answer := Account.Service("entity.dew", TextUntilNul(request[:]))
+    status: [16]u8
+    unused ReadStringText(answer, FieldAt(answer, 0, "status"), status[:])
+    state := TextUntilNul(status[:])
+    if state == "pending" { claim_active = index }
+    else if state == "busy" { claim_at = now + 5000 }
+    else { claim_at = now + 300000 }
+}
+
+CopyText :: (text: string, output: []u8) -> bool {
+    if text.count >= output.count { output[0] = 0; return false }
+    for byte, at: text { output[at] = byte }
+    output[text.count] = 0
+    return true
+}
+
+// The account's plan, skins bought with coins and credited milestones,
+// merged so that no device's claim or purchase is lost.
+SyncPump :: (now: s64) {
+    if now < poll_at { return }
+    poll_at = now + 10000
+    if !SameAccount() { return }
+    reply := Account.Service("entity.records", "{\"operation\":\"get\",\"kind\":\"wurm-cosmetics\",\"id\":\"00000000000000000000000000000002\"}")
+    document := FieldAt(reply, 0, "document")
+    status: [16]u8
+    unused ReadStringText(reply, FieldAt(reply, 0, "status"), status[:])
+    if document >= 0 {
+        remote_days := ReadNumber(reply, FieldAt(reply, document, "days"))
+        remote_last := ReadNumber(reply, FieldAt(reply, document, "last"))
+        remote_skins := ReadNumber(reply, FieldAt(reply, document, "skins"))
+        remote_dew := ReadNumber(reply, FieldAt(reply, document, "dew"))
+        valid := remote_days.valid && remote_days.value >= 0.0 && remote_days.value <= 65535.0 &&
+            remote_days.value == cast(float64)cast(s32)remote_days.value &&
+            remote_last.valid && remote_last.value >= -1.0 && remote_last.value <= 4000000.0 &&
+            remote_skins.valid && remote_skins.value >= 0.0 && remote_skins.value <= 65535.0 &&
+            remote_dew.valid && remote_dew.value >= 0.0 && remote_dew.value <= 31.0
+        if valid {
+            stored_days := cast(s32)remote_days.value
+            stored_last := cast(s64)remote_last.value
+            stored_skins := cast(s32)remote_skins.value
+            stored_dew := cast(s32)remote_dew.value
+            if stored_days > days { days = stored_days }
+            if stored_last > last_day { last_day = stored_last }
+            coin_skins |= stored_skins & REWARD_SKINS
+            dew_done |= stored_dew & 31
+            if days != stored_days || last_day != stored_last || coin_skins != stored_skins || dew_done != stored_dew { dirty = true }
+            unused Save()
+        }
+    } else if TextUntilNul(status[:]) == "missing" && (days > 0 || coin_skins != 0 || dew_done != 0) { dirty = true }
+    if !dirty { return }
+    out: Vec(u8)
+    BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"wurm-cosmetics\",\"schema\":\"wurm.rewards.v1\",\"id\":\"%\",\"document\":{\"days\":%,\"last\":%,\"skins\":%,\"dew\":%}}",
+        RECORD_ID, days, last_day, coin_skins, dew_done)
+    answer := Account.Service("entity.records", TextView(VecSlice(out, 0, out.count)))
+    done: [16]u8
+    dirty = ReadStringText(answer, FieldAt(answer, 0, "status"), done[:]) < 0 || TextUntilNul(done[:]) != "done"
+    VecFree(out)
+    unused Save()
+}

@@ -1,0 +1,70 @@
+Local :: #import, file "../src/multiplayer.zi";
+#import, file "../src/game.zi";
+failures: s32;
+Expect :: (condition: bool, text: string) {
+    if !condition { print("FAIL: local multiplayer: %\n", text); failures += 1 }
+}
+#program_export
+main :: () -> s32 {
+    round: Local.Round
+    Expect(!Local.Start(*round, 1, 0) && !Local.Start(*round, 5, 0), "only two through four players")
+    for count: 2..4 {
+        Expect(Local.Start(*round, cast(s32)count, 0), "start a shared round")
+        for id: 0..count - 1 {
+            Expect(round.players[id].worm[0].y == (ROWS - 2) * 16 + 8 && round.players[id].direction == DIR_UP,
+                "everyone starts at the bottom facing up")
+            if id > 0 { Expect(round.players[id].worm[0].x > round.players[id - 1].worm[0].x, "separate entrance lanes") }
+        }
+        for tick: 0..59 { Local.TickRound(*round) }
+        Expect(round.phase == Local.PLAYING, "all players survive their straight entrance")
+    }
+    unused Local.Start(*round, 4, 0)
+    Expect(Local.Input(*round, 263) && Local.Input(*round, 68) && Local.Input(*round, 74) && Local.Input(*round, 326),
+        "four independent key groups")
+    Expect(!Local.Input(*round, 264), "a reverse turn is rejected")
+    Local.TickRound(*round)
+    Expect(round.players[0].direction == DIR_LEFT && round.players[1].direction == DIR_RIGHT &&
+        round.players[2].direction == DIR_LEFT && round.players[3].direction == DIR_RIGHT, "turns apply on the same tick")
+    unused Local.Start(*round, 3, 0)
+    Expect(!Local.Input(*round, 115) && !Local.Input(*round, 107), "lowercase reverse turns are rejected")
+    Expect(Local.Input(*round, 119) && Local.Input(*round, 105), "lowercase P2 and P3 up keys steer")
+    Local.TickRound(*round)
+    Expect(Local.Input(*round, 97) && Local.Input(*round, 106), "lowercase P2 and P3 left keys steer")
+    Local.TickRound(*round)
+    Expect(Local.Input(*round, 115) && Local.Input(*round, 107), "lowercase P2 and P3 down keys steer")
+    Local.TickRound(*round)
+    Expect(Local.Input(*round, 100) && Local.Input(*round, 108), "lowercase P2 and P3 right keys steer")
+    Local.TickRound(*round)
+    Expect(round.players[1].direction == DIR_RIGHT && round.players[2].direction == DIR_RIGHT,
+        "every lowercase P2 and P3 mapping applies")
+    unused Local.Start(*round, 2, 0)
+    round.players[0].worm[0] = Point.{200, 200}
+    round.players[1].worm[0] = Point.{216, 200}
+    round.players[0].next_direction = DIR_RIGHT
+    round.players[1].next_direction = DIR_LEFT
+    Local.TickRound(*round)
+    Expect(!round.players[0].alive && !round.players[1].alive && round.winner == -1 && round.phase == Local.FINISHED,
+        "head-on collision is a simultaneous draw")
+    unused Local.Start(*round, 2, 0)
+    round.players[0].worm[0] = Point.{16, 160}
+    round.players[0].next_direction = DIR_LEFT
+    Local.TickRound(*round)
+    Expect(round.phase == Local.FINISHED && round.winner == 1, "last surviving player wins")
+    unused Local.Start(*round, 2, 0)
+    round.players[0].worm[0].y = (ROWS - 1) * 16 - 4
+    round.players[0].next_direction = DIR_DOWN
+    Local.TickRound(*round)
+    Expect(!round.players[0].alive && round.winner == 1, "a head cannot escape through an entry while its tail is outside")
+    unused Local.Start(*round, 2, 0)
+    round.apple = Point.{round.players[0].worm[0].x, round.players[0].worm[0].y - 4}
+    Local.TickRound(*round)
+    Expect(round.players[0].score == 1 && round.players[1].score == 0 && round.players[0].target == 80,
+        "the apple rewards and grows its collector")
+    Expect(!Near(round.apple, round.players[0].worm[0], 10), "shared apple respawns away from all worms")
+    round.phase = Local.PAUSED
+    position := round.players[0].worm[0]
+    Local.Advance(*round, 10000)
+    Expect(Near(position, round.players[0].worm[0], 1), "pause freezes the complete round")
+    print("Local multiplayer local test: % failures.\n", failures)
+    return ifx failures == 0 then 0 else 1
+}
