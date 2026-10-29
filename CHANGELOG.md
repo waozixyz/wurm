@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.26] - 2026-10-29
+
+- The new skins have calmer, plainer bodies.
+
 ## [0.2.25] - 2026-10-29
 
 - Mint, Berry, Rose, Night owl, Golden apple and Explorer have new hand-painted looks; skins you own stay yours.
