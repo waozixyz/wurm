@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Mint, Berry, Rose, Night owl, Golden apple and Explorer have new hand-painted looks; skins you own stay yours.
+
 ## [0.2.24] - 2026-10-29
 
 - Keep the entrance area free of enemies: none start there or wander in, so nothing vanishes when you lose a life.

@@ -47,7 +47,6 @@ StarIcon :: #import "mingcute/mingcute_filled_star";
 ProfileIcon :: #import "mingcute/mingcute_regular_user_4";
 DewIcon :: #import "mingcute/mingcute_filled_drop";
 LockIcon :: #import "mingcute/mingcute_filled_lock";
-MoonIcon :: #import "mingcute/mingcute_filled_moon";
 Input :: #import "kryon/input_protocol";
 #if #defined(WURM_PORTABLE) {
     Timer :: #import "portable_runtime";
@@ -409,20 +408,11 @@ SkinName :: (id: s32) -> string {
     if id == 8 { return "Winter cheer" }
     return "Apfelwurm"
 }
-SkinColor :: (id: s32) -> Color {
-    if id == 1 { return Color.{94, 192, 151, 255} }
-    if id == 2 { return Color.{154, 119, 207, 255} }
-    if id == 3 { return Color.{221, 133, 151, 255} }
-    if id == 4 { return Color.{107, 139, 199, 255} }
-    if id == 5 { return Color.{227, 185, 80, 255} }
-    if id == 6 { return Color.{135, 173, 91, 255} }
-    return Color.{236, 151, 67, 255}
-}
 CharacterPreview :: (session: Session, key: u64, bounds: Rectangle, id: s32) {
     for segment: 0..2 {
-        special := id == 7 || id == 8
-        size := (ifx special then 27.0 else 21.0) + cast(float32)segment * 4.0
-        x := bounds.x + cast(float32)segment * (ifx special then 12.0 else 16.0)
+        painted := id != 0
+        size := (ifx painted then 27.0 else 21.0) + cast(float32)segment * 4.0
+        x := bounds.x + cast(float32)segment * (ifx painted then 12.0 else 16.0)
         y := bounds.y + 22.0 - cast(float32)segment * 5.0
         Character(session, key + cast(u64)segment * 8, Rectangle.{x, y, size, size}, id, false)
     }
@@ -435,58 +425,36 @@ Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool
             Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, alpha)
         return
     }
+    // Every other skin is painted: a head facing right and a round body
+    // segment. Skins 1-6 share skins.png in 180px cells, one row each; the
+    // two specials keep their own sheet.
+    path := "assets/art/skins.png"
+    source := Rectangle.{ifx head then 0.0 else 180.0, cast(float32)(id - 1) * 180.0, 180.0, 180.0}
     if id == 7 || id == 8 {
         column := ifx id == 7 then 0 else 2
         if !head { column += 1 }
         crops: [4]Rectangle = .[Rectangle.{47.0, 81.0, 496.0, 627.0}, Rectangle.{543.0, 15.0, 543.0, 709.0},
             Rectangle.{1086.0, 87.0, 524.0, 617.0}, Rectangle.{1638.0, 6.0, 498.0, 718.0}]
-        source := crops[column]
-        height := bounds.height
-        width := height * source.width / source.height
-        if width > bounds.width { width = bounds.width; height = width * source.height / source.width }
-        cx := bounds.x + bounds.width / 2.0
-        cy := bounds.y + bounds.height / 2.0
-        corners: [4]Vector2
-        for corner: 0..3 {
-            dx := (ifx corner % 2 == 0 then -width else width) / 2.0
-            dy := (ifx corner < 2 then -height else height) / 2.0
-            if head && direction == 0 { dx = -dx; dy = -dy }
-            else if head && direction == 1 { previous := dx; dx = dy; dy = -previous }
-            else if head && direction == 3 { previous := dx; dx = -dy; dy = previous }
-            corners[corner] = Vector2.{cx + dx, cy + dy}
-        }
-        unused Image(session, ImageProps.{.key = key, .asset_path = "assets/art/special-skins.png",
-            .bounds = bounds, .source = source, .mesh = ImageMesh.{2, 2, corners[:]},
-            .tint = cast(u32)0xffffff00 | cast(u32)alpha, .smooth = true, .alt_text = Locale.Text(SkinName(id))})
-        return
+        path = "assets/art/special-skins.png"
+        source = crops[column]
     }
-    size := bounds.width
-    if bounds.height < size { size = bounds.height }
-    color := SkinColor(id)
-    color.a = alpha
-    unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = color, .radius = size / 2.0,
-        .border = Color.{30, 48, 35, cast(u8)(cast(s32)alpha * 100 / 255)}})
-    if !head { return }
-    dx: float32 = ifx direction == 0 then -1.0 else ifx direction == 2 then 1.0 else 0.0
-    dy: float32 = ifx direction == 1 then -1.0 else ifx direction == 3 then 1.0 else 0.0
-    cx := bounds.x + bounds.width / 2.0 + dx * size * 0.14
-    cy := bounds.y + bounds.height / 2.0 + dy * size * 0.14
-    eye := size * 0.18
-    for side: 0..1 {
-        sign: float32 = ifx side == 0 then -1.0 else 1.0
-        x := cx - dy * size * 0.2 * sign - eye / 2.0
-        y := cy + dx * size * 0.2 * sign - eye / 2.0
-        unused Box(session, BoxProps.{.key = key + 1 + cast(u64)side, .bounds = Rectangle.{x, y, eye, eye},
-            .fill = Color.{246, 244, 223, alpha}, .radius = eye / 2.0})
-        unused Box(session, BoxProps.{.key = key + 3 + cast(u64)side,
-            .bounds = Rectangle.{x + eye * 0.3, y + eye * 0.3, eye * 0.5, eye * 0.5},
-            .fill = Color.{28, 44, 35, alpha}, .radius = eye / 2.0})
+    height := bounds.height
+    width := height * source.width / source.height
+    if width > bounds.width { width = bounds.width; height = width * source.height / source.width }
+    cx := bounds.x + bounds.width / 2.0
+    cy := bounds.y + bounds.height / 2.0
+    corners: [4]Vector2
+    for corner: 0..3 {
+        dx := (ifx corner % 2 == 0 then -width else width) / 2.0
+        dy := (ifx corner < 2 then -height else height) / 2.0
+        if head && direction == 0 { dx = -dx; dy = -dy }
+        else if head && direction == 1 { previous := dx; dx = dy; dy = -previous }
+        else if head && direction == 3 { previous := dx; dx = -dy; dy = previous }
+        corners[corner] = Vector2.{cx + dx, cy + dy}
     }
-    if id >= 4 {
-        shape := ifx id == 4 then MoonIcon.Shape else ifx id == 5 then StarIcon.Shape else "S2rr:M3 19L9 5L15 15L18 10L22 19Z"
-        SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{bounds.x + size * 0.3, bounds.y - size * 0.18, size * 0.4, size * 0.4},
-            .shape = shape, .color = Color.{249, 229, 157, alpha}})
-    }
+    unused Image(session, ImageProps.{.key = key, .asset_path = path,
+        .bounds = bounds, .source = source, .mesh = ImageMesh.{2, 2, corners[:]},
+        .tint = cast(u32)0xffffff00 | cast(u32)alpha, .smooth = true, .alt_text = Locale.Text(SkinName(id))})
 }
 shop_scroll: s32;
 buy_skin: s32;
@@ -898,7 +866,7 @@ DrawBoard :: (session: Session, stage: Rectangle) {
     // tail first leaves the larger face cleanly above the neck.
     fade: float32 = ifx game.death_ticks > 0 then cast(float32)game.death_ticks / 20.0 else 1.0
     alpha := cast(u8)(255.0 * fade * fade * (3.0 - 2.0 * fade))
-    draw_step: s32 = ifx Wardrobe.skin == 7 || Wardrobe.skin == 8 then 2 else WORM_DRAW_STEP
+    draw_step: s32 = ifx Wardrobe.skin != 0 then 2 else WORM_DRAW_STEP
     index := game.length - 1
     while index > 0 {
         column := 4
