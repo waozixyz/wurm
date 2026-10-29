@@ -60,12 +60,25 @@ Load :: () {
     count := ReadRecord("controls.dat", bytes[:])
     if count == 1 && bytes[0] <= 1 { mode = cast(s32)bytes[0] }
     // A desktop always has a keyboard, and a mouse drag steers like a swipe,
-    // so it starts with swipe steering instead of asking. Phones, browsers
-    // and hosted copies still ask.
-    #if #defined(ANDROID_BUILD) || #defined(PLATFORM_WEB) || #defined(WURM_PORTABLE) {
-    } else {
-        if mode < 0 { mode = 0 }
+    // so it starts with swipe steering instead of asking. Phones and
+    // browsers still ask.
+    if mode < 0 && InputDesktop() { mode = 0 }
+}
+
+// Whether the main input is a keyboard and mouse. A hosted copy asks its
+// host (Kryon's kryon.input.desktop), which knows the device.
+#if #defined(WURM_PORTABLE) {
+    input_api :: #system_library "host_api";
+    AppSupportsHost :: (capability: string) -> bool #foreign input_api;
+}
+InputDesktop :: () -> bool {
+    #if #defined(WURM_PORTABLE) {
+        return AppSupportsHost("kryon.input.desktop")
     }
+    #if #defined(ANDROID_BUILD) || #defined(PLATFORM_WEB) {
+        return false
+    }
+    return true
 }
 Chosen :: () -> bool { Load(); return mode >= 0 }
 Pad :: () -> bool { Load(); return mode == 1 }

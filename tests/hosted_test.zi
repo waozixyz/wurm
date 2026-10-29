@@ -41,9 +41,14 @@ ReadAppUiHost :: () -> AppUiFrame { return frame }
 #program_export
 AppKeyHost :: () -> s32 { return 0 }
 #program_export
+AppNowHost :: () -> float64 { return 1793232000.0 }
+#program_export
 PollPointer :: () -> PointerFrame { return pointer }
 #program_export
 AppSoundHost :: (name: string) -> bool { unused name; return true }
+// A touch host: the controls question still comes.
+#program_export
+AppSupportsHost :: (capability: string) -> bool { unused capability; return false }
 #program_export
 AppRecordHost :: (name: string) -> string {
     for index: cast(s32)0..record_count - 1 {
