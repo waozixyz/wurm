@@ -11,6 +11,13 @@ failures: s32;
 Expect :: (value: bool, message: string) {
     if !value { print("FAIL: %\n", message); failures += 1 }
 }
+// A tile of the published layout, which a landscape may mirror from its
+// portrait design.
+PublishedTile :: (level: s32, x: s32, y: s32, portrait: bool = false) -> u8 {
+    board: [CELLS]u8
+    Custom.DefaultBoard(level, board[:], portrait)
+    return board[Custom.At(x, y, portrait)]
+}
 
 #program_export
 main :: () -> s32 {
@@ -45,7 +52,7 @@ main :: () -> s32 {
     unused Custom.ClearCustomLevel(2)
     Expect(!Custom.HasCustomLevel(0), "no override before any save")
     Expect(Custom.EffectiveApples(0) == BaseApples(0), "no override keeps original apples")
-    Expect(Custom.EffectiveTile(0, 5, 7) == DesignedTile(0, 5, 7), "no override keeps original tiles")
+    Expect(Custom.EffectiveTile(0, 5, 7) == PublishedTile(0, 5, 7), "no override keeps the published tiles")
 
     board: [CELLS]u8
     for at: 0..CELLS - 1 { board[at] = 0 }
@@ -83,7 +90,7 @@ main :: () -> s32 {
     Expect(Custom.EffectiveTile(2, 10, 10) == 0, "override floor applies")
     Expect(Custom.EffectiveTile(2, 11, 10) == 42, "monster marker round-trips")
     Expect(Custom.EffectiveTile(2, 12, 10) == 130, "false wall round-trips")
-    Expect(Custom.EffectiveTile(2, 0, 0) == DesignedTile(2, 0, 0), "untouched cells keep their tiles")
+    Expect(Custom.EffectiveTile(2, 0, 0) == PublishedTile(2, 0, 0), "untouched cells keep their tiles")
     file := File.OpenRead("build/test-levels/level3.dat")
     Expect(file.valid, "override file exists")
     if file.valid {
@@ -106,7 +113,7 @@ main :: () -> s32 {
     Expect(Custom.ClearCustomLevel(2), "override clears")
     Expect(!Custom.HasCustomLevel(2), "cleared override is gone")
     Expect(Custom.EffectiveApples(2) == BaseApples(2), "clear restores the original")
-    Expect(Custom.EffectiveTile(2, 10, 10) == DesignedTile(2, 10, 10), "clear restores original tiles")
+    Expect(Custom.EffectiveTile(2, 10, 10) == PublishedTile(2, 10, 10), "clear restores the published tiles")
 
     // The smart hedge brush fits pieces to their open sides: a wall boxed in
     // from east, south and west wears grass only on its north side (51),
@@ -150,14 +157,18 @@ main :: () -> s32 {
     Expect(game.death_ticks == 0 && game.lives == 3,"portrait level 2 allows a two-second straight approach")
     turned[Custom.At(7,35,true)] = 21
     objects[Custom.At(8,36,true)] = OBJECT_SNAIL
+    published_before := PublishedTile(1,7,10)
     Expect(Custom.SaveCustomLevel(1,turned[:],objects[:],9,true),"independent portrait save")
-    Expect(Custom.EffectiveApples(1,true) == 9 && Custom.EffectiveApples(1) == BaseApples(1),"portrait apple goal is independent")
+    // Without a personal landscape, the landscape mirrors the personal
+    // portrait and its goal; the published one stays as it was.
+    Expect(Custom.EffectiveApples(1,true) == 9 && Custom.EffectiveApples(1) == 9 && Custom.LayoutSource(1) == Custom.LAYOUT_MIRRORED,
+        "the landscape mirrors the personal portrait's apple goal")
     Custom.custom_loaded = false
     Custom.EnsureLoaded()
     Expect(Custom.EffectiveTile(1,7,35,true) == 21,"portrait lower rows survive a restart")
     Custom.EffectiveObjects(1,loaded_objects[:],true)
     Expect(loaded_objects[Custom.At(8,36,true)] == OBJECT_SNAIL,"portrait objects survive a restart")
-    Expect(Custom.EffectiveTile(1,7,10) == BaseTile(1,7,10),"portrait edits leave landscape alone")
+    Expect(PublishedTile(1,7,10) == published_before,"portrait edits leave the published landscape alone")
     Expect(Custom.ClearCustomLevel(1,true),"reset only portrait")
     Expect(!Custom.HasCustomLevel(1,true),"portrait reset uses the generated layout again")
 

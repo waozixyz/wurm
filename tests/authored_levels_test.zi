@@ -1,5 +1,6 @@
 #import, file "../src/game.zi";
 Custom :: #import, file "../src/custom_levels.zi";
+Mirror :: #import, file "../src/board_orientation.zi";
 File :: #import "std/file_linux";
 #import "std/number_text"
 #import "std/text_buffer"
@@ -14,10 +15,20 @@ RecordPath :: (level: s32, portrait: bool) -> string {
     return Custom.BufferText(path_buffer[:],at)
 }
 
+failures: s32;
+Fail :: (message: string, level: s32, portrait: bool) {
+    print("FAIL: % (level %, %)\n", message, level + 1, ifx portrait then "portrait" else "landscape")
+    failures += 1
+}
+
+// Every published editor record is decoded unchanged, tile for tile, object
+// for object and apple goal. A record plays as it is, unless the level's
+// authored portrait leads and its landscape mirrors that portrait.
 #program_export
 main :: () -> s32 {
     if !Custom.CustomSetRoot("build/test-authored-private/") { return 1 }
     count: s32
+    mirrored: s32
     for level: 0..LEVEL_COUNT - 1 {
         for orientation: 0..1 {
             portrait := orientation == 1
@@ -28,30 +39,57 @@ main :: () -> s32 {
             bytes: [2401]u8
             size := File.ReadAt(file,bytes[:],0)
             File.CloseFile(file)
-            if size != 1201 && size != 2401 { return 1 }
+            if size != 1201 && size != 2401 { Fail("published record size", cast(s32)level, portrait); continue }
+            record: [CELLS]u8
+            record_objects: [CELLS]u8
+            Custom.PublishedBoard(cast(s32)level,record[:],portrait)
+            Custom.PublishedObjects(cast(s32)level,record_objects[:],portrait)
+            columns: s32 = ifx portrait then ROWS else COLUMNS
+            rows: s32 = ifx portrait then COLUMNS else ROWS
+            same := Custom.PublishedApples(cast(s32)level,portrait) == cast(s32)bytes[0]
+            for x: 0..columns - 1 {
+                for y: 0..rows - 1 {
+                    if record[y * columns + x] != bytes[1 + x * rows + y] { same = false }
+                    expected: u8 = ifx size == 2401 then bytes[1201 + x * rows + y] else 0
+                    if record_objects[y * columns + x] != expected { same = false }
+                }
+            }
+            if !same { Fail("the generated campaign differs from its published record", cast(s32)level, portrait) }
             board: [CELLS]u8
             objects: [CELLS]u8
             Custom.EffectiveBoard(cast(s32)level,board[:],portrait)
             Custom.EffectiveObjects(cast(s32)level,objects[:],portrait)
-            columns: s32 = ifx portrait then ROWS else COLUMNS
-            rows: s32 = ifx portrait then COLUMNS else ROWS
-            BoardSize(columns,rows)
-            if Custom.EffectiveApples(cast(s32)level,portrait) != cast(s32)bytes[0] { return 1 }
-            for x: 0..columns - 1 {
-                for y: 0..rows - 1 {
-                    if board[y * columns + x] != bytes[1 + x * rows + y] { return 1 }
-                    if size == 2401 && objects[y * columns + x] != bytes[1201 + x * rows + y] { return 1 }
+            apples := Custom.EffectiveApples(cast(s32)level,portrait)
+            expected: [CELLS]u8
+            expected_objects: [CELLS]u8
+            expected_apples := cast(s32)bytes[0]
+            if Custom.LayoutSource(cast(s32)level,portrait) == Custom.LAYOUT_AUTHORED {
+                for at: 0..CELLS - 1 { expected[at] = record[at]; expected_objects[at] = record_objects[at] }
+            } else if !portrait && Custom.HasAuthoredLevel(cast(s32)level,true) {
+                // The authored portrait leads: the landscape is its mirror.
+                portrait_board: [CELLS]u8
+                portrait_objects: [CELLS]u8
+                Custom.PublishedBoard(cast(s32)level,portrait_board[:],true)
+                Custom.PublishedObjects(cast(s32)level,portrait_objects[:],true)
+                if Mirror.MirrorLevel(cast(s32)level,portrait_board[:],portrait_objects[:],false,expected[:],expected_objects[:]) != 0 {
+                    Fail("the authored portrait has no faithful landscape mirror", cast(s32)level, portrait)
                 }
-            }
-            if LevelBlockages(board[:]) != 0 { print("Blocked published level %\n",level + 1); return 1 }
+                expected_apples = Custom.PublishedApples(cast(s32)level,true)
+                mirrored += 1
+            } else { Fail("a published record lost its place", cast(s32)level, portrait) }
+            same = apples == expected_apples
+            for at: 0..CELLS - 1 { if board[at] != expected[at] || objects[at] != expected_objects[at] { same = false } }
+            if !same { Fail("the effective layout is not the intended one", cast(s32)level, portrait) }
+            BoardSize(columns,rows)
+            if LevelBlockages(board[:]) != 0 { Fail("blocked published level", cast(s32)level, portrait) }
             game: Game
-            StartGameData(*game,cast(s32)level,0,1,board[:],cast(s32)bytes[0],columns,rows,objects[:])
+            StartGameData(*game,cast(s32)level,0,1,board[:],apples,columns,rows,objects[:])
             for tick: 0..7 { Tick(*game) }
-            if game.death_ticks != 0 || game.lives != 3 { print("Unsafe published entrance %\n",level + 1); return 1 }
+            if game.death_ticks != 0 || game.lives != 3 { Fail("unsafe published entrance", cast(s32)level, portrait) }
             count += 1
         }
     }
-    if count == 0 { return 1 }
-    print("Published campaign local test: % editor layouts retain every tile, object and apple goal, with clear playable entrances.\n",count)
+    if count == 0 || failures != 0 { return 1 }
+    print("Published campaign local test: % editor layouts decode unchanged; % play as recorded and % mirror their authored portrait, with clear playable entrances.\n",count,count - mirrored,mirrored)
     return 0
 }

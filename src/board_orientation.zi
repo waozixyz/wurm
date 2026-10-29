@@ -1,0 +1,671 @@
+// Mirrors a level between the 40x30 landscape board and the 30x40 portrait
+// board without turning it: the entrance stays at the bottom, the exit at
+// the top and every patrol keeps its course. One axis loses ten lines and
+// the other gains ten, in order. A removed line is a seam, one cell from
+// each row or column, that weaves through open floor and thick walls so
+// rooms, pillars and crossings keep their shape; it is taken only when the
+// floor and wall regions keep their number and their connections. Lines
+// repeat where the board is open or plainly walled. Both spread across the
+// board. The entrance column, its clear start area and the exit row map
+// one to one. Creatures keep their number outside the entrance area and
+// decorations stay single; hedge pieces are refitted where their sides
+// changed. MirrorLevel also keeps the engine's puzzle idea. A board that
+// cannot shrink without losing a passage is reported, never flattened.
+// A portrait keeps its floor roomy instead: it thins walls first and may
+// drop a small lone hedge pillar, never a floor region or passage.
+#import, file "game.zi";
+
+// Problems a mirrored layout reports.
+MIRROR_TOPOLOGY :: 1;
+MIRROR_CREATURE :: 2;
+MIRROR_IDEA :: 4;
+// Spreads MirrorLevel tries before it reports a different puzzle idea:
+// nine even spreads, then nine that follow the costs first, both roomy for
+// a portrait, then for a portrait nine even spreads with the plain costs.
+MIRROR_VARIANTS :: 27;
+MIRROR_ROOMY_VARIANTS :: 18;
+
+// Narrowing a two-cell passage to one cell costs this much per cell: a
+// portrait must stay as easy as its landscape, which may be a little harder.
+MIRROR_THIN_PORTRAIT :: 40;
+MIRROR_THIN_LANDSCAPE :: 6;
+// A lone hedge pillar a portrait may drop: at most this many cells, away
+// from the edge and other walls.
+MIRROR_PILLAR :: 8;
+
+// The board being reshaped: the source cell each cell shows, and whether it
+// repeats its neighbour along a repeated line.
+MirrorWork :: struct {
+    origin: [CELLS]s32
+    copied: [CELLS]bool
+    columns: s32
+    rows: s32
+    // The column showing the source's entrance column.
+    centre: s32
+    // Set for a portrait, whose floor stays roomy; pillars marks the source
+    // cells of the lone hedge pillars it may drop.
+    roomy: bool
+    pillars: [CELLS]bool
+}
+
+MirrorSolid :: (raw: u8) -> bool {
+    tile := LoadedTile(raw)
+    return tile >= 20 && tile < 128
+}
+MirrorCreature :: (raw: u8) -> bool { return (raw & 127) >= 40 && (raw & 127) <= 45 }
+MirrorHedgePiece :: (raw: u8) -> bool { return raw >= 50 && raw <= 58 }
+// Hedge pieces only dress a wall, so they count as the plain wall here.
+MirrorMotif :: (raw: u8) -> u8 {
+    tile := LoadedTile(raw)
+    if MirrorHedgePiece(tile) { return 20 }
+    return tile
+}
+
+// Lines are columns when columns is set, else rows; across runs along them.
+MirrorLines :: (work: *MirrorWork, columns: bool) -> s32 { return ifx columns then work.columns else work.rows }
+MirrorCell :: (work: *MirrorWork, columns: bool, line: s32, across: s32) -> s32 {
+    if columns { return across * work.columns + line }
+    return line * work.columns + across
+}
+// 1 for wall, 0 for floor.
+MirrorClasses :: (source: []u8, work: *MirrorWork, classes: []u8) {
+    for at: 0..work.columns * work.rows - 1 { classes[at] = ifx MirrorSolid(source[work.origin[at]]) then 1 else 0 }
+}
+
+// Labels one region from the cells already queued. Floor joins sideways;
+// walls also join across corners, where the worm cannot pass.
+MirrorFlood :: (classes: []u8, columns: s32, rows: s32, kind: u8, labels: []s32, queue: []s32, filled: s32, label: s32) {
+    head: s32 = 0
+    tail := filled
+    while head < tail {
+        at := queue[head]
+        head += 1
+        x := at % columns
+        y := at / columns
+        for dy: -1..1 {
+            for dx: -1..1 {
+                if (dx == 0 && dy == 0) || (kind == 0 && dx != 0 && dy != 0) { continue }
+                nx := x + cast(s32)dx
+                ny := y + cast(s32)dy
+                if nx < 0 || ny < 0 || nx >= columns || ny >= rows { continue }
+                next := ny * columns + nx
+                if labels[next] != 0 || classes[next] != kind { continue }
+                labels[next] = label
+                queue[tail] = next
+                tail += 1
+            }
+        }
+    }
+}
+// Numbers the floor (kind 0) or wall (kind 1) regions. The walls touching
+// the edge share one region with the outside.
+MirrorRegions :: (classes: []u8, columns: s32, rows: s32, kind: u8, labels: []s32) -> s32 {
+    cells := columns * rows
+    queue: [CELLS]s32
+    for at: 0..cells - 1 { labels[at] = 0 }
+    count: s32 = 0
+    if kind == 1 {
+        count = 1
+        filled: s32 = 0
+        for at: 0..cells - 1 {
+            x := cast(s32)at % columns
+            y := cast(s32)at / columns
+            if classes[at] == 1 && (x == 0 || y == 0 || x == columns - 1 || y == rows - 1) {
+                labels[at] = 1
+                queue[filled] = cast(s32)at
+                filled += 1
+            }
+        }
+        MirrorFlood(classes, columns, rows, kind, labels, queue[:], filled, 1)
+    }
+    for at: 0..cells - 1 {
+        if labels[at] != 0 || classes[at] != kind { continue }
+        count += 1
+        labels[at] = count
+        queue[0] = cast(s32)at
+        MirrorFlood(classes, columns, rows, kind, labels, queue[:], 1, count)
+    }
+    return count
+}
+
+// Marks the source cells of every wall region a roomy board may drop, from
+// the untouched source, so a wall thinned on the way never qualifies.
+MirrorPillars :: (source: []u8, work: *MirrorWork, walls: []s32, wall_count: s32) {
+    size: [CELLS + 1]s32
+    hedge: [CELLS + 1]bool
+    cells := work.columns * work.rows
+    for label: 0..wall_count { hedge[label] = true }
+    for at: 0..cells - 1 {
+        label := walls[at]
+        if label == 0 { continue }
+        size[label] += 1
+        if !IsHedge(MirrorMotif(source[work.origin[at]])) { hedge[label] = false }
+    }
+    for at: 0..CELLS - 1 { work.pillars[at] = false }
+    if !work.roomy { return }
+    for at: 0..cells - 1 {
+        label := walls[at]
+        work.pillars[at] = label > 1 && hedge[label] && size[label] <= MIRROR_PILLAR
+    }
+}
+
+// Takes one cell out of each row (columns) or column (rows) at seam.
+RemoveSeam :: (work: *MirrorWork, columns: bool, seam: []s32) {
+    old := work.*
+    if columns {
+        work.columns -= 1
+        for y: 0..work.rows - 1 {
+            for x: 0..work.columns - 1 {
+                from := y * old.columns + (ifx x < seam[y] then x else x + 1)
+                work.origin[y * work.columns + x] = old.origin[from]
+                work.copied[y * work.columns + x] = old.copied[from]
+            }
+        }
+        if seam[0] < work.centre { work.centre -= 1 }
+    } else {
+        work.rows -= 1
+        for x: 0..work.columns - 1 {
+            for y: 0..work.rows - 1 {
+                from := (ifx y < seam[x] then y else y + 1) * old.columns + x
+                work.origin[y * work.columns + x] = old.origin[from]
+                work.copied[y * work.columns + x] = old.copied[from]
+            }
+        }
+    }
+}
+// Repeats line at right after itself.
+RepeatLine :: (work: *MirrorWork, columns: bool, at: s32) {
+    old := work.*
+    if columns {
+        work.columns += 1
+        for y: 0..work.rows - 1 {
+            for x: 0..work.columns - 1 {
+                from := y * old.columns + (ifx x <= at then x else x - 1)
+                work.origin[y * work.columns + x] = old.origin[from]
+                work.copied[y * work.columns + x] = old.copied[from] || x == at + 1
+            }
+        }
+        if at < work.centre { work.centre += 1 }
+    } else {
+        work.rows += 1
+        for y: 0..work.rows - 1 {
+            for x: 0..work.columns - 1 {
+                from := (ifx y <= at then y else y - 1) * old.columns + x
+                work.origin[y * work.columns + x] = old.origin[from]
+                work.copied[y * work.columns + x] = old.copied[from] || y == at + 1
+            }
+        }
+    }
+}
+
+// Whether removing seam keeps every floor and wall region, each one still
+// the same region it was.
+MirrorKeeps :: (source: []u8, work: *MirrorWork, columns: bool, seam: []s32, floors: []s32, floor_count: s32, walls: []s32, wall_count: s32) -> bool {
+    trial := work.*
+    RemoveSeam(*trial, columns, seam)
+    classes: [CELLS]u8
+    MirrorClasses(source, *trial, classes[:])
+    labels: [CELLS]s32
+    for kind: 0..1 {
+        count := MirrorRegions(classes[:], trial.columns, trial.rows, cast(u8)kind, labels[:])
+        before_count := ifx kind == 0 then floor_count else wall_count
+        if count > before_count || (count < before_count && kind == 0) { return false }
+        now_to_before: [CELLS + 1]s32
+        before_to_now: [CELLS + 1]s32
+        for y: 0..trial.rows - 1 {
+            for x: 0..trial.columns - 1 {
+                cell := y * trial.columns + x
+                if classes[cell] != cast(u8)kind { continue }
+                bx := ifx columns && x >= seam[y] then x + 1 else x
+                by := ifx !columns && y >= seam[x] then y + 1 else y
+                before := ifx kind == 0 then floors[by * work.columns + bx] else walls[by * work.columns + bx]
+                now := labels[cell]
+                if now_to_before[now] == 0 { now_to_before[now] = before }
+                else if now_to_before[now] != before { return false }
+                if before_to_now[before] == 0 { before_to_now[before] = now }
+                else if before_to_now[before] != now { return false }
+            }
+        }
+        if count == before_count { continue }
+        // Only whole lone pillars may go.
+        for at: 0..work.columns * work.rows - 1 {
+            if walls[at] != 0 && before_to_now[walls[at]] == 0 && !work.pillars[work.origin[at]] { return false }
+        }
+    }
+    return true
+}
+
+// The run of one kind through a cell along the lines, the cell included.
+MirrorRun :: (classes: []u8, work: *MirrorWork, columns: bool, line: s32, across: s32) -> s32 {
+    lines := MirrorLines(work, columns)
+    kind := classes[MirrorCell(work, columns, line, across)]
+    run: s32 = 1
+    before := line - 1
+    while before >= 0 && classes[MirrorCell(work, columns, before, across)] == kind { run += 1; before -= 1 }
+    after := line + 1
+    while after < lines && classes[MirrorCell(work, columns, after, across)] == kind { run += 1; after += 1 }
+    return run
+}
+
+// What removing one cell costs, or -1 when it would erase a feature one
+// cell across. Thinning walls is cheap; thinning a passage costs thin.
+MirrorCellCost :: (source: []u8, work: *MirrorWork, classes: []u8, columns: bool, line: s32, across: s32, thin: s32) -> s32 {
+    run := MirrorRun(classes, work, columns, line, across)
+    floor := classes[MirrorCell(work, columns, line, across)] == 0
+    cost: s32 = 0
+    if run == 1 {
+        if floor || !work.pillars[work.origin[MirrorCell(work, columns, line, across)]] { return -1 }
+        cost += 2
+    } else if floor {
+        // A five-cell gap narrowed to four can turn into a gate's doorway.
+        if run == 2 { cost += thin } else if run == 5 { cost += 4 }
+        // A roomy board narrows floor only where walls cannot give way.
+        else if work.roomy && run == 3 { cost += 8 }
+        else if work.roomy && run == 4 { cost += 3 }
+        else if work.roomy { cost += 1 }
+    } else if work.roomy { if run == 2 { cost += 1 } }
+    else if run == 2 { cost += 3 }
+    else if run <= 4 { cost += 1 }
+    raw := source[work.origin[MirrorCell(work, columns, line, across)]]
+    if MirrorMotif(raw) != MirrorMotif(source[work.origin[MirrorCell(work, columns, line - 1, across)]]) &&
+    MirrorMotif(raw) != MirrorMotif(source[work.origin[MirrorCell(work, columns, line + 1, across)]]) { cost += 1 }
+    if MirrorCreature(raw) { cost += 2 }
+    return cost
+}
+
+// Stepping the seam sideways, one or two lines, shifts what lies between:
+// cheap in the open, dearer beside a wall. Two-line steps let a seam
+// weave through staggered pillars.
+MirrorJogCost :: (classes: []u8, work: *MirrorWork, columns: bool, from: s32, to: s32, across: s32) -> s32 {
+    low := ifx from < to then from else to
+    high := ifx from < to then to else from
+    open := true
+    for line: low..high {
+        if classes[MirrorCell(work, columns, cast(s32)line, across - 1)] != 0 || classes[MirrorCell(work, columns, cast(s32)line, across)] != 0 { open = false }
+    }
+    return (high - low) * (ifx open then 1 else 6)
+}
+
+// The cheapest seam between lines low and high, kept near ideal. Writes
+// seam and returns its cost, or -1 when every seam erases a feature.
+MirrorSeam :: (source: []u8, work: *MirrorWork, classes: []u8, columns: bool, low: s32, high: s32, ideal: s32, thin: s32, weight: s32, seam: []s32) -> s32 {
+    span := MirrorLines(work, !columns)
+    width := high - low + 1
+    total: [40 * 40]s32
+    from: [40 * 40]s32
+    for across: 0..span - 1 {
+        for offset: 0..width - 1 {
+            line := low + cast(s32)offset
+            at := cast(s32)across * width + cast(s32)offset
+            total[at] = -1
+            cost := MirrorCellCost(source, work, classes, columns, line, cast(s32)across, thin)
+            if cost < 0 { continue }
+            here := cost * weight + Abs(line - ideal)
+            if across == 0 { total[at] = here; continue }
+            for step: -2..2 {
+                previous := cast(s32)offset + cast(s32)step
+                if previous < 0 || previous >= width { continue }
+                before := total[(cast(s32)across - 1) * width + previous]
+                if before < 0 { continue }
+                if step != 0 { before += MirrorJogCost(classes, work, columns, low + previous, line, cast(s32)across) * 8 }
+                if total[at] < 0 || before + here < total[at] { total[at] = before + here; from[at] = previous }
+            }
+        }
+    }
+    end: s32 = -1
+    for offset: 0..width - 1 {
+        at := (span - 1) * width + cast(s32)offset
+        if total[at] >= 0 && (end < 0 || total[at] < total[(span - 1) * width + end]) { end = cast(s32)offset }
+    }
+    if end < 0 { return -1 }
+    best := total[(span - 1) * width + end]
+    for < across: 0..span - 1 {
+        seam[across] = low + end
+        if across > 0 { end = from[cast(s32)across * width + end] }
+    }
+    return best
+}
+
+// What repeating a straight line costs, or -1 for a line already repeated:
+// widening something narrow shows, widening open floor or thick wall not.
+MirrorRepeatCost :: (work: *MirrorWork, classes: []u8, columns: bool, at: s32) -> s32 {
+    span := MirrorLines(work, !columns)
+    for line: at..at + 1 {
+        for across: 0..span - 1 { if work.copied[MirrorCell(work, columns, cast(s32)line, cast(s32)across)] { return -1 } }
+    }
+    cost: s32 = 0
+    for across: 0..span - 1 {
+        run := MirrorRun(classes, work, columns, at, cast(s32)across)
+        floor := classes[MirrorCell(work, columns, at, cast(s32)across)] == 0
+        // Widening something narrow shows; a doorway four cells across
+        // stops being one at five.
+        if run <= 2 { cost += 2 }
+        else if floor && run == 4 { cost += 4 }
+        else if floor && run == 3 { cost += 1 }
+        // A roomy board grows its open floor, not its walls and lakes.
+        if work.roomy && !floor { cost += 1 }
+        // Lengthening a narrow corridor can make room for a gate.
+        if floor && MirrorRun(classes, work, !columns, cast(s32)across, at) <= 2 { cost += 1 }
+    }
+    return cost
+}
+
+// Removes count seams, each between the lines low and high of the board as
+// it stands, near its even share of the span. A seam that would change a
+// region gives way to the cheapest straight line that does not.
+MirrorDrop :: (source: []u8, work: *MirrorWork, columns: bool, low: s32, high: s32, count: s32, thin: s32, shift: s32, weight: s32) -> bool {
+    for step: 0..count - 1 {
+        top := high - cast(s32)step
+        if !columns && low > top { return false }
+        if columns && low > high { return false }
+        last := ifx columns then high else top
+        classes: [CELLS]u8
+        MirrorClasses(source, work, classes[:])
+        floors: [CELLS]s32
+        walls: [CELLS]s32
+        floor_count := MirrorRegions(classes[:], work.columns, work.rows, 0, floors[:])
+        wall_count := MirrorRegions(classes[:], work.columns, work.rows, 1, walls[:])
+        ideal := low + cast(s32)((2 * step + 1) * (last - low + 1) / (2 * count)) + shift
+        seam: [40]s32
+        if MirrorSeam(source, work, classes[:], columns, low, last, ideal, thin, weight, seam[:]) >= 0 &&
+        MirrorKeeps(source, work, columns, seam[:], floors[:], floor_count, walls[:], wall_count) {
+            RemoveSeam(work, columns, seam[:])
+            if columns { high -= 1 }
+            continue
+        }
+        span := MirrorLines(work, !columns)
+        scores: [40]s32
+        for line: low..last {
+            scores[line] = -1
+            cost: s32 = 0
+            for across: 0..span - 1 {
+                cell := MirrorCellCost(source, work, classes[:], columns, cast(s32)line, cast(s32)across, thin)
+                if cell < 0 { cost = -1; break }
+                cost += cell
+            }
+            if cost >= 0 { scores[line] = cost * weight + Abs(cast(s32)line - ideal) }
+        }
+        removed := false
+        while !removed {
+            best: s32 = -1
+            for line: low..last {
+                if scores[line] >= 0 && (best < 0 || scores[line] < scores[best]) { best = cast(s32)line }
+            }
+            if best < 0 { return false }
+            for across: 0..span - 1 { seam[across] = best }
+            if MirrorKeeps(source, work, columns, seam[:], floors[:], floor_count, walls[:], wall_count) {
+                RemoveSeam(work, columns, seam[:])
+                if columns { high -= 1 }
+                removed = true
+            } else { scores[best] = -1 }
+        }
+    }
+    return true
+}
+
+// Repeats count straight lines between low and high, the same way.
+MirrorRepeat :: (source: []u8, work: *MirrorWork, columns: bool, low: s32, high: s32, count: s32, shift: s32, weight: s32) {
+    for step: 0..count - 1 {
+        classes: [CELLS]u8
+        MirrorClasses(source, work, classes[:])
+        last := high + cast(s32)step
+        ideal := low + cast(s32)((2 * step + 1) * (last - low + 1) / (2 * count)) + shift
+        best: s32 = -1
+        best_score: s32 = 0
+        for at: low..last {
+            cost := MirrorRepeatCost(work, classes[:], columns, cast(s32)at)
+            if cost < 0 { continue }
+            score := cost * weight + Abs(cast(s32)at - ideal) * 3
+            if best < 0 || score < best_score { best = cast(s32)at; best_score = score }
+        }
+        if best >= 0 { RepeatLine(work, columns, best) }
+    }
+}
+
+// The nearest cell, from start, that takes a creature (plain floor outside
+// the entrance area) or a decoration (floor without one).
+MirrorPlace :: (board: []u8, objects: []u8, columns: s32, rows: s32, start: s32, creature: bool) -> s32 {
+    seen: [CELLS]bool
+    queue: [CELLS]s32
+    seen[start] = true
+    queue[0] = start
+    head: s32 = 0
+    tail: s32 = 1
+    while head < tail {
+        at := queue[head]
+        head += 1
+        x := at % columns
+        y := at / columns
+        if creature && board[at] == 0 && !EnemyFreeZone(Point.{x * 16 + 8, y * 16 + 8}) { return at }
+        if !creature && objects[at] == 0 && !MirrorSolid(board[at]) { return at }
+        neighbours: [4]s32 = .[ifx x > 0 then at - 1 else -1, ifx x < columns - 1 then at + 1 else -1,
+            ifx y > 0 then at - columns else -1, ifx y < rows - 1 then at + columns else -1]
+        for next: neighbours {
+            if next < 0 || seen[next] { continue }
+            seen[next] = true
+            queue[tail] = next
+            tail += 1
+        }
+    }
+    return -1
+}
+
+// The cell showing a source cell, or the one showing its nearest shown
+// neighbour when a seam took it.
+MirrorShown :: (shown: []s32, source_columns: s32, source_rows: s32, start: s32) -> s32 {
+    seen: [CELLS]bool
+    queue: [CELLS]s32
+    seen[start] = true
+    queue[0] = start
+    head: s32 = 0
+    tail: s32 = 1
+    while head < tail {
+        at := queue[head]
+        head += 1
+        if shown[at] >= 0 { return shown[at] }
+        x := at % source_columns
+        y := at / source_columns
+        neighbours: [4]s32 = .[ifx x > 0 then at - 1 else -1, ifx x < source_columns - 1 then at + 1 else -1,
+            ifx y > 0 then at - source_columns else -1, ifx y < source_rows - 1 then at + source_columns else -1]
+        for next: neighbours {
+            if next < 0 || seen[next] { continue }
+            seen[next] = true
+            queue[tail] = next
+            tail += 1
+        }
+    }
+    return 0
+}
+
+// Wall or edge on each side of a cell: west, north, east, south.
+MirrorSides :: (board: []u8, columns: s32, rows: s32, x: s32, y: s32) -> s32 {
+    sides: s32 = 0
+    if x == 0 || MirrorSolid(board[y * columns + x - 1]) { sides |= 1 }
+    if y == 0 || MirrorSolid(board[(y - 1) * columns + x]) { sides |= 2 }
+    if x == columns - 1 || MirrorSolid(board[y * columns + x + 1]) { sides |= 4 }
+    if y == rows - 1 || MirrorSolid(board[(y + 1) * columns + x]) { sides |= 8 }
+    return sides
+}
+
+// Writes the reshaped board: one copy of each decoration, creatures placed
+// once each and hedge pieces refitted where their sides changed.
+MirrorBuild :: (source: []u8, source_objects: []u8, work: *MirrorWork, source_columns: s32, source_rows: s32, board: []u8, objects: []u8) -> s32 {
+    columns := work.columns
+    rows := work.rows
+    shown: [CELLS]s32
+    for at: 0..CELLS - 1 { shown[at] = -1 }
+    for at: 0..columns * rows - 1 {
+        from := work.origin[at]
+        board[at] = LoadedTile(source[from])
+        objects[at] = 0
+        if !work.copied[at] { shown[from] = cast(s32)at }
+    }
+    saved_columns := board_columns
+    saved_rows := board_rows
+    BoardSize(columns, rows)
+    for at: 0..columns * rows - 1 {
+        from := work.origin[at]
+        if !MirrorHedgePiece(source[from]) { continue }
+        x := cast(s32)at % columns
+        y := cast(s32)at / columns
+        if MirrorSides(board, columns, rows, x, y) != MirrorSides(source, source_columns, source_rows, from % source_columns, from / source_columns) {
+            board[at] = AutoHedge(board, x, y)
+        }
+    }
+    // Creatures that start in the source's entrance area never appear, so
+    // they stay out of the mirror too.
+    problems: s32 = 0
+    for from: 0..source_columns * source_rows - 1 {
+        raw := source[from]
+        if MirrorCreature(raw) {
+            BoardSize(source_columns, source_rows)
+            quiet := EnemyFreeZone(Point.{(cast(s32)from % source_columns) * 16 + 8, (cast(s32)from / source_columns) * 16 + 8})
+            BoardSize(columns, rows)
+            if !quiet {
+                cell := MirrorPlace(board, objects, columns, rows, MirrorShown(shown[:], source_columns, source_rows, cast(s32)from), true)
+                if cell < 0 { problems |= MIRROR_CREATURE } else { board[cell] = raw & 127 }
+            }
+        }
+        if source_objects[from] != 0 {
+            cell := MirrorShown(shown[:], source_columns, source_rows, cast(s32)from)
+            if objects[cell] != 0 { cell = MirrorPlace(board, objects, columns, rows, cell, false) }
+            if cell >= 0 { objects[cell] = source_objects[from] }
+        }
+    }
+    BoardSize(saved_columns, saved_rows)
+    return problems
+}
+
+// Mirrors source (landscape 40x30 when to_portrait, else portrait 30x40)
+// into board and objects of the other orientation; variant moves where the
+// lines go. Returns the problems found; MIRROR_TOPOLOGY leaves board
+// unwritten for the caller's fallback.
+MirrorLayout :: (source: []u8, source_objects: []u8, to_portrait: bool, board: []u8, objects: []u8, variant: s32 = 0) -> s32 {
+    sc: s32 = ifx to_portrait then COLUMNS else ROWS
+    sr: s32 = ifx to_portrait then ROWS else COLUMNS
+    work: MirrorWork
+    work.columns = sc
+    work.rows = sr
+    work.centre = sc / 2
+    work.roomy = to_portrait && variant < MIRROR_ROOMY_VARIANTS
+    for at: 0..CELLS - 1 { work.origin[at] = cast(s32)at }
+    classes: [CELLS]u8
+    MirrorClasses(source, *work, classes[:])
+    walls: [CELLS]s32
+    MirrorPillars(source, *work, walls[:], MirrorRegions(classes[:], sc, sr, 1, walls[:]))
+    turn := variant % 9
+    shift: s32 = ((turn + 1) / 2) * (ifx turn % 2 == 1 then 1 else -1)
+    // How much a cost point outweighs one line away from an even spread.
+    drop: s32 = ifx variant < 9 then 8 else 128
+    repeat: s32 = ifx variant < 9 then 2 else 128
+    side: s32 = (COLUMNS - ROWS) / 2
+    kept := true
+    if to_portrait {
+        // Five columns leave on each side of the entrance's clear lanes.
+        kept = MirrorDrop(source, *work, true, 1, work.centre - START_CLEAR_HALF_WIDTH - 1, side, MIRROR_THIN_PORTRAIT, shift, drop)
+        if kept {
+            kept = MirrorDrop(source, *work, true, work.centre + START_CLEAR_HALF_WIDTH + 1, work.columns - 2, side, MIRROR_THIN_PORTRAIT, -shift, drop)
+        }
+        if kept { MirrorRepeat(source, *work, false, 1, work.rows - 2, COLUMNS - ROWS, shift, repeat) }
+    } else {
+        // Rows leave between the exit row and the clear start area.
+        kept = MirrorDrop(source, *work, false, 2, work.rows - 2 - START_CLEAR_ROWS, COLUMNS - ROWS, MIRROR_THIN_LANDSCAPE, shift, drop)
+        if kept {
+            MirrorRepeat(source, *work, true, 1, work.centre - 1, side, shift, repeat)
+            MirrorRepeat(source, *work, true, work.centre + 1, work.columns - 2, side, -shift, repeat)
+        }
+    }
+    if !kept || work.columns != ROWS + COLUMNS - sc || work.rows != ROWS + COLUMNS - sr { return MIRROR_TOPOLOGY }
+    return MirrorBuild(source, source_objects, *work, sc, sr, board, objects)
+}
+
+// The puzzle idea the engine places on a board, and its portal pairs.
+MirrorIdea :: (level: s32, board: []u8, objects: []u8, portrait: bool) -> (feature: s32, portals: s32) {
+    saved_columns := board_columns
+    saved_rows := board_rows
+    enabled := features_enabled
+    features_enabled = true
+    game: Game
+    StartGameData(*game, level, 0, 1, board, 5, ifx portrait then ROWS else COLUMNS, ifx portrait then COLUMNS else ROWS, objects)
+    features_enabled = enabled
+    BoardSize(saved_columns, saved_rows)
+    return game.feature, game.portal_count
+}
+
+// How far a board's floor lies from the entrance, in tenths of a step on
+// average, plus a penalty for floor in passages one or two cells across:
+// lower plays more openly.
+MirrorSprawl :: (board: []u8, columns: s32, rows: s32) -> s32 {
+    distance: [CELLS]s32
+    queue: [CELLS]s32
+    for at: 0..columns * rows - 1 { distance[at] = -1 }
+    start := (rows - 2) * columns + columns / 2
+    distance[start] = 0
+    queue[0] = start
+    head: s32 = 0
+    tail: s32 = 1
+    total: s32 = 0
+    while head < tail {
+        at := queue[head]
+        head += 1
+        total += distance[at]
+        x := at % columns
+        y := at / columns
+        neighbours: [4]s32 = .[ifx x > 0 then at - 1 else -1, ifx x < columns - 1 then at + 1 else -1,
+            ifx y > 0 then at - columns else -1, ifx y < rows - 1 then at + columns else -1]
+        for next: neighbours {
+            if next < 0 || distance[next] >= 0 || MirrorSolid(board[next]) { continue }
+            distance[next] = distance[at] + 1
+            queue[tail] = next
+            tail += 1
+        }
+    }
+    // Floor in passages one or two cells across, the narrower way.
+    narrow: s32 = 0
+    for y: 1..rows - 2 {
+        for x: 1..columns - 2 {
+            at := y * columns + x
+            if MirrorSolid(board[at]) { continue }
+            across: s32 = 1
+            while x - across >= 0 && !MirrorSolid(board[at - across]) && across < 3 { across += 1 }
+            right: s32 = 1
+            while x + right < columns && !MirrorSolid(board[at + right]) && across + right <= 3 { right += 1 }
+            wide := across + right - 1
+            down: s32 = 1
+            while y - down >= 0 && !MirrorSolid(board[at - down * columns]) && down < 3 { down += 1 }
+            up: s32 = 1
+            while y + up < rows && !MirrorSolid(board[at + up * columns]) && down + up <= 3 { up += 1 }
+            tall := down + up - 1
+            least := ifx wide < tall then wide else tall
+            if least == 1 { narrow += 5 } else if least == 2 { narrow += 2 }
+        }
+    }
+    return total * 10 / tail + narrow
+}
+
+// Mirrors a campaign level, trying other spreads until the engine places
+// the same puzzle idea as on the source; the first spread otherwise, with
+// MIRROR_IDEA. A portrait takes the most open spread with that idea.
+MirrorLevel :: (level: s32, source: []u8, source_objects: []u8, to_portrait: bool, board: []u8, objects: []u8) -> s32 {
+    want_feature, want_portals := MirrorIdea(level, source, source_objects, !to_portrait)
+    first: s32 = -1
+    best: s32 = -1
+    for variant: 0..MIRROR_VARIANTS - 1 {
+        if !to_portrait && variant >= MIRROR_ROOMY_VARIANTS { break }
+        trial: [CELLS]u8
+        trial_objects: [CELLS]u8
+        problems := MirrorLayout(source, source_objects, to_portrait, trial[:], trial_objects[:], cast(s32)variant)
+        if (problems & MIRROR_TOPOLOGY) != 0 { continue }
+        feature, portals := MirrorIdea(level, trial[:], trial_objects[:], to_portrait)
+        same := feature == want_feature && portals == want_portals
+        sprawl := ifx same && to_portrait then MirrorSprawl(trial[:], ROWS, COLUMNS) else 0
+        if first < 0 || (same && ((first & MIRROR_IDEA) != 0 || sprawl < best)) {
+            for at: 0..CELLS - 1 { board[at] = trial[at]; objects[at] = trial_objects[at] }
+            first = ifx same then problems else problems | MIRROR_IDEA
+            best = sprawl
+        }
+        if same && !to_portrait { return first }
+    }
+    if first < 0 { return MIRROR_TOPOLOGY }
+    return first
+}

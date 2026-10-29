@@ -1,0 +1,764 @@
+// Every level's effective board in both orientations, as the game loads it:
+// where each layout comes from, the same regions, creatures, apple goal and
+// puzzle idea as its mirror's source, a clear start, every floor cell and
+// the exit reachable from the entrance, a real engine drive from the
+// entrance through an apple to the exit, a full playthrough with every apple
+// and the worm's growth (creatures and puzzle ideas set aside: the bot
+// plays geometry with features off and no creatures), repeatable mirroring
+// and personal layouts keeping priority. A mirror that loses a dozen apple
+// sequences while its source wins one plays more beside it and must win
+// at least a third as often; a board lost in both layouts is reported as
+// the bot's limit. Personal records live in a private folder.
+//
+//     orientation_test [verbose | show LEVEL | play LEVEL [SEEDS [DUMPED SEED]] | variants LEVEL [SHOWN]]
+#import, file "../src/game.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+Mirror :: #import, file "../src/board_orientation.zi";
+libc :: #system_library "libc";
+ParseNumber :: (text: *u8) -> s32 #foreign libc "atoi";
+#import "std/text_buffer"
+#import "std/byte_text_linux"
+
+failures: s32;
+Expect :: (value: bool, message: string, level: s32 = -1, portrait: bool = false) {
+    if value { return }
+    if level >= 0 { print("FAIL: % (level %, %)\n", message, level + 1, ifx portrait then "portrait" else "landscape") }
+    else { print("FAIL: %\n", message) }
+    failures += 1
+}
+
+Dimensions :: (portrait: bool) -> (columns: s32, rows: s32) {
+    if portrait { return ROWS, COLUMNS }
+    return COLUMNS, ROWS
+}
+
+// Floor and wall regions, as the mirror counts them, and the lone hedge
+// pillars among the walls that a portrait may drop.
+Regions :: (board: []u8, portrait: bool) -> (floors: s32, walls: s32, pillars: s32) {
+    columns, rows := Dimensions(portrait)
+    classes: [CELLS]u8
+    for at: 0..CELLS - 1 { classes[at] = ifx Mirror.MirrorSolid(board[at]) then 1 else 0 }
+    labels: [CELLS]s32
+    floors := Mirror.MirrorRegions(classes[:], columns, rows, 0, labels[:])
+    walls := Mirror.MirrorRegions(classes[:], columns, rows, 1, labels[:])
+    size: [CELLS + 1]s32
+    hedge: [CELLS + 1]bool
+    for label: 0..walls { hedge[label] = true }
+    for at: 0..columns * rows - 1 {
+        if labels[at] == 0 { continue }
+        size[labels[at]] += 1
+        if !IsHedge(Mirror.MirrorMotif(board[at])) { hedge[labels[at]] = false }
+    }
+    pillars: s32 = 0
+    for label: 2..walls { if hedge[label] && size[label] <= Mirror.MIRROR_PILLAR { pillars += 1 } }
+    return floors, walls, pillars
+}
+
+// Floor cells the entrance reaches, all floor cells and the steps to the
+// exit (-1 when it is out of reach).
+Reach :: (board: []u8, portrait: bool) -> (reached: s32, floor: s32, route: s32) {
+    columns, rows := Dimensions(portrait)
+    floor: s32 = 0
+    for at: 0..CELLS - 1 { if !Mirror.MirrorSolid(board[at]) { floor += 1 } }
+    distance: [CELLS]s32
+    for at: 0..CELLS - 1 { distance[at] = -1 }
+    queue: [CELLS]s32
+    start := (rows - 2) * columns + columns / 2
+    if Mirror.MirrorSolid(board[start]) { return 0, floor, -1 }
+    distance[start] = 0
+    queue[0] = start
+    head: s32 = 0
+    tail: s32 = 1
+    while head < tail {
+        at := queue[head]
+        head += 1
+        x := at % columns
+        y := at / columns
+        neighbours: [4]s32 = .[ifx x > 0 then at - 1 else -1, ifx x < columns - 1 then at + 1 else -1,
+            ifx y > 0 then at - columns else -1, ifx y < rows - 1 then at + columns else -1]
+        for next: neighbours {
+            if next < 0 || distance[next] >= 0 || Mirror.MirrorSolid(board[next]) { continue }
+            distance[next] = distance[at] + 1
+            queue[tail] = next
+            tail += 1
+        }
+    }
+    return tail, floor, distance[columns + columns / 2]
+}
+
+Creatures :: (level: s32, board: []u8, portrait: bool) -> s32 {
+    columns, rows := Dimensions(portrait)
+    objects: [CELLS]u8
+    enabled := features_enabled
+    features_enabled = false
+    game: Game
+    game.random = 1
+    LoadLevelData(*game, level, 0, board, 5, columns, rows, objects[:])
+    features_enabled = enabled
+    return game.monster_count
+}
+
+// The puzzle idea the engine places, and its portal pairs.
+Idea :: (level: s32, board: []u8, portrait: bool) -> (feature: s32, portals: s32) {
+    columns, rows := Dimensions(portrait)
+    objects: [CELLS]u8
+    game: Game
+    StartGameData(*game, level, 0, 17, board, 5, columns, rows, objects[:])
+    return game.feature, game.portal_count
+}
+
+// The first move toward target over cells the head may enter, avoiding the
+// body; -1 when nothing leads there.
+Toward :: (game: *Game, target: s32) -> s32 {
+    blocked: [CELLS]bool
+    index: s32 = 8
+    while index < game.length {
+        segment := game.worm[index]
+        if Inside(segment.x / 16, segment.y / 16) { blocked[Index(segment.x / 16, segment.y / 16)] = true }
+        index += 4
+    }
+    distance: [CELLS]s32
+    for at: 0..CELLS - 1 { distance[at] = -1 }
+    queue: [CELLS]s32
+    distance[target] = 0
+    queue[0] = target
+    head: s32 = 0
+    tail: s32 = 1
+    while head < tail {
+        at := queue[head]
+        head += 1
+        x := at % board_columns
+        y := at / board_columns
+        neighbours: [4]s32 = .[ifx x > 0 then at - 1 else -1, ifx x < board_columns - 1 then at + 1 else -1,
+            ifx y > 0 then at - board_columns else -1, ifx y < board_rows - 1 then at + board_columns else -1]
+        for next: neighbours {
+            if next < 0 || distance[next] >= 0 || blocked[next] || !Passable(game, next) { continue }
+            distance[next] = distance[at] + 1
+            queue[tail] = next
+            tail += 1
+        }
+    }
+    x := game.worm[0].x / 16
+    y := game.worm[0].y / 16
+    best: s32 = -1
+    best_distance: s32 = 0
+    for direction: 0..3 {
+        if direction == (game.direction + 2) % 4 { continue }
+        nx := x + (ifx direction == DIR_LEFT then -1 else ifx direction == DIR_RIGHT then 1 else 0)
+        ny := y + (ifx direction == DIR_UP then -1 else ifx direction == DIR_DOWN then 1 else 0)
+        if !Inside(nx, ny) || distance[Index(nx, ny)] < 0 { continue }
+        if best < 0 || distance[Index(nx, ny)] < best_distance { best = cast(s32)direction; best_distance = distance[Index(nx, ny)] }
+    }
+    return best
+}
+
+// The real engine with creatures and puzzle ideas set aside: a short worm
+// enters, eats the first apple and leaves through the opened exit.
+Drive :: (level: s32, board: []u8, apples: s32, portrait: bool, seed: u32) -> bool {
+    columns, rows := Dimensions(portrait)
+    objects: [CELLS]u8
+    enabled := features_enabled
+    features_enabled = false
+    game: Game
+    StartGameData(*game, level, 0, seed, board, apples, columns, rows, objects[:])
+    features_enabled = enabled
+    game.monster_count = 0
+    eaten := false
+    for tick: 0..20000 {
+        if game.mode == MODE_FINISHED || game.mode == MODE_VICTORY { return true }
+        if game.mode != MODE_PLAYING || game.death_ticks > 0 { return false }
+        if !eaten && game.apples < apples {
+            eaten = true
+            game.apples = 0
+            OpenExit(*game)
+        }
+        head := game.worm[0]
+        if head.x % 16 == 8 && head.y % 16 == 8 && Inside(head.x / 16, head.y / 16) {
+            target := ifx eaten then Index(board_columns / 2, 0) else Index(game.apple.x / 16, game.apple.y / 16)
+            if head.x / 16 == board_columns / 2 && head.y / 16 == 0 { game.next_direction = DIR_UP }
+            else {
+                direction := Toward(*game, target)
+                if direction >= 0 { game.next_direction = direction }
+            }
+        }
+        Tick(*game)
+        game.target_length = 2
+        if game.length > 32 { game.length = 32 }
+    }
+    return false
+}
+
+// The board as text, with the engine's gate (G), key (K), switch stone (S)
+// and portals (P).
+Show :: (level: s32, board: []u8, portrait: bool) {
+    columns, rows := Dimensions(portrait)
+    objects: [CELLS]u8
+    game: Game
+    StartGameData(*game, level, 0, 17, board, 5, columns, rows, objects[:])
+    print("Idea % with % portal pairs\n", game.feature, game.portal_count)
+    line: [41]u8
+    for y: 0..rows - 1 {
+        for x: 0..columns - 1 {
+            raw := board[y * columns + x]
+            line[x] = ifx Mirror.MirrorCreature(raw) then #char "e" else ifx raw == 22 then #char "~" else ifx Mirror.MirrorSolid(raw) then #char "#" else #char "."
+            at := Index(x, y)
+            centre := Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8}
+            for cell: 0..game.gate_span - 1 { if game.gate >= 0 && at == game.gate + cast(s32)cell * game.gate_step { line[x] = #char "G" } }
+            if Near(centre, game.key, 8) { line[x] = #char "K" }
+            if Near(centre, game.switch_stone, 8) { line[x] = #char "S" }
+            for pair: 0..game.portal_count - 1 {
+                if Near(centre, game.portals[pair].a, 8) || Near(centre, game.portals[pair].b, 8) { line[x] = #char "P" }
+            }
+        }
+        line[columns] = 0
+        print("%\n", TextUntilNul(line[:]))
+    }
+}
+
+sources: [5]s32;
+exceptions: s32;
+routes_longer: s32;
+narrowed_boards: s32;
+narrowed_cells: s32;
+narrowed_portraits: s32;
+dropped_pillars: s32;
+verbose: bool;
+PLAY_SEEDS :: 12;
+PLAY_EXTENDED :: 120;
+play_report: bool;
+play_dump: u32;
+// Set after a long wait for an apple: the bot then accepts less room.
+play_bold: bool;
+play_deaths: s32;
+play_stalls: s32;
+played: [LEVEL_COUNT * 2]bool;
+route_ratio_sum: s32;
+CheckLevel :: (level: s32) {
+    for orientation: 0..1 {
+        portrait := orientation == 1
+        columns, rows := Dimensions(portrait)
+        board: [CELLS]u8
+        published: [CELLS]u8
+        objects: [CELLS]u8
+        Custom.EffectiveBoard(level, board[:], portrait)
+        Custom.EffectiveObjects(level, objects[:], portrait)
+        Custom.DefaultBoard(level, published[:], portrait)
+        same := true
+        for at: 0..CELLS - 1 { if board[at] != published[at] { same = false } }
+        Expect(same, "the effective board is the published one without personal layouts", level, portrait)
+        source := Custom.LayoutSource(level, portrait)
+        sources[source] += 1
+        BoardSize(columns, rows)
+        Expect(LevelBlockages(board[:]) == 0, "entrance and exit open", level, portrait)
+        for x: 0..columns - 1 {
+            Expect(Mirror.MirrorSolid(board[x]) && Mirror.MirrorSolid(board[(rows - 1) * columns + x]), "walled top and bottom edges", level, portrait)
+        }
+        for y: 0..rows - 1 {
+            Expect(Mirror.MirrorSolid(board[y * columns]) && Mirror.MirrorSolid(board[y * columns + columns - 1]), "walled side edges", level, portrait)
+        }
+        reached, floor, route := Reach(board[:], portrait)
+        Expect(route > 0, "the exit is reachable from the entrance", level, portrait)
+        apples := Custom.EffectiveApples(level, portrait)
+        driven := false
+        for seed: 0..3 { if !driven { driven = Drive(level, board[:], apples, portrait, cast(u32)(3 + seed * 977 + level)) } }
+        Expect(driven, "a short worm reaches an apple and the exit in the engine", level, portrait)
+        // A full playthrough with a few apple sequences.
+        for seed: 0..PLAY_SEEDS - 1 {
+            if !played[level * 2 + orientation] { played[level * 2 + orientation] = Play(level, board[:], apples, portrait, cast(u32)(11 + seed * 7919 + level * 31)) }
+        }
+        if source != Custom.LAYOUT_MIRRORED { continue }
+        // The mirror against its source in the other orientation.
+        other: [CELLS]u8
+        Custom.DefaultBoard(level, other[:], !portrait)
+        mirrored: [CELLS]u8
+        mirrored_objects: [CELLS]u8
+        problems := Custom.MirroredLayout(level, portrait, false, mirrored[:], mirrored_objects[:])
+        if (problems & Mirror.MIRROR_TOPOLOGY) != 0 {
+            print("Exception: level % % keeps its previous layout: no mirror keeps every passage\n", level + 1, ifx portrait then "portrait" else "landscape")
+            exceptions += 1
+            continue
+        }
+        if (problems & Mirror.MIRROR_CREATURE) != 0 {
+            print("Exception: level % % has a creature without floor\n", level + 1, ifx portrait then "portrait" else "landscape")
+            exceptions += 1
+        }
+        // Mirroring again from nothing gives the same board.
+        Custom.ForgetMirrors(level)
+        again: [CELLS]u8
+        unused Custom.MirroredLayout(level, portrait, false, again[:], mirrored_objects[:])
+        direct: [CELLS]u8
+        direct_objects: [CELLS]u8
+        other_objects: [CELLS]u8
+        Custom.PublishedObjects(level, other_objects[:], !portrait)
+        unused Mirror.MirrorLevel(level, other[:], other_objects[:], portrait, direct[:], direct_objects[:])
+        repeat := true
+        for at: 0..CELLS - 1 { if again[at] != board[at] || direct[at] != board[at] { repeat = false } }
+        Expect(repeat, "mirroring is repeatable and cached faithfully", level, portrait)
+        floors, walls, pillars := Regions(board[:], portrait)
+        unused pillars
+        source_floors, source_walls, source_pillars := Regions(other[:], !portrait)
+        Expect(floors == source_floors, "the mirror keeps every floor region", level, portrait)
+        // A portrait may drop lone hedge pillars, and only those.
+        dropped := source_walls - walls
+        Expect(dropped >= 0 && dropped <= source_pillars && (portrait || dropped == 0),
+            "the mirror keeps every wall region but lone portrait pillars", level, portrait)
+        if dropped > 0 {
+            dropped_pillars += dropped
+            if verbose { print("Pillars: level % portrait drops % of % lone pillars\n", level + 1, dropped, source_pillars) }
+        }
+        source_reached, source_floor, source_route := Reach(other[:], !portrait)
+        Expect((reached == floor) == (source_reached == source_floor), "the mirror reaches its floor like its source", level, portrait)
+        // The clear start area shows only the source's own start area, so it
+        // needs carving only where the source's does.
+        Expect(StartWalls(board[:], portrait) == 0 || StartWalls(other[:], !portrait) > 0, "the clear start area needs no new carving", level, portrait)
+        Expect(Creatures(level, board[:], portrait) == Creatures(level, other[:], !portrait), "the mirror keeps every creature", level, portrait)
+        Expect(apples == Custom.EffectiveApples(level, !portrait), "both orientations share the apple goal", level, portrait)
+        feature, portals := Idea(level, board[:], portrait)
+        source_feature, source_portals := Idea(level, other[:], !portrait)
+        if feature != source_feature || portals != source_portals {
+            print("Exception: level % % places idea % with % portals; its source places % with %\n", level + 1,
+                ifx portrait then "portrait" else "landscape", feature, portals, source_feature, source_portals)
+            exceptions += 1
+        }
+        narrowed := Narrow(board[:], portrait, portrait) - Narrow(other[:], !portrait, portrait)
+        if narrowed > 0 {
+            narrowed_boards += 1
+            narrowed_cells += narrowed
+            if portrait { narrowed_portraits += 1 }
+            if verbose { print("Narrowed: level % % gains % one-cell passage cells\n", level + 1, ifx portrait then "portrait" else "landscape", narrowed) }
+        }
+        Expect(!MeadowPortalLevel(level) || portals == 1, "Meadow portal lessons keep their portal pair", level, portrait)
+        landscape_route := ifx portrait then source_route else route
+        portrait_route := ifx portrait then route else source_route
+        if landscape_route >= portrait_route { routes_longer += 1 }
+        if portrait_route > 0 { route_ratio_sum += landscape_route * 100 / portrait_route }
+    }
+}
+
+// Personal layouts keep their priority over every published and mirrored one.
+CheckPersonal :: () {
+    board: [CELLS]u8
+    objects: [CELLS]u8
+    published: [CELLS]u8
+    // A level with an authored portrait: a personal landscape wins, and the
+    // portrait stays the authored one.
+    Custom.DefaultBoard(12, board[:])
+    board[5 * COLUMNS + 5] = 21
+    Expect(Custom.SaveCustomLevel(12, board[:], objects[:], 7), "save a personal landscape")
+    Expect(Custom.LayoutSource(12) == Custom.LAYOUT_PERSONAL && Custom.EffectiveTile(12, 5, 5) == 21 && Custom.EffectiveApples(12) == 7,
+        "a personal landscape wins over the mirrored portrait")
+    Expect(Custom.LayoutSource(12, true) == Custom.LAYOUT_AUTHORED, "the authored portrait stays")
+    Expect(Custom.ClearCustomLevel(12), "remove the personal landscape")
+    // A personal portrait wins over the authored one, and the landscape
+    // mirrors it until a personal landscape exists; the published layouts
+    // never read either.
+    Custom.DefaultBoard(12, published[:])
+    Custom.DefaultBoard(12, board[:], true)
+    board[Custom.At(4, 6, true)] = 21
+    Expect(Custom.SaveCustomLevel(12, board[:], objects[:], 6, true), "save a personal portrait")
+    Expect(Custom.EffectiveTile(12, 4, 6, true) == 21, "a personal portrait wins over the authored one")
+    mirrored: [CELLS]u8
+    mirrored_objects: [CELLS]u8
+    unused Mirror.MirrorLevel(12, board[:], objects[:], false, mirrored[:], mirrored_objects[:])
+    shown: [CELLS]u8
+    shown_objects: [CELLS]u8
+    Custom.EffectiveBoard(12, shown[:])
+    Custom.EffectiveObjects(12, shown_objects[:])
+    same := true
+    for at: 0..CELLS - 1 { if shown[at] != mirrored[at] || shown_objects[at] != mirrored_objects[at] { same = false } }
+    Expect(same && Custom.LayoutSource(12) == Custom.LAYOUT_MIRRORED && Custom.EffectiveApples(12) == 6,
+        "the landscape mirrors the personal portrait and its apple goal")
+    Custom.DefaultBoard(12, shown[:])
+    same = true
+    for at: 0..CELLS - 1 { if shown[at] != published[at] { same = false } }
+    Expect(same && Custom.LayoutSource(12, false, true) == Custom.LAYOUT_MIRRORED, "the published landscape ignores the personal portrait")
+    // Both personal layouts stay independent.
+    Custom.DefaultBoard(12, shown[:])
+    shown[Custom.At(7, 3)] = 21
+    Expect(Custom.SaveCustomLevel(12, shown[:], objects[:], 8), "save a personal landscape beside the personal portrait")
+    Expect(Custom.LayoutSource(12) == Custom.LAYOUT_PERSONAL && Custom.EffectiveTile(12, 7, 3) == 21 && Custom.EffectiveApples(12) == 8 &&
+        Custom.LayoutSource(12, true) == Custom.LAYOUT_PERSONAL && Custom.EffectiveTile(12, 4, 6, true) == 21 && Custom.EffectiveApples(12, true) == 6,
+        "personal landscape and portrait stay independent")
+    Expect(Custom.ClearCustomLevel(12), "remove the personal landscape")
+    Custom.EffectiveBoard(12, shown[:])
+    same = true
+    for at: 0..CELLS - 1 { if shown[at] != mirrored[at] { same = false } }
+    Expect(same, "removing the personal landscape mirrors the personal portrait again")
+    Expect(Custom.ClearCustomLevel(12, true), "remove the personal portrait")
+    Custom.EffectiveBoard(12, shown[:])
+    same = true
+    for at: 0..CELLS - 1 { if shown[at] != published[at] { same = false } }
+    Expect(same, "removing the personal portrait restores the published landscape")
+    // A level without a portrait design: the portrait mirrors the player's
+    // own landscape and its apple goal until a personal portrait exists.
+    level: s32 = 50
+    Custom.DefaultBoard(level, board[:])
+    for at: 0..CELLS - 1 { objects[at] = 0 }
+    objects[3 * COLUMNS + 3] = OBJECT_FLOWERS
+    Expect(Custom.SaveCustomLevel(level, board[:], objects[:], 9), "save a personal landscape without a portrait design")
+    unused Mirror.MirrorLevel(level, board[:], objects[:], true, mirrored[:], mirrored_objects[:])
+    Custom.EffectiveBoard(level, published[:], true)
+    Custom.EffectiveObjects(level, objects[:], true)
+    same = true
+    for at: 0..CELLS - 1 { if mirrored[at] != published[at] || mirrored_objects[at] != objects[at] { same = false } }
+    Expect(same && Custom.EffectiveApples(level, true) == 9, "the portrait mirrors the personal landscape")
+    flowers: s32 = 0
+    for at: 0..CELLS - 1 { if objects[at] == OBJECT_FLOWERS { flowers += 1 } }
+    Expect(flowers == 1, "a decoration stays single in the mirror")
+    Custom.DefaultBoard(level, board[:], true)
+    board[Custom.At(2, 30, true)] = 21
+    Expect(Custom.SaveCustomLevel(level, board[:], objects[:], 4, true), "save a personal portrait")
+    Expect(Custom.EffectiveTile(level, 2, 30, true) == 21 && Custom.EffectiveApples(level, true) == 4, "a personal portrait wins over the mirror")
+    Expect(Custom.ClearCustomLevel(level, true) && Custom.ClearCustomLevel(level), "remove both personal layouts")
+    Custom.DefaultBoard(level, published[:], true)
+    Custom.EffectiveBoard(level, board[:], true)
+    same = true
+    for at: 0..CELLS - 1 { if board[at] != published[at] { same = false } }
+    Expect(same, "removing personal layouts restores the published mirror")
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    if !Custom.CustomSetRoot("build/orientation-test/private-levels/") { return 1 }
+    if argc > 2 && TextFromCString(argv[1]) == "variants" {
+        level := ParseNumber(argv[2]) - 1
+        portrait := Custom.LayoutSource(level, true) == Custom.LAYOUT_MIRRORED
+        source: [CELLS]u8
+        source_objects: [CELLS]u8
+        Custom.DefaultBoard(level, source[:], !portrait)
+        feature, portals := Mirror.MirrorIdea(level, source[:], source_objects[:], !portrait)
+        print("Source idea % with % portal pairs\n", feature, portals)
+        for variant: 0..Mirror.MIRROR_VARIANTS - 1 {
+            board: [CELLS]u8
+            objects: [CELLS]u8
+            problems := Mirror.MirrorLayout(source[:], source_objects[:], portrait, board[:], objects[:], cast(s32)variant)
+            feature, portals = Mirror.MirrorIdea(level, board[:], objects[:], portrait)
+            columns, rows := Dimensions(portrait)
+            print("Variant %: problems %, idea % with % portal pairs, sprawl %\n", variant, problems, feature, portals, Mirror.MirrorSprawl(board[:], columns, rows))
+            if argc > 3 && ParseNumber(argv[3]) == variant { Show(level, board[:], portrait) }
+        }
+        return 0
+    }
+    if argc > 2 && TextFromCString(argv[1]) == "play" {
+        level := ParseNumber(argv[2]) - 1
+        play_report = true
+        for orientation: 0..1 {
+            portrait := orientation == 1
+            board: [CELLS]u8
+            Custom.EffectiveBoard(level, board[:], portrait)
+            print("Level % %:\n", level + 1, ifx portrait then "portrait" else "landscape")
+            seeds: s32 = ifx argc > 3 then ParseNumber(argv[3]) else PLAY_SEEDS
+            if argc > 4 { play_dump = cast(u32)ParseNumber(argv[4]) }
+            for seed: 0..seeds - 1 {
+                if Play(level, board[:], Custom.EffectiveApples(level, portrait), portrait, cast(u32)(11 + seed * 7919 + level * 31)) { print("  seed %: won\n", 11 + seed * 7919 + level * 31) }
+            }
+        }
+        BoardSize(COLUMNS, ROWS)
+        return 0
+    }
+    if argc > 2 {
+        level := ParseNumber(argv[2]) - 1
+        for orientation: 0..1 {
+            board: [CELLS]u8
+            Custom.EffectiveBoard(level, board[:], orientation == 1)
+            print("Level % %, from source %:\n", level + 1, ifx orientation == 1 then "portrait" else "landscape", Custom.LayoutSource(level, orientation == 1))
+            Show(level, board[:], orientation == 1)
+        }
+        return 0
+    }
+    for level: 0..LEVEL_COUNT - 1 {
+        unused Custom.ClearCustomLevel(cast(s32)level)
+        unused Custom.ClearCustomLevel(cast(s32)level, true)
+    }
+    verbose = argc > 1 && TextFromCString(argv[1]) == "verbose"
+    for level: 0..LEVEL_COUNT - 1 { CheckLevel(cast(s32)level) }
+    mirrors := sources[Custom.LAYOUT_MIRRORED]
+    Expect(exceptions == 0, "every mirror keeps its passages, creatures and puzzle idea")
+    print("Layouts: % authored, % designed, % mirrored; % exceptions\n", sources[Custom.LAYOUT_AUTHORED], sources[Custom.LAYOUT_DESIGNED], mirrors, exceptions)
+    if mirrors > 0 {
+        print("Shortest entrance-to-exit routes: landscape averages % percent of portrait, as long or longer on % of % levels\n", route_ratio_sum / mirrors, routes_longer, mirrors)
+    }
+    print("Narrowed passages: % boards (% portraits), % cells; % lone pillars dropped in portraits\n", narrowed_boards, narrowed_portraits, narrowed_cells, dropped_pillars)
+    // Mirrors must play like the boards they come from: a loss where the
+    // source wins is the mirror's fault, a loss on both the bot's limit.
+    // On hard boards a dozen sequences say little, so a mirror that lost
+    // them all plays PLAY_EXTENDED counted sequences beside its source and
+    // must win at least once and a third as often.
+    won: s32 = 0
+    both_lost: s32 = 0
+    extended: s32 = 0
+    for level: 0..LEVEL_COUNT - 1 {
+        for orientation: 0..1 {
+            if played[level * 2 + orientation] { won += 1; continue }
+            if !played[level * 2 + 1 - orientation] { both_lost += 1; print("Bot limit: level % % lost in both layouts\n", level + 1, ifx orientation == 1 then "portrait" else "landscape"); continue }
+            mirror := Custom.LayoutSource(cast(s32)level, orientation == 1) == Custom.LAYOUT_MIRRORED
+            if !mirror { print("Note: level % % (published as designed) lost where its mirror won\n", level + 1, ifx orientation == 1 then "portrait" else "landscape"); continue }
+            mirror_wins := Wins(cast(s32)level, orientation == 1)
+            source_wins := Wins(cast(s32)level, orientation != 1)
+            extended += 1
+            print("Extended: level % % won % of % apple sequences, its source %\n", level + 1, ifx orientation == 1 then "portrait" else "landscape", mirror_wins, PLAY_EXTENDED, source_wins)
+            Expect(mirror_wins > 0 && mirror_wins * 3 >= source_wins, "the mirror plays through like its source", cast(s32)level, orientation == 1)
+        }
+    }
+    print("Full playthroughs with every apple and full growth: % of 400 boards won within % apple sequences; % lost in both layouts (% bot deaths, % stalls); % mirrors extended to %\n", won, PLAY_SEEDS, both_lost, play_deaths, play_stalls, extended, PLAY_EXTENDED)
+    CheckPersonal()
+    BoardSize(COLUMNS, ROWS)
+    print("Orientation local test: % failures across 200 levels in both layouts\n", failures)
+    return ifx failures == 0 then 0 else 1
+}
+
+// Walls inside the clear start area, which the engine carves away.
+StartWalls :: (board: []u8, portrait: bool) -> s32 {
+    columns, rows := Dimensions(portrait)
+    count: s32 = 0
+    for y: rows - 1 - START_CLEAR_ROWS..rows - 2 {
+        for x: columns / 2 - START_CLEAR_HALF_WIDTH..columns / 2 + START_CLEAR_HALF_WIDTH {
+            if Mirror.MirrorSolid(board[y * columns + x]) { count += 1 }
+        }
+    }
+    return count
+}
+
+// Floor cells with a wall on both sides across the given axis: a passage
+// one cell wide.
+Narrow :: (board: []u8, portrait: bool, across_columns: bool) -> s32 {
+    columns, rows := Dimensions(portrait)
+    count: s32 = 0
+    for y: 1..rows - 2 {
+        for x: 1..columns - 2 {
+            at := y * columns + x
+            if Mirror.MirrorSolid(board[at]) { continue }
+            if across_columns && Mirror.MirrorSolid(board[at - 1]) && Mirror.MirrorSolid(board[at + 1]) { count += 1 }
+            if !across_columns && Mirror.MirrorSolid(board[at - columns]) && Mirror.MirrorSolid(board[at + columns]) { count += 1 }
+        }
+    }
+    return count
+}
+
+// ---- A full playthrough: every apple, the worm's real growth ----
+
+// The worm as cells from head to tail, and the cells it still grows by.
+Snake :: struct {
+    cells: [CELLS]s32
+    count: s32
+    growth: s32
+}
+SnakeOf :: (game: *Game, snake: *Snake) {
+    snake.count = 0
+    index: s32 = 0
+    while index < game.length {
+        point := game.worm[index]
+        if point.y >= 0 && Inside(point.x / 16, point.y / 16) {
+            cell := Index(point.x / 16, point.y / 16)
+            if snake.count == 0 || snake.cells[snake.count - 1] != cell { snake.cells[snake.count] = cell; snake.count += 1 }
+        }
+        index += 4
+    }
+    snake.growth = (game.target_length * 16 - game.length + 3) / 4
+    if snake.growth < 0 { snake.growth = 0 }
+}
+// Arrival moves from start over cells the head may enter: a body cell only
+// once the tail has left it. parent leads back to start.
+SnakeFlood :: (game: *Game, snake: *Snake, distance: []s32, parent: []s32) -> s32 {
+    body: [CELLS]s32
+    for at: 0..CELLS - 1 { body[at] = -1; distance[at] = -1; parent[at] = -1 }
+    for index: 1..snake.count - 1 { body[snake.cells[index]] = cast(s32)index }
+    queue: [CELLS]s32
+    start := snake.cells[0]
+    distance[start] = 0
+    queue[0] = start
+    head: s32 = 0
+    tail: s32 = 1
+    while head < tail {
+        at := queue[head]
+        head += 1
+        x := at % board_columns
+        y := at / board_columns
+        neighbours: [4]s32 = .[ifx x > 0 then at - 1 else -1, ifx x < board_columns - 1 then at + 1 else -1,
+            ifx y > 0 then at - board_columns else -1, ifx y < board_rows - 1 then at + board_columns else -1]
+        for next: neighbours {
+            if next < 0 || distance[next] >= 0 || !Passable(game, next) { continue }
+            if body[next] >= 0 && distance[at] + 1 <= snake.growth + snake.count - body[next] { continue }
+            distance[next] = distance[at] + 1
+            parent[next] = at
+            queue[tail] = next
+            tail += 1
+        }
+    }
+    return tail
+}
+// The worm after its head walks path (first step first), eating at the end
+// when eats is set.
+SnakeAfter :: (game: *Game, snake: *Snake, path: []s32, steps: s32, eats: bool, after: *Snake) {
+    grown := ifx steps < snake.growth then steps else snake.growth
+    after.count = snake.count + grown
+    if after.count > CELLS { after.count = CELLS }
+    for index: 0..after.count - 1 {
+        from := cast(s32)index - steps
+        after.cells[index] = ifx from < 0 then path[steps - 1 - cast(s32)index] else snake.cells[from]
+    }
+    after.growth = snake.growth - grown
+    if eats {
+        target := game.target_length + 4
+        if target > 62 { target = 62 }
+        after.growth += (target - game.target_length) * 4
+    }
+}
+// Safe when the head can still reach its own tail, or room for its body.
+// A growing worm may also wait for its tail: open floor beside the tail,
+// reachable now, with room to wander while the body grows.
+SnakeSafe :: (game: *Game, snake: *Snake) -> bool {
+    distance: [CELLS]s32
+    parent: [CELLS]s32
+    reached := SnakeFlood(game, snake, distance[:], parent[:])
+    if reached >= (ifx play_bold then 1 else 2) * (snake.count + snake.growth) { return true }
+    tail := snake.cells[snake.count - 1]
+    x := tail % board_columns
+    y := tail / board_columns
+    neighbours: [4]s32 = .[ifx x > 0 then tail - 1 else -1, ifx x < board_columns - 1 then tail + 1 else -1,
+        ifx y > 0 then tail - board_columns else -1, ifx y < board_rows - 1 then tail + board_columns else -1]
+    for next: neighbours { if next >= 0 && distance[next] > 0 { return true } }
+    body: [CELLS]bool
+    for index: 0..snake.count - 1 { body[snake.cells[index]] = true }
+    open: s32 = 0
+    for at: 0..board_columns * board_rows - 1 { if distance[at] > 0 && !body[at] { open += 1 } }
+    if open < snake.growth + 8 { return false }
+    for next: neighbours { if next >= 0 && distance[next] > 0 && !body[next] { return true } }
+    // The tail's own neighbours may be body; one step further is enough
+    // once the body behind the tail has left.
+    for index: snake.count - 4..snake.count - 1 {
+        if index < 1 { continue }
+        cell := snake.cells[index]
+        cx := cell % board_columns
+        cy := cell / board_columns
+        around: [4]s32 = .[ifx cx > 0 then cell - 1 else -1, ifx cx < board_columns - 1 then cell + 1 else -1,
+            ifx cy > 0 then cell - board_columns else -1, ifx cy < board_rows - 1 then cell + board_columns else -1]
+        for next: around { if next >= 0 && distance[next] > 0 && !body[next] { return true } }
+    }
+    return false
+}
+DirectionTo :: (from: s32, to: s32) -> s32 {
+    if to == from - 1 { return DIR_LEFT }
+    if to == from + 1 { return DIR_RIGHT }
+    if to < from { return DIR_UP }
+    return DIR_DOWN
+}
+// The next move: toward the target when the worm stays safe there,
+// otherwise the safe move with the most room. -1 when nothing is safe.
+SnakeMove :: (game: *Game, target: s32, exiting: bool) -> s32 {
+    snake: Snake
+    SnakeOf(game, *snake)
+    distance: [CELLS]s32
+    parent: [CELLS]s32
+    unused SnakeFlood(game, *snake, distance[:], parent[:])
+    if distance[target] > 0 {
+        path: [CELLS]s32
+        steps: s32 = 0
+        at := target
+        while at != snake.cells[0] { path[steps] = at; steps += 1; at = parent[at] }
+        // path runs from the target back; reverse it to start at the head.
+        for index: 0..steps / 2 - 1 {
+            swap := path[index]; path[index] = path[steps - 1 - index]; path[steps - 1 - index] = swap
+        }
+        if exiting { return DirectionTo(snake.cells[0], path[0]) }
+        after: Snake
+        SnakeAfter(game, *snake, path[:], steps, true, *after)
+        if SnakeSafe(game, *after) { return DirectionTo(snake.cells[0], path[0]) }
+    }
+    best: s32 = -1
+    best_room: s32 = -1
+    head := snake.cells[0]
+    for direction: 0..3 {
+        if direction == (game.direction + 2) % 4 { continue }
+        x := head % board_columns + (ifx direction == DIR_LEFT then -1 else ifx direction == DIR_RIGHT then 1 else 0)
+        y := head / board_columns + (ifx direction == DIR_UP then -1 else ifx direction == DIR_DOWN then 1 else 0)
+        if !Inside(x, y) || distance[Index(x, y)] != 1 { continue }
+        step: [1]s32 = .[Index(x, y)]
+        after: Snake
+        SnakeAfter(game, *snake, step[:], 1, false, *after)
+        room_distance: [CELLS]s32
+        room_parent: [CELLS]s32
+        room := SnakeFlood(game, *after, room_distance[:], room_parent[:])
+        if SnakeSafe(game, *after) { room += CELLS }
+        if room > best_room { best = cast(s32)direction; best_room = room }
+    }
+    return best
+}
+// Wins of a level's effective board in PLAY_EXTENDED apple sequences.
+Wins :: (level: s32, portrait: bool) -> s32 {
+    board: [CELLS]u8
+    Custom.EffectiveBoard(level, board[:], portrait)
+    apples := Custom.EffectiveApples(level, portrait)
+    wins: s32 = 0
+    for seed: 0..PLAY_EXTENDED - 1 {
+        if Play(level, board[:], apples, portrait, cast(u32)(11 + seed * 7919 + level * 31)) { wins += 1 }
+    }
+    return wins
+}
+
+// The board with the worm drawn on it: head H, body o, apple A.
+ShowWorm :: (game: *Game, columns: s32, rows: s32) {
+    line: [41]u8
+    for y: 0..rows - 1 {
+        for x: 0..columns - 1 {
+            at := Index(x, y)
+            line[x] = ifx Passable(game, at) then #char "." else #char "#"
+            if game.apple.x / 16 == x && game.apple.y / 16 == y { line[x] = #char "A" }
+        }
+        index: s32 = 0
+        while index < game.length {
+            point := game.worm[index]
+            if point.y / 16 == y && point.x >= 0 && point.x / 16 < columns { line[point.x / 16] = ifx index == 0 then #char "H" else #char "o" }
+            index += 4
+        }
+        line[columns] = 0
+        print("%\n", TextUntilNul(line[:]))
+    }
+}
+
+// Plays a level with creatures and puzzle ideas set aside: every apple of
+// the real goal, the worm growing as it eats, then out through the exit.
+Play :: (level: s32, board: []u8, apples: s32, portrait: bool, seed: u32) -> bool {
+    columns, rows := Dimensions(portrait)
+    objects: [CELLS]u8
+    enabled := features_enabled
+    features_enabled = false
+    game: Game
+    StartGameData(*game, level, 0, seed, board, apples, columns, rows, objects[:])
+    features_enabled = enabled
+    game.monster_count = 0
+    left := apples
+    quiet: s32 = 0
+    for tick: 0..80000 {
+        if game.mode == MODE_FINISHED || game.mode == MODE_VICTORY { return true }
+        if game.mode != MODE_PLAYING || game.death_ticks > 0 {
+            play_deaths += 1
+            if play_report {
+                print("  seed %: died at %,% with % apples left, length %\n", seed, game.worm[0].x / 16, game.worm[0].y / 16, game.apples, game.length / 4)
+                if play_dump == seed { ShowWorm(*game, columns, rows) }
+            }
+            return false
+        }
+        // Circling without an apple for long means the bot is stuck.
+        if game.apples < left { left = game.apples; quiet = 0 }
+        quiet += 1
+        play_bold = quiet > 4000
+        if quiet > 16000 {
+            play_stalls += 1
+            if play_report { print("  seed %: stalled with % apples left, length %, apple at %,% on tile %, head at %,%\n", seed, game.apples, game.length / 4, game.apple.x / 16, game.apple.y / 16, game.board[Index(game.apple.x / 16, game.apple.y / 16)], game.worm[0].x / 16, game.worm[0].y / 16) }
+            return false
+        }
+        head := game.worm[0]
+        if head.y >= 0 && head.x % 16 == 8 && head.y % 16 == 8 && Inside(head.x / 16, head.y / 16) && game.transition_ticks == 0 {
+            if game.apples == 0 && head.x / 16 == board_columns / 2 && head.y / 16 == 0 { game.next_direction = DIR_UP }
+            else {
+                exiting := game.apples == 0
+                target := ifx exiting then Index(board_columns / 2, 0) else Index(game.apple.x / 16, game.apple.y / 16)
+                direction := SnakeMove(*game, target, exiting)
+                if direction >= 0 { game.next_direction = direction }
+            }
+        }
+        Tick(*game)
+    }
+    return false
+}

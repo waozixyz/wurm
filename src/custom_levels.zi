@@ -1,9 +1,10 @@
 // Landscape records use 40 columns of 30 rows; the independent portrait
 // records use 30 columns of 40 rows and a -portrait filename suffix.
-// Both contain an apple count and tile/object planes. Missing portrait
-// records use an authored variant or a best guess from the landscape.
+// Both contain an apple count and tile/object planes. A layout without a
+// record of its own mirrors the other orientation; see LayoutSource.
 #import, file "game.zi";
 #import, file "authored_levels.zi";
+Mirror :: #import, file "board_orientation.zi";
 #if #defined(PLATFORM_WEB) {
     BrowserStorage :: #import "kryon/bundle_storage_web";
 }
@@ -100,6 +101,7 @@ LevelPath :: (level: s32, suffix: string, portrait: bool = false) -> string {
 EnsureLoaded :: () {
     if custom_loaded { return }
     custom_loaded = true
+    ForgetMirrors(-1)
     if custom_root_length == 0 {
         root := LevelDirectory()
         if root.count + 1 > custom_root.count { return }
@@ -155,21 +157,50 @@ HasCustomLevel :: (level: s32, portrait: bool = false) -> bool {
     if level < 0 || level >= LEVEL_COUNT { return false }
     return custom_present[Slot(level, portrait)]
 }
-EffectiveApples :: (level: s32, portrait: bool = false) -> s32 {
-    EnsureLoaded()
-    if HasCustomLevel(level, portrait) { return custom_apples[Slot(level, portrait)] }
-    authored := AuthoredApples(level,portrait)
-    if authored >= 0 { return authored }
-    if portrait && HasCustomLevel(level) { return custom_apples[level] }
-    authored = AuthoredApples(level,false)
-    if authored >= 0 { return authored }
-    return BaseApples(level)
-}
 HasAuthoredLevel :: (level: s32, portrait: bool = false) -> bool {
     return AuthoredTiles(level,portrait).count == CELLS
 }
-// The published campaign is separate from each player's editable overrides.
-DefaultBoard :: (level: s32, board: []u8, portrait: bool = false) {
+HasPortraitSource :: (level: s32) -> bool { return HasAuthoredLevel(level,true) || HasPortraitDesign(level) }
+
+// Where a layout comes from. A personal or published record for the same
+// orientation wins, then the level's portrait design: landscape mirrors it,
+// and a portrait without one mirrors the landscape. The player's own layout
+// in the other orientation comes first: a landscape mirrors a personal
+// portrait, and a portrait without an authored record a personal landscape.
+// Mirroring never turns a board, so both share one entrance and exit.
+LAYOUT_PERSONAL :: 1;
+LAYOUT_AUTHORED :: 2;
+LAYOUT_DESIGNED :: 3;
+LAYOUT_MIRRORED :: 4;
+LayoutSource :: (level: s32, portrait: bool = false, published: bool = false) -> s32 {
+    if !published && HasCustomLevel(level,portrait) { return LAYOUT_PERSONAL }
+    if portrait {
+        if HasAuthoredLevel(level,true) { return LAYOUT_AUTHORED }
+        if !published && HasCustomLevel(level) { return LAYOUT_MIRRORED }
+        return ifx HasPortraitDesign(level) then LAYOUT_DESIGNED else LAYOUT_MIRRORED
+    }
+    if (!published && HasCustomLevel(level,true)) || HasPortraitSource(level) { return LAYOUT_MIRRORED }
+    return ifx HasAuthoredLevel(level) then LAYOUT_AUTHORED else LAYOUT_DESIGNED
+}
+IsMirroredLayout :: (level: s32, portrait: bool = false) -> bool { return LayoutSource(level,portrait) == LAYOUT_MIRRORED }
+// Whether a mirrored layout comes from the player's own other orientation.
+MirrorsPersonal :: (level: s32, portrait: bool) -> bool { return HasCustomLevel(level,!portrait) }
+
+PublishedApples :: (level: s32, portrait: bool) -> s32 {
+    authored := AuthoredApples(level,portrait)
+    return ifx authored >= 0 then authored else BaseApples(level)
+}
+EffectiveApples :: (level: s32, portrait: bool = false) -> s32 {
+    source := LayoutSource(level,portrait)
+    if source == LAYOUT_PERSONAL { return custom_apples[Slot(level, portrait)] }
+    if source != LAYOUT_MIRRORED { return PublishedApples(level,portrait) }
+    if MirrorsPersonal(level,portrait) { return custom_apples[Slot(level,!portrait)] }
+    return PublishedApples(level,!portrait)
+}
+
+// A published board in its own orientation: the editor record, the
+// portrait design or the landscape design.
+PublishedBoard :: (level: s32, board: []u8, portrait: bool) {
     text := AuthoredTiles(level,portrait)
     columns := ifx portrait then ROWS else COLUMNS
     rows := ifx portrait then COLUMNS else ROWS
@@ -179,14 +210,110 @@ DefaultBoard :: (level: s32, board: []u8, portrait: bool = false) {
         }
     } else if portrait {
         landscape: [CELLS]u8
-        DefaultBoard(level,landscape[:])
-        if HasAuthoredLevel(level) { GuessPortrait(landscape[:],board) }
-        else { PortraitBoard(level,landscape[:],board) }
+        PublishedBoard(level,landscape[:],false)
+        PortraitBoard(level,landscape[:],board)
     } else {
         for y: 0..ROWS - 1 {
             for x: 0..COLUMNS - 1 { board[y * COLUMNS + x] = BaseTile(level,cast(s32)x,cast(s32)y) }
         }
     }
+}
+PublishedObjects :: (level: s32, objects: []u8, portrait: bool) {
+    columns := ifx portrait then ROWS else COLUMNS
+    rows := ifx portrait then COLUMNS else ROWS
+    if HasAuthoredLevel(level,portrait) {
+        text := AuthoredObjects(level,portrait)
+        for x: 0..columns - 1 {
+            for y: 0..rows - 1 {
+                objects[y * columns + x] = ifx text.count == CELLS then AuthoredDecode(text[x * rows + y]) else 0
+            }
+        }
+    } else {
+        for y: 0..rows - 1 {
+            for x: 0..columns - 1 {
+                objects[y * columns + x] = ifx portrait then 0 else BaseObject(level,cast(s32)x,cast(s32)y)
+            }
+        }
+    }
+}
+
+// Mirrored layouts are worked out once and kept for the next frames; a
+// save or reset of the level forgets them.
+MIRROR_CACHE :: 8;
+mirror_keys: [MIRROR_CACHE]s32;
+mirror_problems: [MIRROR_CACHE]s32;
+mirror_boards: [MIRROR_CACHE][CELLS]u8;
+mirror_objects: [MIRROR_CACHE][CELLS]u8;
+mirror_next: s32;
+ForgetMirrors :: (level: s32) {
+    for slot: 0..MIRROR_CACHE - 1 {
+        if level < 0 || (mirror_keys[slot] - 1) / 4 == level { mirror_keys[slot] = 0 }
+    }
+}
+// The other orientation's layout mirrored, the player's own when personal.
+// Returns the problems Mirror.MirrorLevel found. When no mirror keeps every
+// passage, which only a personal edit can cause, a portrait falls back to
+// the rotated best guess and a landscape to its published board, and the
+// problem is still reported.
+MirroredLayout :: (level: s32, portrait: bool, personal: bool, board: []u8, objects: []u8) -> s32 {
+    key := 1 + level * 4 + (ifx portrait then 2 else 0) + (ifx personal then 1 else 0)
+    for slot: 0..MIRROR_CACHE - 1 {
+        if mirror_keys[slot] != key { continue }
+        for at: 0..CELLS - 1 {
+            board[at] = mirror_boards[slot][at]
+            objects[at] = mirror_objects[slot][at]
+        }
+        return mirror_problems[slot]
+    }
+    source: [CELLS]u8
+    source_objects: [CELLS]u8
+    if personal {
+        slot := Slot(level,!portrait)
+        for at: 0..CELLS - 1 {
+            source[at] = custom_boards[slot][at]
+            source_objects[at] = custom_objects[slot][at]
+        }
+    } else {
+        PublishedBoard(level,source[:],!portrait)
+        PublishedObjects(level,source_objects[:],!portrait)
+    }
+    problems := Mirror.MirrorLevel(level,source[:],source_objects[:],portrait,board,objects)
+    if (problems & Mirror.MIRROR_TOPOLOGY) != 0 {
+        if portrait {
+            GuessPortrait(source[:],board)
+            TurnForward(source_objects[:],objects)
+        } else {
+            PublishedBoard(level,board,false)
+            PublishedObjects(level,objects,false)
+        }
+    }
+    slot := mirror_next
+    mirror_next = (mirror_next + 1) % MIRROR_CACHE
+    mirror_keys[slot] = key
+    mirror_problems[slot] = problems
+    for at: 0..CELLS - 1 {
+        mirror_boards[slot][at] = board[at]
+        mirror_objects[slot][at] = objects[at]
+    }
+    return problems
+}
+
+// Whether a mirrored layout, as the game loads it, shows the fallback
+// because no mirror keeps every passage (see MirroredLayout).
+MirrorFallback :: (level: s32, portrait: bool = false) -> bool {
+    if !IsMirroredLayout(level,portrait) { return false }
+    board: [CELLS]u8
+    objects: [CELLS]u8
+    problems := MirroredLayout(level,portrait,MirrorsPersonal(level,portrait),board[:],objects[:])
+    return (problems & Mirror.MIRROR_TOPOLOGY) != 0
+}
+
+// The published campaign is separate from each player's editable overrides.
+DefaultBoard :: (level: s32, board: []u8, portrait: bool = false) {
+    if LayoutSource(level,portrait,true) == LAYOUT_MIRRORED {
+        objects: [CELLS]u8
+        unused MirroredLayout(level,portrait,false,board,objects[:])
+    } else { PublishedBoard(level,board,portrait) }
 }
 EffectiveBoard :: (level: s32, board: []u8, portrait: bool = false) {
     EnsureLoaded()
@@ -194,18 +321,14 @@ EffectiveBoard :: (level: s32, board: []u8, portrait: bool = false) {
         for at: 0..CELLS - 1 { board[at] = 20 }
         return
     }
-    slot := Slot(level, portrait)
-    if custom_present[slot] {
+    source := LayoutSource(level,portrait)
+    if source == LAYOUT_PERSONAL {
+        slot := Slot(level, portrait)
         for at: 0..CELLS - 1 { board[at] = custom_boards[slot][at] }
-        return
-    }
-    if portrait && !HasAuthoredLevel(level,true) && HasCustomLevel(level) {
-        landscape: [CELLS]u8
-        EffectiveBoard(level, landscape[:])
-        GuessPortrait(landscape[:], board)
-    } else {
-        DefaultBoard(level,board,portrait)
-    }
+    } else if source == LAYOUT_MIRRORED {
+        objects: [CELLS]u8
+        unused MirroredLayout(level,portrait,MirrorsPersonal(level,portrait),board,objects[:])
+    } else { PublishedBoard(level,board,portrait) }
 }
 EffectiveTile :: (level: s32, x: s32, y: s32, portrait: bool = false) -> u8 {
     board: [CELLS]u8
@@ -214,27 +337,14 @@ EffectiveTile :: (level: s32, x: s32, y: s32, portrait: bool = false) -> u8 {
 }
 EffectiveObjects :: (level: s32, objects: []u8, portrait: bool = false) {
     EnsureLoaded()
-    if HasCustomLevel(level, portrait) {
+    source := LayoutSource(level,portrait)
+    if source == LAYOUT_PERSONAL {
         slot := Slot(level,portrait)
         for at: 0..CELLS - 1 { objects[at] = custom_objects[slot][at] }
-    } else if HasAuthoredLevel(level,portrait) {
-        text := AuthoredObjects(level,portrait)
-        columns := ifx portrait then ROWS else COLUMNS
-        rows := ifx portrait then COLUMNS else ROWS
-        for x: 0..columns - 1 {
-            for y: 0..rows - 1 {
-                objects[y * columns + x] = ifx text.count == CELLS then AuthoredDecode(text[x * rows + y]) else 0
-            }
-        }
-    } else if portrait {
-        landscape: [CELLS]u8
-        EffectiveObjects(level,landscape[:])
-        TurnForward(landscape[:],objects)
-    } else {
-        for y: 0..ROWS - 1 {
-            for x: 0..COLUMNS - 1 { objects[At(x,y)] = BaseObject(level,cast(s32)x,cast(s32)y) }
-        }
-    }
+    } else if source == LAYOUT_MIRRORED {
+        board: [CELLS]u8
+        unused MirroredLayout(level,portrait,MirrorsPersonal(level,portrait),board[:],objects)
+    } else { PublishedObjects(level,objects,portrait) }
 }
 
 // Writes the override, tiles and objects, through a temporary file so a
@@ -279,6 +389,7 @@ SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32, portrai
     }
     }
     custom_present[slot] = true
+    ForgetMirrors(level)
     custom_apples[slot] = apples
     for at: 0..CELLS - 1 {
         custom_boards[slot][at] = board[at]
@@ -299,6 +410,7 @@ ClearCustomLevel :: (level: s32, portrait: bool = false) -> bool {
         if !File.RemoveFile(LevelPath(level, ".dat", portrait)) { return false }
     }
     custom_present[slot] = false
+    ForgetMirrors(level)
     #if #defined(PLATFORM_WEB) {
         return BrowserStorage.BundleStorageFlush()
     }

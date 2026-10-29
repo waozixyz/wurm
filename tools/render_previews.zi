@@ -1,7 +1,8 @@
 // Renders each level's board to a small preview picture for the editor's
-// level selector: the playable base level on its stage's sheet, 200x150 and
-// 150x200. Rerun after changing level data or tile art; build/designed comes
-// from tools/design_levels.zi. With --check the committed previews must match.
+// level selector: the published layout in both orientations, loaded as the
+// game loads it (mirrors included), on its stage's sheet, 200x150 and
+// 150x200. Rerun after changing level data, mirroring or tile art. With
+// --check the committed previews must match.
 //
 //     LDLIBS=-lz ziran run --target=c tools/render_previews.zi -- [--check]
 #import "std/file"
@@ -9,6 +10,7 @@
 #import "std/byte_text_linux"
 #import "std/image"
 #import "std/png_linux"
+Custom :: #import, file "../src/custom_levels.zi";
 
 // The source pixel a preview pixel samples: five per tile each way.
 Sample :: (source: *Image, x: s32, y: s32) -> s64 {
@@ -23,20 +25,6 @@ Art :: (name: string) -> Image {
     path: Vec(u8)
     BuilderPrint(*path, "assets/art/%.png", name)
     return ReadPNGFile(BuilderFinish(path))
-}
-
-// A level record: the published editor board when there is one.
-Board :: (number: s64, suffix: string) -> (raw: string, found: bool) {
-    path: Vec(u8)
-    BuilderPrint(*path, "assets/authored-levels/level%", number)
-    Append(*path, suffix)
-    raw, found := ReadEntireFile(BuilderFinish(path))
-    if found { return raw, true }
-    designed: Vec(u8)
-    BuilderPrint(*designed, "build/designed/level%", number)
-    Append(*designed, suffix)
-    text, has := ReadEntireFile(BuilderFinish(designed))
-    return text, has
 }
 
 // The picture a tile shows in the preview, before any creature on it.
@@ -70,28 +58,18 @@ main :: (argc: s32, argv: **u8) -> s32 {
         if !ImageValid(*sheet) || !ImageValid(*water) { print("tools/render_previews: art is missing\n"); return 1 }
         for number: 1..40 {
             level := cast(s64)stage * 40 + number
-            raw, found := Board(level, ".dat")
-            if !found { print("tools/render_previews: level % is missing; run tools/design_levels.zi\n", level); return 1 }
             for orientation: 0..1 {
                 portrait := orientation == 1
                 columns: s32 = ifx portrait then 30 else 40
                 rows: s32 = ifx portrait then 40 else 30
+                // Rows of columns cells, the published layout only.
                 board: [1200]u8
-                for x: 0..39 { for y: 0..29 { board[x * 30 + y] = raw[1 + x * 30 + y] } }
-                if portrait {
-                    data, authored := Board(level, "-portrait.dat")
-                    if authored {
-                        for x: 0..29 { for y: 0..39 { board[x * 40 + y] = data[1 + x * 40 + y] } }
-                    } else {
-                        // A quarter turn: landscape (x, y) shows at (29 - y, x).
-                        for x: 0..39 { for y: 0..29 { board[(29 - y) * 40 + x] = raw[1 + x * 30 + y] } }
-                    }
-                }
+                Custom.DefaultBoard(cast(s32)level - 1, board[:], portrait)
                 field := ifx portrait then *canopy_portrait else *canopy
                 preview := NewImage(columns * 5, rows * 5, 0, 0, 0, 255)
                 for y: 0..rows - 1 {
                     for x: 0..columns - 1 {
-                        tile := cast(s32)(board[x * rows + y] & 127)
+                        tile := cast(s32)(board[y * columns + x] & 127)
                         enemy: s32 = -1
                         if tile >= 40 && tile <= 45 { enemy = tile; tile = 0 }
                         source := TileSource(*sheet, field, *ground, *water, cast(s64)stage, tile, cast(s32)x, cast(s32)y, columns, rows)

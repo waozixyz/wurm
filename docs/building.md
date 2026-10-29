@@ -73,8 +73,17 @@ touch buttons and a compact composition for short landscape screens; the title a
 whole screen with a composition for each orientation. Landscape letterboxes
 the 640x480 board. In portrait
 the game loads its separate 30x40 portrait board, filling the screen edge
-to edge. A missing portrait design starts from a best guess: rotate the
-landscape rooms and connect both gates to the largest playable region.
+to edge. Each level's portrait leads: a landscape without its own record
+mirrors the portrait, and a portrait without a design mirrors the
+landscape. Mirroring never turns a board. Ten lines leave one axis and ten
+repeat along the other, so the entrance stays at the bottom and the exit at
+the top. It keeps every floor region, passage, creature count, apple goal
+and puzzle idea. A portrait mirror stays at least as roomy as its source: it
+thins walls before floor and may drop a small lone hedge pillar, and of its
+candidate spreads it takes the most open one. Landscapes may play a little
+harder. `tests/orientation_test.zi` checks all 400 boards and plays each
+with every apple and full growth (geometry only: creatures and puzzle
+ideas off).
 Portrait level 2 has its own horizontal divider and a clear approach.
 The worm enters from the bottom and exits at the top in both layouts.
 Rotating during play reloads the current level in the other layout, keeping
@@ -106,8 +115,11 @@ Saving is automatic on switch, exit and playtest, plus the Save button; Reset
 (deleting the override) restores the selected layout's base board. The
 **Landscape** and **Portrait** buttons select the layout; T switches between them.
 Each mode has its own tiles, objects and apple goal, and saves without changing
-the other. A missing portrait version is labelled **Best guess**; Save keeps
-it as an independent layout. Playtest uses the selected mode even when the
+the other. A layout without its own record shows the mirror of the other,
+the player's own first, and is labelled **Mirrored**; Save keeps it as an
+independent layout. Should a personal edit leave no mirror that keeps every
+passage, a portrait shows the rotated **Best guess** and a landscape its
+published board instead. Playtest uses the selected mode even when the
 editor window has the other shape.
 
 Landscape edits live in `assets/campaign-levels/level<N>.dat`; portrait edits
