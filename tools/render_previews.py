@@ -65,7 +65,7 @@ def main():
                             column=6 if enemy==40 else enemy-40
                             source=source.copy()
                             source.alpha_composite(sheet.crop((column*32,64,column*32+32,96)))
-                        preview.paste(source.resize((5,5)),(x*5,y*5))
+                        preview.paste(source.resize((5,5), Image.Resampling.NEAREST),(x*5,y*5))
                 suffix='-portrait' if portrait else ''
                 path=destination/f"{stage}-{number}{suffix}.png"
                 if arguments.check:
