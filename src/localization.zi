@@ -85,6 +85,8 @@ Text :: (source: string) -> string {
         if source == "Volume" { return "Hlasitost" }
         if source == "Start level" { return "Spustit úroveň" }
         if source == "Matching rings teleport you." { return "Stejné kruhy vás přenesou." }
+        if source == "Previous level" { return "Předchozí úroveň" }
+        if source == "Next level" { return "Další úroveň" }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
@@ -135,6 +137,8 @@ Text :: (source: string) -> string {
         if source == "Volume" { return "Lautstärke" }
         if source == "Start level" { return "Level starten" }
         if source == "Matching rings teleport you." { return "Gleiche Ringe teleportieren dich." }
+        if source == "Previous level" { return "Vorheriges Level" }
+        if source == "Next level" { return "Nächstes Level" }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
@@ -187,6 +191,8 @@ Text :: (source: string) -> string {
         if source == "Volume" { return "Volumen" }
         if source == "Start level" { return "Empezar nivel" }
         if source == "Matching rings teleport you." { return "Los anillos iguales te teletransportan." }
+        if source == "Previous level" { return "Nivel anterior" }
+        if source == "Next level" { return "Nivel siguiente" }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
@@ -236,6 +242,8 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "Obtenir" }
         if source == "Start level" { return "Commencer le niveau" }
         if source == "Matching rings teleport you." { return "Les anneaux identiques vous téléportent." }
+        if source == "Previous level" { return "Niveau précédent" }
+        if source == "Next level" { return "Niveau suivant" }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
@@ -285,6 +293,8 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "Klaim" }
         if source == "Start level" { return "Mulai level" }
         if source == "Matching rings teleport you." { return "Cincin yang sama memindahkanmu." }
+        if source == "Previous level" { return "Level sebelumnya" }
+        if source == "Next level" { return "Level berikutnya" }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
@@ -336,6 +346,8 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "Riscatta" }
         if source == "Start level" { return "Inizia livello" }
         if source == "Matching rings teleport you." { return "Gli anelli uguali ti teletrasportano." }
+        if source == "Previous level" { return "Livello precedente" }
+        if source == "Next level" { return "Livello successivo" }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
@@ -388,6 +400,8 @@ Text :: (source: string) -> string {
         if source == "Volume" { return "音量" }
         if source == "Start level" { return "レベルを開始" }
         if source == "Matching rings teleport you." { return "同じ輪に入るとワープします。" }
+        if source == "Previous level" { return "前のレベル" }
+        if source == "Next level" { return "次のレベル" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
@@ -440,6 +454,8 @@ Text :: (source: string) -> string {
         if source == "Volume" { return "음량" }
         if source == "Start level" { return "레벨 시작" }
         if source == "Matching rings teleport you." { return "같은 고리를 통해 순간 이동해요." }
+        if source == "Previous level" { return "이전 레벨" }
+        if source == "Next level" { return "다음 레벨" }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
@@ -491,6 +507,8 @@ Text :: (source: string) -> string {
         if source == "Claim" { return "Resgatar" }
         if source == "Start level" { return "Iniciar nível" }
         if source == "Matching rings teleport you." { return "Anéis iguais teletransportam você." }
+        if source == "Previous level" { return "Nível anterior" }
+        if source == "Next level" { return "Nível seguinte" }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
@@ -543,6 +561,8 @@ Text :: (source: string) -> string {
         if source == "Volume" { return "Громкость" }
         if source == "Start level" { return "Начать уровень" }
         if source == "Matching rings teleport you." { return "Одинаковые кольца телепортируют вас." }
+        if source == "Previous level" { return "Предыдущий уровень" }
+        if source == "Next level" { return "Следующий уровень" }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
@@ -595,6 +615,8 @@ Text :: (source: string) -> string {
         if source == "Volume" { return "音量" }
         if source == "Start level" { return "开始关卡" }
         if source == "Matching rings teleport you." { return "相同的圆环可以传送你。" }
+        if source == "Previous level" { return "上一关" }
+        if source == "Next level" { return "下一关" }
     }
     return source
 }

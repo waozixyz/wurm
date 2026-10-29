@@ -214,13 +214,17 @@ def main():
         portrait_edit = level_directory / "level14-portrait.dat"
         assert portrait_edit.read_bytes()[1 + 5 * 40 + 35] == 21, "portrait lower-row edit was not saved"
         assert edited.read_bytes() == painted, "portrait save changed the landscape"
-        pointer(156, 20)  # Landscape mode.
+        pointer(31, 20)  # Previous level.
+        pointer(775, 518)  # Save the selected portrait layout.
+        assert (level_directory / "level13-portrait.dat").exists(), "title-bar back did not switch levels"
+        pointer(73, 20)  # Next level returns to the edited board.
+        pointer(250, 20)  # Landscape mode.
         capture("editor-landscape-independent")
-        pointer(255, 20)  # Portrait mode.
+        pointer(349, 20)  # Portrait mode.
         key("Tab", "space")
         capture("portrait-playtest")
         key("q")
-        pointer(156, 20)
+        pointer(250, 20)
         key("e")
         time.sleep(0.3)
         capture("editor-exit")

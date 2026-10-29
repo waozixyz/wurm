@@ -156,3 +156,9 @@ Level starten
 ---
 [wurm_meadow_portal_hint]
 Gleiche Ringe teleportieren dich.
+---
+[wurm_editor_previous_level]
+Vorheriges Level
+---
+[wurm_editor_next_level]
+Nächstes Level

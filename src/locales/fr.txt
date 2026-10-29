@@ -156,3 +156,9 @@ Commencer le niveau
 ---
 [wurm_meadow_portal_hint]
 Les anneaux identiques vous téléportent.
+---
+[wurm_editor_previous_level]
+Niveau précédent
+---
+[wurm_editor_next_level]
+Niveau suivant

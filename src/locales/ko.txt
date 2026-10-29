@@ -156,3 +156,9 @@ waozi.xyz 방문
 ---
 [wurm_meadow_portal_hint]
 같은 고리를 통해 순간 이동해요.
+---
+[wurm_editor_previous_level]
+이전 레벨
+---
+[wurm_editor_next_level]
+다음 레벨

@@ -156,3 +156,9 @@ Inizia livello
 ---
 [wurm_meadow_portal_hint]
 Gli anelli uguali ti teletrasportano.
+---
+[wurm_editor_previous_level]
+Livello precedente
+---
+[wurm_editor_next_level]
+Livello successivo

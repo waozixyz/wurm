@@ -156,3 +156,9 @@
 ---
 [wurm_meadow_portal_hint]
 相同的圆环可以传送你。
+---
+[wurm_editor_previous_level]
+上一关
+---
+[wurm_editor_next_level]
+下一关

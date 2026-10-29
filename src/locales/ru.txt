@@ -156,3 +156,9 @@
 ---
 [wurm_meadow_portal_hint]
 Одинаковые кольца телепортируют вас.
+---
+[wurm_editor_previous_level]
+Предыдущий уровень
+---
+[wurm_editor_next_level]
+Следующий уровень

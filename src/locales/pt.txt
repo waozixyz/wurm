@@ -156,3 +156,9 @@ Iniciar nível
 ---
 [wurm_meadow_portal_hint]
 Anéis iguais teletransportam você.
+---
+[wurm_editor_previous_level]
+Nível anterior
+---
+[wurm_editor_next_level]
+Nível seguinte

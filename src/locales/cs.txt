@@ -156,3 +156,9 @@ Spustit úroveň
 ---
 [wurm_meadow_portal_hint]
 Stejné kruhy vás přenesou.
+---
+[wurm_editor_previous_level]
+Předchozí úroveň
+---
+[wurm_editor_next_level]
+Další úroveň

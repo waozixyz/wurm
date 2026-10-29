@@ -1686,13 +1686,19 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
     unused Box(session, BoxProps.{.key = 15,
         .bounds = Rectangle.{hud.x, hud.y + hud.height - 2.0, hud.width, 2.0}, .fill = Appearance.Border()})
     if game.mode == MODE_EDITOR {
-        if Button(session, ButtonProps.{.key = 8225, .bounds = Rectangle.{hud.x + 12.0, hud.y + 5.0, 88.0, 32.0},
+        if Button(session,ButtonProps.{.key = 8228,.bounds = Rectangle.{hud.x + 12.0,hud.y + 5.0,38.0,32.0},
+                .label = Locale.Text("Previous level"),.icon_only = true,
+                .icon_shape = "S2rr:M15 6L9 12L15 18"}) != 0 { EditorSwitch(-1) }
+        if Button(session,ButtonProps.{.key = 8229,.bounds = Rectangle.{hud.x + 54.0,hud.y + 5.0,38.0,32.0},
+                .label = Locale.Text("Next level"),.icon_only = true,
+                .icon_shape = "S2rr:M9 6L15 12L9 18"}) != 0 { EditorSwitch(1) }
+        if Button(session, ButtonProps.{.key = 8225, .bounds = Rectangle.{hud.x + 102.0, hud.y + 5.0, 88.0, 32.0},
                 .label = Locale.Text("Levels"), .tone = ButtonTone.ButtonToneSuccess}) != 0 {
             EditorSave(); editor.browsing = true
         }
-        if Button(session,ButtonProps.{.key = 8226,.bounds = Rectangle.{hud.x + 108.0,hud.y + 5.0,96.0,32.0},
+        if Button(session,ButtonProps.{.key = 8226,.bounds = Rectangle.{hud.x + 202.0,hud.y + 5.0,96.0,32.0},
                 .label = Locale.Text("Landscape"),.tone = ifx !editor.turned then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral}) != 0 && editor.turned { EditorTurn() }
-        if Button(session,ButtonProps.{.key = 8227,.bounds = Rectangle.{hud.x + 212.0,hud.y + 5.0,86.0,32.0},
+        if Button(session,ButtonProps.{.key = 8227,.bounds = Rectangle.{hud.x + 306.0,hud.y + 5.0,86.0,32.0},
                 .label = Locale.Text("Portrait"),.tone = ifx editor.turned then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral}) != 0 && !editor.turned { EditorTurn() }
         return
     }

@@ -156,3 +156,9 @@ Mulai level
 ---
 [wurm_meadow_portal_hint]
 Cincin yang sama memindahkanmu.
+---
+[wurm_editor_previous_level]
+Level sebelumnya
+---
+[wurm_editor_next_level]
+Level berikutnya

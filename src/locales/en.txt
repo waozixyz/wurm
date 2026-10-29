@@ -156,3 +156,9 @@ Start level
 ---
 [wurm_meadow_portal_hint]
 Matching rings teleport you.
+---
+[wurm_editor_previous_level]
+Previous level
+---
+[wurm_editor_next_level]
+Next level

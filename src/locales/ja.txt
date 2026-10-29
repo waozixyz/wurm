@@ -156,3 +156,9 @@ waozi.xyzを訪問
 ---
 [wurm_meadow_portal_hint]
 同じ輪に入るとワープします。
+---
+[wurm_editor_previous_level]
+前のレベル
+---
+[wurm_editor_next_level]
+次のレベル
