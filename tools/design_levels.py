@@ -13,6 +13,7 @@ import heapq
 import json
 from pathlib import Path
 import random
+import shutil
 import struct
 from authored_levels import generate as generate_authored
 
@@ -307,7 +308,9 @@ def main():
     if args.check:
         assert path.read_text()==source, 'src/designed_levels.zi differs from the authored campaign'
     else:path.write_text(source)
-    out=ROOT/'build/designed';out.mkdir(parents=True,exist_ok=True)
+    out=ROOT/'build/designed'
+    if out.exists():shutil.rmtree(out)
+    out.mkdir(parents=True,exist_ok=True)
     manifest=[]
     for l in levels:
         (out/f"level{l['number']}.dat").write_bytes(l['blob'])
