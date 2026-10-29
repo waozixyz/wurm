@@ -10,10 +10,7 @@ App :: #import "app";
 Game :: #import, file "game.zi";
 File :: #import "std/file_linux";
 using Vectors :: #import "std/vec";
-#import "std/c_string";
-libc :: #system_library "libc";
-GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
-ParseNumber :: (text: *u8) -> s32 #foreign libc "atoi";
+#import "std/environment_linux"
 
 U32 :: (bytes: []u8, at: s32) -> u32 {
     return cast(u32)bytes[at] | (cast(u32)bytes[at + 1] << 8) |
@@ -85,46 +82,36 @@ main :: () -> s32 {
         !PixmapSetImage(8, "assets/art/title-portrait.png", title_portrait_w, title_portrait_h, VecSlice(title_portrait, 0, title_portrait.count)) ||
         !PixmapSetImage(9, "assets/art/forest-canopy.png", forest_canopy_w, forest_canopy_h, VecSlice(forest_canopy, 0, forest_canopy.count)) ||
         !PixmapSetImage(10, "assets/art/forest-canopy-portrait.png", forest_canopy_portrait_w, forest_canopy_portrait_h, VecSlice(forest_canopy_portrait, 0, forest_canopy_portrait.count)) { return 1 }
-    name: [32]u8
-    unused CopyCString("WORM_SHOT_LEVEL", name[:])
-    level := GetEnvironment(*name[0])
-    if level != null {
-        Game.StartGame(*App.game, ParseNumber(level) - 1, 0)
+    level := cast(s32)EnvironmentNumber("WORM_SHOT_LEVEL", 0)
+    if level > 0 {
+        Game.StartGame(*App.game, level - 1, 0)
         for i: 0..31 { Game.Tick(*App.game) }
         App.game.mode = Game.MODE_PAUSED
     }
-    unused CopyCString("WORM_SHOT_BOARD", name[:])
-    if GetEnvironment(*name[0]) != null {
+    if EnvironmentText("WORM_SHOT_BOARD") != "" {
         App.game.started = true
         App.game.mode = Game.MODE_PLAYING
         App.game.next_step = 9223372036854775000
     }
-    unused CopyCString("WORM_SHOT_VOLUME", name[:])
-    if GetEnvironment(*name[0]) != null { App.sound_popup = true }
-    unused CopyCString("WORM_SHOT_STAGES", name[:])
-    if GetEnvironment(*name[0]) != null {
+    if EnvironmentText("WORM_SHOT_VOLUME") != "" { App.sound_popup = true }
+    if EnvironmentText("WORM_SHOT_STAGES") != "" {
         App.game.started = true
         App.OpenStages()
     }
-    unused CopyCString("WORM_SHOT_EDITOR", name[:])
-    if GetEnvironment(*name[0]) != null {
+    if EnvironmentText("WORM_SHOT_EDITOR") != "" {
         // WORM_SHOT_LEVEL picks which level the editor frame shows; the
         // started flag keeps Frame's first-run OpenStages from overriding it.
         App.game.started = true
-        if level != null { App.OpenEditor(ParseNumber(level) - 1) }
-        else { App.OpenEditor(0) }
-        unused CopyCString("WORM_SHOT_BROWSER", name[:])
-        if GetEnvironment(*name[0]) != null { App.editor.browsing = true }
-        unused CopyCString("WORM_SHOT_TURN", name[:])
-        if GetEnvironment(*name[0]) != null { App.EditorTurn() }
+        App.OpenEditor(ifx level > 0 then level - 1 else 0)
+        if EnvironmentText("WORM_SHOT_BROWSER") != "" { App.editor.browsing = true }
+        if EnvironmentText("WORM_SHOT_TURN") != "" { App.EditorTurn() }
     }
     session := SessionOpen()
     if !SessionValid(session) { return 2 }
     defer { PixmapCloseWorkers(); CloseSession(session) }
     width: s32 = PixmapWidth
     height: s32 = PixmapHeight
-    unused CopyCString("WORM_SHOT_PORTRAIT", name[:])
-    portrait := GetEnvironment(*name[0]) != null
+    portrait := EnvironmentText("WORM_SHOT_PORTRAIT") != ""
     if portrait { width = 390; height = 780 }
     pixels: [390 * 780]u32
     viewport := Rectangle.{0.0, 0.0, cast(float32)width, cast(float32)height}

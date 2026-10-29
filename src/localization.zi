@@ -3,10 +3,7 @@
 #if #defined(PLATFORM_WEB) {
     #import "std/web"
 } else #if !#defined(WURM_PORTABLE) {
-    #import "std/c_string"
-    #import "std/byte_text_linux"
-    libc :: #system_library "libc";
-    LocaleEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
+    #import "std/environment_linux"
 }
 language: [3]u8;
 ready: bool;
@@ -25,10 +22,8 @@ Detect :: () {
         SetLanguage(TextUntilNul(bytes[:]))
         WebEnd(scope)
     } else #if !#defined(WURM_PORTABLE) {
-        key: [16]u8
-        unused CopyCString("LANG", key[:])
-        value := LocaleEnvironment(*key[0])
-        if value != null { SetLanguage(TextFromCString(value)) }
+        value := EnvironmentText("LANG")
+        if value != "" { SetLanguage(value) }
     }
 }
 Text :: (source: string) -> string {

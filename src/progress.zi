@@ -205,13 +205,10 @@ Pump :: (now: s64) -> bool {
     Report()
     if current[0] == 0 { return changed }
     reply := Account.Service("entity.records", "{\"operation\":\"get\",\"kind\":\"game-progress\",\"game\":\"wurm\"}")
-    at := FieldAt(reply, 0, "document")
-    end := ValueEnd(reply, at, 0)
     record: Shared.GameProgressRecord
     unused CopyCString("wurm", record.game[:])
     record.unlocked = 1
-    if at >= 0 && end > at && Shared.GameProgressRead(reply[at:end], *record) &&
-    TextUntilNul(record.game[:]) == "wurm" {
+    if Shared.GameProgressReply(reply, *record) && TextUntilNul(record.game[:]) == "wurm" {
         if record.unlocked - 1 > unlocked && record.unlocked <= LEVELS { unlocked = record.unlocked - 1; unused SaveUnlocked() }
         for index: 0..199 {
             if record.completed[index] == #char "1" { completed[index] = 1 }
@@ -233,9 +230,7 @@ Pump :: (now: s64) -> bool {
     record.completed[200] = 0
     if record.unlocked > LEVELS { record.unlocked = LEVELS }
     out: Vec(u8)
-    BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"game-progress\",\"schema\":\"entity.game-progress.v1\",\"document\":")
-    Shared.GameProgressWrite(*record, *out)
-    BuilderPrint(*out, "}")
+    Shared.GameProgressPutRequest(*record, *out)
     saved := Account.Service("entity.records", TextView(VecSlice(out, 0, out.count)))
     bytes: [16]u8
     dirty = ReadStringText(saved, FieldAt(saved, 0, "status"), bytes[:]) < 0 || TextUntilNul(bytes[:]) != "done"

@@ -16,13 +16,11 @@
     File :: #import "std/file_linux";
 }
 Originals :: #import, file "original_levels.zi";
-#import "std/c_string"
 #import "std/number_text"
 #import "std/text_buffer"
 
 #if !#defined(WURM_PORTABLE) {
-    libc :: #system_library "libc";
-    GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
+    #import "std/environment_linux"
 }
 
 LEVEL_FILE_BYTES :: 1201;
@@ -72,12 +70,10 @@ CustomSetRoot :: (path: string) -> bool {
 
 ApplyEnvironmentRoot :: () {
     #if !#defined(WURM_PORTABLE) {
-    name: [32]u8
-    if !CopyCString("WURM_LEVEL_DIR", name[:]) { return }
-    value := GetEnvironment(*name[0])
-    if value == null { return }
+    value := EnvironmentText("WURM_LEVEL_DIR")
+    if value == "" { return }
     length: s32 = 0
-    while value[length] != 0 && length < custom_root.count - 1 {
+    while length < value.count && length < custom_root.count - 1 {
         custom_root[length] = value[length]
         length += 1
     }

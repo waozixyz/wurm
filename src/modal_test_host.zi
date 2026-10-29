@@ -5,7 +5,6 @@ using UI :: #import "kryon/Widgets";
 #import "kryon/tree"
 #import "kryon/tree_input"
 #import "kryon/Frame"
-#import "std/c_string"
 Timer :: #import "std/timer_linux";
 App :: #import "app";
 Progress :: #import, file "progress.zi";
@@ -13,16 +12,12 @@ Controls :: #import, file "controls.zi";
 Wardrobe :: #import, file "wardrobe.zi";
 Input :: #import "kryon/input_protocol";
 #import, file "game.zi";
+#import "std/environment_linux"
 libc :: #system_library "libc";
-GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
-ParseNumber :: (text: *u8) -> s32 #foreign libc "atoi";
 Flush :: (stream: *void) -> s32 #foreign libc "fflush";
 
 Number :: (name: string, fallback: s32) -> s32 {
-    buffer: [64]u8
-    if !CopyCString(name, buffer[:]) { return fallback }
-    value := GetEnvironment(*buffer[0])
-    return ifx value == null then fallback else ParseNumber(value)
+    return cast(s32)EnvironmentNumber(name, fallback)
 }
 
 ProbeFrame :: (session: Session) -> bool {

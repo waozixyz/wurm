@@ -1,134 +1,39 @@
-// The desktop entry. Kryon's default host opens a fixed 960x600 window;
-// this one sizes the window from WURM_WINDOW=WxH (default 1280x760) so the
-// mobile-first layout can be checked in landscape and portrait. The frame
-// loop mirrors the default host: poll, feed the session, draw one frame.
-#import "std/c_string"
-#import "kryon/Desktop"
-#import "kryon/session"
-#import "kryon/tree"
-#import "kryon/tree_input"
-#import "kryon/Frame"
-#import "kryon/TestDriver"
-File :: #import "std/file_linux";
+// The desktop entry. It runs Kryon's desktop loop in a 1280x760 window, or
+// the size WURM_WINDOW=WxH gives, so the mobile-first layout can be checked
+// in landscape and portrait.
+#import "kryon/desktop_loop"
+#import "std/environment_linux"
+#import "std/number_text"
 App :: #import "app";
 
-libc :: #system_library "libc";
-GetEnvironment :: (name: *u8) -> *u8 #foreign libc "getenv";
-ParseNumber :: (text: *u8) -> s32 #foreign libc "atoi";
-ChangeDirectory :: (path: *u8) -> s32 #foreign libc "chdir";
-ReadExecutableLink :: (path: *u8, output: *u8, capacity: u64) -> s64 #foreign libc "readlink";
-
-// A direct desktop launch starts beside the executable in build/. Resolve
-// its asset root before any image, sound or saved level is opened.
-FindAssets :: () -> bool {
-    if File.PathExists("assets/art/title.png") { return true }
-    link: [32]u8
-    path: [4096]u8
-    if !CopyCString("/proc/self/exe", link[:]) { return false }
-    count := ReadExecutableLink(*link[0], *path[0], 4095)
-    if count <= 0 { return false }
-    index := cast(s32)count - 1
-    while index > 0 && path[index] != #char "/" { index -= 1 }
-    if index <= 0 { return false }
-    path[index] = 0
-    if ChangeDirectory(*path[0]) != 0 { return false }
-    if File.PathExists("assets/art/title.png") { return true }
-    for parent: 0..2 {
-        if !CopyCString("..", link[:]) || ChangeDirectory(*link[0]) != 0 { return false }
-        if File.PathExists("assets/art/title.png") { return true }
-    }
-    return false
-}
-
-window_width: s32;
-window_height: s32;
-
-WindowSize :: () {
-    window_width = 1280
-    window_height = 760
-    name: [32]u8
-    if !CopyCString("WURM_WINDOW", name[:]) { return }
-    value := GetEnvironment(*name[0])
-    if value == null { return }
-    width := ParseNumber(value)
-    if width < 240 { return }
-    index: s32 = 0
-    while value[index] != 0 && value[index] != 120 && index < 15 { index += 1 }
-    if value[index] != 120 { return }
-    height := ParseNumber(*value[index + 1])
-    if height < 240 { return }
-    window_width = width
-    window_height = height
+// The window size WURM_WINDOW asks for, when both sides are at least 240.
+WindowSize :: () -> (width: s32, height: s32) {
+    text := EnvironmentText("WURM_WINDOW")
+    width, count := IntegerPrefix(text)
+    if count == 0 || width < 240 || count >= cast(s64)text.count || text[count] != #char "x" { return 1280, 760 }
+    height, digits := IntegerPrefix(text[count + 1:text.count])
+    if digits == 0 || height < 240 { return 1280, 760 }
+    return cast(s32)width, cast(s32)height
 }
 
 // WURM_START=editor opens straight into the level editor, optionally at
 // WURM_LEVEL=n (1-based), instead of the stage screen.
 StartScreen :: () {
-    name: [32]u8
-    if !CopyCString("WURM_START", name[:]) { return }
-    value := GetEnvironment(*name[0])
-    if value == null { return }
-    editor: bool
-    for index: 0..5 {
-        editor = value[index] == #char "e" || value[index] == #char "E"
-        if editor { break }
-    }
-    if !editor { return }
-    level: s32 = 0
-    if CopyCString("WURM_LEVEL", name[:]) {
-        number := GetEnvironment(*name[0])
-        if number != null && ParseNumber(number) > 1 { level = ParseNumber(number) - 1 }
-    }
-    App.EditorAtStartup(level)
-}
-
-DrawFrame :: (session: Session) -> bool {
-    BeginDesktopFrame()
-    viewport := DesktopViewport()
-    pointer := TestDriverPointer(session, PollPointer())
-    TreePointerUpdate(session, pointer)
-    TreeSecondaryPointerUpdate(session, PollSecondaryPointer())
-    wheel := TestDriverWheel(DesktopWheelMove())
-    PointerWheelSend(session, pointer.x, pointer.y, wheel)
-    if cast(s32)BeginFrame(session, 1, viewport) != 0 { return false }
-    if App.Frame(session, viewport) != 0 {
-        TreeCancel(session)
-        return false
-    }
-    if cast(s32)EndFrame(session) != 0 { return false }
-    TestDriverFrame(session)
-    unused DesktopCursor(session)
-    return EndDesktopFrame()
+    start := EnvironmentText("WURM_START")
+    if start.count == 0 || (start[0] != #char "e" && start[0] != #char "E") { return }
+    level := EnvironmentNumber("WURM_LEVEL", 1) - 1
+    if level < 0 { level = 0 }
+    App.EditorAtStartup(cast(s32)level)
 }
 
 #program_export
 main :: () -> s32 {
-    if !FindAssets() {
+    // A direct launch starts beside the executable in build/.
+    if !DesktopStartBeside("assets/art/title.png") {
         print("Apfelwurm could not find assets/art/title.png beside the game or its parent directory.\n")
         return 1
     }
-    WindowSize()
-    if !OpenDesktopSized(window_width, window_height) {
-        CloseDesktop()
-        return 1
-    }
-    defer { CloseDesktop() }
-    session := SessionOpen()
-    if !SessionValid(session) { return 1 }
-    defer { CloseSession(session) }
     StartScreen()
-    ok := true
-    while ok && PollDesktop() {
-        KeyboardModifiersSend(session, DesktopModifiers())
-        key := DesktopPressedKey()
-        if key != 0 { KeyboardSend(session, key) }
-        codepoint := DesktopTypedCodepoint()
-        while codepoint != 0 {
-            TypedCodepointSend(session, codepoint)
-            codepoint = DesktopTypedCodepoint()
-        }
-        ok = DrawFrame(session)
-        if ok { PauseDesktop() }
-    }
-    return ifx ok then 0 else 1
+    width, height := WindowSize()
+    return RunDesktop(width, height)
 }

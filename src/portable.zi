@@ -1,30 +1,25 @@
 #import "apps/node_types"
+#import "apps/node_app"
 #import "kryon/geometry"
 App :: #import, file "app.zi";
 Runtime :: #import "portable_runtime";
 Locale :: #import, file "localization.zi";
 host_api :: #system_library "host_api";
-ReadAppHost :: () -> AppMessage #foreign host_api;
-WriteAppHost :: (message: AppMessage) #foreign host_api;
 ReadAppUiHost :: () -> AppUiFrame #foreign host_api;
 
 #program_export
-Main :: () -> s32 {
-    message := ReadAppHost()
+Main :: () -> s32 { return RunNodeApp(WurmFrame, WurmBack) }
+
+WurmFrame :: (message: AppMessage) -> bool {
     Locale.SetLanguage(message.locale)
-    if message.abi != MODULE_ABI { return -1 }
-    if message.action == MODULE_IDENTIFY { return MODULE_NODE_APP }
-    message.succeeded = message.action == APP_ROUTE
-    if message.action == APP_FRAME {
-        frame := ReadAppUiHost()
-        Runtime.FrameTime(frame.now)
-        area := Rectangle.{0.0, cast(float32)frame.top, cast(float32)frame.width,
-            cast(float32)(frame.height - frame.top - frame.bottom)}
-        message.succeeded = App.Frame(frame.session, area) == 0
-    }
-    if message.action == APP_BACK {
-        message.succeeded = App.NavigateBack(Runtime.MonotonicMilliseconds())
-    }
-    WriteAppHost(message)
-    return 0
+    frame := ReadAppUiHost()
+    Runtime.FrameTime(frame.now)
+    area := Rectangle.{0.0, cast(float32)frame.top, cast(float32)frame.width,
+        cast(float32)(frame.height - frame.top - frame.bottom)}
+    return App.Frame(frame.session, area) == 0
+}
+
+WurmBack :: (message: AppMessage) -> bool {
+    Locale.SetLanguage(message.locale)
+    return App.NavigateBack(Runtime.MonotonicMilliseconds())
 }
