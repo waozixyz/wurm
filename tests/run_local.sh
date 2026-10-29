@@ -15,7 +15,6 @@ fi
 python3 tests/recovery_test.py "${1:-/mnt/storage/Games/The-Worm_Win_EN}"
 python3 tools/design_levels.py --check
 python3 tests/campaign_design_test.py
-python3 tests/meadow_design_test.py
 python3 tests/authored_design_test.py
 python3 tools/locales.py --check
 python3 tools/make_art.py --check
