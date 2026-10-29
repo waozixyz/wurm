@@ -1,0 +1,195 @@
+// Build steps shared by Wurm's tools and tests: package checkouts, the
+// shared Entity profile bundle and the native cryptography the account
+// builds link. Commands run with the desktop session scrubbed and one job.
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/text_tools"
+#import "std/environment_linux"
+#import "std/process_run_linux"
+
+// Environment changes for build steps: no desktop session, one job each.
+BuildEnvironment :: (extra: []string) -> Vec(string) {
+    changes: Vec(string)
+    scrubbed: [5]string = .["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "SESSION_MANAGER"]
+    for scrubbed { VecPush(changes, it) }
+    settings: [6]string = .["MAKEFLAGS=-j1", "ZIRAN_PAR_THREADS=1", "OMP_NUM_THREADS=1", "EMCC_CORES=1",
+        "CMAKE_BUILD_PARALLEL_LEVEL=1", "YUE_DESKTOP_RECOVERY=0"]
+    for settings { VecPush(changes, it) }
+    for extra { VecPush(changes, it) }
+    return changes
+}
+
+// Development builds use ziran.local.toml's checkouts; CI uses the lock.
+Locked :: () -> bool { return !PathExists("ziran.local.toml") }
+
+// Runs a build step in the scrubbed environment; its output when CAPTURE.
+Step :: (arguments: []string, capture: bool, extra: []string, directory: string = "") -> (output: string, ok: bool) {
+    environment := BuildEnvironment(extra)
+    changes: []string = VecSlice(environment, 0, environment.count)
+    run: ProcessRun
+    options: ProcessOptions = .{arguments = arguments, directory = directory, environment = changes, capture_output = capture}
+    started := RunProcess(options, *run)
+    if !started || run.code != 0 { print("build step failed: %\n", TextJoin(arguments, " ")) }
+    return BuilderFinish(run.output), started && run.code == 0
+}
+
+no_extra: [0]string;
+
+// The checkout of package NAME, as `ziran pkg path` reports it.
+PackagePath :: (name: string) -> string {
+    arguments: [5]string = .["ziran", "pkg", "path", name, "--locked"]
+    count: s64 = ifx Locked() then 5 else 4
+    output, ok := Step(arguments[0:count], true, no_extra[:])
+    return ifx ok then TextTrim(output) else ""
+}
+
+// Bundles the shared Entity profile into build/profile/entity.zx.
+BuildProfile :: () -> string {
+    entity := PackagePath("entity"); kryon := PackagePath("kryon"); compiler := PackagePath("ziran"); qr := PackagePath("qrcode")
+    if entity.count == 0 || kryon.count == 0 || compiler.count == 0 || qr.count == 0 { return "" }
+    output := "build/profile/entity.zx"
+    unused CreateDirectories("build/profile")
+    paths: [8]Vec(u8)
+    BuilderPrint(*paths[0], "%/src", entity)
+    BuilderPrint(*paths[1], "kryon=%/src/backend", kryon)
+    BuilderPrint(*paths[2], "kryon=%/src/ui", kryon)
+    BuilderPrint(*paths[3], "%/src/ui", kryon)
+    BuilderPrint(*paths[4], "%/std", compiler)
+    BuilderPrint(*paths[5], "qrcode=%/src", qr)
+    BuilderPrint(*paths[6], "assets=%/assets", entity)
+    BuilderPrint(*paths[7], "%/src/entity.zi", entity)
+    arguments: [25]string = .[JoinPath(compiler, "build/bin/ziran"), "bundle", "--root", entity,
+        "--module-path", BuilderFinish(paths[0]), "--module-path", BuilderFinish(paths[1]),
+        "--module-path", BuilderFinish(paths[2]), "--module-path", BuilderFinish(paths[3]),
+        "--module-path", BuilderFinish(paths[4]), "--module-path", BuilderFinish(paths[5]),
+        "--define", "KRYON_HOSTED_UI", "--asset-dir", BuilderFinish(paths[6]),
+        "--entry", "entity:Main", "-o", output, BuilderFinish(paths[7])]
+    text, ok := Step(arguments[:], false, no_extra[:])
+    return ifx ok then output else ""
+}
+
+// The Ziran runtime and liboqs for the account provider, built for the
+// desktop or, with WEB, Emscripten; link arguments go into OUTPUT.
+AccountLibraries :: (web: bool, output: *Vec(string)) -> bool {
+    compiler := PackagePath("ziran"); oqs := PackagePath("liboqs"); mono := PackagePath("monocypher")
+    if compiler.count == 0 || oqs.count == 0 || mono.count == 0 { return false }
+    work := ResolvePath(ifx web then "build/account-web" else "build/account-native")
+    unused CreateDirectories(work)
+    // One runtime folder per toolchain checkout: make keeps objects that are
+    // newer than another toolchain's sources, which mixes saved IR formats.
+    runtime_folder: Vec(u8)
+    BuilderPrint(*runtime_folder, "runtime-%", PathName(compiler))
+    runtime := JoinPath(JoinPath(work, BuilderFinish(runtime_folder)), "libziran.a")
+    emcc := EnvironmentText("EMCC")
+    if emcc.count == 0 { emcc = JoinPath(EnvironmentText("HOME"), "emsdk/upstream/emscripten/emcc") }
+    build_dir: Vec(u8)
+    BuilderPrint(*build_dir, "BUILD_DIR=%", PathParent(runtime))
+    make: Vec(string)
+    start: [6]string = .["make", "-s", "-j1", "-C", compiler, "BOOTSTRAP=1"]
+    for start { VecPush(make, it) }
+    VecPush(make, BuilderFinish(build_dir))
+    if web {
+        flags: [4]Vec(u8)
+        BuilderPrint(*flags[0], "CC=%", emcc)
+        BuilderPrint(*flags[1], "AR=%", JoinPath(PathParent(emcc), "emar"))
+        Append(*flags[2], "OBJCOPY=true")
+        Append(*flags[3], "CFLAGS=-O2")
+        for i: 0..3 { VecPush(make, BuilderFinish(flags[i])) }
+    }
+    VecPush(make, runtime)
+    out1, made := Step(VecSlice(make, 0, make.count), false, no_extra[:])
+    if !made { return false }
+    oqs_build := JoinPath(work, "oqs")
+    configure: Vec(string)
+    if web { VecPush(configure, JoinPath(PathParent(emcc), "emcmake")) }
+    VecPush(configure, "cmake")
+    // A cache from another liboqs checkout must be rebuilt from scratch.
+    cache, cached := ReadEntireFile(JoinPath(oqs_build, "CMakeCache.txt"))
+    if cached {
+        home := Quoted(cache, "CMAKE_HOME_DIRECTORY:INTERNAL=", "\n")
+        if home.count > 0 && ResolvePath(home) != ResolvePath(oqs) { VecPush(configure, "--fresh") }
+    }
+    options: [9]string = .["-S", oqs, "-B", oqs_build, "-DCMAKE_BUILD_TYPE=MinSizeRel", "-DBUILD_SHARED_LIBS=OFF",
+        "-DOQS_BUILD_ONLY_LIB=ON", "-DOQS_USE_OPENSSL=OFF", "-DOQS_DIST_BUILD=OFF"]
+    for options { VecPush(configure, it) }
+    VecPush(configure, "-DOQS_OPT_TARGET=generic")
+    VecPush(configure, "-DOQS_MINIMAL_BUILD=SIG_ml_dsa_44")
+    out2, configured := Step(VecSlice(configure, 0, configure.count), false, no_extra[:])
+    if !configured { return false }
+    compile: [7]string = .["cmake", "--build", oqs_build, "--target", "oqs", "-j1", ""]
+    out3, compiled := Step(compile[0:6], false, no_extra[:])
+    if !compiled { return false }
+    VecPush(output.*, runtime)
+    VecPush(output.*, JoinPath(oqs_build, "lib/liboqs.a"))
+    include: Vec(u8)
+    BuilderPrint(*include, "-I%/src", mono)
+    VecPush(output.*, BuilderFinish(include))
+    VecPush(output.*, JoinPath(mono, "src/monocypher.c"))
+    VecPush(output.*, JoinPath(mono, "src/optional/monocypher-ed25519.c"))
+    return true
+}
+
+// The text after NEEDLE up to END in TEXT, or "".
+Quoted :: (text: string, needle: string, end: string) -> string {
+    at := TextFind(text, needle)
+    if at < 0 { return "" }
+    start := at + needle.count
+    stop := TextFind(text, end, start)
+    return ifx stop < 0 then text[start:text.count] else text[start:stop]
+}
+
+// Every file under FOLDER ending in SUFFIX, and every folder, recursively.
+Walk :: (folder: string, suffix: string, files: *Vec(string), folders: *Vec(string)) {
+    VecPush(folders.*, folder)
+    names: Vec(string)
+    if !ListDirectory(folder, *names) { return }
+    for i: 0..names.count - 1 {
+        path := JoinPath(folder, names[i])
+        if IsDirectory(path) { Walk(path, suffix, files, folders) }
+        else if TextHasSuffix(names[i], suffix) { VecPush(files.*, path) }
+    }
+}
+
+// Builds a native account program: Ziran C for ENTRY from SOURCE into
+// OUTPUT, linked with the account libraries and the desktop's system
+// libraries into OUTPUT/PROGRAM. ROOT is the module root ("" for src).
+BuildAccountProgram :: (source: string, root: string, entry: string, output: string, program: string, optimize: string) -> bool {
+    if !CreateDirectories(output) { return false }
+    arguments: Vec(string)
+    head: [3]string = .["ziran", "build", "--project"]
+    for head { VecPush(arguments, it) }
+    if Locked() { VecPush(arguments, "--locked") }
+    if root.count > 0 { VecPush(arguments, "--root"); VecPush(arguments, root) }
+    rest: [10]string = .["--target=c", "--define", "PLATFORM_DESKTOP", "--define", "WURM_ACCOUNTS", "--entry", entry, "-o", output, source]
+    for rest { VecPush(arguments, it) }
+    out1, generated := Step(VecSlice(arguments, 0, arguments.count), false, no_extra[:])
+    if !generated { return false }
+    libraries: Vec(string)
+    if !AccountLibraries(false, *libraries) { return false }
+    files: Vec(string)
+    folders: Vec(string)
+    Walk(output, ".c", *files, *folders)
+    packages: [8]string = .["pkg-config", "--libs", "sdl2", "cairo", "freetype2", "fontconfig", "pangocairo", "gtk+-3.0"]
+    system, found := Step(packages[:], true, no_extra[:])
+    if !found { return false }
+    compile: Vec(string)
+    start: [5]string = .["cc", "-std=c11", optimize, "-ffunction-sections", "-fdata-sections"]
+    for start { VecPush(compile, it) }
+    VecPush(compile, "-Wl,--gc-sections")
+    include: Vec(u8)
+    BuilderPrint(*include, "-I%/include", PackagePath("ziran"))
+    VecPush(compile, BuilderFinish(include))
+    for i: 0..folders.count - 1 { VecPush(compile, "-iquote"); VecPush(compile, folders[i]) }
+    for i: 0..files.count - 1 { VecPush(compile, files[i]) }
+    for i: 0..libraries.count - 1 { VecPush(compile, libraries[i]) }
+    words := TextSplit(TextTrim(system), " ")
+    for i: 0..words.count - 1 { if words[i].count > 0 { VecPush(compile, words[i]) } }
+    link: [5]string = .["-lX11", "-l:libcurl.so.4", "-lm", "-lpthread", "-lz"]
+    for link { VecPush(compile, it) }
+    candidate := JoinPath(output, "program.new")
+    VecPush(compile, "-o")
+    VecPush(compile, candidate)
+    out2, linked := Step(VecSlice(compile, 0, compile.count), false, no_extra[:])
+    return linked && RenamePath(candidate, JoinPath(output, program))
+}

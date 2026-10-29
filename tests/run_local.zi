@@ -1,0 +1,240 @@
+// Wurm's local test suite: the recovered archive, the campaign and published
+// boards, the generated sources and art, every engine and account test, the
+// headless pictures and the desktop builds. Development checkouts in
+// ziran.local.toml are used when present; CI has none and uses the lock.
+//
+//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- [ARCHIVE]
+//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web
+//
+// ui, account-ui and web run the private Xvfb, account and browser tests;
+// build the desktop, modal-test, account and web editions first.
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/text_tools"
+#import "std/byte_text_linux"
+#import "std/process_run_linux"
+#import "std/image"
+#import "std/png_linux"
+#import, file "../src/account_build.zi";
+
+Fail :: (message: string) -> s32 {
+    print("FAIL: run_local: %\n", message)
+    return 1
+}
+
+// Runs a command with the scrubbed build environment plus EXTRA, output shown.
+Run :: (arguments: []string, extra: []string) -> bool {
+    output, ok := Step(arguments, false, extra)
+    return ok
+}
+
+// ziran ARGUMENTS..., with --locked when there are no local checkouts.
+Ziran :: (arguments: []string, extra: []string) -> bool {
+    command: Vec(string)
+    VecPush(command, "ziran")
+    VecPush(command, arguments[0])
+    if Locked() { VecPush(command, "--locked") }
+    for i: 1..arguments.count - 1 { VecPush(command, arguments[i]) }
+    return Run(VecSlice(command, 0, command.count), extra)
+}
+
+// A native tool from tools/.
+Tool :: (name: string, argument: string) -> bool {
+    path: Vec(u8)
+    BuilderPrint(*path, "tools/%.zi", name)
+    arguments: [5]string = .["run", "--target=c", BuilderFinish(path), "--", argument]
+    count: s64 = ifx argument.count > 0 then 5 else 3
+    link: [1]string = .["LDLIBS=-lz"]
+    return Ziran(arguments[0:count], link[:])
+}
+
+// Builds tests/NAME.zi into build/OUTPUT and runs it with ENVIRONMENT.
+Test :: (name: string, output: string, defines: []string, link: string, environment: []string, argument: string = "") -> bool {
+    arguments: Vec(string)
+    head: [5]string = .["build", "--project", "--root", "tests", "--target=c"]
+    for head { VecPush(arguments, it) }
+    for defines { VecPush(arguments, "--define"); VecPush(arguments, it) }
+    entry: Vec(u8)
+    BuilderPrint(*entry, "%:main", name)
+    source: Vec(u8)
+    BuilderPrint(*source, "tests/%.zi", name)
+    VecPush(arguments, "--entry"); VecPush(arguments, BuilderFinish(entry))
+    VecPush(arguments, "--exe"); VecPush(arguments, "-o")
+    folder := JoinPath("build", output)
+    VecPush(arguments, folder)
+    VecPush(arguments, BuilderFinish(source))
+    libraries: Vec(u8)
+    BuilderPrint(*libraries, "LDLIBS=%", link)
+    flags: [1]string = .[BuilderFinish(libraries)]
+    if !Ziran(VecSlice(arguments, 0, arguments.count), flags[:]) { return false }
+    program: [2]string = .[JoinPath(folder, name), argument]
+    return Run(program[0:ifx argument.count > 0 then 2 else 1], environment)
+}
+
+// "NAME=PATH".
+Pair :: (name: string, path: string) -> string {
+    text: Vec(u8)
+    BuilderPrint(*text, "%=%", name, path)
+    return BuilderFinish(text)
+}
+
+none: [0]string;
+
+// The real account frames headlessly, with a private profile under work/.
+AccountNavigation :: () -> bool {
+    fixture := ResolvePath("work/account-navigation")
+    unused RemoveTree(fixture)
+    if !CreateDirectories(JoinPath(fixture, "levels")) || !CreateDirectories(JoinPath(fixture, "profile")) { return false }
+    profile := BuildProfile()
+    if profile.count == 0 || !CopyFile(profile, "assets/entity.zx") { return false }
+    output := "build/account-navigation-test"
+    unused RemoveTree(output)
+    if !BuildAccountProgram("tests/account_navigation_test.zi", "tests", "account_navigation_test:main", output, "account_navigation_test", "-O1") {
+        return false
+    }
+    settings: [4]Vec(u8)
+    BuilderPrint(*settings[0], "WURM_PROFILE_DIR=%/profile", fixture)
+    BuilderPrint(*settings[1], "XDG_DATA_HOME=%/data", fixture)
+    Append(*settings[2], "SDL_AUDIODRIVER=dummy")
+    Append(*settings[3], "SDL_VIDEODRIVER=dummy")
+    environment: [4]string
+    for i: 0..3 { environment[i] = BuilderFinish(settings[i]) }
+    program: [1]string = .[JoinPath(output, "account_navigation_test")]
+    return Run(program[:], environment[:])
+}
+
+// The real portable entry with a private host account and retained UI tree.
+Hosted :: () -> bool {
+    toolchain := PackagePath("ziran")
+    kryon := PackagePath("kryon")
+    command: Vec(string)
+    start: [3]string = .[JoinPath(toolchain, "build/bin/ziran"), "build", "--root"]
+    for start { VecPush(command, it) }
+    VecPush(command, ResolvePath("src"))
+    paths: Vec(string)
+    VecPush(paths, ResolvePath("tests")); VecPush(paths, ResolvePath("src"))
+    VecPush(paths, Pair("kryon", JoinPath(kryon, "src/ui")))
+    VecPush(paths, Pair("kryon", JoinPath(kryon, "src/backend")))
+    VecPush(paths, JoinPath(kryon, "src/ui"))
+    VecPush(paths, Pair("std", JoinPath(toolchain, "std")))
+    VecPush(paths, JoinPath(toolchain, "std"))
+    packages: [3]string = .["apps", "mingcute", "entity"]
+    for packages { VecPush(paths, Pair(it, JoinPath(PackagePath(it), "src"))) }
+    for i: 0..paths.count - 1 { VecPush(command, "--module-path"); VecPush(command, paths[i]) }
+    rest: [9]string = .["--define", "WURM_PORTABLE", "--target=c", "--entry", "hosted_test:main", "--exe", "-o", "", ""]
+    for i: 0..6 { VecPush(command, rest[i]) }
+    VecPush(command, ResolvePath("build/hosted-test"))
+    VecPush(command, ResolvePath("tests/hosted_test.zi"))
+    if !Run(VecSlice(command, 0, command.count), none[:]) { return false }
+    program: [1]string = .["build/hosted-test/hosted_test"]
+    return Run(program[:], none[:])
+}
+
+// A headless picture from the shot host: 960x600 with real artwork.
+Shot :: (name: string, settings: []string) -> bool {
+    ppm: Vec(u8)
+    BuilderPrint(*ppm, "build/research/%.ppm", name)
+    path := BuilderFinish(ppm)
+    command: Vec(string)
+    VecPush(command, "ziran"); VecPush(command, "run")
+    if Locked() { VecPush(command, "--locked") }
+    VecPush(command, "shot")
+    environment := BuildEnvironment(settings)
+    run: ProcessRun
+    options: ProcessOptions = .{arguments = VecSlice(command, 0, command.count), environment = VecSlice(environment, 0, environment.count), output_path = path}
+    if !RunProcess(options, *run) || run.code != 0 { return false }
+    data, found := ReadEntireFile(path)
+    if !found { return false }
+    // P3 (decimal) or P6 (binary): WIDTH HEIGHT 255, then RGB rows.
+    words: [4]string
+    at: s64
+    for w: 0..3 {
+        while at < data.count && TextIsSpace(data[at]) { at += 1 }
+        start := at
+        while at < data.count && !TextIsSpace(data[at]) { at += 1 }
+        words[w] = data[start:at]
+    }
+    width, width_ok := TextInteger(words[1])
+    height, height_ok := TextInteger(words[2])
+    if (words[0] != "P3" && words[0] != "P6") || !width_ok || !height_ok || width != 960 || height != 600 { return false }
+    image := NewImage(960, 600, 0, 0, 0, 255)
+    if words[0] == "P6" {
+        at += 1
+        if data.count - at < 960 * 600 * 3 { return false }
+        for i: 0..960 * 600 - 1 { for c: 0..2 { image.pixels[i * 4 + c] = data[at + i * 3 + c] } }
+    } else {
+        for i: 0..960 * 600 * 3 - 1 {
+            while at < data.count && TextIsSpace(data[at]) { at += 1 }
+            value: s64
+            digits: s64
+            while at < data.count && data[at] >= #char "0" && data[at] <= #char "9" { value = value * 10 + cast(s64)(data[at] - #char "0"); at += 1; digits += 1 }
+            if digits == 0 || value > 255 { return false }
+            image.pixels[(i / 3) * 4 + i % 3] = cast(u8)value
+        }
+    }
+    if ImageColorCountOver(*image, 100) <= 100 { return false }
+    png: Vec(u8)
+    BuilderPrint(*png, "build/research/%.png", name)
+    return WritePNGFile(BuilderFinish(png), *image, false)
+}
+
+// Whether the picture has more than LIMIT colours.
+ImageColorCountOver :: (image: *Image, limit: s64) -> s64 {
+    seen: Vec(u8)
+    for i: 0..2097151 { unused VecPush(seen, 0) }
+    count: s64
+    for i: 0..cast(s64)image.width * image.height - 1 {
+        color := (cast(s64)image.pixels[i * 4] << 16) | (cast(s64)image.pixels[i * 4 + 1] << 8) | cast(s64)image.pixels[i * 4 + 2]
+        bit := cast(u8)(1 << cast(u8)(color & 7))
+        if (seen[color >> 3] & bit) == 0 { seen[color >> 3] |= bit; count += 1 }
+        if count > limit { return count }
+    }
+    return count
+}
+
+// A UI test that links the private display and draws in a private Xvfb.
+Interface :: (name: string, output: string, link: string) -> bool {
+    scrubbed: [0]string
+    return Test(name, output, scrubbed[:], link, scrubbed[:])
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    unused CreateDirectories("build/research")
+    mode := ifx argc > 1 then TextFromCString(argv[1]) else ""
+    if mode == "ui" { return ifx Interface("private_ui_test", "private-ui-test", "-lX11 -lcairo -lm") then 0 else Fail("private UI") }
+    if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
+    if mode == "web" { return ifx Interface("web_test", "web-test-runner", "-lm") then 0 else Fail("browser") }
+    archive := ifx mode.count > 0 then mode else "/mnt/storage/Games/The-Worm_Win_EN"
+    if !Test("recovery_test", "recovery-test", none[:], "-lz", none[:], archive) { return Fail("recovery") }
+    if !Tool("design_levels", "--check") { return Fail("campaign design") }
+    if !Test("campaign_design_test", "campaign-design-test", none[:], "", none[:]) { return Fail("campaign boards") }
+    if !Test("authored_design_test", "authored-design-test", none[:], "", none[:]) { return Fail("published boards") }
+    if !Tool("authored_levels", "--check") || !Tool("locales", "--check") { return Fail("generated sources") }
+    if !Tool("make_art", "--check") || !Tool("render_previews", "--check") { return Fail("art") }
+    if !Test("android_release_test", "android-release-test", none[:], "-lz", none[:]) { return Fail("Android editions") }
+    check: [1]string = .["check"]
+    if !Ziran(check[:], none[:]) { return Fail("ziran check") }
+    engine: [7]string = .["game_test", "steering_test", "start_clearance_test", "meadow_test", "campaign_replay", "progress_test", "editor_test"]
+    folders: [7]string = .["game-test", "steering-test", "start-clearance-test", "meadow-test", "campaign-replay", "progress-test", "editor-test"]
+    for i: 0..6 { if !Test(engine[i], folders[i], none[:], "", none[:]) { return Fail(engine[i]) } }
+    accounts: [1]string = .["WURM_ACCOUNT_TEST"]
+    if !Test("account_test", "account-test", accounts[:], "", none[:]) { return Fail("account") }
+    if !AccountNavigation() { return Fail("account navigation") }
+    if !Hosted() { return Fail("hosted") }
+    if !Test("authored_levels_test", "authored-levels-test", none[:], "", none[:]) { return Fail("published campaign") }
+    sound: [2]string = .["SDL_VIDEODRIVER=dummy", "SDL_AUDIODRIVER=dummy"]
+    if !Test("audio_test", "audio-test", none[:], "-lSDL2", sound[:]) { return Fail("audio") }
+    finale: [1]string = .["WORM_SHOT_LEVEL=200"]
+    stages: [2]string = .["WORM_SHOT_LEVEL=20", "WORM_SHOT_STAGES=1"]
+    editor: [1]string = .["WORM_SHOT_EDITOR=1"]
+    if !Shot("remake-start", none[:]) || !Shot("remake-mountain-finale", finale[:]) || !Shot("remake-stages", stages[:]) ||
+       !Shot("remake-editor", editor[:]) { return Fail("headless pictures") }
+    print("Headless local tests: title, mountain finale, title after level 20 and the editor rendered with the new art.\n")
+    desktop: [2]string = .["build", "desktop"]
+    probe: [2]string = .["build", "modal-test"]
+    if !Ziran(desktop[:], none[:]) || !Ziran(probe[:], none[:]) { return Fail("desktop builds") }
+    print("Apfelwurm local tests passed; GitHub CI is separate.\n")
+    return 0
+}

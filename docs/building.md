@@ -28,7 +28,7 @@ Continue starts the highest unlocked level with three lives and a fresh
 score; Play from start begins at level 1. Earlier save records are imported.
 Try again after game over also starts the highest unlocked level with fresh
 lives and score, including after replaying an earlier level.
-`tools/design_levels.py` regenerates the boards and static route certificates.
+`tools/design_levels.zi` regenerates the boards and static route certificates.
 The local engine replay wins all 200 levels in both orientations with enemies
 active, using recorded seeds and routes from `tests/campaign_cases.json`.
 This is separate from device and Android input verification.
@@ -126,8 +126,8 @@ redirects where overrides are read and written.
 
 Published editor layouts live in `assets/authored-levels/`, separate from
 personal saves. To publish a saved board, copy only its `level<N>.dat` or
-`level<N>-portrait.dat` file there, then run `python3 tools/authored_levels.py`
-and `python3 tools/render_previews.py`. The generated boards are compiled
+`level<N>-portrait.dat` file there, then run `LDLIBS=-lz ziran run --target=c tools/authored_levels.zi`
+and `LDLIBS=-lz ziran run --target=c tools/render_previews.zi`. The generated boards are compiled
 into desktop, Android, browser and Arcade editions. Personal progress,
 wardrobes and other save records are never included. Reset restores the
 published board; a new personal edit takes precedence over it.
@@ -141,16 +141,18 @@ The portable host plays packed sound effects. The native editions keep the
 streaming soundtrack and secondary-pointer editor controls.
 
 ```sh
-python3 tools/build_desktop.py
+LDLIBS=-lz ziran run --target=c tools/build_desktop.zi
 build/account-desktop/wurm
-python3 tools/build_android.py --abi arm64-v8a
+LDLIBS=-lz ziran run --target=c tools/build_android.zi -- --abi arm64-v8a
 ziran run --locked shot > build/stages.ppm
 WORM_SHOT_LEVEL=200 ziran run --locked shot > build/forest-finale.ppm
 ziran check --locked
-sh tests/run_local.sh
+LDLIBS=-lz ziran run --target=c tests/run_local.zi
 ```
 
-`tests/private_ui_test.py` additionally exercises the real desktop build on
+Wurm's tools and tests are Ziran programs; `ziran run --target=c` builds each
+once and runs it. `LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui`
+runs `tests/private_ui_test.zi`, which additionally exercises the real desktop build on
 its own verified Xvfb server. It checks all three dialogs in 320x568 portrait
 and 640x360 landscape, including their primary and Back to title actions.
 It never uses the owner's desktop. The audio
@@ -172,8 +174,8 @@ The generated `version.json` supplies the Android version and increasing
 version code. Build and sign both ARM architectures with:
 
 ```sh
-python3 tools/build_android.py --release --abi universal
-python3 tools/android_release.py sign build/android/Apfelwurm-universal-release-unsigned.apk
+LDLIBS=-lz ziran run --target=c tools/build_android.zi -- --release --abi universal
+LDLIBS=-lz ziran run --target=c tools/android_release.zi -- sign build/android/Apfelwurm-universal-release-unsigned.apk
 ```
 
 Signing uses the preserved private key in ignored `backup/android-signing/`.
@@ -188,8 +190,8 @@ artifact; it does not imply a listing or approval in the F-Droid catalog.
 Build and sign the separate Google Play APK with:
 
 ```sh
-python3 tools/build_android.py --release --abi universal --edition gplay
-python3 tools/android_release.py sign build/android/Apfelwurm-universal-gplay-release-unsigned.apk --edition gplay
+LDLIBS=-lz ziran run --target=c tools/build_android.zi -- --release --abi universal --edition gplay
+LDLIBS=-lz ziran run --target=c tools/android_release.zi -- sign build/android/Apfelwurm-universal-gplay-release-unsigned.apk --edition gplay
 ```
 
 This produces `wurm-v<VERSION>-gplay.apk`, with Play Billing for Dew purchases.
@@ -216,7 +218,7 @@ launched from `build/`.
 The title uses detailed sunlit storybook art, and the tiles and creatures use clean cartoon
 art generated with the built-in image tool. Source atlases live in
 `assets/art-source`; their prompts are recorded in `assets/art/title.json`.
-`tools/make_art.py` crops and packs those cells into the landscape
+`tools/make_art.zi` crops and packs those cells into the landscape
 sheets without changing gameplay tile IDs or collision rules. It also writes
 the display-free `.argb` mirrors. Run it with `--check` to verify the packed
 art matches its sources. `assets/art-source/journey-terrain.png` supplies
@@ -237,7 +239,7 @@ audio and receives the game's effects.
 ## Recover the assets again
 
 ```sh
-python3 tools/extract_original.py /mnt/storage/Games/The-Worm_Win_EN
+LDLIBS=-lz ziran run --target=c tools/extract_original.zi -- /mnt/storage/Games/The-Worm_Win_EN
 ```
 
 The extractor validates the complete archive, preserves every packed file,
@@ -256,8 +258,9 @@ original Windows dialogs and DirectPlay multiplayer have not been ported.
 
 ## Browser build and deployment
 
-`python3 tools/build_web.py` compiles the same game with Kryon's Canvas2D host
-and Emscripten. `node tests/web_test.mjs` runs a private browser test, including
+`LDLIBS=-lz ziran run --target=c tools/build_web.zi` compiles the same game with Kryon's Canvas2D host
+and Emscripten. `LDLIBS=-lz ziran run --target=c tests/run_local.zi -- web` runs a private
+browser test, including
 control selection, the direct start, portrait resizing and persistent saves.
 The browser stores records through Kryon's IndexedDB provider.
 
@@ -269,7 +272,7 @@ the website's existing deployment credentials. Nothing needs updating by hand.
 
 ## Profile, appearance and cosmetics
 
-The release desktop build uses `tools/build_desktop.py`. Android and browser
+The release desktop build uses `tools/build_desktop.zi`. Android and browser
 builds use the same native Entity account provider through `src/account.zi`;
 keys stay in the provider. Desktop profile data lives in
 `$XDG_DATA_HOME/wurm/profile` (or `~/.local/share/wurm/profile`), Android uses
@@ -293,14 +296,14 @@ is shared across retries and devices. The game grants paid skins only after a
 confirmed receipt. The three prices are 10, 20 and 30 Dew.
 
 `tests/account_test.zi` covers account changes, completion-only publication,
-offline retry and playtime unlocks. `tests/account_ui_test.py` drives the actual
+offline retry and playtime unlocks. `tests/account_ui_test.zi` (`run_local.zi -- account-ui`) drives the actual
 account build on its own verified Xvfb display in both orientations. Entity's
 `python3 scripts/game_shop_test.py` additionally verifies authenticated private
 node spending, retry deduplication, fresh-device restore and isolation with
 throwaway accounts and Dew. GitHub Actions and live deployment are verified
 separately from these local tests.
 
-`python3 tests/account_navigation_test.py` exercises the real Wurm frame and
+`tests/account_navigation_test.zi`, which `run_local.zi` builds, exercises the real Wurm frame and
 Entity provider without a display, using an isolated account under ignored
 `work/account-navigation/`. It verifies actual leaderboard score rows, repeated
 opening in both orientations, and Back after an account changes while the

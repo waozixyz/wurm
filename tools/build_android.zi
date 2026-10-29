@@ -1,0 +1,265 @@
+// Builds Apfelwurm's native APK or Google Play bundle, with its art, scores,
+// levels and launcher icon, through Kryon's Android scaffold and Gradle.
+//
+//     LDLIBS=-lz ziran run --target=c tools/build_android.zi -- [--abi arm64-v8a|armeabi-v7a|universal]
+//         [--release] [--bundle] [--edition direct|gplay] [--verification]
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/text_tools"
+#import "std/byte_text_linux"
+#import "std/environment_linux"
+#import "std/json_scan"
+#import "std/image"
+#import "std/png_linux"
+#import, file "../src/account_build.zi";
+
+Fail :: (message: string) -> s32 {
+    print("tools/build_android: %\n", message)
+    return 1
+}
+
+// TEXT with the digits after the first PREFIX replaced by VALUE.
+ReplaceNumber :: (text: string, prefix: string, value: string) -> string {
+    at := TextFind(text, prefix)
+    if at < 0 { return text }
+    end := at + prefix.count
+    while end < text.count && text[end] >= #char "0" && text[end] <= #char "9" { end += 1 }
+    out: Vec(u8)
+    Append(*out, text[0:at + prefix.count]); Append(*out, value); Append(*out, text[end:text.count])
+    return BuilderFinish(out)
+}
+
+// TEXT with the quoted value after the first PREFIX replaced by VALUE.
+ReplaceQuoted :: (text: string, prefix: string, quote: string, value: string) -> string {
+    at := TextFind(text, prefix)
+    if at < 0 { return text }
+    end := TextFind(text, quote, at + prefix.count)
+    if end < 0 { return text }
+    out: Vec(u8)
+    Append(*out, text[0:at + prefix.count]); Append(*out, value); Append(*out, text[end:text.count])
+    return BuilderFinish(out)
+}
+
+// TEXT with the first OLD replaced by NEW.
+ReplaceFirst :: (text: string, old: string, new: string) -> string {
+    at := TextFind(text, old)
+    if at < 0 { return text }
+    out: Vec(u8)
+    Append(*out, text[0:at]); Append(*out, new); Append(*out, text[at + old.count:text.count])
+    return BuilderFinish(out)
+}
+
+// TEXT without any android:usesCleartextTraffic attribute and the space before it.
+WithoutCleartext :: (text: string) -> string {
+    at := TextFind(text, "android:usesCleartextTraffic=\"")
+    if at < 0 { return text }
+    start := at
+    while start > 0 && TextIsSpace(text[start - 1]) { start -= 1 }
+    end := TextFind(text, "\"", at + 30)
+    if end < 0 { return text }
+    out: Vec(u8)
+    Append(*out, text[0:start]); Append(*out, text[end + 1:text.count])
+    return WithoutCleartext(BuilderFinish(out))
+}
+
+// The launcher icon at each density, from the reviewed bitmap.
+InstallIcon :: () -> bool {
+    resources := "droid/app/src/main/res"
+    source := ReadPNGFile("assets/app/icon.png")
+    if !ImageValid(*source) { return false }
+    DropAlpha(*source)
+    artwork := JoinPath(resources, "drawable-nodpi")
+    if !CreateDirectories(artwork) { return false }
+    art := ResizeLanczos(*source, 432, 432)
+    if !WritePNGFile(JoinPath(artwork, "ic_launcher_art.png"), *art, false) { return false }
+    densities: [5]string = .["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]
+    sizes: [5]s32 = .[48, 72, 96, 144, 192]
+    for i: 0..4 {
+        folder: Vec(u8)
+        BuilderPrint(*folder, "%/mipmap-%", resources, densities[i])
+        path := BuilderFinish(folder)
+        icon := ResizeLanczos(*source, sizes[i], sizes[i])
+        if !CreateDirectories(path) || !WritePNGFile(JoinPath(path, "ic_launcher.png"), *icon, false) { return false }
+    }
+    adaptive := JoinPath(resources, "mipmap-anydpi-v26")
+    xml := "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<adaptive-icon xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <background android:drawable=\"@drawable/ic_launcher_art\" />\n    <foreground android:drawable=\"@android:color/transparent\" />\n</adaptive-icon>\n"
+    return CreateDirectories(adaptive) && WriteEntireFile(JoinPath(adaptive, "ic_launcher.xml"), xml)
+}
+
+// Copies every file under SOURCE ending in SUFFIX into TARGET, keeping paths.
+CopyMatching :: (source: string, target: string, suffix: string) -> bool {
+    names: Vec(string)
+    if !ListDirectory(source, *names) { return false }
+    for i: 0..names.count - 1 {
+        from := JoinPath(source, names[i])
+        to := JoinPath(target, names[i])
+        if IsDirectory(from) { if !CopyMatching(from, to, suffix) { return false }; continue }
+        if !TextHasSuffix(names[i], suffix) { continue }
+        if !CreateDirectories(target) || !CopyFile(from, to) { return false }
+    }
+    return true
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    abi := "arm64-v8a"
+    release := false; bundle := false; verification := false
+    edition := ""
+    index: s32 = 1
+    while index < argc {
+        argument := TextFromCString(argv[index])
+        if argument == "--abi" && index + 1 < argc { index += 1; abi = TextFromCString(argv[index]) }
+        else if argument == "--edition" && index + 1 < argc { index += 1; edition = TextFromCString(argv[index]) }
+        else if argument == "--release" { release = true }
+        else if argument == "--bundle" { bundle = true }
+        else if argument == "--verification" { verification = true }
+        else { return Fail("usage: build_android [--abi ABI] [--release] [--bundle] [--edition direct|gplay] [--verification]") }
+        index += 1
+    }
+    if abi != "arm64-v8a" && abi != "armeabi-v7a" && abi != "universal" { return Fail("unknown ABI") }
+    if edition.count == 0 { edition = ifx bundle then "gplay" else "direct" }
+    if edition != "direct" && edition != "gplay" { return Fail("unknown edition") }
+    if bundle && edition != "gplay" { return Fail("--bundle requires the gplay edition") }
+    version_text, has_version := ReadEntireFile("version.json")
+    span := ReadString(version_text, FieldAt(version_text, 0, "version"))
+    code := ReadNumber(version_text, FieldAt(version_text, 0, "version_code"))
+    changelog, has_changelog := ReadEntireFile("CHANGELOG.md")
+    if !has_version || !span.valid || !code.valid || !has_changelog { return Fail("version.json or CHANGELOG.md is unreadable") }
+    version := version_text[span.start:span.end]
+    current := ""
+    lines := TextLines(changelog)
+    for i: 0..lines.count - 1 {
+        if TextHasPrefix(lines[i], "## [") {
+            close := TextFind(lines[i], "]")
+            candidate := lines[i][4:ifx close < 0 then 4 else close]
+            if TextOnly(candidate, "0123456789.") && candidate.count > 0 { current = candidate; break }
+        }
+    }
+    if current != version { return Fail("run update_version.sh first") }
+    version_code: Vec(u8)
+    BuilderPrint(*version_code, "%", cast(s64)code.value)
+    code_text := BuilderFinish(version_code)
+    kryon := PackagePath("kryon"); ziran := PackagePath("ziran"); raylib := PackagePath("raylib")
+    monocypher := PackagePath("monocypher"); liboqs := PackagePath("liboqs")
+    profile := BuildProfile()
+    if profile.count == 0 || kryon.count == 0 { return Fail("the Profile bundle or packages failed") }
+    scaffold: [11]string = .["python3", JoinPath(kryon, "scripts/android_scaffold.py"), "--root", ResolvePath("."),
+        "--name", "Apfelwurm", "--package", "xyz.waozi.wurm", "--activity", "MainActivity", "--kryon"]
+    scaffold_all: Vec(string)
+    for scaffold { VecPush(scaffold_all, it) }
+    VecPush(scaffold_all, kryon)
+    out1, scaffolded := Step(VecSlice(scaffold_all, 0, scaffold_all.count), false, no_extra[:])
+    if !scaffolded { return Fail("Kryon's Android scaffold failed") }
+    // Wurm uses the canonical host, so generated projects also receive Kryon's
+    // clipboard, keyboard and document-picker integrations.
+    template, has_template := ReadEntireFile(JoinPath(kryon, "templates/droid/droid/app/src/main/java/__PACKAGE_PATH__/__ACTIVITY__.java"))
+    if !has_template { return Fail("Kryon's activity template is missing") }
+    activity := TextReplace(TextReplace(template, "__PACKAGE__", "xyz.waozi.wurm"), "__ACTIVITY__", "MainActivity")
+    if !WriteEntireFile("droid/app/src/main/java/xyz/waozi/wurm/MainActivity.java", activity) { return Fail("cannot write the activity") }
+    // The install ID may differ while the Java/JNI activity remains the same.
+    gradle_path := "droid/app/build.gradle"
+    gradle, has_gradle := ReadEntireFile(gradle_path)
+    if !has_gradle { return Fail("the scaffold has no build.gradle") }
+    gradle = TextReplace(gradle, "applicationId 'xyz.waozi.wurm'", "applicationId (project.findProperty('app.installId') ?: 'xyz.waozi.wurm')")
+    gradle = ReplaceNumber(gradle, "versionCode ", code_text)
+    gradle = ReplaceQuoted(gradle, "versionName '", "'", version)
+    if !WriteEntireFile(gradle_path, gradle) { return Fail("cannot write build.gradle") }
+    manifest_path := "droid/app/src/main/AndroidManifest.xml"
+    manifest, has_manifest := ReadEntireFile(manifest_path)
+    if !has_manifest { return Fail("the scaffold has no manifest") }
+    manifest = TextReplace(manifest, "android:name=\".MainActivity\"", "android:name=\"xyz.waozi.wurm.MainActivity\"")
+    manifest = TextReplace(manifest, "android:targetActivity=\".MainActivity\"", "android:targetActivity=\"xyz.waozi.wurm.MainActivity\"")
+    if !TextContains(manifest, "android.permission.INTERNET") {
+        manifest = ReplaceFirst(manifest, "    <application", "    <uses-permission android:name=\"android.permission.INTERNET\" />\n\n    <application")
+    }
+    if !TextContains(manifest, "android:icon=") {
+        manifest = ReplaceFirst(manifest, "    <application", "    <application\n        android:icon=\"@mipmap/ic_launcher\"\n        android:roundIcon=\"@mipmap/ic_launcher\"")
+    }
+    manifest = WithoutCleartext(manifest)
+    if verification {
+        // The Moto fixture connects only to its private localhost Daochi node.
+        manifest = ReplaceFirst(manifest, "    <application", "    <application android:usesCleartextTraffic=\"true\"")
+    }
+    if !WriteEntireFile(manifest_path, manifest) { return Fail("cannot write the manifest") }
+    if !InstallIcon() { return Fail("cannot write the launcher icon") }
+    // The account provider uses the same native cryptography on both ABIs.
+    cmake_path := "droid/app/src/main/cpp/CMakeLists.txt"
+    cmake, has_cmake := ReadEntireFile(cmake_path)
+    if !has_cmake { return Fail("the scaffold has no CMakeLists.txt") }
+    defines := TextFind(cmake, "set(APP_ZIRAN_DEFINES --define ANDROID_BUILD")
+    if defines >= 0 {
+        close := TextFind(cmake, ")", defines)
+        out: Vec(u8)
+        Append(*out, cmake[0:defines]); Append(*out, "set(APP_ZIRAN_DEFINES --define ANDROID_BUILD --define WURM_ACCOUNTS)")
+        Append(*out, cmake[close + 1:cmake.count])
+        cmake = BuilderFinish(out)
+    }
+    marker := TextFind(cmake, "\n# Apfelwurm account libraries\n")
+    if marker >= 0 { cmake = cmake[0:marker] }
+    accounts: Vec(u8)
+    Append(*accounts, cmake)
+    Append(*accounts, "\n# Apfelwurm account libraries\nset(OQS_BUILD_ONLY_LIB ON CACHE BOOL \"\" FORCE)\nset(OQS_USE_OPENSSL OFF CACHE BOOL \"\" FORCE)\n")
+    Append(*accounts, "set(OQS_DIST_BUILD OFF CACHE BOOL \"\" FORCE)\nset(OQS_OPT_TARGET generic CACHE STRING \"\" FORCE)\n")
+    Append(*accounts, "set(OQS_MINIMAL_BUILD SIG_ml_dsa_44 CACHE STRING \"\" FORCE)\n")
+    BuilderPrint(*accounts, "add_subdirectory(\"%\" \"${CMAKE_BINARY_DIR}/account-oqs\" EXCLUDE_FROM_ALL)\n", liboqs)
+    BuilderPrint(*accounts, "target_sources(main PRIVATE \"%/src/monocypher.c\" \"%/src/optional/monocypher-ed25519.c\")\n", monocypher, monocypher)
+    BuilderPrint(*accounts, "target_include_directories(main PRIVATE \"%/src\")\ntarget_link_libraries(main oqs)\n", monocypher)
+    if !WriteEntireFile(cmake_path, BuilderFinish(accounts)) { return Fail("cannot write CMakeLists.txt") }
+    destination := "droid/app/src/main/assets"
+    if !CreateDirectories(JoinPath(destination, "assets")) || !CopyFile(profile, JoinPath(destination, "assets/entity.zx")) {
+        return Fail("cannot package the Profile")
+    }
+    // Personal edits never become release assets; the base campaign is compiled.
+    unused RemoveTree(JoinPath(destination, "assets/campaign-levels"))
+    if !CopyMatching("assets/art", JoinPath(destination, "assets/art"), ".png") ||
+       !CopyMatching("assets/sounds", JoinPath(destination, "assets/sounds"), ".pcm") ||
+       !CopyMatching("assets/levels", JoinPath(destination, "assets/levels"), ".dat") { return Fail("cannot package the assets") }
+    gradle_properties := "org.gradle.daemon=false\norg.gradle.parallel=false\norg.gradle.workers.max=1\norg.gradle.jvmargs=-Xmx1024m -Dfile.encoding=UTF-8\n"
+    if !WriteEntireFile("droid/gradle.properties", gradle_properties) { return Fail("cannot write gradle.properties") }
+    sdk := EnvironmentText("ANDROID_SDK_ROOT")
+    if sdk.count == 0 { sdk = JoinPath(EnvironmentText("HOME"), "Android/Sdk") }
+    aapt := JoinPath(sdk, "build-tools/36.0.0/aapt2")
+    if !IsFile(aapt) { return Fail("install Android build-tools 36.0.0") }
+    abis := ifx abi == "universal" then "arm64-v8a,armeabi-v7a" else abi
+    task := ifx bundle then "bundleRelease" else ifx release then "assembleRelease" else "assembleDebug"
+    command: Vec(string)
+    start: [8]string = .["sh", "droid/gradlew", "-p", "droid", "--no-daemon", "--max-workers=1", task, ""]
+    for i: 0..6 { VecPush(command, start[i]) }
+    pairs: Vec(string)
+    VecPush(pairs, Pair("-Pkryon.dir", kryon)); VecPush(pairs, Pair("-Pziran.dir", ziran))
+    VecPush(pairs, Pair("-Praylib.dir", JoinPath(raylib, "src"))); VecPush(pairs, Pair("-Papp.abis", abis))
+    VecPush(pairs, "-Papp.minSdk=21"); VecPush(pairs, "-Papp.codegen=c99"); VecPush(pairs, Pair("-Papp.edition", edition))
+    VecPush(pairs, Pair("-Pandroid.aapt2FromMavenOverride", aapt))
+    // Kryon's Google Play edition adds Play Billing, so Dew is bought through Play.
+    if edition == "gplay" { VecPush(pairs, "-Pandroid.useAndroidX=true") }
+    VecPush(pairs, Pair("-Papp.installId", ifx verification then "xyz.waozi.wurm.verification" else "xyz.waozi.wurm"))
+    for i: 0..pairs.count - 1 { VecPush(command, pairs[i]) }
+    sdk_settings: [2]string = .[Pair("ANDROID_SDK_ROOT", sdk), Pair("ANDROID_HOME", sdk)]
+    out2, built := Step(VecSlice(command, 0, command.count), false, sdk_settings[:])
+    if !built { return Fail("Gradle failed") }
+    unused CreateDirectories("build/android")
+    if bundle {
+        target := "build/android/Apfelwurm-release-unsigned.aab"
+        if !CopyFile("droid/app/build/outputs/bundle/release/app-release.aab", target) { return Fail("no bundle was built") }
+        print("Built %\n", ResolvePath(target))
+        return 0
+    }
+    name: Vec(u8)
+    Append(*name, ifx verification then "build/android/Apfelwurm-verification-" else "build/android/Apfelwurm-")
+    Append(*name, abi)
+    if edition == "gplay" { Append(*name, "-gplay") }
+    Append(*name, ifx release then "-release-unsigned.apk" else "-debug.apk")
+    target := BuilderFinish(name)
+    source := ifx release then "droid/app/build/outputs/apk/release/app-release-unsigned.apk" else "droid/app/build/outputs/apk/debug/app-debug.apk"
+    if !CopyFile(source, target) { return Fail("no APK was built") }
+    print("Built %\n", ResolvePath(target))
+    return 0
+}
+
+// "NAME=VALUE".
+Pair :: (name: string, value: string) -> string {
+    text: Vec(u8)
+    BuilderPrint(*text, "%=%", name, value)
+    return BuilderFinish(text)
+}

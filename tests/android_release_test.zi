@@ -1,0 +1,80 @@
+// The Google-free and Google Play release boundary, on made-up archives:
+// Google code in any DEX is refused for downloads, the Play edition needs
+// Play Billing and its bridge, and assets never count as code.
+#import "std/zip"
+#import "std/format"
+#import "std/text_tools"
+#import, file "../src/android_edition.zi";
+
+failures: s32;
+
+// A stored ZIP of NAMES with CONTENTS.
+Archive :: (names: []string, contents: []string) -> Vec(u8) {
+    input: Vec(u8)
+    items: Vec(ZipWriteItem)
+    for i: 0..names.count - 1 {
+        item: ZipWriteItem
+        item.name_start = cast(u64)input.count
+        item.name_size = cast(u64)names[i].count
+        Append(*input, names[i])
+        item.data_start = cast(u64)input.count
+        item.data_size = cast(u64)contents[i].count
+        Append(*input, contents[i])
+        unused VecPush(items, item)
+    }
+    output: Vec(u8)
+    {
+        source: []u8 = VecSlice(input, 0, input.count)
+        entries: []ZipWriteItem = VecSlice(items, 0, items.count)
+        size := StoredZipSize(source, entries)
+        for i: cast(u64)0..size - 1 { unused VecPush(output, 0) }
+        target: []u8 = VecSlice(output, 0, output.count)
+        unused WriteStoredZip(target, source, entries)
+    }
+    return output
+}
+
+Expect :: (names: []string, contents: []string, edition: string, bundle: bool, wanted: string, case: string) {
+    archive := Archive(names, contents)
+    bytes: []u8 = VecSlice(archive, 0, archive.count)
+    problem := VerifyEdition(bytes, edition, bundle)
+    ok := ifx wanted.count == 0 then problem.count == 0 else TextContains(problem, wanted)
+    if !ok { print("FAIL: % (got \"%\")\n", case, problem); failures += 1 }
+}
+
+#program_export
+main :: () -> s32 {
+    main_code := "Lxyz/waozi/wurm/MainActivity;"
+    one: [1]string = .["classes.dex"]
+    plain: [1]string = .[main_code]
+    Expect(one[:], plain[:], "direct", false, "", "a Google-free APK")
+    markers: [4]string = .["Lcom/google/android/gms/", "Lcom/android/billingclient/api/BillingClient;", "Lcom/android/vending/", "Lorg/kryonlabs/play/PlayBilling;"]
+    two: [2]string = .["classes.dex", "classes2.dex"]
+    for marker: markers {
+        code: [2]string = .[main_code, marker]
+        Expect(two[:], code[:], "direct", false, "exclude Google libraries", "Google code in any DEX is refused")
+    }
+    padding: Vec(u8)
+    for i: 0..1024 * 1024 - 5 { unused VecPush(padding, 0) }
+    Append(*padding, "Lcom/google/android/gms/")
+    crossing: [1]string = .[BuilderFinish(padding)]
+    Expect(one[:], crossing[:], "direct", false, "exclude Google libraries", "a marker crossing a megabyte boundary is refused")
+    halves: [2]string = .["Lcom/android/billingclient/api/BillingClient;", "Lorg/kryonlabs/play/PlayBilling;"]
+    for half: halves {
+        only: [1]string = .[half]
+        Expect(one[:], only[:], "gplay", false, "must include Play Billing", "the Play APK needs both billing and its bridge")
+    }
+    play: [2]string = .["Lorg/kryonlabs/play/PlayBilling;", "Lcom/android/billingclient/api/BillingClient;"]
+    Expect(two[:], play[:], "gplay", false, "", "the Play APK may use several DEX files")
+    bundle: [2]string = .["base/dex/classes.dex", "base/dex/classes2.dex"]
+    Expect(bundle[:], play[:], "gplay", true, "", "the Play bundle")
+    readme: [1]string = .["assets/readme"]
+    words: [1]string = .["No code"]
+    Expect(readme[:], words[:], "direct", false, "must include DEX", "an archive without DEX code is refused")
+    asset: [2]string = .["classes.dex", "assets/readme"]
+    asset_text: [2]string = .[main_code, "Lcom/google/android/gms/"]
+    Expect(asset[:], asset_text[:], "direct", false, "", "asset text does not count as Google code")
+    if failures > 0 { return 1 }
+    print("Android edition local test: downloads refuse Google code in any DEX, the Play APK and bundle need billing and its bridge, and assets are not code.\n")
+    return 0
+}

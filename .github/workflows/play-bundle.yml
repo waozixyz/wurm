@@ -31,11 +31,9 @@ jobs:
       - name: Read the release version
         id: version
         run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          from pathlib import Path
-          print('version=' + json.loads(Path('version.json').read_text())['version'])
-          PY
+          version=$(sed -n 's/^ *"version": "\([^"]*\)".*/\1/p' version.json)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       # The locked compiler comes prebuilt, the package checkouts cached, and
       # Ubuntu packages from the canonical archive.
       - name: Set up the locked Ziran, its packages and the build tools
@@ -45,7 +43,7 @@ jobs:
           path: ziranlang/ziran
           fetch: true
           packages: >-
-            build-essential cmake pkg-config python3-pil python3-numpy libssl-dev
+            build-essential cmake pkg-config zlib1g-dev libssl-dev
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -58,11 +56,14 @@ jobs:
           sh update_version.sh
           git diff --exit-code -- version.json
       - name: Build both ARM architectures in one Google Play edition bundle
-        run: python3 tools/build_android.py --bundle --abi universal
+        env:
+          LDLIBS: -lz
+        run: ziran run --target=c tools/build_android.zi -- --bundle --abi universal
       - name: Sign with the Apfelwurm upload key and verify
         env:
           KEYSTORE: ${{ secrets.WURM_ANDROID_KEYSTORE }}
           PASSWORD: ${{ secrets.WURM_ANDROID_KEYSTORE_PASSWORD }}
+          LDLIBS: -lz
         run: |
           set -euo pipefail
           test -n "$KEYSTORE" && test -n "$PASSWORD"
@@ -73,7 +74,7 @@ jobs:
           trap 'rm -f "$RUNNER_TEMP/wurm-release.p12" "$RUNNER_TEMP/wurm-password"' EXIT
           printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/wurm-release.p12"
           printf '%s\n' "$PASSWORD" > "$RUNNER_TEMP/wurm-password"
-          python3 tools/android_release.py sign build/android/Apfelwurm-release-unsigned.aab \
+          ziran run --target=c tools/android_release.zi -- sign build/android/Apfelwurm-release-unsigned.aab \
             --keystore "$RUNNER_TEMP/wurm-release.p12" --password-file "$RUNNER_TEMP/wurm-password" \
             --bundletool "$RUNNER_TEMP/bundletool.jar"
           cat backup/android-release/play-verification.json

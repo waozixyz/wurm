@@ -111,9 +111,9 @@ Built with [Ziran](https://ziran-lang.org) and [Kryon](https://kryonlabs.com).
 The desktop, Android and browser editions share the same game rules.
 
 ```sh
-python3 tools/build_desktop.py
+LDLIBS=-lz ziran run --target=c tools/build_desktop.zi
 build/account-desktop/wurm
-sh tests/run_local.sh
+LDLIBS=-lz ziran run --target=c tests/run_local.zi
 ```
 
 See the [build and development guide](docs/building.md) for the editor's

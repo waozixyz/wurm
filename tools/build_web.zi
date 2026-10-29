@@ -1,0 +1,227 @@
+// Builds the same native Wurm game for wurm.waozi.xyz with Canvas2D and
+// Wasm into build/web; deployment is separate. Emscripten's emcc and its
+// file packager come from EMCC or ~/emsdk.
+//
+//     LDLIBS=-lz ziran run --target=c tools/build_web.zi
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/text_tools"
+#import "std/environment_linux"
+#import "crypto/sha256"
+#import, file "../src/account_build.zi";
+
+OUT :: "build/web"
+
+Fail :: (message: string) -> s32 {
+    print("tools/build_web: %\n", message)
+    return 1
+}
+
+// Copies the game's art, leaving out cover studies, old previews and mirrors.
+CopyArt :: (source: string, target: string) -> bool {
+    if !CreateDirectories(target) { return false }
+    names: Vec(string)
+    if !ListDirectory(source, *names) { return false }
+    unused_art: [4]string = .["garden-cover.png", "space-cover.png", "factory-cover.png", "stage-covers.png"]
+    for i: 0..names.count - 1 {
+        name := names[i]
+        from := JoinPath(source, name)
+        if IsDirectory(from) {
+            if name == "previews" { continue }
+            if !CopyArt(from, JoinPath(target, name)) { return false }
+            continue
+        }
+        if TextHasSuffix(name, ".argb") { continue }
+        skip := false
+        for unused_art { if it == name { skip = true } }
+        if !skip && !CopyFile(from, JoinPath(target, name)) { return false }
+    }
+    return true
+}
+
+Put16 :: (bytes: *Vec(u8), value: u32) {
+    unused VecPush(bytes.*, cast(u8)(value & 255))
+    unused VecPush(bytes.*, cast(u8)((value >> 8) & 255))
+}
+
+// A mono 16-bit 22050 Hz WAV file around raw PCM samples.
+WriteWave :: (path: string, samples: string) -> bool {
+    bytes: Vec(u8)
+    size := cast(u32)samples.count
+    Append(*bytes, "RIFF"); Put16(*bytes, (36 + size) & 65535); Put16(*bytes, (36 + size) >> 16); Append(*bytes, "WAVEfmt ")
+    Put16(*bytes, 16); Put16(*bytes, 0); Put16(*bytes, 1); Put16(*bytes, 1); Put16(*bytes, 22050); Put16(*bytes, 0)
+    Put16(*bytes, 44100); Put16(*bytes, 0); Put16(*bytes, 2); Put16(*bytes, 16); Append(*bytes, "data")
+    Put16(*bytes, size & 65535); Put16(*bytes, size >> 16)
+    Append(*bytes, samples)
+    return WriteEntireFile(path, BuilderFinish(bytes))
+}
+
+Hex :: (data: string) -> string {
+    context: Sha256Context
+    Sha256Initialize(*context)
+    Sha256UpdateText(*context, data)
+    hash: [32]u8
+    Sha256FinishBytes(*context, hash[:])
+    digest: [65]u8
+    unused BytesToHex(*hash[0], 32, *digest[0], 65)
+    copy: Vec(u8)
+    for i: 0..63 { unused VecPush(copy, digest[i]) }
+    return BuilderFinish(copy)
+}
+
+Steps :: (arguments: []string) -> bool {
+    output, ok := Step(arguments, false, no_extra[:])
+    return ok
+}
+
+#program_export
+main :: () -> s32 {
+    kryon := PackagePath("kryon")
+    compiler := PackagePath("ziran")
+    if kryon.count == 0 || compiler.count == 0 { return Fail("package checkouts are missing") }
+    profile := BuildProfile()
+    if profile.count == 0 { return Fail("the Profile bundle failed") }
+    libraries: Vec(string)
+    if !AccountLibraries(true, *libraries) { return Fail("the account libraries failed") }
+    // Module names change with dependency revisions: never reuse IR or C
+    // left by an earlier revision.
+    ir := "build/web-native/ir"
+    code := "build/web-native/c"
+    unused RemoveTree(ir); unused RemoveTree(code)
+    if !CreateDirectories(OUT) || !CreateDirectories(ir) || !CreateDirectories(code) { return Fail("cannot create build folders") }
+    host := JoinPath(kryon, "src/backend/canvas_run.zi")
+    raster := JoinPath(kryon, "src/backend/canvas_raster.zi")
+    emit: Vec(string)
+    VecPush(emit, "ziran"); VecPush(emit, "ir")
+    if Locked() { VecPush(emit, "--locked") }
+    rest: [9]string = .["--project", "--define", "PLATFORM_WEB", "--define", "WURM_ACCOUNTS", "-o", ir, host, raster]
+    for rest { VecPush(emit, it) }
+    if !Steps(VecSlice(emit, 0, emit.count)) { return Fail("Ziran IR failed") }
+    lower: Vec(string)
+    head: [6]string = .[JoinPath(compiler, "build/bin/zi2c"), "--define", "PLATFORM_WEB", "--root", ir, "-o"]
+    for head { VecPush(lower, it) }
+    VecPush(lower, code)
+    modules: Vec(string)
+    unused ListDirectory(ir, *modules)
+    for i: 0..modules.count - 1 { if TextHasSuffix(modules[i], ".zir") { VecPush(lower, JoinPath(ir, modules[i])) } }
+    if !Steps(VecSlice(lower, 0, lower.count)) { return Fail("C generation failed") }
+    art := JoinPath(OUT, "assets/art")
+    unused RemoveTree(JoinPath(art, "previews"))
+    if !CopyArt("assets/art", art) { return Fail("cannot copy the art") }
+    // Studies an earlier build copied stay out of the browser preload too.
+    studies: [4]string = .["garden-cover.png", "space-cover.png", "factory-cover.png", "stage-covers.png"]
+    for studies { unused RemoveFile(JoinPath(art, it)) }
+    emcc := EnvironmentText("EMCC")
+    if emcc.count == 0 { emcc = JoinPath(EnvironmentText("HOME"), "emsdk/upstream/emscripten/emcc") }
+    packager := JoinPath(PathParent(ResolvePath(emcc)), "tools/file_packager.py")
+    // Pages limits each file: artwork and previews are separate asset bundles.
+    preloads: Vec(u8)
+    names: [2]string = .["art", "previews"]
+    for name: names {
+        source := ifx name == "art" then ResolvePath(art) else ResolvePath(JoinPath(art, "campaign-previews"))
+        virtual := ifx name == "art" then "/assets/art" else "/assets/art/campaign-previews"
+        mapping: Vec(u8)
+        BuilderPrint(*mapping, "%@%", source, virtual)
+        data: Vec(u8)
+        BuilderPrint(*data, "%.data", name)
+        loader: Vec(u8)
+        BuilderPrint(*loader, "%-preload.js", name)
+        loader_name := BuilderFinish(loader)
+        output: Vec(u8)
+        BuilderPrint(*output, "--js-output=%", loader_name)
+        command: Vec(string)
+        VecPush(command, "python3"); VecPush(command, packager); VecPush(command, BuilderFinish(data))
+        VecPush(command, "--preload"); VecPush(command, BuilderFinish(mapping))
+        if name == "art" { VecPush(command, "--exclude"); VecPush(command, "*/campaign-previews/*") }
+        VecPush(command, BuilderFinish(output))
+        out, packed := Step(VecSlice(command, 0, command.count), false, no_extra[:], OUT)
+        if !packed { return Fail("the asset packager failed") }
+        script, found := ReadEntireFile(JoinPath(OUT, loader_name))
+        if !found { return Fail("no asset loader") }
+        Append(*preloads, script)
+        Append(*preloads, "\n")
+    }
+    if !WriteEntireFile(JoinPath(OUT, "asset-preloads.js"), BuilderFinish(preloads)) { return Fail("cannot write asset-preloads.js") }
+    link: Vec(string)
+    start: [3]string = .[emcc, "-O2", "-Wno-parentheses-equality"]
+    for start { VecPush(link, it) }
+    include: Vec(u8)
+    BuilderPrint(*include, "-I%/include", compiler)
+    VecPush(link, BuilderFinish(include))
+    VecPush(link, "-iquote"); VecPush(link, code)
+    sources: Vec(string)
+    unused ListDirectory(code, *sources)
+    for i: 0..sources.count - 1 { if TextHasSuffix(sources[i], ".c") { VecPush(link, JoinPath(code, sources[i])) } }
+    for i: 0..libraries.count - 1 { VecPush(link, libraries[i]) }
+    font: Vec(u8)
+    BuilderPrint(*font, "%/assets/fonts/LiberationSans-Regular.ttf@/kryon-font.ttf", kryon)
+    bundled: Vec(u8)
+    BuilderPrint(*bundled, "%@/assets/entity.zx", profile)
+    flags: [14]string = .["-sUSE_ZLIB=1", "--js-library", JoinPath(compiler, "web/ziran_web.js"),
+        "-sEXPORTED_RUNTIME_METHODS=FS,FS_createPath,FS_createDataFile,addRunDependency,removeRunDependency",
+        "-sFORCE_FILESYSTEM=1", "-lidbfs.js", "-sALLOW_MEMORY_GROWTH=1", "-sASYNCIFY", "-sENVIRONMENT=web",
+        "-sSTACK_SIZE=8388608", "-sASYNCIFY_STACK_SIZE=1048576", "--preload-file", BuilderFinish(font), "--preload-file"]
+    for flags { VecPush(link, it) }
+    VecPush(link, BuilderFinish(bundled))
+    VecPush(link, "-o"); VecPush(link, JoinPath(OUT, "game.js"))
+    if !Steps(VecSlice(link, 0, link.count)) { return Fail("emcc failed") }
+    packs: [3]string = .["game.data", "art.data", "previews.data"]
+    for packs {
+        info := PathStatus(JoinPath(OUT, it))
+        if info.size > 25 * 1024 * 1024 { return Fail(JoinPath(it, "exceeds the Pages limit")) }
+    }
+    sounds := JoinPath(OUT, "assets/sounds")
+    if !CreateDirectories(sounds) { return Fail("cannot create sounds") }
+    effects: [4]string = .["start", "pickup", "lose", "exit"]
+    for effects {
+        source: Vec(u8)
+        BuilderPrint(*source, "assets/sounds/%.pcm", it)
+        samples, found := ReadEntireFile(BuilderFinish(source))
+        target: Vec(u8)
+        BuilderPrint(*target, "%/%.wav", sounds, it)
+        if !found || !WriteWave(BuilderFinish(target), samples) { return Fail(JoinPath("cannot write", it)) }
+    }
+    music: [3]string = .["garden", "factory", "space"]
+    for music {
+        source: Vec(u8)
+        BuilderPrint(*source, "assets/sounds/%.pcm", it)
+        target: Vec(u8)
+        BuilderPrint(*target, "%/%.ogg", sounds, it)
+        encode: [17]string = .["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "s16le", "-ar", "22050",
+            "-ac", "1", "-i", BuilderFinish(source), "-c:a", "libvorbis", "-q:a", "4"]
+        command: Vec(string)
+        for encode { VecPush(command, it) }
+        VecPush(command, BuilderFinish(target))
+        if !Steps(VecSlice(command, 0, command.count)) { return Fail("ffmpeg failed") }
+    }
+    page: Vec(string)
+    unused ListDirectory("src/web", *page)
+    for i: 0..page.count - 1 {
+        from := JoinPath("src/web", page[i])
+        if IsFile(from) && !CopyFile(from, JoinPath(OUT, page[i])) { return Fail("cannot copy the page") }
+    }
+    // The page shows the title art while the game loads and in link
+    // previews; small copies keep that first paint fast.
+    loading: [14]string = .["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", "assets/art/title.png",
+        "-vf", "scale=1280:853:flags=lanczos,format=yuv420p", "-quality", "86", "-compression_level", "6", JoinPath(OUT, "loading.webp")]
+    social: [11]string = .["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", "assets/art/title.png",
+        "-vf", "scale=1200:800:flags=lanczos,format=yuvj420p", "-q:v", "2"]
+    social_command: Vec(string)
+    for social { VecPush(social_command, it) }
+    VecPush(social_command, JoinPath(OUT, "social.jpg"))
+    if !Steps(loading[:]) || !Steps(VecSlice(social_command, 0, social_command.count)) { return Fail("the title pictures failed") }
+    version_text, has_version := ReadEntireFile("version.json")
+    at := TextFind(version_text, "\"version\": \"")
+    end := TextFind(version_text, "\"", at + 12)
+    revision_command: [3]string = .["git", "rev-parse", "HEAD"]
+    revision, has_revision := Step(revision_command[:], true, no_extra[:])
+    game, has_game := ReadEntireFile("src/game.zi")
+    if !has_version || at < 0 || end < 0 || !has_revision || !has_game { return Fail("cannot describe the version") }
+    description: Vec(u8)
+    BuilderPrint(*description, "{\"version\": \"%\", \"revision\": \"%\", \"game_sha256\": \"%\"}\n",
+        version_text[at + 12:end], TextTrim(revision), Hex(game))
+    if !WriteEntireFile(JoinPath(OUT, "version.json"), BuilderFinish(description)) { return Fail("cannot write version.json") }
+    print("Built playable Wurm browser edition in build/web; deployment remains separate.\n")
+    return 0
+}

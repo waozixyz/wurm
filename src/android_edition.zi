@@ -1,0 +1,80 @@
+// The Android edition boundary: Google-free downloads and the separate
+// Google Play APK and bundle. tools/android_release.zi checks release files
+// with it and tests/android_release_test.zi checks it with made-up archives.
+#import "std/zip"
+#import "std/zip_linux"
+#import "std/format"
+#import "std/text_tools"
+#import "std/byte_text_linux"
+
+// An entry's uncompressed bytes; found is false when it cannot be read.
+ZipEntryBytes :: (archive: []u8, entry: ZipEntry) -> Vec(u8) {
+    bytes: Vec(u8)
+    if entry.found && entry.size <= cast(u64)1073741824 {
+        for i: cast(u64)0..entry.size - 1 { unused VecPush(bytes, 0) }
+        extracted := false
+        {
+            view: []u8 = VecSlice(bytes, 0, bytes.count)
+            extracted = ExtractZipEntry(archive, entry, view)
+        }
+        if !extracted { VecClear(bytes) }
+    }
+    return bytes
+}
+
+// The name of a directory entry, as text borrowed from the archive.
+ZipName :: (archive: []u8, named: ZipNamedEntry) -> string {
+    return TextFromBytes(archive[cast(s64)named.name_start:cast(s64)(named.name_start + named.name_size)])
+}
+
+// classes.dex, classes2.dex, ... (under base/dex/ in a bundle).
+DexName :: (name: string, bundle: bool) -> bool {
+    prefix := ifx bundle then "base/dex/classes" else "classes"
+    if !TextHasPrefix(name, prefix) || !TextHasSuffix(name, ".dex") { return false }
+    middle := name[prefix.count:name.count - 4]
+    for i: 0..middle.count - 1 { if middle[i] < #char "0" || middle[i] > #char "9" { return false } }
+    return true
+}
+
+// Inspects every DEX, including multidex. "" when ARCHIVE is a proper
+// EDITION ("direct" or "gplay"), else the reason it is not.
+VerifyEdition :: (archive: []u8, edition: string, bundle: bool) -> string {
+    markers: [4]string = .["Lcom/google/", "Lcom/android/billingclient/", "Lcom/android/vending/", "Lorg/kryonlabs/play/PlayBilling;"]
+    labels: [4]string = .["Google", "Play Billing", "Play Store", "Play bridge"]
+    found: [4]bool
+    directory := OpenZipDirectory(archive)
+    if !directory.valid { return "Android releases must be readable archives" }
+    dex_count: s32
+    while directory.index < directory.count {
+        named := NextZipEntry(archive, directory)
+        if !named.valid { return "Android releases must be readable archives" }
+        directory = named.directory
+        if !DexName(ZipName(archive, named), bundle) { continue }
+        dex_count += 1
+        bytes := ZipEntryBytes(archive, named.entry)
+        if bytes.count == 0 && named.entry.size > 0 { return "Android releases must have readable DEX code" }
+        code := BuilderFinish(bytes)
+        for m: 0..3 { if TextContains(code, markers[m]) { found[m] = true } }
+    }
+    if dex_count == 0 { return "Android releases must include DEX code" }
+    if edition == "gplay" {
+        if !found[1] || !found[3] { return "The Google Play edition must include Play Billing and its bridge" }
+        return ""
+    }
+    if edition != "direct" { return "Unknown Android edition" }
+    if found[0] || found[1] || found[2] || found[3] {
+        names: Vec(u8)
+        Append(*names, "Standard and F-Droid APKs must exclude Google libraries:")
+        first := true
+        // In byte order of their names: Google, Play Billing, Play Store, Play bridge.
+        order: [4]s32 = .[0, 1, 2, 3]
+        for o: 0..3 {
+            if !found[order[o]] { continue }
+            Append(*names, ifx first then " " else ", ")
+            Append(*names, labels[order[o]])
+            first = false
+        }
+        return BuilderFinish(names)
+    }
+    return ""
+}

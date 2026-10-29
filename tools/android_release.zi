@@ -1,0 +1,375 @@
+// Signs and verifies the Google-free Android downloads and the separate
+// Google Play APK and bundle: identity, version, both ARM architectures,
+// the release certificate, 16 KB alignment, the edition boundary and the
+// packaged assets.
+//
+//     LDLIBS=-lz ziran run --target=c tools/android_release.zi -- sign|verify FILE
+//         [--keystore P12] [--password-file FILE] [--output DIR]
+//         [--bundletool JAR] [--edition direct|gplay]
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/json_scan"
+#import "std/text_tools"
+#import "std/byte_text_linux"
+#import "std/environment_linux"
+#import "std/process_run_linux"
+#import "std/zip"
+#import "crypto/sha256"
+#import, file "../src/android_edition.zi";
+
+problem: string;
+no_changes: [0]string;
+
+Need :: (ok: bool, message: string) -> bool {
+    if !ok && problem.count == 0 { problem = message }
+    return ok
+}
+
+// Runs a program; its output when CAPTURE, and whether it exited with 0.
+Run :: (arguments: []string, capture: bool, environment: []string) -> (output: string, ok: bool) {
+    run: ProcessRun
+    options: ProcessOptions = .{arguments = arguments, capture_output = capture, environment = environment}
+    started := RunProcess(options, *run)
+    return BuilderFinish(run.output), started && run.code == 0
+}
+
+Hex :: (data: string) -> string {
+    context: Sha256Context
+    Sha256Initialize(*context)
+    Sha256UpdateText(*context, data)
+    hash: [32]u8
+    Sha256FinishBytes(*context, hash[:])
+    digest: [65]u8
+    unused BytesToHex(*hash[0], 32, *digest[0], 65)
+    copy: Vec(u8)
+    Append(*copy, TextFromBytes(digest[0:64]))
+    return BuilderFinish(copy)
+}
+
+BuildTools :: () -> string {
+    sdk := EnvironmentText("ANDROID_SDK_ROOT")
+    if sdk.count == 0 { sdk = EnvironmentText("ANDROID_HOME") }
+    if sdk.count == 0 { sdk = JoinPath(EnvironmentText("HOME"), "Android/Sdk") }
+    tools := JoinPath(sdk, "build-tools/36.0.0")
+    names: [3]string = .["aapt", "apksigner", "zipalign"]
+    for names { if !IsFile(JoinPath(tools, it)) { problem = "Android build-tools 36.0.0 are missing"; return "" } }
+    return tools
+}
+
+Version :: () -> (version: string, code: s64) {
+    text, found := ReadEntireFile("version.json")
+    if !found { return "", 0 }
+    span := ReadString(text, FieldAt(text, 0, "version"))
+    code := ReadNumber(text, FieldAt(text, 0, "version_code"))
+    if !span.valid || !code.valid { return "", 0 }
+    return text[span.start:span.end], cast(s64)code.value
+}
+
+// The SHA-256 of the committed release certificate.
+Certificate :: () -> string {
+    arguments: [6]string = .["openssl", "x509", "-in", "packaging/android/certificate.pem", "-outform", "DER"]
+    der, ok := Run(arguments[:], true, no_changes[:])
+    if !Need(ok && der.count > 0, "cannot read the release certificate") { return "" }
+    return Hex(der)
+}
+
+// The text between QUOTE marks after NEEDLE in TEXT, or "".
+Quoted :: (text: string, needle: string, quote: string) -> string {
+    at := TextFind(text, needle)
+    if at < 0 { return "" }
+    start := at + needle.count
+    end := TextFind(text, quote, start)
+    return ifx end < 0 then "" else text[start:end]
+}
+
+Bytes :: (archive: []u8, name: string) -> (data: string, found: bool) {
+    entry := FindZipEntry(archive, name)
+    if !entry.found { return "", false }
+    bytes := ZipEntryBytes(archive, entry)
+    if bytes.count == 0 && entry.size > 0 { return "", false }
+    return BuilderFinish(bytes), true
+}
+
+SameAsFile :: (archive: []u8, entry: string, path: string) -> bool {
+    packaged, found := Bytes(archive, entry)
+    committed, has := ReadEntireFile(path)
+    return Need(found && has && packaged == committed, JoinPath("a packaged file differs from", path))
+}
+
+// Every lib/<abi>/libmain.so ABI, and that arm64 libraries load at 16 KB.
+Libraries :: (archive: []u8, prefix: string) {
+    abis: Vec(string)
+    directory := OpenZipDirectory(archive)
+    unused CreateDirectories("build/android-release-check")
+    while directory.valid && directory.index < directory.count {
+        named := NextZipEntry(archive, directory)
+        if !named.valid { break }
+        directory = named.directory
+        name := ZipName(archive, named)
+        if TextHasPrefix(name, prefix) && TextHasSuffix(name, "/libmain.so") {
+            abi := name[prefix.count:name.count - 11]
+            if !TextContains(abi, "/") { unused VecPush(abis, abi) }
+        }
+        arm64 := JoinPath(prefix, "arm64-v8a/")
+        if TextHasPrefix(name, arm64) && TextHasSuffix(name, ".so") {
+            data, found := Bytes(archive, name)
+            library := JoinPath("build/android-release-check", PathName(name))
+            if !Need(found && WriteEntireFile(library, data), "cannot read a native library") { break }
+            arguments: [3]string = .["readelf", "-lW", library]
+            headers, ok := Run(arguments[:], true, no_changes[:])
+            unused RemoveFile(library)
+            loads: s32
+            lines := TextLines(headers)
+            for i: 0..lines.count - 1 {
+                line := TextTrim(lines[i])
+                if !TextHasPrefix(line, "LOAD ") { continue }
+                loads += 1
+                last := TextFindLast(line, " ")
+                alignment := line[last + 1:line.count]
+                value: s64
+                if TextHasPrefix(alignment, "0x") { alignment = alignment[2:alignment.count] }
+                for c: 0..alignment.count - 1 { value = value * 16 + cast(s64)TextHexDigit(alignment[c]) }
+                unused Need(value >= 16384, "Native libraries require 16 KB load alignment")
+            }
+            unused Need(ok && loads > 0, "Native libraries require 16 KB load alignment")
+        }
+    }
+    unused RemoveTree("build/android-release-check")
+    sorted := TextJoin(VecSlice(abis, 0, abis.count), ",")
+    unused Need(sorted == "arm64-v8a,armeabi-v7a" || sorted == "armeabi-v7a,arm64-v8a", "Both ARM architectures are required")
+}
+
+Record :: (version: string, code: s64, edition: string, sha: string, certificate: string) -> string {
+    out: Vec(u8)
+    BuilderPrint(*out, "{\n  \"version\": \"%\",\n  \"version_code\": %,\n", version, code)
+    if edition.count > 0 { BuilderPrint(*out, "  \"edition\": \"%\",\n", edition) }
+    BuilderPrint(*out, "  \"package\": \"xyz.waozi.wurm\",\n  \"abis\": [\n    \"arm64-v8a\",\n    \"armeabi-v7a\"\n  ],\n")
+    BuilderPrint(*out, "  \"sha256\": \"%\",\n  \"certificate_sha256\": \"%\"\n}\n", sha, certificate)
+    return BuilderFinish(out)
+}
+
+// The release checks for an APK; its verification record, or "".
+VerifyApk :: (apk: string, edition: string) -> string {
+    version, code := Version()
+    tools := BuildTools()
+    if tools.count == 0 { return "" }
+    badging_arguments: [4]string = .[JoinPath(tools, "aapt"), "dump", "badging", apk]
+    badging, ok := Run(badging_arguments[:], true, no_changes[:])
+    if !Need(ok, "aapt cannot read the APK") { return "" }
+    package := Quoted(badging, "package: name='", "'")
+    code_text := Quoted(badging, "versionCode='", "'")
+    name := Quoted(badging, "versionName='", "'")
+    expected_code: Vec(u8)
+    BuilderPrint(*expected_code, "%", code)
+    unused Need(package == "xyz.waozi.wurm" && name == version && code_text == BuilderFinish(expected_code), "the APK's identity or version is wrong")
+    unused Need(!TextContains(badging, "application-debuggable"), "A debug APK cannot be released")
+    unused Need(TextContains(badging, "android.permission.INTERNET"), "Optional account sync and Dew require network access")
+    unused Need(TextContains(badging, "com.android.vending.BILLING") == (edition == "gplay"), "Play Billing permission must match the edition")
+    certificate := Certificate()
+    signature_arguments: [5]string = .[JoinPath(tools, "apksigner"), "verify", "--verbose", "--print-certs", apk]
+    signature, signed := Run(signature_arguments[:], true, no_changes[:])
+    lines := TextLines(signature)
+    digests: s32
+    for i: 0..lines.count - 1 {
+        line := lines[i]
+        at := TextFind(line, " certificate SHA-256 digest: ")
+        if at < 0 || !(TextHasPrefix(line, "Signer #") || TextHasPrefix(line, "V")) { continue }
+        digests += 1
+        unused Need(line[at + 29:line.count] == certificate, "Unexpected release certificate")
+    }
+    unused Need(signed && digests > 0 && TextContains(signature, "Number of signers: 1"), "Unexpected release certificate")
+    align_arguments: [6]string = .[JoinPath(tools, "zipalign"), "-c", "-P", "16", "4", apk]
+    aligned_output, aligned := Run(align_arguments[:], true, no_changes[:])
+    unused Need(aligned, "the APK is not aligned")
+    archive: Vec(u8)
+    if !Need(ReadFileInto(apk, *archive), "cannot read the APK") { return "" }
+    bytes: []u8 = VecSlice(archive, 0, archive.count)
+    edition_problem := VerifyEdition(bytes, edition, false)
+    unused Need(edition_problem.count == 0, edition_problem)
+    Libraries(bytes, "lib/")
+    art: [17]string = .["garden.png", "forest.png", "forest-canopy.png", "forest-canopy-portrait.png",
+        "meadow.png", "leafwood.png", "pinewood.png", "lake.png", "mountains.png",
+        "campaign-meadow.png", "campaign-leafwood.png", "campaign-pinewood.png",
+        "campaign-lake.png", "campaign-mountains.png", "stage-covers.png", "title.png", "title-portrait.png"]
+    for art { unused SameAsFile(bytes, JoinPath("assets/assets/art", it), JoinPath("assets/art", it)) }
+    previews: Vec(string)
+    unused ListDirectory("assets/art/campaign-previews", *previews)
+    for i: 0..previews.count - 1 {
+        if !TextHasSuffix(previews[i], ".png") { continue }
+        unused SameAsFile(bytes, JoinPath("assets/assets/art/campaign-previews", previews[i]), JoinPath("assets/art/campaign-previews", previews[i]))
+    }
+    PrivateLevels(bytes, "assets/assets/campaign-levels/")
+    levels: [3]string = .["level1.dat", "level2.dat", "level3.dat"]
+    for levels { unused SameAsFile(bytes, JoinPath("assets/assets/levels", it), JoinPath("assets/levels", it)) }
+    unused SameAsFile(bytes, "assets/assets/sounds/garden.pcm", "assets/sounds/garden.pcm")
+    unused Need(SameAsFile(bytes, "assets/assets/entity.zx", "build/profile/entity.zx"), "The shared Profile must be packaged")
+    if problem.count > 0 { return "" }
+    whole, read := ReadEntireFile(apk)
+    return Record(version, code, edition, Hex(whole), certificate)
+}
+
+// Personal campaign edits must stay private.
+PrivateLevels :: (archive: []u8, prefix: string) {
+    directory := OpenZipDirectory(archive)
+    while directory.valid && directory.index < directory.count {
+        named := NextZipEntry(archive, directory)
+        if !named.valid { break }
+        directory = named.directory
+        unused Need(!TextHasPrefix(ZipName(archive, named), prefix), "Personal campaign edits must stay private")
+    }
+}
+
+// The release checks for a Google Play bundle; its record, or "".
+VerifyBundle :: (bundle: string, bundletool: string) -> string {
+    version, code := Version()
+    option: Vec(u8)
+    BuilderPrint(*option, "--bundle=%", bundle)
+    validate: [5]string = .["java", "-jar", bundletool, "validate", BuilderFinish(option)]
+    validate_output, valid := Run(validate[:], true, no_changes[:])
+    if !Need(valid, "bundletool rejects the bundle") { return "" }
+    dump: [6]string = .["java", "-jar", bundletool, "dump", "manifest", validate[4]]
+    manifest, dumped := Run(dump[:], true, no_changes[:])
+    if !Need(dumped, "bundletool cannot read the manifest") { return "" }
+    expected_code: Vec(u8)
+    BuilderPrint(*expected_code, "%", code)
+    unused Need(Quoted(manifest, "package=\"", "\"") == "xyz.waozi.wurm", "the bundle's package is wrong")
+    unused Need(Quoted(manifest, "android:versionName=\"", "\"") == version, "the bundle's version is wrong")
+    unused Need(Quoted(manifest, "android:versionCode=\"", "\"") == BuilderFinish(expected_code), "the bundle's version code is wrong")
+    sdk_at := TextFind(manifest, "<uses-sdk")
+    target, digits := TextInteger(ifx sdk_at < 0 then "" else Quoted(manifest[sdk_at:manifest.count], "android:targetSdkVersion=\"", "\""))
+    unused Need(digits && target >= 35, "Google Play needs a current target SDK")
+    application_at := TextFind(manifest, "<application")
+    application := ifx application_at < 0 then "" else manifest[application_at:manifest.count]
+    unused Need(Quoted(application, "android:debuggable=\"", "\"") != "true", "A debug bundle cannot be released")
+    english: [1]string = .["LC_ALL=C"]
+    jar: [3]string = .["jarsigner", "-verify", bundle]
+    verified, jar_ok := Run(jar[:], true, english[:])
+    unused Need(jar_ok && TextContains(verified, "jar verified."), "the bundle signature does not verify")
+    certificate := Certificate()
+    keytool: [4]string = .["keytool", "-printcert", "-jarfile", bundle]
+    printed, printed_ok := Run(keytool[:], true, english[:])
+    lines := TextLines(printed)
+    found: s32
+    for i: 0..lines.count - 1 {
+        at := TextFind(lines[i], "SHA256:")
+        if at < 0 { continue }
+        found += 1
+        digest := TextLower(TextReplace(TextTrim(lines[i][at + 7:lines[i].count]), ":", ""))
+        unused Need(digest == certificate, "Unexpected upload certificate")
+    }
+    unused Need(printed_ok && found > 0, "Unexpected upload certificate")
+    archive: Vec(u8)
+    if !Need(ReadFileInto(bundle, *archive), "cannot read the bundle") { return "" }
+    bytes: []u8 = VecSlice(archive, 0, archive.count)
+    Libraries(bytes, "base/lib/")
+    art: [3]string = .["title.png", "title-portrait.png", "stage-covers.png"]
+    for art { unused SameAsFile(bytes, JoinPath("base/assets/assets/art", it), JoinPath("assets/art", it)) }
+    PrivateLevels(bytes, "base/assets/assets/campaign-levels/")
+    unused Need(SameAsFile(bytes, "base/assets/assets/entity.zx", "build/profile/entity.zx"), "The shared Profile must be packaged")
+    edition_problem := VerifyEdition(bytes, "gplay", true)
+    unused Need(edition_problem.count == 0, edition_problem)
+    if problem.count > 0 { return "" }
+    whole, read := ReadEntireFile(bundle)
+    return Record(version, code, "", Hex(whole), certificate)
+}
+
+Fail :: (message: string) -> s32 {
+    print("tools/android_release: %\n", ifx problem.count > 0 then problem else message)
+    return 1
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    if argc < 3 { return Fail("usage: android_release sign|verify FILE [options]") }
+    action := TextFromCString(argv[1])
+    file := TextFromCString(argv[2])
+    keystore := "backup/android-signing/wurm-release.p12"
+    password := "backup/android-signing/password"
+    output := "build/downloads"
+    bundletool := ""
+    edition := ""
+    index: s32 = 3
+    while index + 1 < argc {
+        name := TextFromCString(argv[index]); value := TextFromCString(argv[index + 1])
+        if name == "--keystore" { keystore = value } else if name == "--password-file" { password = value }
+        else if name == "--output" { output = value } else if name == "--bundletool" { bundletool = value }
+        else if name == "--edition" { edition = value } else { return Fail(JoinPath("unknown option", name)) }
+        index += 2
+    }
+    if (action != "sign" && action != "verify") || !IsFile(file) { return Fail("usage: android_release sign|verify FILE [options]") }
+    version, code := Version()
+    if version.count == 0 { return Fail("version.json is unreadable") }
+    unused CreateDirectories("backup/android-release")
+    if TextHasSuffix(file, ".aab") {
+        if edition == "direct" { return Fail("App Bundles require the gplay edition") }
+        if bundletool.count == 0 { return Fail("--bundletool is required for a Google Play bundle") }
+        bundle := file
+        if action == "sign" {
+            unused CreateDirectories(output)
+            name: Vec(u8)
+            BuilderPrint(*name, "wurm-v%-gplay.aab", version)
+            target := JoinPath(output, BuilderFinish(name))
+            temporary := JoinPath(output, "wurm.new.aab")
+            sign: [9]string = .["jarsigner", "-keystore", ResolvePath(keystore), "-storepass:file", ResolvePath(password),
+                "-signedjar", temporary, ResolvePath(file), "wurm"]
+            signed_output, signed := Run(sign[:], false, no_changes[:])
+            record := ifx signed then VerifyBundle(temporary, ResolvePath(bundletool)) else ""
+            if record.count == 0 { unused RemoveFile(temporary); return Fail("the bundle could not be signed") }
+            if !RenamePath(temporary, target) { return Fail("cannot keep the signed bundle") }
+            if !WriteEntireFile("backup/android-release/play-verification.json", record) { return Fail("cannot write the record") }
+        } else {
+            record := VerifyBundle(ResolvePath(bundle), ResolvePath(bundletool))
+            if record.count == 0 { return Fail("the bundle does not verify") }
+            if !WriteEntireFile("backup/android-release/play-verification.json", record) { return Fail("cannot write the record") }
+        }
+        print("Apfelwurm % (%): Google Play bundle identity, version, both ARM architectures, upload signature, alignment and current assets verified.\n", version, code)
+        return 0
+    }
+    if edition.count == 0 { edition = "direct" }
+    if edition != "direct" && edition != "gplay" { return Fail("unknown edition") }
+    if action == "verify" {
+        if VerifyApk(file, edition).count == 0 { return Fail("the APK does not verify") }
+    } else {
+        unused CreateDirectories(output)
+        tools := BuildTools()
+        if tools.count == 0 { return Fail("no build tools") }
+        suffix := ifx edition == "gplay" then "-gplay" else ""
+        names: [4]Vec(u8)
+        BuilderPrint(*names[0], "aligned%-unsigned.apk", suffix)
+        BuilderPrint(*names[1], "wurm%.new.apk", suffix)
+        BuilderPrint(*names[2], "wurm-v%", version); Append(*names[2], suffix); Append(*names[2], ".apk")
+        BuilderPrint(*names[3], "wurm-%-fdroid.apk", version)
+        aligned := JoinPath(output, BuilderFinish(names[0]))
+        temporary := JoinPath(output, BuilderFinish(names[1]))
+        target := JoinPath(output, BuilderFinish(names[2]))
+        fdroid := JoinPath(output, BuilderFinish(names[3]))
+        align: [7]string = .[JoinPath(tools, "zipalign"), "-P", "16", "-f", "4", ResolvePath(file), aligned]
+        sign: [11]string = .[JoinPath(tools, "apksigner"), "sign", "--alignment-preserved", "--ks", ResolvePath(keystore),
+            "--ks-key-alias", "wurm", "--ks-pass", "", "--out", temporary]
+        pass: Vec(u8)
+        BuilderPrint(*pass, "file:%", ResolvePath(password))
+        sign[8] = BuilderFinish(pass)
+        sign_all: [12]string
+        for i: 0..10 { sign_all[i] = sign[i] }
+        sign_all[11] = aligned
+        aligned_output, aligned_ok := Run(align[:], false, no_changes[:])
+        record := ""
+        if aligned_ok {
+            signed_output, signed := Run(sign_all[:], false, no_changes[:])
+            if signed { record = VerifyApk(temporary, edition) }
+        }
+        unused RemoveFile(aligned)
+        if record.count == 0 { unused RemoveFile(temporary); return Fail("the APK could not be signed or verified") }
+        if !RenamePath(temporary, target) { return Fail("cannot keep the signed APK") }
+        if edition == "direct" {
+            if !CopyFile(target, fdroid) { return Fail("cannot copy the F-Droid APK") }
+            fdroid_record := VerifyApk(fdroid, edition)
+            if fdroid_record != record { return Fail("the F-Droid APK differs") }
+        }
+        record_name := ifx edition == "gplay" then "gplay-verification.json" else "verification.json"
+        if !WriteEntireFile(JoinPath("backup/android-release", record_name), record) { return Fail("cannot write the record") }
+    }
+    print("Apfelwurm % release APK: edition, identity, version, both ARM architectures, signature, alignment and current assets verified.\n", edition)
+    return 0
+}

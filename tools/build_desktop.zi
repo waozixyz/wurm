@@ -1,0 +1,18 @@
+// Builds the desktop game with the shared account, Profile and Dew provider
+// into build/account-desktop/wurm; installation is separate.
+//
+//     LDLIBS=-lz ziran run --target=c tools/build_desktop.zi
+#import "std/file_tree_linux"
+#import, file "../src/account_build.zi";
+
+#program_export
+main :: () -> s32 {
+    profile := BuildProfile()
+    if profile.count == 0 { print("tools/build_desktop: the Profile bundle failed\n"); return 1 }
+    if !BuildAccountProgram("src/desktop_host.zi", "", "desktop_host:main", "build/account-desktop", "wurm", "-O2") {
+        print("tools/build_desktop: the desktop build failed\n"); return 1
+    }
+    if !CopyFile(profile, "assets/entity.zx") { print("tools/build_desktop: cannot place assets/entity.zx\n"); return 1 }
+    print("Built build/account-desktop/wurm with Profile, Dew and account sync; installation is separate.\n")
+    return 0
+}
