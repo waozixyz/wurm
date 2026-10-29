@@ -8,7 +8,7 @@
   "host_api": 41,
   "save_schema": 1,
   "build_defines": ["WURM_PORTABLE"],
-  "prepare_assets": "tools/portable_assets.py",
+  "prepare_assets": "tools/portable_assets.zi",
   "harnesses": ["arcade"],
   "entry": "portable:Main",
   "source": "src/portable.zi",
