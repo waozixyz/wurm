@@ -1,8 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.25] - 2026-10-29
 
 - Mint, Berry, Rose, Night owl, Golden apple and Explorer have new hand-painted looks; skins you own stay yours.
+- Runs in the newest Inner Breeze.
 
 ## [0.2.24] - 2026-10-29
 
