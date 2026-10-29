@@ -61,6 +61,12 @@ jobs:
         run: |
           sh update_version.sh
           git diff --exit-code -- version.json
+      # Only the Google Play edition may name a Google library, in its build
+      # files as in its APK.
+      - name: Keep Google libraries out of the normal and F-Droid build files
+        uses: kryonlabs/kryon/.github/actions/google-free@7217475dfa7f462939e47e3f0bc918aef248b179
+        with:
+          source: waozixyz/wurm
       # Tests and tools are native Ziran programs; ziran run builds each once.
       - name: Run the game and asset tests
         env:
@@ -96,6 +102,19 @@ jobs:
         env:
           LDLIBS: -lz
         run: ziran run --target=c tools/build_android.zi -- --release --abi universal --edition gplay
+      # The normal APK is also the F-Droid download; the Google Play APK must
+      # still show Play Billing, or the check proves nothing.
+      - name: Keep Google libraries out of the normal and F-Droid APK
+        uses: kryonlabs/kryon/.github/actions/google-free@7217475dfa7f462939e47e3f0bc918aef248b179
+        with:
+          packages: waozixyz/wurm/build/android/Apfelwurm-universal-release-unsigned.apk
+          source: ''
+      - name: Find Play Billing in the Google Play APK
+        uses: kryonlabs/kryon/.github/actions/google-free@7217475dfa7f462939e47e3f0bc918aef248b179
+        with:
+          packages: waozixyz/wurm/build/android/Apfelwurm-universal-gplay-release-unsigned.apk
+          source: ''
+          expect-google: 'true'
       - name: Sign and verify the Google-free downloads and Google Play APK
         env:
           KEYSTORE: ${{ secrets.WURM_ANDROID_KEYSTORE }}
