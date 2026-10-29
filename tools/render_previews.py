@@ -13,6 +13,13 @@ ROOT = Path(__file__).resolve().parents[1]
 WIDTH, HEIGHT = 200, 150
 
 
+def sample(source, x, y):
+    width, height = source.size
+    source_x = min(width - 1, int((x + 0.5) * width / 5))
+    source_y = min(height - 1, int((y + 0.5) * height / 5))
+    return source.getpixel((source_x, source_y))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true",
@@ -66,7 +73,10 @@ def main():
                             column=6 if enemy==40 else enemy-40
                             source=source.copy()
                             source.alpha_composite(sheet.crop((column*32,64,column*32+32,96)))
-                        preview.paste(source.resize((5,5), Image.Resampling.NEAREST),(x*5,y*5))
+                        pixels=preview.load()
+                        for pixel_y in range(5):
+                            for pixel_x in range(5):
+                                pixels[x*5+pixel_x, y*5+pixel_y]=sample(source,pixel_x,pixel_y)
                 suffix='-portrait' if portrait else ''
                 path=destination/f"{stage}-{number}{suffix}.png"
                 if arguments.check:
