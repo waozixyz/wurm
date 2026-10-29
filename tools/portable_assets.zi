@@ -1,0 +1,97 @@
+// Prepares the portable game's art, sound effects and generated level stub
+// for Arcade: RESOURCES is the copied bundle folder, GENERATED receives
+// portable_levels.zi.
+//
+//     ziran run --target=c tools/portable_assets.zi -- RESOURCES GENERATED
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/text_tools"
+#import "std/byte_text_linux"
+
+
+Fail :: (message: string) -> s32 {
+    print("tools/portable_assets: %\n", message)
+    return 1
+}
+
+// The art the portable game draws; native mirrors stay in the source.
+Kept :: (folder: string, name: string) -> bool {
+    keep: [18]string = .["garden.png", "forest.png", "forest-canopy.png", "forest-canopy-portrait.png",
+        "meadow.png", "leafwood.png", "pinewood.png", "lake.png", "mountains.png",
+        "title.png", "title-portrait.png", "ground-meadow.png", "water-field.png",
+        "campaign-meadow.png", "campaign-leafwood.png", "campaign-pinewood.png", "campaign-lake.png", "campaign-mountains.png"]
+    stages: [5]string = .["meadow-", "leafwood-", "pinewood-", "lake-", "mountains-"]
+    for keep { if it == name { return true } }
+    if PathName(folder) == "campaign-previews" && TextHasSuffix(name, ".png") {
+        for stages { if TextHasPrefix(name, it) { return true } }
+    }
+    return false
+}
+
+// Removes every file under FOLDER that the portable game does not draw.
+Prune :: (folder: string) -> bool {
+    names: Vec(string)
+    if !ListDirectory(folder, *names) { return false }
+    for i: 0..names.count - 1 {
+        path := JoinPath(folder, names[i])
+        if IsDirectory(path) {
+            if !Prune(path) { return false }
+        } else if !Kept(folder, names[i]) && !RemoveFile(path) { return false }
+    }
+    return true
+}
+
+Put16 :: (bytes: *Vec(u8), value: u32) {
+    unused VecPush(bytes.*, cast(u8)(value & 255))
+    unused VecPush(bytes.*, cast(u8)((value >> 8) & 255))
+}
+
+Put32 :: (bytes: *Vec(u8), value: u32) {
+    Put16(bytes, value & 65535)
+    Put16(bytes, value >> 16)
+}
+
+// A mono 16-bit 22050 Hz WAV file around raw PCM samples.
+WriteWave :: (path: string, samples: string) -> bool {
+    bytes: Vec(u8)
+    size := cast(u32)samples.count
+    Append(*bytes, "RIFF"); Put32(*bytes, 36 + size); Append(*bytes, "WAVEfmt ")
+    Put32(*bytes, 16); Put16(*bytes, 1); Put16(*bytes, 1); Put32(*bytes, 22050); Put32(*bytes, 44100)
+    Put16(*bytes, 2); Put16(*bytes, 16); Append(*bytes, "data"); Put32(*bytes, size)
+    Append(*bytes, samples)
+    return WriteEntireFile(path, BuilderFinish(bytes))
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    if argc != 3 { return Fail("usage: portable_assets RESOURCES GENERATED") }
+    resources := TextFromCString(argv[1])
+    generated := TextFromCString(argv[2])
+    children: Vec(string)
+    if !ListDirectory(resources, *children) { return Fail("cannot list the resources") }
+    for i: 0..children.count - 1 {
+        name := children[i]
+        if name == "art" || name == "levels" || name == "catalog.json" { continue }
+        if !RemoveTree(JoinPath(resources, name)) { return Fail(JoinPath("cannot remove", name)) }
+    }
+    if !Prune(JoinPath(resources, "art")) { return Fail("cannot prune the art") }
+    sounds := JoinPath(resources, "sounds")
+    if !CreateDirectories(sounds) { return Fail("cannot create sounds") }
+    effects: [4]string = .["start", "exit", "lose", "pickup"]
+    for name: effects {
+        source: Vec(u8)
+        BuilderPrint(*source, "assets/sounds/%.pcm", name)
+        samples, found := ReadEntireFile(BuilderFinish(source))
+        target: Vec(u8)
+        BuilderPrint(*target, "%/%.wav", sounds, name)
+        if !found || !WriteWave(BuilderFinish(target), samples) { return Fail(JoinPath("cannot write sound", name)) }
+    }
+    // The authored campaign is compiled from designed_levels.zi. Personal
+    // editor records stay in the host's private storage, never in the bundle.
+    code := "BundledLevel :: (level: s32, output: []u8) -> s64 { unused level; unused output; return -1 }\n"
+    if !CreateDirectories(generated) || !WriteEntireFile(JoinPath(generated, "portable_levels.zi"), code) {
+        return Fail("cannot write portable_levels.zi")
+    }
+    return 0
+}

@@ -1,0 +1,260 @@
+// Independently validates the emitted campaign boards and loop certificates
+// in build/designed: shapes, routes, reachability and the difficulty curve.
+#import "std/file"
+#import "std/json_scan"
+
+LEVELS :: 200
+STAGES :: string.["meadow", "leafwood", "pinewood", "lake", "mountains"]
+
+failures: s32;
+Expect :: (value: bool, message: string, level: s64 = 0) {
+    if value { return }
+    if level > 0 { print("FAIL: level %: %\n", level, message) } else { print("FAIL: %\n", message) }
+    failures += 1
+}
+
+Entry :: struct {
+    number: s32
+    apples: s32
+    enemies: s32
+    floors: s32
+    original: s32
+    kinds: s32       // bit k set for enemy kind k
+    stage: JsonSpan
+    name: JsonSpan
+    family: JsonSpan
+}
+
+manifest: string;
+entries: [LEVELS]Entry;
+
+Number :: (object: s32, name: string) -> s32 {
+    at := FieldAt(manifest, object, name)
+    value := ReadNumber(manifest, at)
+    Expect(value.valid, name)
+    return cast(s32)value.value
+}
+
+Text :: (object: s32, name: string) -> JsonSpan {
+    span := ReadString(manifest, FieldAt(manifest, object, name))
+    Expect(span.valid, name)
+    return span
+}
+
+SameSpan :: (first: JsonSpan, second: JsonSpan) -> bool {
+    return manifest[first.start:first.end] == manifest[second.start:second.end]
+}
+
+// A floor shape in one of its eight rotations and reflections.
+Shape :: struct { width: s32; height: s32; cells: [1200]bool }
+
+Less :: (first: *Shape, second: *Shape) -> bool {
+    if first.width != second.width { return first.width < second.width }
+    for i: 0..1199 {
+        if first.cells[i] != second.cells[i] { return !first.cells[i] }
+    }
+    return false
+}
+
+Same :: (first: *Shape, second: *Shape) -> bool {
+    if first.width != second.width { return false }
+    for i: 0..1199 { if first.cells[i] != second.cells[i] { return false } }
+    return true
+}
+
+signatures: [LEVELS]Shape;
+
+// The smallest of the eight variants names the shape regardless of turns.
+Signature :: (floor: []bool, output: *Shape) {
+    first := true
+    for rotation: 0..3 {
+        for reflection: 0..1 {
+            variant: Shape
+            variant.width = ifx rotation % 2 == 0 then 40 else 30
+            variant.height = ifx rotation % 2 == 0 then 30 else 40
+            for y: 0..29 {
+                for x: 0..39 {
+                    if !floor[y * 40 + x] { continue }
+                    px := x; py := y; w: s32 = 40; h: s32 = 30
+                    for turn: 0..rotation - 1 {
+                        nx := h - 1 - py; ny := px
+                        px = nx; py = ny
+                        swap := w; w = h; h = swap
+                    }
+                    if reflection == 1 { px = w - 1 - px }
+                    variant.cells[py * w + px] = true
+                }
+            }
+            if first || Less(*variant, output) { output.* = variant; first = false }
+        }
+    }
+}
+
+// Breadth-first reach from the entrance over a columns x rows floor mask.
+ReachesAll :: (floor: []bool, columns: s32, rows: s32) -> bool {
+    start := (rows - 2) * columns + columns / 2
+    if !floor[start] { return false }
+    seen: [1200]bool
+    queue: [1200]s32
+    head: s32; tail: s32 = 1
+    queue[0] = start; seen[start] = true
+    while head < tail {
+        cell := queue[head]; head += 1
+        x := cell % columns
+        neighbours: [4]s32 = .[cell - 1, cell + 1, cell - columns, cell + columns]
+        for i: 0..3 {
+            next := neighbours[i]
+            if (i == 0 && x == 0) || (i == 1 && x == columns - 1) || next < 0 || next >= columns * rows { continue }
+            if floor[next] && !seen[next] { seen[next] = true; queue[tail] = next; tail += 1 }
+        }
+    }
+    for i: 0..columns * rows - 1 { if floor[i] != seen[i] { return false } }
+    return true
+}
+
+LevelPath :: (prefix: string, number: s32) -> string {
+    path: Vec(u8)
+    BuilderPrint(*path, "build/designed/%", prefix)
+    BuilderPrint(*path, "%.dat", number)
+    return BuilderFinish(path)
+}
+
+CheckBoard :: (entry: Entry, index: s32) {
+    n := entry.number
+    raw, found := ReadEntireFile(LevelPath("level", n))
+    if !found || raw.count != 2401 { Expect(false, "missing 2401-byte board", n); return }
+    Expect(cast(s32)raw[0] == entry.apples, "apple count in the board", n)
+    for i: 1201..2400 { if raw[i] != 0 { Expect(false, "objects must be empty", n); break } }
+    board: [1200]u8
+    floor: [1200]bool
+    floors: s32
+    for x: 0..39 {
+        for y: 0..29 {
+            value := raw[1 + x * 30 + y]
+            board[y * 40 + x] = value
+            allowed := value == 0 || value == 20 || value == 21 || value == 22 || (value >= 40 && value <= 45)
+            Expect(allowed, "only clear floor and solid tile hazards", n)
+            if value < 20 || (value >= 40 && value <= 45) { floor[y * 40 + x] = true; floors += 1 }
+        }
+    }
+    Expect(floors == entry.floors && floors >= 352, "floor count", n)
+    Signature(floor[:], *signatures[index])
+    for previous: 0..index - 1 {
+        if Same(*signatures[previous], *signatures[index]) { Expect(false, "duplicate or rotated copy", n); break }
+    }
+    certificate, has := ReadEntireFile(LevelPath("cycle", n))
+    if !has || certificate.count < 2 { Expect(false, "missing loop certificate", n); return }
+    count := cast(s32)certificate[0] | (cast(s32)certificate[1] << 8)
+    Expect(certificate.count == count * 2 + 2, "certificate size", n)
+    if certificate.count != count * 2 + 2 { return }
+    visited: [1200]bool
+    previous_cell: s32 = -1
+    first_cell: s32 = -1
+    route_ok := true
+    for i: 0..count - 1 {
+        cell := cast(s32)certificate[2 + i * 2] | (cast(s32)certificate[3 + i * 2] << 8)
+        if cell < 0 || cell >= 1200 || visited[cell] || !floor[cell] { route_ok = false; break }
+        visited[cell] = true
+        if previous_cell >= 0 {
+            dx := cell % 40 - previous_cell % 40; dy := cell / 40 - previous_cell / 40
+            if dx * dx + dy * dy != 1 { route_ok = false }
+        } else { first_cell = cell }
+        previous_cell = cell
+    }
+    if route_ok && count > 0 {
+        dx := first_cell % 40 - previous_cell % 40; dy := first_cell / 40 - previous_cell / 40
+        route_ok = dx * dx + dy * dy == 1 && count == floors
+    }
+    Expect(route_ok, "certificate is a closed loop over every floor cell", n)
+    Expect(count * 4 > (2 + 4 * cast(s32)raw[0]) * 16 + 256, "safe route is too short for the grown worm", n)
+    // Every floor cell belongs to a full 2x2 patch: no one-tile corridors.
+    for mx: 0..18 {
+        for my: 0..13 {
+            open: s32
+            solid: s32
+            for d: 0..3 {
+                value := board[(1 + my * 2 + d / 2) * 40 + 1 + mx * 2 + d % 2]
+                if value < 20 || (value >= 40 && value <= 45) { open += 1 }
+                if value >= 20 && value < 40 { solid += 1 }
+            }
+            if open != 4 && solid != 4 { Expect(false, "one-tile corridor", n); return }
+        }
+    }
+    portrait: [1200]bool
+    for y: 0..29 { for x: 0..39 { if floor[y * 40 + x] { portrait[x * 30 + 29 - y] = true } } }
+    Expect(floor[27 * 40 + 20] && floor[40 + 20] && ReachesAll(floor[:], 40, 30), "unreachable landscape apple floor", n)
+    Expect(portrait[37 * 30 + 15] && portrait[30 + 15] && ReachesAll(portrait[:], 30, 40), "unreachable portrait apple floor", n)
+}
+
+#program_export
+main :: () -> s32 {
+    found: bool
+    manifest, found = ReadEntireFile("build/designed/manifest.json")
+    if !found { print("FAIL: build/designed/manifest.json is missing; run the level designer first\n"); return 1 }
+    positions: [LEVELS]s32
+    total := ArrayPositions(manifest, 0, positions[:])
+    if total != LEVELS { print("FAIL: % levels in the manifest\n", total); return 1 }
+    for i: 0..LEVELS - 1 {
+        at := positions[i]
+        entry: Entry
+        entry.number = Number(at, "number")
+        entry.apples = Number(at, "apples")
+        entry.enemies = Number(at, "enemies")
+        entry.floors = Number(at, "floors")
+        entry.original = Number(at, "original")
+        entry.stage = Text(at, "stage")
+        entry.name = Text(at, "name")
+        entry.family = Text(at, "family")
+        kinds_at := FieldAt(manifest, at, "enemy_kinds")
+        kinds: [16]s32
+        kind_count := ArrayPositions(manifest, kinds_at, kinds[:])
+        Expect(kind_count >= 0 && kind_count <= 16, "enemy kinds", i + 1)
+        for k: 0..kind_count - 1 {
+            kind := ReadNumber(manifest, kinds[k])
+            if kind.valid && kind.value >= 0.0 && kind.value < 31.0 { entry.kinds |= 1 << cast(s32)kind.value }
+        }
+        entries[i] = entry
+        Expect(manifest[entry.stage.start:entry.stage.end] == STAGES[i / 40], "complete five-landscape journey", i + 1)
+        Expect(entry.apples >= 5 && entry.apples <= 10, "5 to 10 apples", i + 1)
+        for previous: 0..i - 1 {
+            if SameSpan(entries[previous].name, entry.name) { Expect(false, "unique name", i + 1) }
+        }
+    }
+    if failures > 0 { return 1 }
+    families: s32
+    originals: s32
+    kinds: s32
+    for i: 0..LEVELS - 1 {
+        new_family := true
+        new_original := true
+        for previous: 0..i - 1 {
+            if SameSpan(entries[previous].family, entries[i].family) { new_family = false }
+            if entries[previous].original == entries[i].original { new_original = false }
+        }
+        if new_family { families += 1 }
+        if new_original { originals += 1 }
+        kinds |= entries[i].kinds
+    }
+    Expect(families >= 10, "at least ten families")
+    Expect(entries[0].apples == 5 && entries[1].apples == 5 && entries[0].enemies == 0 && entries[1].enemies == 0,
+        "five apples and a gentle, open level 2")
+    early: s32
+    late: s32
+    for i: 0..7 { early += entries[i].apples; late += entries[LEVELS - 8 + i].apples }
+    Expect(early < late, "apple goals grow over the campaign")
+    rests: s32
+    for i: 1..LEVELS - 1 { if entries[i].apples < entries[i - 1].apples { rests += 1 } }
+    Expect(rests >= 15, "retain natural breathing room")
+    for i: 0..LEVELS - 1 { CheckBoard(entries[i], cast(s32)i) }
+    Expect(originals >= 80, "at least 80 original references")
+    Expect(kinds == 126, "all six enemy types")
+    for stage: 0..3 {
+        this_stage: s32
+        next_stage: s32
+        for i: 0..39 { this_stage += entries[stage * 40 + i].enemies; next_stage += entries[(stage + 1) * 40 + i].enemies }
+        Expect(this_stage < next_stage, "increasing stage difficulty")
+    }
+    if failures > 0 { return 1 }
+    print("Campaign local test: 200 unique layouts, no rotated copies, complete reachability and wide routes in both orientations; original references, all six enemy types and increasing stage difficulty.\n")
+    return 0
+}

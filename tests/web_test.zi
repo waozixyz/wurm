@@ -1,0 +1,244 @@
+// Plays the browser edition in a private headless Chromium with its own
+// profile, served by this test's own HTTP server (or WURM_TEST_URL): touch
+// feedback, the direction pad, controls, play, portrait, music blending,
+// durable progress and the unlocked-level selector.
+#import "kryon/devtools_linux"
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/json_scan"
+#import "std/text_tools"
+#import "std/environment_linux"
+
+OUT :: "build/web-test"
+
+browser: *Browser;
+
+Shot :: (name: string) -> bool {
+    path: Vec(u8)
+    BuilderPrint(*path, "%/%.png", OUT, name)
+    return BrowserScreenshot(browser, BuilderFinish(path))
+}
+
+Pause :: (milliseconds: s64) { BrowserSleep(browser, milliseconds) }
+
+Until :: (expression: string) -> bool { return BrowserWait(browser, expression, 20000) }
+
+True :: (expression: string) -> bool { return BrowserTrue(browser, expression) }
+
+Fail :: (message: string) -> bool {
+    print("FAIL: browser: %\n", message)
+    return false
+}
+
+// A key as a person presses it: down, then up.
+Key :: (name: string, code: s32) -> bool {
+    dom := name
+    if name == " " { dom = "Space" }
+    if !BrowserKey(browser, name, dom, code) { return false }
+    Pause(180)
+    return true
+}
+
+Click :: (x: s64, y: s64) -> bool {
+    fx := cast(float64)x; fy := cast(float64)y
+    if !BrowserMouse(browser, "mouseMoved", fx, fy, 0.0) { return false }
+    Pause(80)
+    if !BrowserMouse(browser, "mousePressed", fx, fy, 0.0) { return false }
+    Pause(80)
+    if !BrowserMouse(browser, "mouseReleased", fx, fy, 0.0) { return false }
+    Pause(180)
+    return true
+}
+
+// A touch event; an empty point list ends every touch.
+Touch :: (kind: string, x: s64, y: s64) -> bool {
+    params: Vec(u8)
+    if kind == "touchEnd" {
+        Append(*params, "{\"type\":\"touchEnd\",\"touchPoints\":[]}")
+    } else {
+        BuilderPrint(*params, "{\"type\":\"%\",\"touchPoints\":[{\"x\":%,\"y\":%}]}", kind, x, y)
+    }
+    return BrowserCall(browser, "Input.dispatchTouchEvent", BuilderFinish(params))
+}
+
+Viewport :: (width: s32, height: s32, mobile: bool) -> bool {
+    return BrowserViewport(browser, width, height, 1.0, mobile)
+}
+
+Reload :: () -> bool {
+    return BrowserCall(browser, "Page.reload", "{}") && Until(LOADED)
+}
+
+LOADED :: "typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden"
+
+// The canvas's red, green and blue sum at a CSS point.
+Brightness :: (x: s64, y: s64) -> s64 {
+    expression: Vec(u8)
+    BuilderPrint(*expression, "(()=>{const c=document.getElementById('canvas'),b=c.getBoundingClientRect();const p=c.getContext('2d').getImageData(Math.round((%-b.left)*c.width/b.width),Math.round((%-b.top)*c.height/b.height),1,1).data;return p[0]+p[1]+p[2]})()", x, y)
+    return cast(s64)BrowserNumber(browser, BuilderFinish(expression), -1.0)
+}
+
+RunIs :: (bytes: string) -> string {
+    text: Vec(u8)
+    BuilderPrint(*text, "(()=>{try{return JSON.stringify(Array.from(Module.FS.readFile('/kryon-apps/wurm/run.dat')))==='%'}catch{return false}})()", bytes)
+    return BuilderFinish(text)
+}
+
+Play :: () -> bool {
+    url := EnvironmentText("WURM_TEST_URL")
+    if url.count == 0 {
+        if !BrowserServe(browser, "build/web") { return Fail("the HTTP server did not start") }
+        url = BrowserUrl(browser, "/")
+    }
+    profile := JoinPath(ResolvePath(OUT), "profile")
+    unused RemoveTree(profile)
+    if !BrowserOpen(browser, profile) { return Fail("the private Chromium did not start") }
+    // Observe real HTML audio in this disposable browser without app hooks.
+    audio := "window.__wurmAudio=[];window.__wurmAudioErrors=[];window.Audio=new Proxy(window.Audio,{construct(target,args){const audio=Reflect.construct(target,args),play=audio.play.bind(audio);audio.play=()=>{const p=play();p.catch(e=>window.__wurmAudioErrors.push({src:audio.src,error:String(e)}));return p};window.__wurmAudio.push(audio);return audio;}});"
+    if !BrowserCall(browser, "Page.enable", "{}") || !BrowserCall(browser, "Runtime.enable", "{}") { return false }
+    if !BrowserScriptOnLoad(browser, audio) || !Viewport(1100, 900, false) { return false }
+    if !BrowserCall(browser, "Page.navigate", BrowserParams1("url", url)) { return false }
+    if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") { return false }
+    Pause(1800)
+    if !Shot("title") { return false }
+    colorful := BrowserNumber(browser, "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data,s=new Set();for(let i=0;i<p.length;i+=80)s.add(p[i]+','+p[i+1]+','+p[i+2]);return s.size})()", 0.0)
+    if colorful < 200.0 { return Fail("title artwork did not render") }
+    if !Click(1018, 34) { return false }
+    Pause(400)
+    if !Shot("profile") || !Click(48, 30) { return false }
+    Pause(200)
+    if !Click(1066, 34) { return false }
+    Pause(200)
+    if !Shot("settings") || !Key("Escape", 27) || !Key("Enter", 13) { return false }
+    Pause(200)
+    if !Shot("controls") || !Key("1", 49) { return false }
+    if !Until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/controls.dat')[0]===0}catch{return false}})()") { return false }
+    Pause(300)
+    if !Shot("level-1") || !Key("ArrowRight", 39) { return false }
+    Pause(150)
+    if !Key(" ", 32) || !Shot("playing") { return false }
+    // Run a real recording quickly to its end. The next starts before the old
+    // one stops, with complementary gains, then finishes the fade on its own.
+    if !Until("window.__wurmAudio.length===7 && window.__wurmAudio.slice(4).some(a=>!a.paused && a.currentTime>0 && Number.isFinite(a.duration))") { return false }
+    if !True("(()=>{window.__outgoing=window.__wurmAudio.slice(4).find(a=>!a.paused);window.__outgoing.playbackRate=16;return true})()") { return false }
+    if !Until("window.__wurmAudio.slice(4).filter(a=>!a.paused).length===2") { return false }
+    if !BrowserEvaluate(browser, "window.__outgoing.playbackRate=1") { return false }
+    Pause(750)
+    if !True("(()=>{const playing=window.__wurmAudio.slice(4).filter(a=>!a.paused);return playing.length===2 && playing.every(a=>a.volume>0 && a.volume<0.4) && Math.abs(playing.reduce((s,a)=>s+a.volume,0)-0.4)<0.001})()") {
+        return Fail("music did not blend the two real recordings")
+    }
+    if !Until("window.__outgoing.paused && window.__wurmAudio.slice(4).filter(a=>!a.paused).length===1") { return false }
+    if !Viewport(390, 844, true) { return false }
+    Pause(400)
+    if !Shot("portrait") || !Reload() { return false }
+    Pause(1200)
+    if !Until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/controls.dat')[0]===0}catch{return false}})()") { return false }
+    if !Key("Enter", 13) { return false }
+    Pause(300)
+    if !Shot("playing-portrait") { return false }
+    // The real touch path paints Kryon's feedback above the board, then
+    // removes it on release. Read the same spot to skip moving game pieces.
+    before := Brightness(219, 480)
+    if !Touch("touchStart", 195, 480) { return false }
+    Pause(80)
+    if !Touch("touchMove", 225, 480) { return false }
+    Pause(80)
+    during := Brightness(219, 480)
+    if !Shot("swipe-feedback") { return false }
+    if during < before + 80 { return Fail("touch feedback did not appear above the board") }
+    if !Touch("touchEnd", 0, 0) { return false }
+    Pause(100)
+    after := Brightness(219, 480)
+    if during < after + 80 { return Fail("touch feedback stayed after release") }
+    if !Shot("swipe-released") { return false }
+    // Import an old run, persist it through IndexedDB, then use the real title
+    // buttons. Only this test's private browser profile holds these records.
+    if !BrowserEvaluate(browser, "new Promise((resolve,reject)=>{Module.FS.writeFile('/kryon-apps/wurm/run.dat',new Uint8Array([57,6,120,0,0,0]));try{Module.FS.unlink('/kryon-apps/wurm/unlocked.dat')}catch{}Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})") { return false }
+    if !Reload() { return false }
+    Pause(1500)
+    if !Until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57}catch{return false}})()") { return false }
+    if !Shot("continue-title") || !Click(195, 700) || !Until(RunIs("[57,3,0,0,0,0]")) || !Shot("continued-level-58") { return false }
+    if !Key(" ", 32) || !Key("q", 81) || !Click(195, 774) || !Until(RunIs("[0,3,0,0,0,0]")) { return false }
+    if !True("Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57") { return Fail("Play erased unlocked progress") }
+    Pause(500)
+    if !Reload() { return false }
+    Pause(1500)
+    if !Key("c", 67) || !Until(RunIs("[57,3,0,0,0,0]")) { return false }
+    if !Key(" ", 32) || !Key("q", 81) || !Key("l", 76) || !Shot("level-selector") { return false }
+    grid := "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,132,c.width,c.height-132).data;let h=0;for(let i=0;i<p.length;i+=20)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()"
+    before_scroll := BrowserNumber(browser, grid, -1.0)
+    if !Touch("touchStart", 195, 700) { return false }
+    for step: 1..5 {
+        if !Touch("touchMove", 195, 700 - step * 50) { return false }
+        Pause(70)
+    }
+    if !Touch("touchEnd", 0, 0) { return false }
+    Pause(350)
+    if BrowserNumber(browser, grid, -1.0) == before_scroll { return Fail("the selector did not scroll under touch drag") }
+    if !True("Module.FS.readFile('/kryon-apps/wurm/run.dat')[0]===57") { return Fail("dragging the selector started a level") }
+    if !Shot("level-selector-scrolled") { return false }
+    if !Click(354, 96) || !Click(90, 238) { return false }  // Future Pinewood shows only locks.
+    if !True("Module.FS.readFile('/kryon-apps/wurm/run.dat')[0]===57") { return Fail("a locked browser level started") }
+    if !Shot("locked-levels") || !Click(36, 96) || !Click(90, 238) || !Until(RunIs("[40,3,0,0,0,0]")) { return false }
+    if !True("Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57") { return Fail("level selection erased progress") }
+    if !Key(" ", 32) || !Key("q", 81) || !Key("l", 76) || !Key("Escape", 27) || !Key("c", 67) { return false }
+    if !Until("Module.FS.readFile('/kryon-apps/wurm/run.dat')[0]===57") { return false }
+    // Both orientations use the same pad placement and keep a press highlight.
+    if !BrowserEvaluate(browser, "new Promise((resolve,reject)=>{Module.FS.writeFile('/kryon-apps/wurm/controls.dat',new Uint8Array([1]));Module.FS.writeFile('/kryon-apps/wurm/unlocked.dat',new Uint8Array([0]));Module.FS.writeFile('/kryon-apps/wurm/run.dat',new Uint8Array([0,3,0,0,0,0]));Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})") { return false }
+    for orientation: 0..1 {
+        width: s64 = ifx orientation == 0 then 390 else 844
+        height: s64 = ifx orientation == 0 then 844 else 390
+        if !Viewport(cast(s32)width, cast(s32)height, true) || !Reload() { return false }
+        Pause(1200)
+        if !Key("Enter", 13) { return false }
+        play_height := cast(float64)(height - (ifx width < 520 then 104 else 72))
+        short := ifx cast(float64)width < play_height then cast(float64)width else play_height
+        margin := short * 0.06
+        if margin < 24.0 { margin = 24.0 }
+        if margin > 32.0 { margin = 32.0 }
+        side := short * 0.44
+        if side < 168.0 { side = 168.0 }
+        if side > 216.0 { side = 216.0 }
+        x := cast(s64)(margin + side / 6.0 + 0.5)
+        y := cast(s64)(cast(float64)height - margin - side / 2.0 + 0.5)
+        rest := Brightness(x - 10, y + 9)
+        if !Touch("touchStart", x, y) { return false }
+        Pause(80)
+        held := Brightness(x - 10, y + 9)
+        name: Vec(u8)
+        BuilderPrint(*name, "pad-%x%", width, height)
+        if !Shot(BuilderFinish(name)) { return false }
+        difference := held - rest
+        if difference < 0 { difference = -difference }
+        if difference < 10 { return Fail("the direction pad did not highlight the held arm") }
+        if !Touch("touchEnd", 0, 0) { return false }
+    }
+    if browser.exceptions.count > 0 {
+        for i: 0..browser.exceptions.count - 1 { print("page exception: %\n", browser.exceptions[i]) }
+        return Fail("the page threw")
+    }
+    result: Vec(u8)
+    BuilderPrint(*result, "{\n  \"passed\": true,\n  \"url\": %,\n  \"colorful\": %,\n", JsonQuote(url), cast(s64)colorful)
+    Append(*result, "  \"behaviors\": [\"shared touch feedback and release\", \"mobile pad placement and held highlight in both orientations\", \"rendered title artwork\", \"control choice\", \"straight into level 1\", \"keyboard steering\", \"pause\", \"portrait resize\", \"durable saves after reload\", \"old run migration\", \"Continue highest level with fresh stats\", \"Play from start preserves unlocks\", \"Continue after browser reload\", \"landscape level selector\", \"touch scrolling without starting a level\", \"locked levels show only locks\", \"unlocked level selection starts fresh\", \"selector keyboard back\"]\n}\n")
+    unused WriteEntireFile(JoinPath(OUT, "result.json"), BuilderFinish(result))
+    print("Browser local test: touch feedback and release, mobile pad placement and highlight, controls, play, portrait, durable progress and unlocked-level selection passed.\n")
+    return true
+}
+
+#program_export
+main :: () -> s32 {
+    unused CreateDirectories(OUT)
+    session: Browser
+    browser = *session
+    passed := Play()
+    if !passed {
+        if BrowserEvaluate(browser, "({audio:(window.__wurmAudio||[]).map(a=>({src:a.src,paused:a.paused,time:a.currentTime,duration:a.duration,volume:a.volume,ready:a.readyState,error:a.error?.code})),errors:window.__wurmAudioErrors})") {
+            unused WriteEntireFile(JoinPath(OUT, "audio-failure.json"), browser.result)
+        }
+        unused Shot("failure")
+    }
+    BrowserClose(browser)
+    unused RemoveTree(JoinPath(ResolvePath(OUT), "profile"))
+    return ifx passed then 0 else 1
+}

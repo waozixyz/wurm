@@ -1,0 +1,125 @@
+// Recovers the owner's Worm resources; never modifies the supplied game.
+//
+// ONLY.ONE: OO + uint32 count, then count (1024-byte complemented filename,
+// uint32 offset, uint32 length) records. LEVELn.DAT: apple count, followed by
+// 40 columns of 30 bytes. PIX v2: dimensions, RLE bytes, 256 VGA RGB colors.
+//
+//     LDLIBS=-lz ziran run --target=c tools/extract_original.zi -- SOURCE [--destination DIR] [--generated FILE]
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/text_tools"
+#import "std/byte_text_linux"
+#import "std/process_run_linux"
+#import "std/image"
+#import "std/png_linux"
+#import "crypto/sha256"
+#import, file "../src/original_archive.zi";
+
+Hex :: (data: string) -> string {
+    context: Sha256Context
+    Sha256Initialize(*context)
+    Sha256UpdateText(*context, data)
+    hash: [32]u8
+    Sha256FinishBytes(*context, hash[:])
+    digest: [65]u8
+    unused BytesToHex(*hash[0], 32, *digest[0], 65)
+    copy: Vec(u8)
+    Append(*copy, TextFromBytes(digest[0:64]))
+    return BuilderFinish(copy)
+}
+
+// Width and height, then BGRA rows, as the native mirrors are stored.
+WriteArgb :: (path: string, image: *Image) -> bool {
+    bytes: Vec(u8)
+    for shift: 0..3 { unused VecPush(bytes, cast(u8)((image.width >> cast(s32)(shift * 8)) & 255)) }
+    for shift: 0..3 { unused VecPush(bytes, cast(u8)((image.height >> cast(s32)(shift * 8)) & 255)) }
+    for i: 0..cast(s64)image.width * cast(s64)image.height - 1 {
+        unused VecPush(bytes, image.pixels[i * 4 + 2]); unused VecPush(bytes, image.pixels[i * 4 + 1])
+        unused VecPush(bytes, image.pixels[i * 4]); unused VecPush(bytes, image.pixels[i * 4 + 3])
+    }
+    return WriteEntireFile(path, BuilderFinish(bytes))
+}
+
+Fail :: (message: string) -> s32 {
+    print("tools/extract_original: %\n", message)
+    return 1
+}
+
+Under :: (folder: string, name: string, suffix: string) -> string {
+    path: Vec(u8)
+    BuilderPrint(*path, "%/%", folder, name)
+    Append(*path, suffix)
+    return BuilderFinish(path)
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    source := ""
+    destination := "assets/original"
+    generated := "src/original_levels.zi"
+    index: s32 = 1
+    while index < argc {
+        argument := TextFromCString(argv[index])
+        if argument == "--destination" && index + 1 < argc { index += 1; destination = TextFromCString(argv[index]) }
+        else if argument == "--generated" && index + 1 < argc { index += 1; generated = TextFromCString(argv[index]) }
+        else { source = argument }
+        index += 1
+    }
+    if source.count == 0 { return Fail("usage: extract_original SOURCE [--destination DIR] [--generated FILE]") }
+    blob, found := ReadEntireFile(JoinPath(source, "ONLY.ONE"))
+    if !found { return Fail("cannot read ONLY.ONE") }
+    entries: Vec(ArchiveEntry)
+    problem := ArchiveEntries(blob, *entries)
+    if problem.count > 0 { return Fail(problem) }
+    text: Vec(u8)
+    problem = GenerateLevels(*entries, *text)
+    if problem.count > 0 { return Fail(problem) }
+    unused CreateDirectories(destination)
+    manifest: Vec(u8)
+    BuilderPrint(*manifest, "{\n  \"archive_sha256\": \"%\",\n  \"level_count\": 99,\n  \"columns\": 40,\n  \"rows\": 30,\n", Hex(blob))
+    Append(*manifest, "  \"order\": \"column-major\",\n  \"files\": {")
+    for i: 0..entries.count - 1 {
+        entry := entries[i]
+        if !WriteEntireFile(JoinPath(destination, entry.name), entry.data) { return Fail(JoinPath("cannot write", entry.name)) }
+        BuilderPrint(*manifest, "%\n    \"%\": {\n      \"bytes\": %,\n", ifx i == 0 then "" else ",", entry.name, entry.data.count)
+        BuilderPrint(*manifest, "      \"sha256\": \"%\"\n    }", Hex(entry.data))
+        stem := PathStem(entry.name)
+        if TextHasSuffix(entry.name, ".pix") {
+            picture: IndexedImage
+            problem = DecodePix(entry.data, *picture)
+            if problem.count > 0 { return Fail(problem) }
+            if !WriteIndexedPNGFile(Under(destination, stem, ".png"), *picture) { return Fail("cannot write a PNG") }
+            colors := PixColors(*picture, false)
+            if !WriteArgb(Under(destination, stem, ".argb"), *colors) { return Fail("cannot write an ARGB mirror") }
+            if TextHasPrefix(entry.name, "steine_") {
+                sprite := PixColors(*picture, true)
+                if !WritePNGFile(Under(destination, stem, "_sprites.png"), *sprite) ||
+                   !WriteArgb(Under(destination, stem, "_sprites.argb"), *sprite) { return Fail("cannot write sprites") }
+            }
+        } else if TextHasSuffix(entry.name, ".wav") {
+            convert: [14]string = .["ffmpeg", "-v", "error", "-nostdin", "-y", "-i", JoinPath(destination, entry.name),
+                "-ar", "22050", "-ac", "1", "-f", "s16le", Under(destination, stem, ".pcm")]
+            run: ProcessRun
+            options: ProcessOptions = .{arguments = convert[:]}
+            if !RunProcess(options, *run) || run.code != 0 { return Fail("ffmpeg could not convert a sound") }
+        }
+    }
+    Append(*manifest, "\n  }\n}\n")
+    names: Vec(string)
+    unused ListDirectory(source, *names)
+    for i: 0..names.count - 1 {
+        name := names[i]
+        if !TextHasPrefix(name, "WURM") || !TextHasSuffix(name, ".MDS") { continue }
+        stream, has := ReadEntireFile(JoinPath(source, name))
+        if !has || !WriteEntireFile(JoinPath(destination, TextLower(name)), stream) { return Fail("cannot copy a MIDS stream") }
+        midi: Vec(u8)
+        problem = MidsToMidi(stream, *midi)
+        if problem.count > 0 { return Fail(problem) }
+        if !WriteEntireFile(Under(destination, TextLower(PathStem(name)), ".mid"), BuilderFinish(midi)) { return Fail("cannot write MIDI") }
+    }
+    if !WriteEntireFile(JoinPath(destination, "manifest.json"), BuilderFinish(manifest)) ||
+       !WriteEntireFile(generated, BuilderFinish(text)) { return Fail("cannot write the manifest or levels") }
+    print("Recovered 99 levels, 14 images, 4 sounds and 3 MIDI streams.\n")
+    return 0
+}

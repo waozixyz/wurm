@@ -1,0 +1,80 @@
+// Validates the playable geometry of the owner's published editor boards:
+// every floor cell and the exit are reachable from the entrance.
+#import "std/file"
+#import "std/byte_text_linux"
+#import "std/number_text"
+
+Floor :: (value: u8) -> bool { return value < 20 || (value >= 40 && value <= 45) }
+
+// A published record is levelN.dat or levelN-portrait.dat; anything else in
+// the folder is a mistake.
+RecordName :: (name: string) -> (ok: bool, portrait: bool) {
+    if name.count < 10 || name[0:5] != "level" || name[name.count - 4:name.count] != ".dat" { return false, false }
+    stem := name[5:name.count - 4]
+    portrait := stem.count > 9 && stem[stem.count - 9:stem.count] == "-portrait"
+    if portrait { stem = stem[0:stem.count - 9] }
+    value, digits := IntegerPrefix(stem)
+    return digits > 0 && digits == stem.count && value > 0, portrait
+}
+
+Check :: (path: string, portrait: bool) -> string {
+    text, found := ReadEntireFile(path)
+    if !found { return "unreadable" }
+    if (text.count != 1201 && text.count != 2401) || text[0] < 1 || text[0] > 12 { return "bad record size or apple count" }
+    columns: s32 = ifx portrait then 30 else 40
+    rows: s32 = ifx portrait then 40 else 30
+    floor: [1200]bool
+    floors: s32
+    for x: 1..columns - 2 {
+        for y: 1..rows - 2 {
+            if Floor(text[1 + x * rows + y]) { floor[y * columns + x] = true; floors += 1 }
+        }
+    }
+    start := (rows - 2) * columns + columns / 2
+    if !floor[start] || !floor[(rows - 3) * columns + columns / 2] { return "blocked approach" }
+    seen: [1200]bool
+    queue: [1200]s32
+    head: s32; tail: s32 = 1
+    queue[0] = start; seen[start] = true
+    reached: s32 = 1
+    while head < tail {
+        cell := queue[head]; head += 1
+        x := cell % columns; y := cell / columns
+        neighbours: [4]s32 = .[cell - 1, cell + 1, cell - columns, cell + columns]
+        for i: 0..3 {
+            next := neighbours[i]
+            if (i == 0 && x == 0) || (i == 1 && x == columns - 1) || next < 0 || next >= columns * rows { continue }
+            if floor[next] && !seen[next] { seen[next] = true; queue[tail] = next; tail += 1; reached += 1 }
+        }
+    }
+    if !seen[columns + columns / 2] { return "unreachable exit" }
+    if reached != floors { return "unreachable floor" }
+    return ""
+}
+
+#program_export
+main :: () -> s32 {
+    folder := "assets/authored-levels"
+    cursor := OpenDirectory(folder)
+    if !cursor.valid { print("FAIL: % is missing\n", folder); return 1 }
+    count: s32
+    failed: bool
+    while true {
+        entry := NextDirectoryEntry(*cursor)
+        if !entry.valid { break }
+        name := TextFromBytes(entry.name[0:entry.name_count])
+        if name == "." || name == ".." { continue }
+        ok, portrait := RecordName(name)
+        if !ok { print("FAIL: unexpected published record %\n", name); failed = true; continue }
+        path: Vec(u8)
+        BuilderPrint(*path, "%/%", folder, name)
+        problem := Check(BuilderFinish(path), portrait)
+        if problem.count > 0 { print("FAIL: %: %\n", name, problem); failed = true }
+        count += 1
+    }
+    walk_failed := cursor.failed
+    unused CloseDirectory(*cursor)
+    if walk_failed || failed || count == 0 { return 1 }
+    print("Published geometry local test: all floor cells and exits reachable in % editor layouts.\n", count)
+    return 0
+}

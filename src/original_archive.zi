@@ -1,0 +1,226 @@
+// Readers for the owner's Worm archive: ONLY.ONE entries, PIX v2 pictures,
+// MIDS music and the generated original level source. tools/extract_original.zi
+// writes the recovered files with them; tests/recovery_test.zi checks them.
+#import "std/format"
+#import "std/byte_text_linux"
+#import "std/image"
+
+ArchiveEntry :: struct {
+    name: string
+    data: string  // a view of the archive
+}
+
+U32 :: (bytes: string, at: s64) -> s64 {
+    if at < 0 || at + 4 > bytes.count { return -1 }
+    return cast(s64)bytes[at] | (cast(s64)bytes[at + 1] << 8) | (cast(s64)bytes[at + 2] << 16) | (cast(s64)bytes[at + 3] << 24)
+}
+
+U16 :: (bytes: string, at: s64) -> s64 {
+    if at < 0 || at + 2 > bytes.count { return -1 }
+    return cast(s64)bytes[at] | (cast(s64)bytes[at + 1] << 8)
+}
+
+// The archive's files in order, or the reason it is rejected.
+ArchiveEntries :: (blob: string, entries: *Vec(ArchiveEntry)) -> string {
+    if blob.count < 6 || blob[0:2] != "OO" { return "Not an ONLY.ONE archive" }
+    count := U32(blob, 2)
+    end := 6 + count * 1032
+    if end > blob.count { return "Truncated archive directory" }
+    next := end
+    for i: 0..count - 1 {
+        at := 6 + i * 1032
+        name: Vec(u8)
+        length: s64
+        while length < 1024 && blob[at + length] != 0 {
+            byte := blob[at + length] ^ 255
+            if byte >= #char "A" && byte <= #char "Z" { byte += 32 }
+            safe := (byte >= #char "a" && byte <= #char "z") || (byte >= #char "0" && byte <= #char "9") ||
+                byte == #char "_" || byte == #char "."
+            if !safe { return "Unsafe or duplicate archive filename" }
+            unused VecPush(name, byte)
+            length += 1
+        }
+        text := BuilderFinish(name)
+        if text.count == 0 { return "Unsafe or duplicate archive filename" }
+        for j: 0..entries.count - 1 { if entries.*[j].name == text { return "Unsafe or duplicate archive filename" } }
+        offset := U32(blob, at + 1024)
+        size := U32(blob, at + 1028)
+        if offset != next || offset + size > blob.count { return "Invalid archive range" }
+        unused VecPush(entries.*, ArchiveEntry.{text, blob[offset:offset + size]})
+        next += size
+    }
+    if next != blob.count { return "Unaccounted archive bytes" }
+    return ""
+}
+
+// A PIX v2 picture as palette indices and its 256 RGB colours, or the
+// reason it is rejected. WURM.EXE shifts the 6-bit channels left by 2.
+DecodePix :: (blob: string, picture: *IndexedImage) -> string {
+    if blob.count < 11 || blob[0:5] != "PIX\x02\x0b" { return "Unsupported PIX header" }
+    width := U16(blob, 5)
+    height := U16(blob, 7)
+    if U16(blob, 9) != 256 || width * height <= 0 || width * height > 640 * 480 { return "Unsupported PIX dimensions/palette" }
+    size_bytes: s64 = ifx width * height < 65536 then 2 else 4
+    packed := ifx size_bytes == 2 then U16(blob, 11) else U32(blob, 11)
+    start := 11 + size_bytes
+    if packed < 0 || start + packed + 768 != blob.count { return "Incorrect PIX stream size" }
+    VecClear(picture.indices)
+    VecClear(picture.palette)
+    at := start
+    stop := start + packed
+    while at < stop {
+        control := blob[at]
+        at += 1
+        count := cast(s64)(control & 127)
+        if count == 0 { return "Empty PIX packet" }
+        if (control & 128) != 0 {
+            if at >= stop { return "Truncated PIX run" }
+            for i: 0..count - 1 { unused VecPush(picture.indices, blob[at]) }
+            at += 1
+        } else {
+            if at + count > stop { return "Truncated PIX literals" }
+            for i: 0..count - 1 { unused VecPush(picture.indices, blob[at + i]) }
+            at += count
+        }
+        if picture.indices.count > width * height { return "PIX expansion exceeds image" }
+    }
+    if picture.indices.count != width * height { return "Incomplete PIX image" }
+    for i: blob.count - 768..blob.count - 1 {
+        if blob[i] > 63 { return "Invalid VGA palette" }
+        unused VecPush(picture.palette, blob[i] << 2)
+    }
+    picture.width = cast(s32)width
+    picture.height = cast(s32)height
+    return ""
+}
+
+// The picture as RGBA; with key_zero, colour index zero (the original
+// DirectDraw sprite key) is transparent.
+PixColors :: (picture: *IndexedImage, key_zero: bool) -> Image {
+    image := NewImage(picture.width, picture.height)
+    for i: 0..picture.indices.count - 1 {
+        index := cast(s64)picture.indices[i]
+        image.pixels[i * 4] = picture.palette[index * 3]
+        image.pixels[i * 4 + 1] = picture.palette[index * 3 + 1]
+        image.pixels[i * 4 + 2] = picture.palette[index * 3 + 2]
+        image.pixels[i * 4 + 3] = ifx key_zero && index == 0 then 0 else 255
+    }
+    return image
+}
+
+VariableLength :: (output: *Vec(u8), value: s64) {
+    digits: [10]u8
+    count: s64
+    digits[0] = cast(u8)(value & 127)
+    count = 1
+    rest := value >> 7
+    while rest != 0 {
+        digits[count] = cast(u8)((rest & 127) | 128)
+        count += 1
+        rest = rest >> 7
+    }
+    while count > 0 { count -= 1; unused VecPush(output.*, digits[count]) }
+}
+
+PutBig :: (output: *Vec(u8), value: s64, bytes: s64) {
+    shift := (bytes - 1) * 8
+    while shift >= 0 { unused VecPush(output.*, cast(u8)((value >> shift) & 255)); shift -= 8 }
+}
+
+// A Windows MIDS stream as a standard one-track MIDI file, or the reason it
+// is rejected.
+MidsToMidi :: (blob: string, output: *Vec(u8)) -> string {
+    if blob.count < 12 || blob[0:4] != "RIFF" || blob[8:12] != "MIDS" { return "Invalid MIDS stream" }
+    format_at: s64 = -1
+    data_at: s64 = -1
+    data_size: s64
+    at: s64 = 12
+    while at + 8 <= blob.count {
+        size := U32(blob, at + 4)
+        if blob[at:at + 4] == "fmt " { format_at = at + 8 }
+        if blob[at:at + 4] == "data" { data_at = at + 8; data_size = size }
+        at += 8 + size + (size & 1)
+    }
+    if format_at < 0 || data_at < 0 || data_at + data_size > blob.count { return "Invalid MIDS stream" }
+    division := U32(blob, format_at)
+    if U32(blob, format_at + 8) != 0 { return "Unsupported compact MIDS events" }
+    data := blob[data_at:data_at + data_size]
+    count := U32(data, 0)
+    at = 4
+    track: Vec(u8)
+    for block: 0..count - 1 {
+        size := U32(data, at + 4)
+        at += 8
+        if size < 0 || size % 12 != 0 || at + size > data.count { return "Invalid MIDS event block" }
+        offset := at
+        while offset < at + size {
+            VariableLength(*track, U32(data, offset))
+            event := U32(data, offset + 8)
+            kind := event >> 24
+            if kind == 1 {
+                unused VecPush(track, 255); unused VecPush(track, 81); unused VecPush(track, 3)
+                PutBig(*track, event & 0xffffff, 3)
+            } else if kind == 0 {
+                status := event & 255
+                length: s64 = ifx (status & 0xf0) == 0xc0 || (status & 0xf0) == 0xd0 then 2 else 3
+                for b: 0..length - 1 { unused VecPush(track, cast(u8)((event >> (b * 8)) & 255)) }
+            } else { return "Unsupported MIDS event" }
+            offset += 12
+        }
+        at += size
+    }
+    if at != data.count { return "Trailing MIDS data" }
+    unused VecPush(track, 0); unused VecPush(track, 255); unused VecPush(track, 47); unused VecPush(track, 0)
+    Append(output, "MThd")
+    PutBig(output, 6, 4); PutBig(output, 0, 2); PutBig(output, 1, 2); PutBig(output, division, 2)
+    Append(output, "MTrk")
+    PutBig(output, track.count, 4)
+    Append(output, BuilderFinish(track))
+    return ""
+}
+
+Find :: (entries: *Vec(ArchiveEntry), name: string) -> s64 {
+    for i: 0..entries.count - 1 { if entries.*[i].name == name { return i } }
+    return -1
+}
+
+// src/original_levels.zi: the 99 maps in a printable one-byte encoding.
+GenerateLevels :: (entries: *Vec(ArchiveEntry), output: *Vec(u8)) -> string {
+    levels: [99]string
+    used: [256]bool
+    for i: 0..98 {
+        name: Vec(u8)
+        BuilderPrint(*name, "level%.dat", i + 1)
+        at := Find(entries, BuilderFinish(name))
+        if at < 0 || entries.*[at].data.count != 1201 { return "Incorrect level size" }
+        levels[i] = entries.*[at].data
+        for b: 1..1200 { used[levels[i][b]] = true }
+    }
+    alphabet := "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!$%&()*+,-./:;<=>?@[]^_{|}~"
+    code: [256]u8
+    codes: Vec(u8)
+    for value: 0..255 {
+        if !used[value] { continue }
+        if codes.count >= alphabet.count { return "Too many tile codes" }
+        code[value] = alphabet[codes.count]
+        unused VecPush(codes, cast(u8)value)
+    }
+    Append(output, "// Generated by tools/extract_original.zi from ONLY.ONE. Do not hand-edit.\nORIGINAL_LEVEL_COUNT :: 99;\n")
+    BuilderPrint(output, "OriginalCodebook: [%]u8 = .[", codes.count)
+    for i: 0..codes.count - 1 { if i > 0 { Append(output, ", ") }; BuilderPrint(output, "%", codes[i]) }
+    Append(output, "];\nOriginalAlphabet :: \"")
+    Append(output, alphabet[0:codes.count])
+    Append(output, "\";\nOriginalApples: [99]s32 = .[")
+    for i: 0..98 { if i > 0 { Append(output, ", ") }; BuilderPrint(output, "%", levels[i][0]) }
+    Append(output, "];\n\nOriginalLevelText :: (level: s32) -> string {\n")
+    for i: 0..98 {
+        BuilderPrint(output, "    // Level %; original column-major tile order.\n    if level == % { return \"", i + 1, i)
+        for b: 1..1200 { unused VecPush(output.*, code[levels[i][b]]) }
+        Append(output, "\" }\n")
+    }
+    Append(output, "    return \"\"\n}\n\nOriginalTile :: (level: s32, x: s32, y: s32) -> u8 {\n    text := OriginalLevelText(level)\n")
+    Append(output, "    code := text[x * 30 + y]\n    for index: 0..OriginalAlphabet.count - 1 {\n")
+    Append(output, "        if OriginalAlphabet[index] == code { return OriginalCodebook[index] }\n    }\n    return 20\n}\n")
+    return ""
+}
+

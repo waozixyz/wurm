@@ -1,0 +1,811 @@
+// Adapts the recovered Worm designs into five distinct 40-level chapters.
+//
+// Every board cites two original design references. Their walls, chambers,
+// shorelines and patrol arenas are adapted to a two-tile-wide mobile grid;
+// minimal doors join enclosed floor and the four orientation-safe landings.
+// A floor-covering loop certifies the static geometry. The real engine replay
+// separately verifies winning with the original moving enemies still active.
+//
+// Writes src/designed_levels.zi, the campaign case fixture in
+// tests/campaign_replay.zi and build/designed. With --check the two source
+// files must already be current; build/designed is always written.
+//
+//     ziran run --target=c tools/design_levels.zi -- [--check]
+//
+// The random choices follow Python's random module exactly (MT19937 with
+// init_by_array seeding, choice and shuffle), so the campaign stays the one
+// the levels were designed and replayed with.
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/json_scan"
+#import "std/text_tools"
+#import "std/byte_text_linux"
+
+MW :: 19
+MH :: 14
+BLOCKS :: 1024   // block keys mx * 32 + my
+CELLS :: 4096    // cell keys x * 64 + y
+
+// ---- Python's Mersenne Twister ----
+
+Twister :: struct { state: [624]u64; index: s64 }
+
+Seed :: (rng: *Twister, seed: u64) {
+    rng.state[0] = 19650218
+    for i: 1..623 { rng.state[i] = (1812433253 * (rng.state[i - 1] ^ (rng.state[i - 1] >> 30)) + cast(u64)i) & 0xffffffff }
+    // init_by_array with the seed's single 32-bit word.
+    key := seed & 0xffffffff
+    i: s64 = 1
+    for k: 0..623 {
+        rng.state[i] = ((rng.state[i] ^ (((rng.state[i - 1] ^ (rng.state[i - 1] >> 30)) * 1664525) & 0xffffffff)) + key) & 0xffffffff
+        i += 1
+        if i >= 624 { rng.state[0] = rng.state[623]; i = 1 }
+    }
+    for k: 0..622 {
+        rng.state[i] = ((rng.state[i] ^ (((rng.state[i - 1] ^ (rng.state[i - 1] >> 30)) * 1566083941) & 0xffffffff)) - cast(u64)i) & 0xffffffff
+        i += 1
+        if i >= 624 { rng.state[0] = rng.state[623]; i = 1 }
+    }
+    rng.state[0] = 0x80000000
+    rng.index = 624
+}
+
+Next32 :: (rng: *Twister) -> u64 {
+    if rng.index >= 624 {
+        for k: 0..623 {
+            y := (rng.state[k] & 0x80000000) | (rng.state[(k + 1) % 624] & 0x7fffffff)
+            rng.state[k] = rng.state[(k + 397) % 624] ^ (y >> 1) ^ (ifx (y & 1) != 0 then cast(u64)0x9908b0df else cast(u64)0)
+        }
+        rng.index = 0
+    }
+    y := rng.state[rng.index]
+    rng.index += 1
+    y ^= y >> 11
+    y ^= (y << 7) & 0x9d2c5680
+    y ^= (y << 15) & 0xefc60000
+    y ^= y >> 18
+    return y & 0xffffffff
+}
+
+// random._randbelow(n): rejection sampling on n's bit length.
+Below :: (rng: *Twister, n: s64) -> s64 {
+    bits: s64
+    while (cast(s64)1 << bits) <= n { bits += 1 }
+    while true {
+        r := cast(s64)(Next32(rng) >> cast(u64)(32 - bits))
+        if r < n { return r }
+    }
+    return 0
+}
+
+Shuffle :: (rng: *Twister, values: []s64) {
+    i := cast(s64)values.count - 1
+    while i >= 1 {
+        j := Below(rng, i + 1)
+        swap := values[i]; values[i] = values[j]; values[j] = swap
+        i -= 1
+    }
+}
+
+// ---- Walls: blocks in insertion order, as a Python dict keeps them ----
+
+Walls :: struct {
+    tile: [BLOCKS]u8      // 0 when absent
+    order: [BLOCKS]s64
+    next: s64
+}
+
+Set :: (walls: *Walls, block: s64, tile: u8) {
+    if walls.tile[block] == 0 { walls.order[block] = walls.next; walls.next += 1 }
+    walls.tile[block] = tile
+}
+
+Pop :: (walls: *Walls, block: s64) { walls.tile[block] = 0 }
+
+Key :: (x: s64, y: s64) -> s64 { return x * 32 + y }
+
+WallCount :: (walls: *Walls) -> s64 {
+    count: s64
+    for b: 0..BLOCKS - 1 { if walls.tile[b] != 0 { count += 1 } }
+    return count
+}
+
+// The blocks with walls, in insertion order.
+Ordered :: (walls: *Walls, output: []s64) -> s64 {
+    count: s64
+    for b: 0..BLOCKS - 1 { if walls.tile[b] != 0 { output[count] = b; count += 1 } }
+    for i: 1..count - 1 {
+        j := i
+        while j > 0 && walls.order[output[j - 1]] > walls.order[output[j]] {
+            swap := output[j]; output[j] = output[j - 1]; output[j - 1] = swap
+            j -= 1
+        }
+    }
+    return count
+}
+
+// Counter(values).most_common(1): the most frequent, earliest first seen.
+MostCommon :: (values: []u8, fallback: u8) -> u8 {
+    counts: [256]s64
+    best: u8 = fallback
+    best_count: s64
+    first_seen: [256]s64
+    for v: 0..255 { first_seen[v] = -1 }
+    for i: 0..values.count - 1 {
+        counts[values[i]] += 1
+        if first_seen[values[i]] < 0 { first_seen[values[i]] = i }
+    }
+    for i: 0..values.count - 1 {
+        v := values[i]
+        if counts[v] > best_count || (counts[v] == best_count && first_seen[v] < first_seen[best]) { best = v; best_count = counts[v] }
+    }
+    return best
+}
+
+ALL :: (block: s64) -> bool { return block / 32 < MW && block % 32 < MH }
+
+Gate :: (block: s64) -> bool {
+    x := block / 32; y := block % 32
+    return (x == 9 && (y == 0 || y == 1 || y == 12 || y == 13)) || ((x == 0 || x == 1 || x == 17 || x == 18) && (y == 6 || y == 7))
+}
+
+// The floor blocks reachable from START over ALLOWED.
+Reachable :: (allowed: []bool, start: s64, seen: []bool, width: s64, height: s64) {
+    for b: 0..BLOCKS - 1 { seen[b] = false }
+    todo: [BLOCKS]s64
+    count: s64 = 1
+    todo[0] = start
+    seen[start] = true
+    while count > 0 {
+        count -= 1
+        p := todo[count]
+        x := p / 32; y := p % 32
+        steps: [4]s64 = .[-32, 32, -1, 1]
+        for s: 0..3 {
+            nx := x + ifx s == 0 then -1 else ifx s == 1 then 1 else 0
+            ny := y + ifx s == 2 then -1 else ifx s == 3 then 1 else 0
+            if nx < 0 || ny < 0 || nx >= width || ny >= height { continue }
+            q := Key(nx, ny)
+            if allowed[q] && !seen[q] { seen[q] = true; todo[count] = q; count += 1 }
+        }
+    }
+}
+
+// ---- The safe loop certificate ----
+
+Graph :: struct { links: [CELLS][4]s64; degree: [CELLS]s64; present: [CELLS]bool }
+
+Link :: (graph: *Graph, a: s64, b: s64) {
+    graph.links[a][graph.degree[a]] = b; graph.degree[a] += 1; graph.present[a] = true
+    graph.links[b][graph.degree[b]] = a; graph.degree[b] += 1; graph.present[b] = true
+}
+
+Unlink :: (graph: *Graph, a: s64, b: s64) {
+    for side: 0..1 {
+        from := ifx side == 0 then a else b
+        to := ifx side == 0 then b else a
+        for i: 0..graph.degree[from] - 1 {
+            if graph.links[from][i] == to {
+                graph.links[from][i] = graph.links[from][graph.degree[from] - 1]
+                graph.degree[from] -= 1
+                break
+            }
+        }
+    }
+}
+
+Cell :: (x: s64, y: s64) -> s64 { return x * 64 + y }
+
+graph: Graph;
+
+// A loop over every cell of the ALLOWED 2x2 blocks; cells as x * 64 + y.
+SafeCycle :: (allowed: []bool, width: s64, height: s64, seed: u64, cycle: *Vec(s64)) -> bool {
+    for c: 0..CELLS - 1 { graph.degree[c] = 0; graph.present[c] = false }
+    start: s64 = -1
+    blocks: s64
+    for b: 0..BLOCKS - 1 {
+        if !allowed[b] { continue }
+        if start < 0 { start = b }
+        blocks += 1
+        x := 1 + (b / 32) * 2; y := 1 + (b % 32) * 2
+        cells: [4]s64 = .[Cell(x, y), Cell(x + 1, y), Cell(x + 1, y + 1), Cell(x, y + 1)]
+        for i: 0..3 { Link(*graph, cells[i], cells[(i + 1) % 4]) }
+    }
+    rng: Twister
+    Seed(*rng, seed)
+    seen: [BLOCKS]bool
+    seen[start] = true
+    stack: [BLOCKS]s64
+    depth: s64 = 1
+    stack[0] = start
+    tree_a: Vec(s64)
+    tree_b: Vec(s64)
+    found: s64 = 1
+    while depth > 0 {
+        a := stack[depth - 1]
+        x := a / 32; y := a % 32
+        // Neighbours in tuple order: (x-1,y) < (x,y-1) < (x,y+1) < (x+1,y).
+        choices: [4]s64
+        count: s64
+        candidates: [4]s64 = .[Key(x - 1, y), Key(x, y - 1), Key(x, y + 1), Key(x + 1, y)]
+        valid: [4]bool = .[x > 0, y > 0, y + 1 < height, x + 1 < width]
+        for c: 0..3 { if valid[c] && allowed[candidates[c]] && !seen[candidates[c]] { choices[count] = candidates[c]; count += 1 } }
+        if count == 0 { depth -= 1; continue }
+        b := choices[Below(*rng, count)]
+        seen[b] = true; stack[depth] = b; depth += 1; found += 1
+        unused VecPush(tree_a, a); unused VecPush(tree_b, b)
+    }
+    if found != blocks { return false }
+    for t: 0..tree_a.count - 1 {
+        a := tree_a[t]; b := tree_b[t]
+        p: s64; q: s64; r: s64; s: s64
+        if a / 32 != b / 32 {
+            if a > b { swap := a; a = b; b = swap }
+            x := 1 + (a / 32) * 2; y := 1 + (a % 32) * 2
+            p = Cell(x + 1, y); q = Cell(x + 1, y + 1); r = Cell(x + 2, y); s = Cell(x + 2, y + 1)
+        } else {
+            if a > b { swap := a; a = b; b = swap }
+            x := 1 + (a / 32) * 2; y := 1 + (a % 32) * 2
+            p = Cell(x, y + 1); q = Cell(x + 1, y + 1); r = Cell(x, y + 2); s = Cell(x + 1, y + 2)
+        }
+        Unlink(*graph, p, q); Unlink(*graph, r, s); Link(*graph, p, r); Link(*graph, q, s)
+    }
+    first: s64 = -1
+    nodes: s64
+    for c: 0..CELLS - 1 {
+        if !graph.present[c] { continue }
+        if graph.degree[c] != 2 { return false }
+        if first < 0 { first = c }
+        nodes += 1
+    }
+    VecClear(cycle.*)
+    unused VecPush(cycle.*, first)
+    previous: s64 = -1
+    current := first
+    while true {
+        following: s64 = -1
+        for i: 0..1 {
+            option := graph.links[current][i]
+            if option == previous { continue }
+            if following < 0 || option < following { following = option }
+        }
+        if following == first { break }
+        unused VecPush(cycle.*, following)
+        previous = current; current = following
+        if cycle.count > nodes { return false }
+    }
+    return cycle.count == nodes
+}
+
+// ---- The original boards ----
+
+originals: [100]string;
+
+OriginalWalls :: (number: s64, walls: *Walls) {
+    walls.* = .{}
+    raw := originals[number]
+    for b: 0..BLOCKS - 1 {
+        if !ALL(b) { continue }
+        mx := b / 32; my := b % 32
+        solid: [4]u8
+        count: s64
+        for dx: 0..1 {
+            for dy: 0..1 {
+                tile := raw[1 + (1 + mx * 2 + dx) * 30 + 1 + my * 2 + dy]
+                if tile >= 20 && tile < 128 && !(tile >= 40 && tile <= 45) { solid[count] = tile; count += 1 }
+            }
+        }
+        if count == 0 { continue }
+        common := MostCommon(solid[0:count], 20)
+        tile: u8 = 20
+        if common == 22 || (common >= 53 && common <= 58) { tile = 22 }
+        else if common == 21 || common == 23 || common == 24 || common == 25 { tile = 21 }
+        Set(walls, b, tile)
+    }
+}
+
+// Carves the least costly doors until every floor block is reachable.
+JoinFloor :: (walls: *Walls) {
+    for b: 0..BLOCKS - 1 { if Gate(b) { Pop(walls, b) } }
+    allowed: [BLOCKS]bool
+    seen: [BLOCKS]bool
+    while true {
+        for b: 0..BLOCKS - 1 { allowed[b] = ALL(b) && walls.tile[b] == 0 }
+        Reachable(allowed[:], Key(9, 13), seen[:], MW, MH)
+        complete := true
+        for b: 0..BLOCKS - 1 { if allowed[b] != seen[b] { complete = false } }
+        if complete { return }
+        // Dijkstra from the reached floor; walls cost 4, floor 1. Ties pop
+        // in (cost, block) order, as Python's heapq does.
+        costs: [BLOCKS]s64
+        previous: [BLOCKS]s64
+        done: [BLOCKS]bool
+        for b: 0..BLOCKS - 1 { costs[b] = ifx seen[b] then 0 else 99999; previous[b] = -1 }
+        target: s64 = -1
+        while true {
+            best: s64 = -1
+            for b: 0..BLOCKS - 1 {
+                if !ALL(b) || done[b] || costs[b] >= 99999 { continue }
+                if best < 0 || costs[b] < costs[best] { best = b }
+            }
+            if best < 0 { break }
+            done[best] = true
+            if allowed[best] && !seen[best] { target = best; break }
+            x := best / 32; y := best % 32
+            for s: 0..3 {
+                nx := x + ifx s == 0 then -1 else ifx s == 1 then 1 else 0
+                ny := y + ifx s == 2 then -1 else ifx s == 3 then 1 else 0
+                if nx < 0 || ny < 0 || nx >= MW || ny >= MH { continue }
+                q := Key(nx, ny)
+                cost := costs[best] + ifx walls.tile[q] != 0 then 4 else 1
+                if cost < costs[q] { costs[q] = cost; previous[q] = best }
+            }
+        }
+        while target >= 0 && !seen[target] { Pop(walls, target); target = previous[target] }
+    }
+}
+
+// The smallest of a layout's eight turns and reflections, as a bitmap.
+Signature :: struct { width: s64; cells: [BLOCKS]bool }
+
+MakeSignature :: (walls: *Walls) -> Signature {
+    best: Signature
+    first := true
+    for rotation: 0..3 {
+        for flip: 0..1 {
+            variant: Signature
+            variant.width = ifx rotation % 2 == 0 then MW else MH
+            for b: 0..BLOCKS - 1 {
+                if walls.tile[b] == 0 { continue }
+                x := b / 32; y := b % 32; w: s64 = MW; h: s64 = MH
+                for turn: 0..rotation - 1 { nx := h - 1 - y; ny := x; x = nx; y = ny; swap := w; w = h; h = swap }
+                if flip == 1 { x = w - 1 - x }
+                variant.cells[Key(x, y)] = true
+            }
+            if first || Before(*variant, *best) { best = variant; first = false }
+        }
+    }
+    return best
+}
+
+Before :: (a: *Signature, b: *Signature) -> bool {
+    if a.width != b.width { return a.width < b.width }
+    for i: 0..BLOCKS - 1 { if a.cells[i] != b.cells[i] { return a.cells[i] } }
+    return false
+}
+
+SameSignature :: (a: *Signature, b: *Signature) -> bool {
+    if a.width != b.width { return false }
+    for i: 0..BLOCKS - 1 { if a.cells[i] != b.cells[i] { return false } }
+    return true
+}
+
+REFERENCE_COUNT :: 84
+references: [REFERENCE_COUNT]s64;
+
+Layout :: (stage: s64, within: s64, attempt: s64, walls: *Walls) -> (source: s64, accent: s64) {
+    source := references[(within + stage * 17 + attempt * 7) % REFERENCE_COUNT]
+    accent := references[(within * 11 + stage * 23 + attempt * 13 + 7) % REFERENCE_COUNT]
+    OriginalWalls(source, walls)
+    secondary: Walls
+    OriginalWalls(accent, *secondary)
+    if stage > 0 || within >= 6 || attempt != 0 {
+        variant := (within + stage + attempt) % 5
+        for b: 0..BLOCKS - 1 {
+            if !ALL(b) { continue }
+            x := b / 32; y := b % 32
+            use := x >= 5 && x <= 12 && y >= 3 && y <= 10
+            if variant == 0 { use = x >= 12 } else if variant == 1 { use = y >= 8 }
+            else if variant == 2 { use = x < 7 && y < 8 } else if variant == 3 { use = x + y >= 20 }
+            if use {
+                Pop(walls, b)
+                if secondary.tile[b] != 0 { Set(walls, b, secondary.tile[b]) }
+            }
+        }
+        // The later stage's terrain changes what its obstacles become.
+        for b: 0..BLOCKS - 1 {
+            v := walls.tile[b]
+            if v == 0 { continue }
+            if stage == 3 { walls.tile[b] = ifx v == 21 then cast(u8)21 else cast(u8)22 }
+            if stage == 4 { walls.tile[b] = ifx v == 22 && ((b / 32) + (b % 32)) % 3 == 0 then cast(u8)22 else ifx v == 21 then cast(u8)21 else cast(u8)20 }
+        }
+    }
+    if stage == 0 && within == 9 && attempt == 0 {
+        // Tall Aisles: four-cell lanes leave room for touch steering while
+        // retaining the two tall hedges and the lower courtyard.
+        walls.* = .{}
+        for y: 1..8 { Set(walls, Key(4, y), 20) }
+        for y: 0..8 { Set(walls, Key(14, y), 20) }
+        hedges: [2]s64 = .[7, 11]
+        for x: hedges { for y: 3..8 { Set(walls, Key(x, y), 20) } }
+        for x: 7..14 { Set(walls, Key(x, 8), 20) }
+        posts: [2]s64 = .[5, 13]
+        for x: posts { for y: 9..11 { Set(walls, Key(x, y), 20) } }
+        courtyard: [7]s64 = .[5, 6, 7, 8, 11, 12, 13]
+        for x: courtyard { Set(walls, Key(x, 10), 20) }
+    }
+    JoinFloor(walls)
+    return source, accent
+}
+
+// Mountain boards that close a corner room with a single doorway; a portal
+// is the only way in, and with the doorway open it is ordinary floor.
+PortalLevel :: (number: s64) -> bool { return number == 181 || number == 183 || number == 185 || number == 189 || number == 191 }
+
+PortalRoom :: (walls: *Walls, number: s64, room: []bool) -> bool {
+    blocks: [BLOCKS]s64
+    count := Ordered(walls, blocks[:])
+    values: [BLOCKS]u8
+    for i: 0..count - 1 { values[i] = walls.tile[blocks[i]] }
+    tile := ifx count > 0 then MostCommon(values[0:count], 20) else cast(u8)20
+    order: [8]s64 = .[0, 1, 2, 3, 4, 5, 6, 7]
+    rng: Twister
+    Seed(*rng, cast(u64)(number * 977))
+    Shuffle(*rng, order[:])
+    for o: 0..7 {
+        index := order[o]
+        corner := index / 2
+        right := corner >= 2
+        bottom := corner % 2 == 1
+        below_door := index % 2 == 1
+        shaped := walls.*
+        for b: 0..BLOCKS - 1 { room[b] = false }
+        x0: s64 = ifx right then 15 else 0
+        y0: s64 = ifx bottom then 11 else 0
+        for x: x0..x0 + 3 { for y: y0..y0 + 2 { room[Key(x, y)] = true; Pop(*shaped, Key(x, y)) } }
+        wall_x: s64 = ifx right then 14 else 4
+        wall_y: s64 = ifx bottom then 10 else 3
+        ring_y0: s64 = ifx bottom then 10 else 0
+        for y: ring_y0..ring_y0 + 3 { Set(*shaped, Key(wall_x, y), tile) }
+        ring_x0: s64 = ifx right then 14 else 0
+        for x: ring_x0..ring_x0 + 4 { Set(*shaped, Key(x, wall_y), tile) }
+        door: s64; outside: s64
+        if !below_door {
+            door = Key(wall_x, ifx bottom then 12 else 1)
+            outside = Key(wall_x + ifx right then -1 else 1, ifx bottom then 12 else 1)
+        } else {
+            door = Key(ifx right then 16 else 2, wall_y)
+            outside = Key(ifx right then 16 else 2, wall_y + ifx bottom then -1 else 1)
+        }
+        Pop(*shaped, door); Pop(*shaped, outside)
+        allowed: [BLOCKS]bool
+        seen: [BLOCKS]bool
+        for b: 0..BLOCKS - 1 { allowed[b] = ALL(b) && shaped.tile[b] == 0 }
+        Reachable(allowed[:], Key(9, 13), seen[:], MW, MH)
+        ok := true
+        for b: 0..BLOCKS - 1 {
+            if allowed[b] != seen[b] { ok = false }
+            if Gate(b) && shaped.tile[b] != 0 { ok = false }
+        }
+        if ok { walls.* = shaped; return true }
+    }
+    return false
+}
+
+// ---- The campaign ----
+
+Level :: struct {
+    number: s64
+    stage: s64
+    within: s64
+    source: s64
+    accent: s64
+    apples: s64
+    enemies: s64
+    kinds: [8]s64
+    floors: s64
+    walls: s64
+    grid: [1200]u8     // x * 30 + y
+}
+
+levels: [200]Level;
+cycles: [200]Vec(s64);
+signatures: [200]Signature;
+portrait_grid: [1200]u8;  // level 2's portrait board, x * 40 + y
+portrait_cycle: Vec(s64);
+
+StageName :: (stage: s64) -> string {
+    names: [5]string = .["meadow", "leafwood", "pinewood", "lake", "mountains"]
+    return names[stage]
+}
+
+StageTitle :: (stage: s64) -> string {
+    titles: [5]string = .["Meadow", "Leafwood", "Pinewood", "Lake", "Mountains"]
+    return titles[stage]
+}
+
+LevelName :: (within: s64) -> string {
+    names: [40]string = .["First Bite","Hedge Line","Crossing Paths","Four Gateways","Orchard Stones","Corner Gardens","Ember Hollow","Long Walk","Firefly Clearing","Tall Aisles",
+    "Broad Canopy","Sheltered Corners","Stone Crosses","Open Windows","Walled Garden","Narrow Escape","Moss Courtyard","Forest Rooms","Winding Passage","Forked Trail",
+    "Hidden Doorways","Linked Courts","Roundabout","Old Walls","Broken Ridge","Twin Paths","Branching Rooms","Quiet Clearing","Needle Crossing","Reed Channels",
+    "Pebble Islands","Winding Shore","Double Crossing","High Terraces","Cliff Galleries","Rock Corridors","Alpine Refuge","Summit Spiral","Last Ascent","Beyond the Gate"]
+    return names[within]
+}
+
+Campaign :: () -> string {
+    known: s64
+    for stage: 0..4 {
+        for within: 0..39 {
+            number := stage * 40 + within + 1
+            walls: Walls
+            room: [BLOCKS]bool
+            source: s64; accent: s64
+            chosen := false
+            for attempt: 0..511 {
+                source, accent = Layout(stage, within, attempt, *walls)
+                for b: 0..BLOCKS - 1 { room[b] = false }
+                if PortalLevel(number) && !PortalRoom(*walls, number, room[:]) { continue }
+                floors := MW * MH - WallCount(*walls)
+                signature := MakeSignature(*walls)
+                duplicate := false
+                for k: 0..known - 1 { if SameSignature(*signatures[k], *signature) { duplicate = true; break } }
+                if duplicate || floors < 88 || (within >= 6 && WallCount(*walls) < 8) { continue }
+                signatures[known] = signature
+                known += 1
+                chosen = true
+                break
+            }
+            if !chosen { return "could not adapt a unique level" }
+            level := *levels[number - 1]
+            level.number = number; level.stage = stage; level.within = within
+            level.source = source; level.accent = accent
+            for x: 0..39 { for y: 0..29 { level.grid[x * 30 + y] = ifx x == 0 || x == 39 || y == 0 || y == 29 then cast(u8)20 else cast(u8)0 } }
+            for b: 0..BLOCKS - 1 {
+                if walls.tile[b] == 0 { continue }
+                for dx: 0..1 { for dy: 0..1 { level.grid[(1 + (b / 32) * 2 + dx) * 30 + 1 + (b % 32) * 2 + dy] = walls.tile[b] } }
+            }
+            allowed: [BLOCKS]bool
+            for b: 0..BLOCKS - 1 { allowed[b] = ALL(b) && walls.tile[b] == 0 }
+            if !SafeCycle(allowed[:], MW, MH, cast(u64)(number * 4099), *cycles[number - 1]) { return "no safe loop" }
+            count: s64 = ifx stage == 0 && within < 6 then 0 else 1 + stage + within / 16
+            if count > 8 { count = 8 }
+            // Creatures stay out of a portal room, leaving room for the ring.
+            candidates: Vec(s64)
+            for i: 0..cycles[number - 1].count - 1 {
+                p := cycles[number - 1][i]
+                x := p / 64; y := p % 64
+                dx1 := x - 20; dy1 := y - 27; dx2 := x - 37; dy2 := y - 14
+                far1 := (ifx dx1 < 0 then -dx1 else dx1) + (ifx dy1 < 0 then -dy1 else dy1) >= 14
+                far2 := (ifx dx2 < 0 then -dx2 else dx2) + (ifx dy2 < 0 then -dy2 else dy2) >= 10
+                if x >= 3 && x <= 36 && y >= 3 && y <= 23 && far1 && far2 && !room[Key((x - 1) / 2, (y - 1) / 2)] { unused VecPush(candidates, p) }
+            }
+            rng: Twister
+            Seed(*rng, cast(u64)(number * 65537))
+            view: []s64 = VecSlice(candidates, 0, candidates.count)
+            Shuffle(*rng, view)
+            placed: [8]s64
+            placed_count: s64
+            for i: 0..candidates.count - 1 {
+                if placed_count >= count { break }
+                x := candidates[i] / 64; y := candidates[i] % 64
+                near := false
+                for j: 0..placed_count - 1 {
+                    ax := placed[j] / 64; ay := placed[j] % 64
+                    if (ifx x > ax then x - ax else ax - x) + (ifx y > ay then y - ay else ay - y) < 5 { near = true }
+                }
+                if near { continue }
+                index := placed_count
+                kind: s64 = 41 + (within + index) % 4
+                if (within + index) % 3 == 0 && (stage > 0 || within >= 8) { kind = 40 }
+                else if stage >= 1 && (within + index) % 5 == 0 { kind = 45 }
+                level.grid[x * 30 + y] = cast(u8)kind
+                placed[placed_count] = candidates[i]
+                level.kinds[placed_count] = kind - 39
+                placed_count += 1
+            }
+            if placed_count != count { return "could not place every creature" }
+            level.enemies = count
+            level.apples = 5 + stage + ifx within % 10 >= 7 then 1 else 0
+            level.floors = cycles[number - 1].count
+            level.walls = WallCount(*walls) * 4
+            if number == 2 {
+                // Keep this introductory divider across the narrow display;
+                // a quarter-turn would put it along the worm's approach.
+                portrait: [BLOCKS]bool
+                for x: 0..13 { for y: 0..18 { portrait[Key(x, y)] = !(y == 9 && x < 10) } }
+                for x: 0..29 { for y: 0..39 { portrait_grid[x * 40 + y] = ifx x == 0 || x == 29 || y == 0 || y == 39 then cast(u8)20 else cast(u8)0 } }
+                for mx: 0..9 { for dx: 0..1 { for dy: 0..1 { portrait_grid[(1 + mx * 2 + dx) * 40 + 19 + dy] = 20 } } }
+                if !SafeCycle(portrait[:], 14, 19, cast(u64)(number * 4099), *portrait_cycle) { return "no portrait loop" }
+            }
+        }
+    }
+    return ""
+}
+
+// ---- Output ----
+
+ALPHABET :: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+Encode :: () -> string {
+    used: [256]bool
+    for l: 0..199 { for i: 0..1199 { used[levels[l].grid[i]] = true } }
+    code: [256]u8
+    values: Vec(u8)
+    for v: 0..255 { if used[v] { code[v] = ALPHABET[values.count]; unused VecPush(values, cast(u8)v) } }
+    out: Vec(u8)
+    Append(*out, "// Generated by tools/design_levels.zi. 200 original-inspired challenges with active enemies.\n")
+    Append(*out, "DESIGNED_LEVEL_COUNT :: 200;\nDesignedStageStarts: [6]s32 = .[0, 40, 80, 120, 160, 200];\n")
+    Append(*out, "DesignedMeadowPortals: [6]s32 = .[9, 11, 15, 22, 30, 37];\n")
+    BuilderPrint(*out, "DesignedCodebook: [%]u8 = .[", values.count)
+    for i: 0..values.count - 1 { if i > 0 { Append(*out, ", ") }; BuilderPrint(*out, "%", values[i]) }
+    Append(*out, "];\nDesignedAlphabet :: \"")
+    Append(*out, ALPHABET[0:values.count])
+    Append(*out, "\";\nDesignedApples: [200]s32 = .[")
+    for l: 0..199 { if l > 0 { Append(*out, ", ") }; BuilderPrint(*out, "%", levels[l].apples) }
+    Append(*out, "];\n\nDesignedLevelText :: (level: s32) -> string {\n")
+    for l: 0..199 {
+        BuilderPrint(*out, "    if level == % { return \"", l)
+        for i: 0..1199 { unused VecPush(out, code[levels[l].grid[i]]) }
+        Append(*out, "\" }\n")
+    }
+    Append(*out, "    return \"\"\n}\n\nDesignedPortraitText :: (level: s32) -> string {\n    if level == 1 { return \"")
+    for i: 0..1199 { unused VecPush(out, code[portrait_grid[i]]) }
+    Append(*out, "\" }\n    return \"\"\n}\n\nDesignedTile :: (level: s32, x: s32, y: s32) -> u8 {\n    text := DesignedLevelText(level)\n")
+    Append(*out, "    code := text[x * 30 + y]\n    for index: 0..DesignedAlphabet.count - 1 {\n")
+    Append(*out, "        if DesignedAlphabet[index] == code { return DesignedCodebook[index] }\n    }\n    return 20\n}\n")
+    return BuilderFinish(out)
+}
+
+// A route certificate: the count, then each cell as y * WIDTH + x, 16-bit LE.
+WriteCycle :: (path: string, cycle: *Vec(s64), width: s64) -> bool {
+    bytes: Vec(u8)
+    unused VecPush(bytes, cast(u8)(cycle.count & 255)); unused VecPush(bytes, cast(u8)(cycle.count >> 8))
+    for i: 0..cycle.count - 1 {
+        index := (cycle.*[i] % 64) * width + cycle.*[i] / 64
+        unused VecPush(bytes, cast(u8)(index & 255)); unused VecPush(bytes, cast(u8)(index >> 8))
+    }
+    return WriteEntireFile(path, BuilderFinish(bytes))
+}
+
+WriteBoard :: (path: string, apples: s64, grid: []u8) -> bool {
+    bytes: Vec(u8)
+    unused VecPush(bytes, cast(u8)apples)
+    for i: 0..1199 { unused VecPush(bytes, grid[i]) }
+    for i: 0..1199 { unused VecPush(bytes, 0) }
+    return WriteEntireFile(path, BuilderFinish(bytes))
+}
+
+// A JSON string as Python's json.dumps writes it, with non-ASCII escaped.
+Quote :: (out: *Vec(u8), text: string) {
+    Append(out, "\"")
+    i: s64
+    while i < text.count {
+        byte := text[i]
+        if byte == #char "\"" || byte == #char "\\" { unused VecPush(out.*, #char "\\"); unused VecPush(out.*, byte); i += 1; continue }
+        if byte < 128 { unused VecPush(out.*, byte); i += 1; continue }
+        // Three-byte UTF-8, as the level names' em dash.
+        point := ((cast(s64)byte & 15) << 12) | ((cast(s64)text[i + 1] & 63) << 6) | (cast(s64)text[i + 2] & 63)
+        hex := "0123456789abcdef"
+        Append(out, "\\u")
+        shifts: [4]s64 = .[12, 8, 4, 0]
+        for shift: shifts { unused VecPush(out.*, hex[(point >> shift) & 15]) }
+        i += 3
+    }
+    Append(out, "\"")
+}
+
+Path :: (prefix: string, number: s64, suffix: string) -> string {
+    path: Vec(u8)
+    BuilderPrint(*path, "build/designed/%", prefix)
+    BuilderPrint(*path, "%", number)
+    Append(*path, suffix)
+    return BuilderFinish(path)
+}
+
+Fail :: (message: string) -> s32 {
+    print("tools/design_levels: %\n", message)
+    return 1
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    check := argc > 1 && TextFromCString(argv[1]) == "--check"
+    values: [REFERENCE_COUNT]s64 = .[1,2,3,4,5,6,8,9,12,13,15,19,25,26,7,10,14,21,22,23,27,28,30,32,35,37,41,39,43,44,45,46,48,49,51,52,53,54,55,56,
+        16,20,24,31,33,36,40,42,47,50,58,60,62,63,64,65,66,68,71,72,73,74,76,77,78,79,80,81,82,83,84,85,87,88,89,90,91,92,94,95,96,97,98,99]
+    for i: 0..REFERENCE_COUNT - 1 { references[i] = values[i] }
+    for n: 1..99 {
+        name: Vec(u8)
+        BuilderPrint(*name, "assets/original/level%.dat", n)
+        raw, found := ReadEntireFile(BuilderFinish(name))
+        if !found || raw.count != 1201 { return Fail("an original level is missing") }
+        originals[n] = raw
+    }
+    problem := Campaign()
+    if problem.count > 0 { return Fail(problem) }
+    source := Encode()
+    cases_text, has_cases := ReadEntireFile("tests/campaign_cases.json")
+    pairs: [200]s32
+    if !has_cases || ArrayPositions(cases_text, 0, pairs[:]) != 200 { return Fail("tests/campaign_cases.json needs 200 pairs") }
+    seeds: [400]s64; routes: [400]s64; reverses: [400]s64
+    for l: 0..199 {
+        both: [2]s32
+        if ArrayPositions(cases_text, pairs[l], both[:]) != 2 { return Fail("each campaign case is a pair") }
+        for c: 0..1 {
+            seeds[l * 2 + c] = cast(s64)ReadNumber(cases_text, FieldAt(cases_text, both[c], "seed")).value
+            routes[l * 2 + c] = cast(s64)ReadNumber(cases_text, FieldAt(cases_text, both[c], "route")).value
+            reverses[l * 2 + c] = cast(s64)ReadNumber(cases_text, FieldAt(cases_text, both[c], "reverse")).value
+        }
+    }
+    fixture: Vec(u8)
+    Append(*fixture, "// Generated from campaign_cases.json by tools/design_levels.zi.\n")
+    names: [3]string = .["CampaignSeeds", "CampaignRoutes", "CampaignReverse"]
+    kinds: [3]string = .["u32", "s32", "s32"]
+    for f: 0..2 {
+        BuilderPrint(*fixture, "%: [400]% = .[", names[f], kinds[f])
+        for i: 0..399 {
+            if i > 0 { Append(*fixture, ", ") }
+            BuilderPrint(*fixture, "%", ifx f == 0 then seeds[i] else ifx f == 1 then routes[i] else reverses[i])
+        }
+        Append(*fixture, "];\n")
+    }
+    fixture_text := BuilderFinish(fixture)
+    replay_path := "tests/campaign_replay.zi"
+    replay, has_replay := ReadEntireFile(replay_path)
+    begin := TextFind(replay, "// campaign-cases:begin")
+    end := TextFind(replay, "// campaign-cases:end")
+    if !has_replay || begin < 0 || end < begin { return Fail("tests/campaign_replay.zi lost its case markers") }
+    first := begin + 24
+    designed_path := "src/designed_levels.zi"
+    if check {
+        if replay[first:end] != fixture_text { return Fail("the campaign case fixture is stale") }
+        current, found := ReadEntireFile(designed_path)
+        if !found || current != source { return Fail("src/designed_levels.zi differs from the authored campaign") }
+    } else {
+        updated: Vec(u8)
+        Append(*updated, replay[0:first]); Append(*updated, fixture_text); Append(*updated, replay[end:replay.count])
+        if !WriteEntireFile(replay_path, BuilderFinish(updated)) || !WriteEntireFile(designed_path, source) {
+            return Fail("cannot write the generated sources")
+        }
+    }
+    unused RemoveTree("build/designed")
+    if !CreateDirectories("build/designed") { return Fail("cannot create build/designed") }
+    manifest: Vec(u8)
+    Append(*manifest, "[")
+    for l: 0..199 {
+        level := *levels[l]
+        n := level.number
+        if !WriteBoard(Path("level", n, ".dat"), level.apples, level.grid[:]) ||
+           !WriteCycle(Path("cycle", n, ".dat"), *cycles[l], 40) { return Fail("cannot write build/designed") }
+        variants: [2]s64 = .[routes[l * 2], routes[l * 2 + 1]]
+        if variants[0] > variants[1] { swap := variants[0]; variants[0] = variants[1]; variants[1] = swap }
+        for v: 0..1 {
+            variant := variants[v]
+            if variant == 0 || (v == 1 && variant == variants[0]) { continue }
+            allowed: [BLOCKS]bool
+            for x: 0..39 {
+                for y: 0..29 {
+                    tile := level.grid[x * 30 + y]
+                    if tile < 20 || (tile >= 40 && tile <= 45) { allowed[Key((x - 1) / 2, (y - 1) / 2)] = true }
+                }
+            }
+            route: Vec(s64)
+            if !SafeCycle(allowed[:], MW, MH, cast(u64)(n * 4099 + variant * 65537), *route) { return Fail("no route variant loop") }
+            suffix: Vec(u8)
+            BuilderPrint(*suffix, "-%.dat", variant)
+            if !WriteCycle(Path("cycle", n, BuilderFinish(suffix)), *route, 40) { return Fail("cannot write a route") }
+        }
+        if n == 2 {
+            if !WriteCycle(Path("cycle", n, "-portrait.dat"), *portrait_cycle, 30) ||
+               !WriteBoard(Path("level", n, "-portrait.dat"), level.apples, portrait_grid[:]) { return Fail("cannot write the portrait board") }
+        }
+        Append(*manifest, ifx l == 0 then "\n  {\n" else ",\n  {\n")
+        BuilderPrint(*manifest, "    \"number\": %,\n    \"name\": ", n)
+        title: Vec(u8)
+        BuilderPrint(*title, "% — %", StageTitle(level.stage), LevelName(level.within))
+        Quote(*manifest, BuilderFinish(title))
+        BuilderPrint(*manifest, ",\n    \"family\": \"original-%\",\n    \"tier\": %,\n    \"apples\": %,\n", level.source, level.stage + 1, level.apples)
+        BuilderPrint(*manifest, "    \"floors\": %,\n    \"walls\": %,\n    \"original\": %,\n", level.floors, level.walls, level.source)
+        BuilderPrint(*manifest, "    \"accent\": %,\n    \"enemies\": %,\n    \"enemy_kinds\": ", level.accent, level.enemies)
+        if level.enemies == 0 { Append(*manifest, "[]") } else {
+            Append(*manifest, "[")
+            for k: 0..level.enemies - 1 { Append(*manifest, ifx k == 0 then "\n      " else ",\n      "); BuilderPrint(*manifest, "%", level.kinds[k]) }
+            Append(*manifest, "\n    ]")
+        }
+        BuilderPrint(*manifest, ",\n    \"stage\": \"%\"\n  }", StageName(level.stage))
+    }
+    Append(*manifest, "\n]\n")
+    if !WriteEntireFile("build/designed/manifest.json", BuilderFinish(manifest)) { return Fail("cannot write the manifest") }
+    print("200 distinct original-inspired challenges %; every floor has a complete safe-loop certificate.\n", ifx check then "verified" else "written")
+    return 0
+}

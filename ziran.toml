@@ -69,3 +69,7 @@ ref = "master"
 [dependencies.entity]
 git = "https://github.com/waozixyz/entity.git"
 ref = "master"
+
+[dependencies.crypto]
+git = "https://github.com/ziranlang/crypto.git"
+ref = "master"

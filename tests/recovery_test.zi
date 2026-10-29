@@ -1,0 +1,193 @@
+// Compares every recovered byte and generated map with the owner's archive
+// and its committed record: every archive byte when the archive is present
+// (pass its folder; default /mnt/storage/Games/The-Worm_Win_EN), file sizes
+// and SHA-256 hashes, all 118,800 original level coordinates as the game
+// decodes them, exact picture decoding, rejected damaged input and the
+// recovered music.
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/json_scan"
+#import "std/image"
+#import "std/png_linux"
+#import "crypto/sha256"
+#import "std/byte_text_linux"
+Original :: #import, file "../src/original_levels.zi";
+#import, file "../src/original_archive.zi";
+
+failures: s32;
+Expect :: (value: bool, message: string, detail: string = "") {
+    if value { return }
+    print("FAIL: % %\n", message, detail)
+    failures += 1
+}
+
+Path :: (name: string) -> string {
+    path: Vec(u8)
+    BuilderPrint(*path, "assets/original/%", name)
+    return BuilderFinish(path)
+}
+
+// Every file the manifest lists has its recorded size and SHA-256.
+CheckManifest :: () -> s32 {
+    manifest, found := ReadEntireFile("assets/original/manifest.json")
+    if !found { Expect(false, "assets/original/manifest.json is missing"); return 0 }
+    cursor := Space(manifest, FieldAt(manifest, 0, "files"))
+    if cursor < 0 || manifest[cursor] != #char "{" { Expect(false, "manifest has no files"); return 0 }
+    cursor = Space(manifest, cursor + 1)
+    count: s32
+    while cursor < cast(s32)manifest.count && manifest[cursor] != #char "}" {
+        key := ReadString(manifest, cursor)
+        if !key.valid { Expect(false, "malformed manifest"); return count }
+        value := Space(manifest, Space(manifest, key.after) + 1)
+        name := manifest[key.start:key.end]
+        expected_bytes := ReadNumber(manifest, FieldAt(manifest, value, "bytes"))
+        expected_hash := ReadString(manifest, FieldAt(manifest, value, "sha256"))
+        raw, readable := ReadEntireFile(Path(name))
+        Expect(readable && expected_bytes.valid && cast(s64)expected_bytes.value == cast(s64)raw.count, "size of", name)
+        context: Sha256Context
+        Sha256Initialize(*context)
+        Sha256UpdateText(*context, raw)
+        hash: [32]u8
+        Sha256FinishBytes(*context, hash[:])
+        digest: [65]u8
+        unused BytesToHex(*hash[0], 32, *digest[0], 65)
+        Expect(expected_hash.valid && expected_hash.end - expected_hash.start == 64 &&
+            manifest[expected_hash.start:expected_hash.end] == TextFromBytes(digest[0:64]), "SHA-256 of", name)
+        count += 1
+        cursor = Space(manifest, ValueEnd(manifest, value, 0))
+        if cursor >= 0 && cursor < cast(s32)manifest.count && manifest[cursor] == #char "," { cursor = Space(manifest, cursor + 1) }
+    }
+    return count
+}
+
+// The compiled-in maps decode to exactly the original LEVELn.DAT tiles.
+CheckLevels :: () {
+    for level: 0..98 {
+        number: Vec(u8)
+        BuilderPrint(*number, "level%.dat", level + 1)
+        original, found := ReadEntireFile(Path(BuilderFinish(number)))
+        if !found || original.count != 1201 { Expect(false, "original level record", Path("")); continue }
+        text := Original.OriginalLevelText(cast(s32)level)
+        Expect(text.count == 1200, "encoded map length")
+        if text.count != 1200 { continue }
+        for x: 0..39 {
+            for y: 0..29 {
+                code := text[x * 30 + y]
+                known := false
+                for index: 0..Original.OriginalAlphabet.count - 1 { if Original.OriginalAlphabet[index] == code { known = true } }
+                tile := Original.OriginalTile(cast(s32)level, cast(s32)x, cast(s32)y)
+                if !known || tile != original[1 + x * 30 + y] {
+                    print("FAIL: level % tile %,% decodes to %, original %\n", level + 1, x, y, tile, original[1 + x * 30 + y])
+                    failures += 1
+                    return
+                }
+            }
+        }
+    }
+}
+
+// The three recovered songs are complete standard MIDI files with PCM beside them.
+CheckMusic :: () {
+    for number: 1..3 {
+        base: Vec(u8)
+        BuilderPrint(*base, "assets/original/wurm%", number)
+        stem := BuilderFinish(base)
+        midi_path: Vec(u8)
+        BuilderPrint(*midi_path, "%.mid", stem)
+        midi, has_midi := ReadEntireFile(BuilderFinish(midi_path))
+        Expect(has_midi && midi.count > 22 && midi[0:4] == "MThd", "MIDI header", stem)
+        if !has_midi || midi.count <= 22 { continue }
+        length := (cast(s64)midi[18] << 24) | (cast(s64)midi[19] << 16) | (cast(s64)midi[20] << 8) | cast(s64)midi[21]
+        Expect(length == cast(s64)midi.count - 22, "MIDI track length", stem)
+        end := midi.count - 4
+        Expect(midi[end] == 0 && midi[end + 1] == 255 && midi[end + 2] == 47 && midi[end + 3] == 0, "MIDI end of track", stem)
+        pcm_path: Vec(u8)
+        BuilderPrint(*pcm_path, "%.pcm", stem)
+        pcm, has_pcm := ReadEntireFile(BuilderFinish(pcm_path))
+        sound := false
+        for i: 0..pcm.count - 1 { if pcm[i] != 0 { sound = true; break } }
+        Expect(has_pcm && pcm.count > 44100 && pcm.count % 2 == 0 && sound, "PCM rendering", stem)
+        stream_path: Vec(u8)
+        BuilderPrint(*stream_path, "%.mds", stem)
+        stream, has_stream := ReadEntireFile(BuilderFinish(stream_path))
+        converted: Vec(u8)
+        Expect(has_stream && MidsToMidi(stream, *converted) == "" && BuilderFinish(converted) == midi, "MIDI events recovered from", stem)
+    }
+}
+
+// Every archive entry is the committed file, byte for byte.
+CheckArchive :: (source: string) -> bool {
+    blob, found := ReadEntireFile(JoinPath(source, "ONLY.ONE"))
+    if !found { return false }
+    entries: Vec(ArchiveEntry)
+    Expect(ArchiveEntries(blob, *entries) == "" && entries.count == 117, "117 archive entries")
+    for i: 0..entries.count - 1 {
+        committed, has := ReadEntireFile(Path(entries[i].name))
+        Expect(has && committed == entries[i].data, "archive bytes of", entries[i].name)
+    }
+    return true
+}
+
+// Each recovered picture decodes to exactly the committed PNG's pixels.
+CheckPictures :: () -> s32 {
+    names: Vec(string)
+    unused ListDirectory("assets/original", *names)
+    count: s32
+    for i: 0..names.count - 1 {
+        name := names[i]
+        if !TextHasSuffixAscii(name, ".pix") { continue }
+        raw, found := ReadEntireFile(Path(name))
+        picture: IndexedImage
+        Expect(found && DecodePix(raw, *picture) == "", "decode", name)
+        decoded := PixColors(*picture, false)
+        png_name: Vec(u8)
+        BuilderPrint(*png_name, "%.png", name[0:name.count - 4])
+        saved := ReadPNGFile(Path(BuilderFinish(png_name)))
+        same := ImageValid(*saved) && saved.width == decoded.width && saved.height == decoded.height
+        if same {
+            for p: 0..cast(s64)saved.width * cast(s64)saved.height - 1 {
+                for c: 0..2 { if saved.pixels[p * 4 + c] != decoded.pixels[p * 4 + c] { same = false } }
+            }
+        }
+        Expect(same, "picture pixels of", name)
+        count += 1
+    }
+    return count
+}
+
+TextHasSuffixAscii :: (text: string, suffix: string) -> bool {
+    return text.count >= suffix.count && text[text.count - suffix.count:text.count] == suffix
+}
+
+// Damaged archives and pictures are refused, never half read.
+CheckRejected :: () {
+    entries: Vec(ArchiveEntry)
+    Expect(ArchiveEntries("", *entries) != "", "an empty archive is refused")
+    truncated: Vec(u8)
+    Append(*truncated, "OO")
+    for i: 0..3 { unused VecPush(truncated, 255) }
+    Expect(ArchiveEntries(BuilderFinish(truncated), *entries) != "", "a truncated directory is refused")
+    pix, found := ReadEntireFile(Path("steine_1.pix"))
+    if !found { Expect(false, "steine_1.pix is missing"); return }
+    picture: IndexedImage
+    Expect(DecodePix("", *picture) != "", "an empty picture is refused")
+    Expect(DecodePix(pix[0:pix.count - 1], *picture) != "", "a truncated picture is refused")
+    broken: Vec(u8)
+    for i: 0..pix.count - 1 { unused VecPush(broken, ifx i == 13 then cast(u8)0 else pix[i]) }
+    Expect(DecodePix(BuilderFinish(broken), *picture) != "", "an empty run is refused")
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    source := ifx argc > 1 then TextFromCString(argv[1]) else "/mnt/storage/Games/The-Worm_Win_EN"
+    archive := CheckArchive(source)
+    files := CheckManifest()
+    CheckLevels()
+    pictures := CheckPictures()
+    CheckRejected()
+    CheckMusic()
+    if failures > 0 || files == 0 || pictures == 0 { return 1 }
+    if !archive { print("Owner archive absent; committed archive file hashes verified instead.\n") }
+    print("Recovery local test: % archive files match their sizes and SHA-256, % pictures decode exactly, damaged input is refused, all 118,800 original tile coordinates decode exactly, and the three songs are complete.\n", files, pictures)
+    return 0
+}

@@ -1,0 +1,879 @@
+// Exercises only this test's app windows on its own verified, private Xvfb
+// server. The game is driven through Kryon's test driver: pointer, wheel and
+// keys go through the app's own input path, and pixels are read back from
+// the owned window. Launch from the repository root after building the
+// desktop and modal-test profiles.
+#import "kryon/private_display"
+#import "kryon/test_driver_client"
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/timer_linux"
+#import "std/text_tools"
+#import "std/environment_linux"
+#import "std/byte_text_linux"
+
+OUT :: "build/research/ui"
+KEY_E :: 69
+KEY_L :: 76
+KEY_Q :: 81
+KEY_T :: 84
+
+// main owns the display and the driver; these point at them.
+display: *PrivateDisplay;
+driver: *TestDriverClient;
+app_pid: s32;
+window: u64;
+settings: Vec(string);
+levels: string;
+desktop: string;
+modal_test: string;
+
+Join :: (first: string, second: string) -> string {
+    path: Vec(u8)
+    BuilderPrint(*path, "%/%", first, second)
+    return BuilderFinish(path)
+}
+
+Out :: (name: string, suffix: string) -> string {
+    path: Vec(u8)
+    BuilderPrint(*path, "%/%", OUT, name)
+    Append(*path, suffix)
+    return BuilderFinish(path)
+}
+
+// "first-second", for picture and log names.
+Dash :: (first: string, second: string) -> string {
+    name: Vec(u8)
+    BuilderPrint(*name, "%-%", first, second)
+    return BuilderFinish(name)
+}
+
+// "first second", for messages.
+Words :: (first: string, second: string) -> string {
+    text: Vec(u8)
+    BuilderPrint(*text, "% %", first, second)
+    return BuilderFinish(text)
+}
+
+Fail :: (message: string) -> bool {
+    print("FAIL: private UI: %\n", message)
+    return false
+}
+
+// Sets NAME for the next app launch, as the Python harness's env dict did.
+SetEnv :: (name: string, value: string) {
+    entry: Vec(u8)
+    BuilderPrint(*entry, "%=%", name, value)
+    text := BuilderFinish(entry)
+    for i: 0..settings.count - 1 {
+        existing := settings[i]
+        if existing.count > name.count && existing[0:name.count] == name && existing[name.count] == #char "=" {
+            settings[i] = text
+            return
+        }
+    }
+    VecPush(settings, text)
+}
+
+SetNumber :: (name: string, value: s64) {
+    text: Vec(u8)
+    BuilderPrint(*text, "%", value)
+    SetEnv(name, BuilderFinish(text))
+}
+
+Unset :: (name: string) {
+    for i: 0..settings.count - 1 {
+        existing := settings[i]
+        if existing.count > name.count && existing[0:name.count] == name && existing[name.count] == #char "=" {
+            settings[i] = name
+        }
+    }
+}
+
+// The app this test started last, as a run record to stop or poll.
+App :: () -> ProcessRun {
+    run: ProcessRun
+    run.pid = app_pid
+    run.started = app_pid > 0
+    return run
+}
+
+Stop :: () {
+    run := App()
+    if run.started { unused StopOwnedProcess(*run, 5000) }
+    app_pid = 0
+    window = 0
+}
+
+AppRunning :: () -> bool {
+    run := App()
+    return run.started && !PollProcess(*run)
+}
+
+// Starts an owned app on the private display and waits for its window.
+Launch :: (binary: string, directory: string, log: string) -> bool {
+    Stop()
+    // A fresh app answers the next command; leave no earlier one behind.
+    stale: [4]string = .["command", "command.tmp", "reply", "reply.tmp"]
+    for name: stale { unused RemoveFile(Join(driver.directory, name)) }
+    extra: Vec(string)
+    for i: 0..settings.count - 1 { VecPush(extra, settings[i]) }
+    VecPush(extra, DriverEnvironment(driver))
+    arguments: [1]string = .[binary]
+    view: []string = VecSlice(extra, 0, extra.count)
+    started := StartOnDisplay(display, arguments[:], view, directory, log)
+    if !started.started { return Fail(Words("cannot start", binary)) }
+    app_pid = started.pid
+    DriverWatch(driver, app_pid, log)
+    window = FindOwnedWindow(display, app_pid, 10000)
+    if window == 0 {
+        text, found := ReadEntireFile(log)
+        print("%\n", text)
+        return Fail("no owned window appeared")
+    }
+    return true
+}
+
+Sleep :: (milliseconds: s64) { unused SleepMilliseconds(milliseconds) }
+
+// One key per call: a burst inside one frame would drop presses.
+Key :: (code: s32) -> bool {
+    if !DriverKey(driver, code, false, false) { return false }
+    Sleep(120)
+    return true
+}
+
+// A rested pointer, then a press and release there.
+Click :: (x: s64, y: s64) -> bool {
+    fx := cast(float64)x; fy := cast(float64)y
+    if !DriverPointer(driver, fx, fy, false) || !DriverPointer(driver, fx, fy, true) ||
+        !DriverPointer(driver, fx, fy, false) { return false }
+    Sleep(150)
+    return true
+}
+
+Hold :: (x: s64, y: s64, down: bool) -> bool {
+    return DriverPointer(driver, cast(float64)x, cast(float64)y, down)
+}
+
+// Recheck the actual server before any pixel capture, then save the picture.
+Capture :: (name: string, image: *DisplayImage) -> bool {
+    if !PrivateDisplayOwned(display) { return Fail("owned capture source disappeared") }
+    if !CaptureWindow(display, window, image) { return Fail(Words("cannot capture", name)) }
+    unused SavePNG(image, Out(name, ".png"))
+    return true
+}
+
+Log :: (path: string) -> string {
+    text, found := ReadEntireFile(path)
+    return ifx found then text else ""
+}
+
+WaitLog :: (path: string, needle: string, timeout_ms: s64) -> bool {
+    deadline := MonotonicMilliseconds() + timeout_ms
+    while !TextContains(Log(path), needle) {
+        if MonotonicMilliseconds() >= deadline { return false }
+        if !AppRunning() { return TextContains(Log(path), needle) }
+        Sleep(20)
+    }
+    return true
+}
+
+Bytes :: (name: string) -> string { return Log(Join(levels, name)) }
+
+// Waits briefly for a saved record to hold exactly `expected`.
+Record :: (name: string, expected: []u8) -> bool {
+    deadline := MonotonicMilliseconds() + 2000
+    while true {
+        text := Bytes(name)
+        same := text.count == expected.count
+        if same { for i: 0..text.count - 1 { if text[i] != expected[i] { same = false } } }
+        if same { return true }
+        if MonotonicMilliseconds() >= deadline { return false }
+        Sleep(20)
+    }
+    return false
+}
+
+WriteRecord :: (name: string, bytes: []u8) -> bool {
+    return WriteEntireFile(Join(levels, name), TextFromBytes(bytes))
+}
+
+Round :: (value: float64) -> s64 { return cast(s64)(value + 0.5) }
+Min :: (a: float64, b: float64) -> float64 { return ifx a < b then a else b }
+Max :: (a: float64, b: float64) -> float64 { return ifx a > b then a else b }
+
+Red :: (image: *DisplayImage, x: s64, y: s64) -> s32 { return PixelRed(ImagePixel(image, cast(s32)x, cast(s32)y)) }
+Green :: (image: *DisplayImage, x: s64, y: s64) -> s32 { return PixelGreen(ImagePixel(image, cast(s32)x, cast(s32)y)) }
+Blue :: (image: *DisplayImage, x: s64, y: s64) -> s32 { return PixelBlue(ImagePixel(image, cast(s32)x, cast(s32)y)) }
+
+// The share of pixels brighter than near-black: the artwork drew.
+Bright :: (image: *DisplayImage) -> float64 {
+    count: s64
+    for i: 0..image.pixels.count - 1 {
+        p := image.pixels[i]
+        if PixelRed(p) > 40 || PixelGreen(p) > 40 || PixelBlue(p) > 40 { count += 1 }
+    }
+    return cast(float64)count / cast(float64)image.pixels.count
+}
+
+Dark :: (r: s32, g: s32) -> bool { return r < 100 && g < 120 }
+
+// A rectangle of the picture, as numpy's clipped slices.
+Patch :: struct { x0: s64; y0: s64; x1: s64; y1: s64 }
+
+MakePatch :: (image: *DisplayImage, x0: float64, y0: float64, x1: float64, y1: float64) -> Patch {
+    patch: Patch
+    patch.x0 = cast(s64)Max(0.0, cast(float64)Round(x0)); patch.y0 = cast(s64)Max(0.0, cast(float64)Round(y0))
+    patch.x1 = cast(s64)Min(cast(float64)image.width, cast(float64)Round(x1))
+    patch.y1 = cast(s64)Min(cast(float64)image.height, cast(float64)Round(y1))
+    return patch
+}
+
+Orange :: (image: *DisplayImage, x: s64, y: s64) -> bool {
+    r := Red(image, x, y); g := Green(image, x, y); b := Blue(image, x, y)
+    return r > 90 && g > 35 && b < 140 && cast(float64)r > cast(float64)g * 1.15
+}
+
+// ---- The standing title, Play, volume, the editor and its saves ----
+
+Editor :: () -> bool {
+    SetEnv("WURM_WINDOW", "960x600")
+    if !Launch(desktop, "build", Out("app", ".log")) { return false }
+    title := WindowTitle(display, window)
+    if title != "Apfelwurm" { return Fail(Words("window is titled", title)) }
+    Sleep(350)
+    stages: DisplayImage
+    if !Capture("stages", *stages) { return false }
+    if Bright(*stages) <= 0.95 { return Fail("title artwork is missing or black") }
+    // The desktop starts swipe steering without asking, straight into level 1.
+    if !Click(480, 530) { return false }
+    if PathExists(Join(levels, "controls.dat")) { return Fail("the desktop asked for controls") }
+    Sleep(200)
+    image: DisplayImage
+    if !Click(868, 32) || !Capture("volume-dropdown", *image) { return false }
+    if !Click(720, 180) { return false }  // Lower the real slider.
+    sound := Bytes("sound.dat")
+    if sound.count != 2 || sound[1] == 0 || sound[1] >= 100 { return Fail("volume slider did not save its gain") }
+    if !Key(DRIVER_KEY_ESCAPE) || !Key(DRIVER_KEY_SPACE) { return false }
+    Sleep(150)
+    if !Capture("level-01", *image) || !Key(KEY_Q) { return false }
+    Sleep(400)
+    // Arrow keys no longer page to another menu.
+    if !Key(DRIVER_KEY_RIGHT) { return false }
+    Sleep(400)
+    returned: DisplayImage
+    if !Capture("title-no-pages", *returned) { return false }
+    for i: 0..cast(s64)stages.width * 450 - 1 {
+        if returned.pixels[i] != stages.pixels[i] { return Fail("title unexpectedly changed pages") }
+    }
+    if !Key(KEY_E) { return false }
+    Sleep(300)
+    browser: DisplayImage
+    if !Capture("editor-browser", *browser) { return false }
+    dark: s64
+    for i: 0..browser.pixels.count - 1 { if Dark(PixelRed(browser.pixels[i]), PixelGreen(browser.pixels[i])) { dark += 1 } }
+    if dark * 2 <= browser.pixels.count { return Fail("the browser surface is not mostly dark") }
+    // All five landscapes are reachable from the same editor browser.
+    chapters: [5]string = .["leafwood", "pinewood", "lake", "mountains", "meadow"]
+    for chapters {
+        if !Click(930, 68) { return false }
+        Sleep(150)
+        if !Capture(Dash("browser", it), *image) { return false }
+    }
+    // Card 14 of the forty-level Meadow browser, laid out with the same
+    // column search as DrawLevelBrowser for the 960x600 window.
+    area_w := 960.0; area_h := 558.0
+    columns: s64 = 4
+    while columns < 12 {
+        item := (area_w - 16.0 - cast(float64)(columns - 1) * 8.0) / cast(float64)columns
+        lines := (40 + columns - 1) / columns
+        if cast(float64)lines * (item * 0.75 + 30.0) + cast(float64)(lines - 1) * 8.0 + 56.0 <= area_h { break }
+        columns += 1
+    }
+    item_w := (area_w - 16.0 - cast(float64)(columns - 1) * 8.0) / cast(float64)columns
+    item_h := item_w * 0.75 + 30.0
+    index: s64 = 13
+    card_x := 8.0 + cast(float64)(index % columns) * (item_w + 8.0) + item_w / 2.0
+    card_y := 42.0 + 56.0 + cast(float64)(index / columns) * (item_h + 8.0) + item_h / 2.0
+    if !Hold(cast(s64)card_x, cast(s64)card_y, true) { return false }
+    Sleep(250)
+    if !Hold(210, 250, true) { return false }
+    Sleep(250)
+    if !Hold(210, 250, false) { return false }
+    Sleep(300)
+    if !Capture("editor-open", *image) || !Click(775, 518) { return false }
+    if PathExists(Join(levels, "level14.dat")) { return Fail("selecting a level painted the board") }
+    // Picking a brush owns that press until release, even when dragged.
+    if !Hold(737, 195, true) { return false }
+    Sleep(200)
+    if !Hold(210, 250, true) { return false }
+    Sleep(200)
+    if !Hold(210, 250, false) || !Click(775, 518) { return false }
+    if PathExists(Join(levels, "level14.dat")) { return Fail("a palette drag painted the board") }
+    // The first floor swatch painted over the top-left wall, then Save. The
+    // board is 712x534 at (0, 54) beside a 248px panel whose palette starts
+    // at y 178 in 38px columns.
+    if !Click(737, 195) || !Click(8, 62) { return false }
+    Sleep(200)
+    if !Capture("editor-painted", *image) || !Click(775, 518) { return false }
+    Sleep(300)
+    painted := Bytes("level14.dat")
+    original, found := ReadEntireFile("build/designed/level14.dat")
+    if !found || painted.count != 2401 { return Fail("override size") }
+    if painted[0] != original[0] { return Fail("apple count changed") }
+    if painted[1] != 0 || original[1] != 20 { return Fail("cell (0, 0) was not painted from wall to floor") }
+    // T stands the level up as portrait plays it.
+    if !Key(KEY_T) { return false }
+    Sleep(300)
+    turned: DisplayImage
+    if !Capture("editor-turned", *turned) { return false }
+    standing: s64
+    for x: 0..711 {
+        count: s64
+        for y: 100..499 { if Dark(Red(*turned, x, y), Green(*turned, x, y)) { count += 1 } }
+        if count * 10 > 400 * 9 { standing += 1 }
+    }
+    if standing <= 100 { return Fail("the canvas board did not stand up") }
+    if !Click(813, 269) || !Click(223, 537) || !Click(775, 518) { return false }  // Stone, cell (5, 35), Save.
+    portrait := Bytes("level14-portrait.dat")
+    if portrait.count < 2401 || portrait[1 + 5 * 40 + 35] != 21 { return Fail("portrait lower-row edit was not saved") }
+    if Bytes("level14.dat") != painted { return Fail("portrait save changed the landscape") }
+    if !Click(31, 20) || !Click(775, 518) { return false }  // Previous level, Save.
+    if !PathExists(Join(levels, "level13-portrait.dat")) { return Fail("title-bar back did not switch levels") }
+    if !Click(73, 20) || !Click(250, 20) { return false }  // Next level, landscape.
+    if !Capture("editor-landscape-independent", *image) || !Click(349, 20) { return false }
+    if !Key(DRIVER_KEY_TAB) || !Key(DRIVER_KEY_SPACE) || !Capture("portrait-playtest", *image) { return false }
+    if !Key(KEY_Q) || !Click(250, 20) || !Key(KEY_E) { return false }
+    Sleep(300)
+    if !Capture("editor-exit", *image) { return false }
+    receipt: Vec(u8)
+    BuilderPrint(*receipt, "{\n  \"server_pid\": %,\n  \"server_executable\": \"%\",\n", display.server.pid, display.executable)
+    BuilderPrint(*receipt, "  \"display\": \"%\",\n  \"app_pid\": %,\n  \"window\": %\n}\n", display.name, app_pid, window)
+    unused WriteEntireFile(Out("receipt", ".json"), BuilderFinish(receipt))
+    print("Private UI local test played the standing level, opened the editor with E, browsed the Meadow levels and edited one.\n")
+    return true
+}
+
+// A portrait window: the themed status bar on top, the board turned below it.
+PortraitWindow :: () -> bool {
+    SetEnv("WURM_WINDOW", "480x700")
+    if !Launch(desktop, "build", Out("app-portrait", ".log")) { return false }
+    Sleep(500)
+    picture: DisplayImage
+    if !Capture("portrait-stages", *picture) { return false }
+    if Bright(*picture) <= 0.95 { return Fail("portrait title artwork is missing") }
+    if !Key(DRIVER_KEY_ENTER) { return false }
+    Sleep(200)
+    if !Capture("portrait-level", *picture) { return false }
+    if picture.width != 480 || picture.height != 700 { return Fail("portrait window size") }
+    top_green: s64
+    for y: 0..41 { for x: 0..479 { top_green += Green(*picture, x, y) } }
+    if top_green <= 480 * 42 * 40 || top_green >= 480 * 42 * 130 { return Fail("the themed status bar did not render across the top") }
+    board: DisplayImage
+    ImageRegion(*picture, 0, 42, 480, 656, *board)
+    if ImageColorCount(*board) <= 40 { return Fail("the board area did not render") }
+    board_green: s64
+    for i: 0..board.pixels.count - 1 { board_green += PixelGreen(board.pixels[i]) }
+    if board_green <= 480 * 656 * 40 { return Fail("the board is not a green field") }
+    // The turned board fills the width edge to edge, with no black side bars.
+    for x: 0..479 {
+        black: s64
+        for y: 100..599 { if (ImagePixel(*picture, cast(s32)x, cast(s32)y) & 0xf0f0f0) == 0 { black += 1 } }
+        if black * 10 > 500 * 9 { return Fail("a black side column; the board did not turn") }
+    }
+    print("Private UI local test rendered the turned portrait board and the top icon bar.\n")
+    return true
+}
+
+// Real frame transitions save the next level and keep playtests out of progress.
+ProgressProbe :: () -> bool {
+    Stop()
+    probe := Join(levels, "progress-probe")
+    unused CreateDirectories(probe)
+    extra: [3]string
+    level_dir: Vec(u8)
+    BuilderPrint(*level_dir, "WURM_LEVEL_DIR=%", ResolvePath(probe))
+    extra[0] = BuilderFinish(level_dir); extra[1] = "WURM_PROBE_PROGRESS=1"; extra[2] = "SDL_AUDIODRIVER=dummy"
+    combined: Vec(string)
+    for i: 0..settings.count - 1 { VecPush(combined, settings[i]) }
+    for extra { VecPush(combined, it) }
+    arguments: [1]string = .[modal_test]
+    view: []string = VecSlice(combined, 0, combined.count)
+    run := StartOnDisplay(display, arguments[:], view, "", Out("progress-probe", ".log"))
+    deadline := MonotonicMilliseconds() + 30000
+    while !PollProcess(*run) {
+        if MonotonicMilliseconds() >= deadline { unused StopOwnedProcess(*run, 2000); return Fail("progress probe timed out") }
+        Sleep(50)
+    }
+    if run.code != 0 { print("%", Log(Out("progress-probe", ".log"))); return Fail("progress probe failed") }
+    print("%", Log(Out("progress-probe", ".log")))
+    return true
+}
+
+// Each dialog in a narrow phone portrait and a short phone landscape window.
+Dialogs :: () -> bool {
+    sizes: [4]s64 = .[320, 568, 640, 360]
+    modes: [5]s64 = .[2, 3, 5, 11, 11]
+    labels: [5]string = .["paused", "game-over", "complete", "ready", "portal-ready"]
+    for size: 0..1 {
+        width := sizes[size * 2]; height := sizes[size * 2 + 1]
+        for index: 0..4 {
+            mode := modes[index]; label := labels[index]
+            name: Vec(u8)
+            BuilderPrint(*name, "%x%-%", width, height, label)
+            title := BuilderFinish(name)
+            log := Out(title, ".log")
+            if mode == 3 {
+                run: [6]u8 = .[0, 3, 0, 0, 0, 0]
+                unlocked: [1]u8 = .[57]
+                unused WriteRecord("run.dat", run[:]); unused WriteRecord("unlocked.dat", unlocked[:])
+            }
+            preview: s64 = ifx label == "portal-ready" then 9 else 12
+            SetNumber("WURM_PROBE_WIDTH", width); SetNumber("WURM_PROBE_HEIGHT", height)
+            SetNumber("WURM_PROBE_MODE", mode); SetNumber("WURM_PROBE_LEVEL", ifx mode == 11 then preview else 0)
+            if !Launch(modal_test, "", log) { return false }
+            Sleep(400)
+            picture: DisplayImage
+            if !Capture(title, *picture) { return false }
+            if picture.width != cast(s32)width || picture.height != cast(s32)height { return Fail(Words("window size", title)) }
+            // Both full-width actions fit entirely inside the window.
+            compact := height < 400
+            card: s64 = ifx mode == 2 then (ifx compact then 252 else 292) else (ifx compact then 288 else 340)
+            if mode == 2 { card += 56 }
+            card_top := cast(float64)(height - card) / 2.0
+            primary := Round(card_top + cast(float64)card - cast(float64)(ifx mode == 2 then 152 else 96))
+            if mode == 11 {
+                // Start is centred on the playable board, below the HUD.
+                hud: s64 = ifx width < 520 then 104 else 72
+                ratio := ifx height > width then 4.0 / 3.0 else 0.75
+                board_height := Min(cast(float64)(height - hud), cast(float64)width * ratio)
+                ready: s64 = ifx board_height < 180.0 then 132 else 164
+                if label == "portal-ready" && board_height >= 216.0 { ready += 40 }
+                primary = Round(cast(float64)(height + hud) / 2.0 + cast(float64)ready / 2.0 - 40.0)
+                Sleep(1100)
+                if TextContains(Log(log), "mode=1 lives=") { return Fail("next level started without consent") }
+                if !Key(DRIVER_KEY_UP) { return false }
+                if TextContains(Log(log), "mode=1 lives=") { return Fail("steering started the level") }
+                expected: Vec(u8)
+                BuilderPrint(*expected, "mode=11 lives=3 level=% score=1234", preview)
+                if !TextContains(Log(log), BuilderFinish(expected)) { return Fail("preview is not the selected level") }
+                if !Capture(Dash(title, "waiting"), *picture) { return false }
+            }
+            secondary := Round(card_top + cast(float64)card - 36.0)
+            if !(24 < primary && primary < secondary && secondary < height - 24) { return Fail(Words("actions do not fit", title)) }
+            // Each primary action makes a real state change.
+            if !Click(width / 2, primary) { return false }
+            if !WaitLog(log, "mode=1 lives=", 1500) { return Fail(Words(title, "primary action did not start or resume play")) }
+            if mode == 3 && !TextContains(Log(log), "mode=1 lives=3 level=57 score=0") {
+                return Fail("Try again did not use the furthest unlocked level")
+            }
+            if !Key(DRIVER_KEY_SPACE) { return false }
+            Sleep(150)
+            // A reopened pause uses the pause card, including after game over.
+            pause: s64 = (ifx compact then 252 else 292) + 56
+            if !Click(width / 2, Round(cast(float64)(height + pause) / 2.0 - 36.0)) { return false }
+            if !WaitLog(log, "mode=0", 1500) { return Fail(Words(title, "Back to title action failed")) }
+        }
+    }
+    print("Private UI local test: pause, game-over, victory and next-level Start fit portrait/landscape; waiting and steering stay paused, Start and title actions worked.\n")
+    return true
+}
+
+// Continue, Play and the scrollable unlocked-level selector at three sizes.
+ResponsiveTitles :: () -> bool {
+    sizes: [6]s64 = .[320, 568, 360, 800, 800, 360]
+    for size: 0..2 {
+        width := sizes[size * 2]; height := sizes[size * 2 + 1]
+        // A previous-version save unlocks its reached level on relaunch.
+        old: [6]u8 = .[57, 6, 120, 0, 0, 0]
+        unused WriteRecord("run.dat", old[:])
+        unused RemoveFile(Join(levels, "unlocked.dat"))
+        name: Vec(u8)
+        BuilderPrint(*name, "%x%", width, height)
+        dimensions := BuilderFinish(name)
+        SetEnv("WURM_WINDOW", dimensions)
+        if !Launch(desktop, "build", Out(Dash("title", dimensions), ".log")) { return false }
+        Sleep(300)
+        image: DisplayImage
+        if !Capture(Dash("title", dimensions), *image) { return false }
+        continued: [6]u8 = .[57, 3, 0, 0, 0, 0]
+        fresh: [6]u8 = .[0, 3, 0, 0, 0, 0]
+        reached: [1]u8 = .[57]
+        if !Click(width / 2, height - 144) { return false }
+        if !Record("run.dat", continued[:]) { return Fail("Continue did not start the highest unlocked level with fresh stats") }
+        if !Key(DRIVER_KEY_SPACE) || !Key(KEY_Q) { return false }
+        if !Capture(Dash("continue-title", dimensions), *image) { return false }
+        if !Click(width / 2, height - 70) { return false }
+        if !Record("run.dat", fresh[:]) { return Fail("Play did not start from level one") }
+        if !Record("unlocked.dat", reached[:]) { return Fail("Play erased unlocked progress") }
+        if !Key(DRIVER_KEY_SPACE) || !Key(KEY_Q) || !Key(KEY_L) { return false }
+        if !Capture(Dash("levels", dimensions), *image) { return false }
+        // Future Pinewood cards show only a lock and cannot start.
+        if !Click(width - 36, 96) { return false }
+        columns: s64 = ifx width - 24 < 560 then 2 else (ifx width - 24 < 900 then 3 else 4)
+        card_width := cast(float64)(width - 40 - (columns - 1) * 12) / cast(float64)columns
+        card_height := (card_width - 16.0) * (ifx height > width then 4.0 / 3.0 else 0.75) + 44.0
+        card_x := Round(12.0 + card_width / 2.0); card_y := Round(132.0 + card_height / 2.0)
+        if !Click(card_x, card_y) { return false }
+        Sleep(150)
+        if Bytes("run.dat").count < 1 || Bytes("run.dat")[0] != 0 { return Fail("a locked level started") }
+        if !Capture(Dash("levels-locked", dimensions), *image) { return false }
+        if !Click(36, 96) { return false }  // Back to Leafwood.
+        // Scrolling moves the grid while keeping chapter controls fixed.
+        before: DisplayImage
+        after: DisplayImage
+        if !Capture(Dash("levels-scroll-before", dimensions), *before) { return false }
+        for turn: 0..9 {
+            // Button 5, as SDL reports it: one line down.
+            if !DriverWheel(driver, cast(float64)(width / 2), cast(float64)(height - 40), -1.0) { return false }
+            Sleep(35)
+        }
+        Sleep(200)
+        if !Capture(Dash("levels-scroll-after", dimensions), *after) { return false }
+        moved := false
+        for i: cast(s64)before.width * 132..before.pixels.count - 1 { if before.pixels[i] != after.pixels[i] { moved = true; break } }
+        if !moved { return Fail("level cards did not scroll") }
+        if !Click(36, 96) || !Click(width - 36, 96) || !Click(card_x, card_y) { return false }
+        selected: [6]u8 = .[40, 3, 0, 0, 0, 0]
+        if !Record("run.dat", selected[:]) { return Fail("an unlocked level did not start fresh") }
+        if !Record("unlocked.dat", reached[:]) { return Fail("selecting an earlier level reduced progress") }
+        Sleep(150)
+        if !Key(DRIVER_KEY_SPACE) || !Capture(Dash("play", dimensions), *image) { return false }
+    }
+    print("Private UI local test: Try again, Continue, Play and the scrollable unlocked-level selector worked in portrait and landscape.\n")
+    return true
+}
+
+// Held pointer input turns before release, for swipe and the direction pad.
+HeldSteering :: (pad: bool) -> bool {
+    sizes: [4]s64 = .[640, 480, 320, 568]
+    for size: 0..1 {
+        width := sizes[size * 2]; height := sizes[size * 2 + 1]
+        name: Vec(u8)
+        BuilderPrint(*name, "%-%x%", ifx pad then "pad" else "steering", width, height)
+        title := BuilderFinish(name)
+        log := Out(title, ".log")
+        SetNumber("WURM_PROBE_WIDTH", width); SetNumber("WURM_PROBE_HEIGHT", height)
+        SetEnv("WURM_PROBE_SCENE", "1"); SetEnv("WURM_PROBE_STEERING", "1"); SetEnv("WURM_PROBE_MODE", "1")
+        if !Launch(modal_test, "", log) { return false }
+        if !WaitLog(log, "steering=", 10000) { return Fail("steering probe did not finish its first frame") }
+        // Each turn: direction, x, y.
+        points: [9]s64
+        if pad {
+            short := Min(cast(float64)width, cast(float64)(height - (ifx width < 520 then 104 else 72)))
+            margin := Min(32.0, Max(24.0, short * 0.06))
+            side := Min(216.0, Max(168.0, short * 0.44))
+            left := margin; top := cast(float64)height - side - margin
+            points[0] = 2; points[1] = Round(left + side * 0.84); points[2] = Round(top + side * 0.5)
+            points[3] = 3; points[4] = Round(left + side * 0.5); points[5] = Round(top + side * 0.84)
+            points[6] = 0; points[7] = Round(left + side * 0.16); points[8] = Round(top + side * 0.5)
+        } else {
+            x := width / 2; y := height / 2
+            if !Hold(x, y, true) { return false }
+            Sleep(80)
+            points[0] = 2; points[1] = x + 14; points[2] = y
+            points[3] = 3; points[4] = x + 14; points[5] = y + 14
+            points[6] = 0; points[7] = x; points[8] = y + 14
+        }
+        for turn: 0..2 {
+            if !Hold(points[turn * 3 + 1], points[turn * 3 + 2], true) { return false }
+            wanted: Vec(u8)
+            BuilderPrint(*wanted, "steering=% touch=1", points[turn * 3])
+            if !WaitLog(log, BuilderFinish(wanted), 1000) {
+                print("%\n", Log(log))
+                unused Hold(points[turn * 3 + 1], points[turn * 3 + 2], false)
+                return Fail("held-contact turn missing")
+            }
+        }
+        image: DisplayImage
+        captured := Capture(Dash(ifx pad then "direction-pad" else "held-steering", title), *image)
+        if !Hold(points[7], points[8], false) || !captured { return false }
+    }
+    Unset("WURM_PROBE_STEERING")
+    if pad {
+        print("Private UI local test: saved direction-pad choice and held arm changes steer in both orientations.\n")
+    } else {
+        print("Private UI local test: right, down and left turns took effect before release in both orientations.\n")
+    }
+    return true
+}
+
+// A playtest uses the selected editor layout even in a window of the other shape.
+PlaytestLayouts :: () -> bool {
+    // Window width and height, editor layout, board columns and rows.
+    table: [10]s64 = .[320, 568, 0, 40, 30, 640, 480, 1, 30, 40]
+    for which: 0..1 {
+        entry := table[which * 5:which * 5 + 5]
+        name: Vec(u8)
+        BuilderPrint(*name, "layout-%-%x%", entry[2], entry[0], entry[1])
+        log := Out(BuilderFinish(name), ".log")
+        SetNumber("WURM_PROBE_WIDTH", entry[0]); SetNumber("WURM_PROBE_HEIGHT", entry[1]); SetEnv("WURM_PROBE_LEVEL", "1")
+        SetEnv("WURM_PROBE_SCENE", "0"); SetNumber("WURM_PROBE_EDITOR_LAYOUT", entry[2]); SetEnv("WURM_PROBE_MODE", "1")
+        if !Launch(modal_test, "", log) { return false }
+        board: Vec(u8)
+        BuilderPrint(*board, "board=%x%", entry[3], entry[4])
+        if !WaitLog(log, BuilderFinish(board), 2000) { print("%\n", Log(log)); return Fail("playtest ignored the editor layout") }
+        shot: Vec(u8)
+        BuilderPrint(*shot, "editor-playtest-%x%", entry[3], entry[4])
+        image: DisplayImage
+        if !Capture(BuilderFinish(shot), *image) { return false }
+    }
+    Unset("WURM_PROBE_EDITOR_LAYOUT")
+    print("Private UI local test: independent portrait edits survive mode switches; both playtest layouts ignore window shape.\n")
+    return true
+}
+
+// Turning a running game selects its other board and keeps pause, lives and score.
+Rotation :: () -> bool {
+    log := Out("rotate-active", ".log")
+    SetEnv("WURM_PROBE_WIDTH", "640"); SetEnv("WURM_PROBE_HEIGHT", "480"); SetEnv("WURM_PROBE_LEVEL", "1")
+    SetEnv("WURM_PROBE_SCENE", "0"); SetEnv("WURM_PROBE_MODE", "2")
+    if !Launch(modal_test, "", log) { return false }
+    Sleep(150)
+    table: [8]s64 = .[320, 568, 30, 40, 640, 480, 40, 30]
+    for which: 0..1 {
+        entry := table[which * 4:which * 4 + 4]
+        if !ResizeWindow(display, window, cast(s32)entry[0], cast(s32)entry[1]) { return Fail("cannot resize the owned window") }
+        wanted: Vec(u8)
+        BuilderPrint(*wanted, "board=%x% lives=3 score=1234 mode=2", entry[2], entry[3])
+        if !WaitLog(log, BuilderFinish(wanted), 3000) { print("%\n", Log(log)); return Fail("rotation lost board orientation or run state") }
+        name: Vec(u8)
+        BuilderPrint(*name, "rotate-level-2-%x%", entry[2], entry[3])
+        image: DisplayImage
+        if !Capture(BuilderFinish(name), *image) { return false }
+    }
+    print("Private UI local test: rotating level 2 loads the other layout, preserving pause, lives and score.\n")
+    return true
+}
+
+// An actual board from every landscape, without a modal.
+Landscapes :: () -> bool {
+    names: [5]string = .["meadow", "leafwood", "pinewood", "lake", "mountains"]
+    for index: 0..4 {
+        SetEnv("WURM_PROBE_WIDTH", "640"); SetEnv("WURM_PROBE_HEIGHT", "480"); SetEnv("WURM_PROBE_SCENE", "7")
+        SetEnv("WURM_PROBE_MODE", "1"); SetNumber("WURM_PROBE_LEVEL", index * 40)
+        if !Launch(modal_test, "", Out(names[index], ".log")) { return false }
+        Sleep(200)
+        image: DisplayImage
+        if !Capture(Dash("landscape", names[index]), *image) { return false }
+    }
+    SetEnv("WURM_PROBE_LEVEL", "0")
+    return true
+}
+
+// The full bent worm and both gates without a modal, in two window shapes.
+Gameplay :: () -> bool {
+    sizes: [4]s64 = .[960, 600, 320, 568]
+    labels: [8]string = .["entrance", "exit", "zero-lives", "entering", "leaving", "downward", "walls", "forest-walls"]
+    for size: 0..1 {
+        width := sizes[size * 2]; height := sizes[size * 2 + 1]
+        for index: 0..7 {
+            scene := index + 1
+            name: Vec(u8)
+            BuilderPrint(*name, "gameplay-%x%-%", width, height, labels[index])
+            title := BuilderFinish(name)
+            log := Out(title, ".log")
+            SetNumber("WURM_PROBE_WIDTH", width); SetNumber("WURM_PROBE_HEIGHT", height)
+            SetNumber("WURM_PROBE_SCENE", scene); SetEnv("WURM_PROBE_MODE", "1")
+            SetEnv("WURM_PROBE_LEVEL", ifx scene == 8 then "40" else "0")
+            if !Launch(modal_test, "", log) { return false }
+            Sleep(300)
+            picture: DisplayImage
+            if !Capture(title, *picture) { return false }
+            if scene == 3 {
+                if !WaitLog(log, "mode=3 lives=0", 1000) { return Fail("game over did not stop at zero lives") }
+                continue
+            }
+            if !CheckScene(*picture, scene, width, height, title) { return false }
+        }
+    }
+    print("Private UI local test: stone gates, long spaced body, directional head and zero-life game over passed in landscape and portrait.\n")
+    return true
+}
+
+CheckScene :: (picture: *DisplayImage, scene: s64, width: s64, height: s64, title: string) -> bool {
+    portrait := height > width
+    columns: s64 = ifx portrait then 30 else 40
+    rows: s64 = ifx portrait then 40 else 30
+    bar: s64 = ifx width < 520 then 104 else 72
+    scale := Min(cast(float64)width / cast(float64)(columns * 16), cast(float64)(height - bar) / cast(float64)(rows * 16))
+    left := (cast(float64)width - cast(float64)(columns * 16) * scale) / 2.0
+    top := cast(float64)bar + (cast(float64)(height - bar) - cast(float64)(rows * 16) * scale) / 2.0
+    row: s64 = ifx scene == 2 || scene == 5 then 0 else rows - 1
+    for side: 0..1 {
+        column := columns / 2 - 1 + side * 2
+        stone := MakePatch(picture, left + cast(float64)(column * 16 + 2) * scale, top + cast(float64)(row * 16 + 2) * scale,
+            left + cast(float64)(column * 16 + 14) * scale, top + cast(float64)(row * 16 + 14) * scale)
+        neutral: s64; total: s64
+        for y: stone.y0..stone.y1 - 1 {
+            for x: stone.x0..stone.x1 - 1 {
+                r := Red(picture, x, y); g := Green(picture, x, y); b := Blue(picture, x, y)
+                high := ifx r > g then r else g; high = ifx b > high then b else high
+                low := ifx r < g then r else g; low = ifx b < low then b else low
+                if high - low < 55 { neutral += 1 }
+                total += 1
+            }
+        }
+        if total == 0 || neutral * 4 <= total { return Fail(Words(title, "is missing a stone gate post")) }
+    }
+    head_x := cast(float64)(columns / 2 * 16 + 8)
+    head_y := cast(float64)(rows / 2 * 16 + 8)
+    if scene == 1 {
+        chip_x: s64 = ifx width < 520 then 12 else 334
+        chip_y: s64 = ifx width < 520 then 60 else 16
+        right := ifx width < 520 then cast(float64)chip_x + cast(float64)(width - 40) / 3.0 else cast(float64)(chip_x + 108)
+        hearts := MakePatch(picture, cast(float64)chip_x, cast(float64)chip_y, right, cast(float64)(chip_y + 34))
+        groups: s64
+        previous := false
+        for x: hearts.x0..hearts.x1 - 1 {
+            occupied := false
+            for y: hearts.y0..hearts.y1 - 1 {
+                r := Red(picture, x, y)
+                if r > 180 && cast(float64)r > cast(float64)Green(picture, x, y) * 1.5 { occupied = true }
+            }
+            if occupied && !previous { groups += 1 }
+            previous = occupied
+        }
+        if groups != 3 { return Fail(Words(title, "must show three separate life hearts")) }
+    }
+    if scene == 1 || scene == 2 {
+        ribbon := MakePatch(picture, left + (head_x - 140.0) * scale, top + head_y * scale - 2.0,
+            left + (head_x - 32.0) * scale, top + head_y * scale + 3.0)
+        covered: s64
+        for x: ribbon.x0..ribbon.x1 - 1 {
+            for y: ribbon.y0..ribbon.y1 - 1 { if Orange(picture, x, y) { covered += 1; break } }
+        }
+        if covered * 10 <= (ribbon.x1 - ribbon.x0) * 9 { return Fail(Words(title, "has large gaps between body segments")) }
+        face := MakePatch(picture, left + (head_x - 10.0) * scale, top + (head_y - 13.0) * scale,
+            left + (head_x + 10.0) * scale, top + (head_y + 13.0) * scale)
+        body := MakePatch(picture, left + (head_x - 61.0) * scale, top + (head_y - 13.0) * scale,
+            left + (head_x - 59.0) * scale, top + (head_y + 13.0) * scale)
+        face_count, face_span := OrangeRows(picture, face)
+        body_count, body_span := OrangeRows(picture, body)
+        if face_count <= 3 || body_count <= 3 { return Fail("worm artwork missing") }
+        if face_span < body_span { return Fail("head is smaller than the body") }
+    } else if scene == 6 {
+        head := MakePatch(picture, left + (head_x - 12.0) * scale, top + (head_y - 12.0) * scale,
+            left + (head_x + 12.0) * scale, top + (head_y + 12.0) * scale)
+        eyes := false
+        for y: head.y0..head.y1 - 1 {
+            for x: head.x0..head.x1 - 1 {
+                b := cast(float64)Blue(picture, x, y)
+                if b > cast(float64)Red(picture, x, y) * 1.1 && b > cast(float64)Green(picture, x, y) * 1.05 { eyes = true }
+            }
+        }
+        if !eyes { return Fail(Words(title, "has no visible directional eyes")) }
+    } else if scene == 7 || scene == 8 {
+        wall := MakePatch(picture, left + 96.0 * scale, top + 99.0 * scale,
+            left + cast(float64)((columns - 7) * 16) * scale, top + 125.0 * scale)
+        dark: s64; green: s64; total: s64
+        for y: wall.y0..wall.y1 - 1 {
+            for x: wall.x0..wall.x1 - 1 {
+                if Red(picture, x, y) < 130 { dark += 1 }
+                green += Green(picture, x, y)
+                total += 1
+            }
+        }
+        if total == 0 { return Fail(Words(title, "has no wall area")) }
+        if scene == 7 && dark * 10 <= total * 9 { return Fail(Words(title, "has gaps in the joined hedge")) }
+        if scene == 8 && green >= total * 125 { return Fail(Words(title, "has missing forest canopy")) }
+    } else {
+        opening := MakePatch(picture, left + cast(float64)(columns / 2 * 16) * scale, top + cast(float64)(row * 16) * scale,
+            left + cast(float64)((columns / 2 + 1) * 16) * scale, top + cast(float64)((row + 1) * 16) * scale)
+        count: s64
+        for y: opening.y0..opening.y1 - 1 { for x: opening.x0..opening.x1 - 1 { if Orange(picture, x, y) { count += 1 } } }
+        if count <= 2 { return Fail(Words(title, "hides the head while it passes through the gate")) }
+    }
+    return true
+}
+
+// How many rows of the patch hold orange, and the span from first to last.
+OrangeRows :: (picture: *DisplayImage, patch: Patch) -> (count: s64, span: s64) {
+    count: s64
+    first: s64 = -1
+    last: s64 = -1
+    for y: patch.y0..patch.y1 - 1 {
+        found := false
+        for x: patch.x0..patch.x1 - 1 { if Orange(picture, x, y) { found = true; break } }
+        if found { count += 1; if first < 0 { first = y }; last = y }
+    }
+    return count, last - first
+}
+
+// Every skin but the original sprite is painted art: in play each draws
+// its own detailed head, never a flat coloured circle.
+Skins :: () -> bool {
+    heads: [9]DisplayImage
+    for id: 1..8 {
+        name: Vec(u8)
+        BuilderPrint(*name, "skin-%", id)
+        title := BuilderFinish(name)
+        SetEnv("WURM_PROBE_WIDTH", "960"); SetEnv("WURM_PROBE_HEIGHT", "600"); SetEnv("WURM_PROBE_SCENE", "1")
+        SetEnv("WURM_PROBE_MODE", "1"); SetEnv("WURM_PROBE_LEVEL", "0"); SetNumber("WURM_PROBE_SKIN", id)
+        if !Launch(modal_test, "", Out(title, ".log")) { return false }
+        Sleep(300)
+        picture: DisplayImage
+        if !Capture(title, *picture) { return false }
+        // The head sits at the board centre, as in the gameplay scenes.
+        scale := Min(960.0 / 640.0, cast(float64)(600 - 72) / 480.0)
+        left := (960.0 - 640.0 * scale) / 2.0
+        top := 72.0 + (cast(float64)(600 - 72) - 480.0 * scale) / 2.0
+        x := cast(s32)(left + (20.0 * 16.0 + 8.0) * scale)
+        y := cast(s32)(top + (15.0 * 16.0 + 8.0) * scale)
+        ImageRegion(*picture, x - 16, y - 16, 32, 32, *heads[id])
+        if ImageColorCount(*heads[id]) < 60 { return Fail(Words(title, "draws a plain head instead of its art")) }
+        for other: 1..id - 1 {
+            same := true
+            for i: 0..heads[id].pixels.count - 1 { if heads[id].pixels[i] != heads[other].pixels[i] { same = false; break } }
+            if same { return Fail(Words(title, "looks the same as another skin")) }
+        }
+    }
+    Unset("WURM_PROBE_SKIN")
+    print("Private UI local test: all eight bought or earned skins draw their own painted head in play.\n")
+    return true
+}
+
+Run :: () -> bool {
+    if !Editor() || !PortraitWindow() || !ProgressProbe() || !Dialogs() || !ResponsiveTitles() { return false }
+    if !HeldSteering(false) { return false }
+    // The saved pad choice drives the same actual pointer path.
+    pad: [1]u8 = .[1]
+    unused WriteRecord("controls.dat", pad[:])
+    if !HeldSteering(true) { return false }
+    swipe: [1]u8 = .[0]
+    unused WriteRecord("controls.dat", swipe[:])
+    return PlaytestLayouts() && Rotation() && Landscapes() && Gameplay() && Skins()
+}
+
+#program_export
+main :: () -> s32 {
+    unused CreateDirectories(OUT)
+    // The editor writes level overrides into this private directory, never
+    // into the repository's assets.
+    levels = ResolvePath(OUT)
+    levels = Join(levels, "levels")
+    unused RemoveTree(levels)
+    if !CreateDirectories(levels) { unused Fail("no private level directory"); return 1 }
+    desktop = EnvironmentText("WURM_TEST_BINARY")
+    if desktop.count == 0 { desktop = Join(ResolvePath("build"), "Apfelwurm-desktop") }
+    modal_test = Join(ResolvePath("build"), "Apfelwurm-modal-test")
+    // Large enough that every tested window lies wholly on screen.
+    private := OpenPrivateDisplay(1280, 1024, Out("xvfb", ".log"))
+    if !private.valid { unused Fail(private.error); return 1 }
+    display = *private
+    client := DriverOpen(Join(OUT, "driver"))
+    driver = *client
+    // A fixed window keeps the pointer math stable on any screen.
+    level_dir: Vec(u8)
+    BuilderPrint(*level_dir, "WURM_LEVEL_DIR=%", levels)
+    VecPush(settings, BuilderFinish(level_dir))
+    fixed: [6]string = .["SDL_RENDER_DRIVER=software", "SDL_FRAMEBUFFER_ACCELERATION=0", "SDL_AUDIODRIVER=dummy",
+        "LP_NUM_THREADS=1", "ZIRAN_PAR_THREADS=1", "WURM_PROBE_SCENE=0"]
+    for setting: fixed { VecPush(settings, setting) }
+    passed := Run()
+    Stop()
+    ClosePrivateDisplay(display)
+    return ifx passed then 0 else 1
+}

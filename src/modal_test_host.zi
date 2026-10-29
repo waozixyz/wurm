@@ -5,6 +5,7 @@ using UI :: #import "kryon/Widgets";
 #import "kryon/tree"
 #import "kryon/tree_input"
 #import "kryon/Frame"
+#import "kryon/test_driver"
 Timer :: #import "std/timer_linux";
 App :: #import "app";
 Progress :: #import, file "progress.zi";
@@ -241,13 +242,18 @@ main :: () -> s32 {
     previous_contact: bool;
     while PollDesktop() {
         BeginDesktopFrame()
-        TreePointerUpdate(session, PollPointer())
+        // A private-display test drives the probe through KRYON_TEST_DRIVER.
+        TreePointerUpdate(session, TestDriverPointer(session, PollPointer()))
         key := DesktopPressedKey()
+        if key == 0 {
+            for candidate: cast(s32)0..349 { if TestDriverKeyPressed(candidate) { key = candidate; break } }
+        }
         if key != 0 { KeyboardSend(session, key) }
         viewport := DesktopViewport()
         if cast(s32)BeginFrame(session, 1, viewport) != 0 { return 3 }
         if App.Frame(session, viewport) != 0 { return 4 }
         if cast(s32)EndFrame(session) != 0 || !EndDesktopFrame() { return 5 }
+        TestDriverFrame(session)
         if previous_columns != board_columns || previous_rows != board_rows {
             previous_columns = board_columns; previous_rows = board_rows
             print("board=%x% lives=% score=% mode=%\n",board_columns,board_rows,state.lives,state.score,state.mode)

@@ -94,7 +94,7 @@
     }
   ],
   "root": {
-    "dependencies": {"apps": "p1e4e4f044a26528c", "entity": "p4fd05d3b01b94ee1", "kryon": "p31868b412b407f25", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "p1e4e4f044a26528c", "crypto": "pc23fbf455e97614d", "entity": "p4fd05d3b01b94ee1", "kryon": "p31868b412b407f25", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {
