@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.20] - 2026-10-28
+
+- Open Leaderboard repeatedly without a black board or losing Android Back.
+- See a newly chosen Wurm skin immediately on this device and after account sync.
+
 ## [0.2.19] - 2026-10-28
 
 - Hear three related calm scores rotate as levels progress, with phrase-aligned 4.8-second crossfades.

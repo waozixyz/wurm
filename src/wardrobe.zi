@@ -60,7 +60,14 @@ Available :: (id: s32) -> bool {
     return false
 }
 MountainsAvailable :: () -> bool { return (owned & 512) != 0 }
-Select :: (id: s32) { if Available(id) { skin = id; dirty = true; Save() } }
+Select :: (id: s32) {
+    if Available(id) {
+        skin = id
+        dirty = true
+        Save()
+        Report()
+    }
+}
 Visit :: () { visited = true; dirty = true; Save(); poll_at = 0 }
 Report :: () {
     if skin < 0 || skin > 8 || skin == reported_skin { return }
@@ -101,10 +108,17 @@ Pump :: (now: s64, playing: bool) {
             id: [33]u8
             unused ReadStringText(reply, FieldAt(reply, at, "id"), id[:])
             duration := ReadNumber(reply, FieldAt(reply, at, "played_ms"))
+            chosen := ReadNumber(reply, FieldAt(reply, at, "skin"))
             if duration.valid && duration.value >= 0.0 && duration.value <= 315576000000.0 {
                 if TextUntilNul(id[:]) == TextUntilNul(device[:]) {
                     if cast(s64)duration.value > played { played = cast(s64)duration.value }
                 } else { other_played += cast(s64)duration.value }
+            }
+            if !dirty && TextUntilNul(id[:]) == TextUntilNul(device[:]) &&
+            chosen.valid && chosen.value >= 0.0 && chosen.value <= 8.0 &&
+            chosen.value == cast(float64)cast(s32)chosen.value && Available(cast(s32)chosen.value) {
+                skin = cast(s32)chosen.value
+                Save()
             }
             flag := FieldAt(reply, at, "visited")
             if flag >= 0 && reply[flag] == #char "t" { visited = true }

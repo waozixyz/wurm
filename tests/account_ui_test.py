@@ -116,6 +116,10 @@ def main():
             press('Back')
             nodes = tree('leaderboard-return-' + size)
             assert 'Choose level' in [node['label'] for node in nodes], 'Title leaderboard Back must return to title'
+            press('Leaderboard')
+            nodes = tree('leaderboard-second-' + size)
+            assert 'Leaderboard' in [node['label'] for node in nodes], 'A second leaderboard open must keep drawing the board'
+            press('Back')
             press('Skin shop')
             nodes = tree('shop-' + size)
             assert 'Mint' in [node['label'] for node in nodes]
@@ -142,7 +146,7 @@ def main():
             app.wait(timeout=5)
             app = None
         (OUT / 'result.json').write_text(json.dumps({'passed': True, 'private_display': env['DISPLAY'],
-            'behaviors': ['title-only account/shop/settings actions', 'shared appearance options and version', 'title leaderboard Back returns to title', 'skin catalog',
+            'behaviors': ['title-only account/shop/settings actions', 'shared appearance options and version', 'title leaderboard Back returns to title twice', 'skin catalog',
                           'explicit purchase confirmation', 'sign-in instead of guest debit', 'shared Profile in both orientations']}, indent=2))
         print('Account UI local tests passed in portrait and landscape on private Xvfb.')
     finally:
