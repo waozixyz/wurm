@@ -403,8 +403,9 @@ Portal :: (root: string) -> bool {
     // Put an old guest save in browser IDB, then reload as Alice. Her missing
     // cloud record must not borrow it; she starts a new journey in her own data.
     if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-no-sdk','1'),true") || !Reload() { return false }
-    if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") { return false }
-    if !BrowserEvaluate(browser, "new Promise((resolve,reject)=>{Module.FS.writeFile('/kryon-apps/wurm/unlocked.dat',new Uint8Array([57]));Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})") { return false }
+    // Audio is initialized on the first frame after browser storage settles.
+    if !Until(LOADED) || !Until("window.__wurmAudio.length>=7") { return false }
+    if !BrowserEvaluate(browser, "new Promise((resolve,reject)=>{Module.FS.mkdirTree('/kryon-apps/wurm');Module.FS.writeFile('/kryon-apps/wurm/unlocked.dat',new Uint8Array([57]));Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})") { return false }
     if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-account','Alice');sessionStorage.removeItem('wurm-no-sdk');true") || !Reload() { return false }
     if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") || !True("WurmPortal.username==='Alice'") { return Fail("the signed account did not load") }
     if CloudRecord("unlocked.dat") != "" {
