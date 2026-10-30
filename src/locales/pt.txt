@@ -457,3 +457,9 @@ Adicionando…
 [wurm_share_28]
 Adicionada a Meus níveis.
 ---
+[wurm_portal_0]
+Convidado
+---
+[wurm_portal_1]
+O progresso só fica guardado até fechar esta página.
+---

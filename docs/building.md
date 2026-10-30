@@ -282,6 +282,9 @@ release every ten minutes and deploys its verified browser archive to the
 `wurm` Cloudflare Pages project at https://wurm.waozi.xyz automatically, using
 the website's existing deployment credentials. Nothing needs updating by hand.
 
+The separate [CrazyGames edition](crazygames.md) has its own package, platform
+integration and local browser tests. Its build preserves the normal web output.
+
 ## Profile, appearance and cosmetics
 
 The release desktop build uses `tools/build_desktop.zi`. Android and browser

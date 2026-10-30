@@ -2,8 +2,11 @@
 #import "std/web"
 #import, file "audio_volume.zi";
 #import, file "audio_score.zi";
+Portal :: #import, file "portal.zi";
 ready: bool;
 muted: bool;
+// A portal's own mute, over the player's choice, which it leaves as it was.
+silenced: bool;
 volume: s32 = 100;
 sounds: [7]s32;
 ignore_play_failure: s32;
@@ -63,12 +66,15 @@ Play :: (index: s32) {
     promise := WebAsObject(WebCall0(sounds[index], WebName("play")))
     if promise != 0 { unused WebCall1(promise, WebName("catch"), WebObject(ignore_play_failure)) }
 }
+ApplyMute :: () {
+    mark := WebScope()
+    for index: 0..6 { WebSet(sounds[index], WebName("muted"), WebBool(muted || silenced)) }
+    WebEnd(mark)
+}
 ToggleMute :: () {
     Ensure()
     muted = !muted
-    mark := WebScope()
-    for index: 0..6 { WebSet(sounds[index], WebName("muted"), WebBool(muted)) }
-    WebEnd(mark)
+    ApplyMute()
 }
 MusicTime :: (track: s32) -> float64 { return WebGetNumber(sounds[track + 3], WebName("currentTime")) }
 RequestMusic :: (track: s32) {
@@ -104,7 +110,7 @@ PumpMusic :: () {
     }
 }
 UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: s32, active: bool = true) {
-    Ensure()
+    EnforceMute()
     mark := WebScope()
     if playing && !was_playing {
         Play(music_current + 3)
@@ -123,7 +129,7 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
     else if playing && active && apples < previous_apples { effect = 1 }
     else if playing && active && death > previous_death { effect = 2 }
     else if playing && active && transition > previous_transition { effect = 3 }
-    if effect >= 0 && !muted {
+    if effect >= 0 && !muted && !silenced {
         WebSet(sounds[effect], WebName("currentTime"), WebNumber(0.0))
         Play(effect)
     }
@@ -134,4 +140,13 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
     previous_death = death
     previous_transition = transition
     WebEnd(mark)
+}
+
+// Also called before modal and pending-ad early returns.
+EnforceMute :: () {
+    Ensure()
+    if Portal.AudioMuted() != silenced {
+        silenced = !silenced
+        ApplyMute()
+    }
 }

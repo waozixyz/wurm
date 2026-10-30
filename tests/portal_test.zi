@@ -1,0 +1,112 @@
+// The guest copy for game portals, built with WURM_CRAZYGAMES, against the
+// waozi.xyz edition built without it: the Mountains come free and unlock
+// like any chapter, nothing reaches an account, shop or website, the
+// language comes from the portal or is English, and the portal page loads
+// only files beside it and CrazyGames' SDK.
+Custom :: #import, file "../src/custom_levels.zi";
+Progress :: #import, file "../src/progress.zi";
+Records :: #import, file "../src/controls.zi";
+Wardrobe :: #import, file "../src/wardrobe.zi";
+Account :: #import, file "../src/account.zi";
+Portal :: #import, file "../src/portal.zi";
+Locale :: #import, file "../src/localization.zi";
+File :: #import "std/file_linux";
+#import "std/file"
+#import "std/text_buffer"
+#import "std/text_tools"
+
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: %\n", message); failures += 1 }
+}
+
+#program_export
+main :: () -> s32 {
+    Expect(Custom.CustomSetRoot("build/portal-test-data/"), "private records")
+    unused File.CreateDirectory("build/portal-test-data")
+    unused File.RemoveFile("build/portal-test-data/unlocked.dat")
+    unused File.RemoveFile("build/portal-test-data/run.dat")
+    Wardrobe.owned = 0
+    guest := false
+    #if #defined(WURM_CRAZYGAMES) {
+        guest = true
+    }
+    Expect(Portal.Guest() == guest, "the define chooses the edition")
+    // Without CrazyGames' SDK the portal copy speaks English, never the
+    // computer's language; waozi.xyz keeps the player's language.
+    Locale.SetLanguage("de")
+    Portal.ConfigureLanguage()
+    Expect(Locale.Text("Back") == ifx guest then "Back" else "Zurück", "portal language falls back to English")
+    // Play reports cost nothing and repeat nothing away from the portal.
+    Portal.LevelFinished(12345)
+    Portal.ReportBest(12345)
+    Expect(!Portal.AdPending(), "result hooks never block without the SDK")
+    Portal.Gameplay(true)
+    Portal.Gameplay(true)
+    Expect(Portal.reported_gameplay, "gameplay start remembered")
+    Portal.Gameplay(false)
+    Expect(!Portal.reported_gameplay && !Portal.AudioMuted(), "gameplay stop reported; no portal mute without the SDK")
+    // Nobody can buy the chapter in a portal copy, so it comes with the game.
+    Expect(Wardrobe.MountainsAvailable() == guest, "Mountains free only in the portal copy")
+    Wardrobe.owned = 512
+    Expect(Wardrobe.MountainsAvailable(), "a bought chapter stays open")
+    Wardrobe.owned = 0
+    // Shop, Dew, records and sharing answer nothing without an account.
+    Expect(Account.Service("entity.game-shop", "wurm.mountains") == "", "no purchase")
+    Expect(Account.Service("entity.dew", "balance") == "", "no Dew")
+    Expect(!Account.SharingAvailable(), "no level sharing")
+    Expect(!Account.ProfileVisible(), "no profile")
+    Expect(!Portal.AccountAvailable() && !Portal.ProfileVisible(), "no portal profile without the SDK")
+    #if #defined(WURM_CRAZYGAMES) {
+        session: [4]u8 = .[1, 2, 3, 4]
+        read: [4]u8
+        Expect(Records.SessionWrite("session.dat", session[0:3]), "a first session record can be written")
+        Expect(Records.SessionRead("session.dat", read[:]) == 3 && read[0] == 1 && read[1] == 2 && read[2] == 3,
+            "a first session record can be read back")
+        long_name: [64]u8
+        for index: 0..63 { long_name[index] = #char "n" }
+        Expect(!Records.SessionWrite(TextView(long_name[:]), session[0:1]), "a 64-character session name is rejected")
+        oversized: [513]u8
+        Expect(!Records.SessionWrite("oversized.dat", oversized[:]), "an oversized session value is rejected before copying")
+        // A website link would open a page away from the portal.
+        Expect(!Account.VisitWebsite(), "no link away")
+        // Mountains are free but still follow the forest's level order.
+        Expect(!Progress.Select(159, Wardrobe.MountainsAvailable()), "the next locked forest level cannot be selected")
+        Expect(!Progress.Select(160, Wardrobe.MountainsAvailable()), "a locked Mountain cannot start")
+        Progress.loaded = true; Progress.unlocked = 158; Progress.level = 0; Progress.lives = 3; Progress.score = 0
+        Expect(Progress.Begin(159, 3, 0), "finishing level 159 opens level 160")
+        Expect(Progress.unlocked == 159, "level 160 is unlocked in order")
+        Expect(Progress.Begin(160, 3, 0), "finishing level 160 opens level 161")
+        Expect(Progress.unlocked == 160, "level 161 is unlocked in order")
+        Expect(!Progress.Select(161, true), "the next locked Mountain cannot be selected")
+        Expect(Progress.Begin(161, 3, 0), "finishing level 161 opens level 162")
+        Expect(Progress.Select(161, true), "an unlocked Mountain follows sequentially")
+        saved, has_saved := ReadEntireFile("build/portal-test-data/unlocked.dat")
+        Expect(has_saved && saved.count == 1 && saved[0] == 161, "portal unlocks persist through 160 and 161")
+    } else {
+        Progress.loaded = true; Progress.unlocked = 158; Progress.level = 0; Progress.lives = 3; Progress.score = 0
+        Expect(!Progress.Select(160, Wardrobe.MountainsAvailable()), "Mountains stay a purchase on waozi.xyz")
+    }
+    page, has_page := ReadEntireFile("src/web/crazygames/index.html")
+    Expect(has_page, "portal page")
+    sdk := "https://sdk.crazygames.com/crazygames-sdk-v3.js"
+    Expect(TextFind(page, sdk) >= 0 && TextFind(page, sdk) < TextFind(page, ".then(connect).catch(function(){}).then(start)"), "portal page loads CrazyGames' SDK before the game")
+    Expect(TextFind(TextReplace(page, sdk, ""), "http") < 0 && TextFind(page, "//account") < 0 && TextFind(page, "share.js") < 0, "portal page loads nothing else from elsewhere")
+    Expect(TextFind(page, "within(5000,SDK.init())") >= 0, "the SDK start is bounded")
+    Expect(TextFind(page, "!!SDK.user.isUserAccountAvailable") >= 0 && TextFind(page, "isUserAccountAvailable()") < 0,
+        "SDK account availability is read as a property")
+    Expect(TextFind(page, "SDK.user.getUser()") >= 0 && TextFind(page, "user.showAuthPrompt()") >= 0,
+        "the page uses the official profile APIs")
+    Expect(TextFind(page, "__dangerousUserId") < 0, "the dangerous SDK identifier is not used")
+    Expect(TextFind(page, "WurmPortal.sdk.data.getItem") >= 0 && TextFind(page, "WurmPortal.sdk.data.setItem") >= 0,
+        "records use the active SDK")
+    Expect(TextFind(page, "sdkActive") >= 0 && TextFind(page, "saveLimited") >= 0,
+        "SDK routing and session-save warnings are explicit")
+    Expect(TextFind(page, "Promise.resolve(result).catch") >= 0, "sign-in cancellation is bounded")
+    Expect(TextFind(page, "src='asset-preloads.js'") >= 0 && TextFind(page, "src='game.js'") >= 0, "portal page loads the game beside it")
+    shared, has_shared := ReadEntireFile("src/web/index.html")
+    Expect(has_shared && TextFind(shared, "https://account.waozi.xyz/share.js") >= 0, "waozi.xyz keeps its shared sign-in")
+    if failures > 0 { return 1 }
+    print("Portal policy: % edition passed.\n", ifx guest then "CrazyGames guest" else "waozi.xyz")
+    return 0
+}

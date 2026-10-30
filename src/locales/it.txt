@@ -457,3 +457,9 @@ Aggiunta…
 [wurm_share_28]
 Aggiunta ai miei livelli.
 ---
+[wurm_portal_0]
+Ospite
+---
+[wurm_portal_1]
+I progressi restano solo finché questa pagina è aperta.
+---

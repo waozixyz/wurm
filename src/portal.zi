@@ -1,0 +1,248 @@
+// The CrazyGames edition keeps its progress in the portal's own data and shows
+// the portal profile. Other editions retain their local records and accounts.
+Locale :: #import, file "localization.zi";
+#if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+    #import "std/web"
+}
+#if #defined(WURM_CRAZYGAMES) {
+    #import "std/text_buffer"
+}
+#if #defined(WURM_CRAZYGAMES) {
+    Guest :: () -> bool { return true }
+} else {
+    Guest :: () -> bool { return false }
+}
+language_configured: bool;
+reported_gameplay: bool;
+account_available: bool;
+signed_in: bool;
+profile_visible: bool;
+username: [64]u8;
+
+// The page's window.WurmPortal: what the CrazyGames SDK said at start, kept
+// current by its settings listener. Zero when the page has none.
+#if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+    Bridge :: () -> s32 { return WebGetObject(WebGlobal, WebName("WurmPortal")) }
+}
+
+// CrazyGames picks the language from the player's portal settings, and
+// without its SDK the portal copy speaks English rather than following the
+// browser. The waozi.xyz edition keeps its own detection.
+ConfigureLanguage :: () {
+    if language_configured { return }
+    language_configured = true
+    #if #defined(WURM_CRAZYGAMES) {
+        locale := "en"
+        bytes: [64]u8
+        #if #defined(PLATFORM_WEB) {
+            scope := WebScope()
+            bridge := Bridge()
+            if bridge != 0 {
+                value := WebGet(bridge, WebName("locale"))
+                if value.tag == WebStringTag {
+                    unused WebCopyString(WebAsObject(value), bytes[:])
+                    if TextUntilNul(bytes[:]).count >= 2 { locale = TextUntilNul(bytes[:]) }
+                }
+            }
+            WebEnd(scope)
+        }
+        Locale.SetLanguage(locale)
+    }
+}
+
+// Tells CrazyGames when a level is being played and when it stops for a
+// pause, a menu or its end; each change is reported once.
+Gameplay :: (playing: bool) {
+    if playing == reported_gameplay { return }
+    reported_gameplay = playing
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        if bridge != 0 { unused WebCall1(bridge, WebName("gameplay"), WebBool(playing)) }
+        WebEnd(scope)
+    }
+}
+
+// Whether the portal's own settings silence the game, over the player's
+// sound choice.
+AudioMuted :: () -> bool {
+    muted := false
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        if bridge != 0 { muted = WebAsBool(WebGet(bridge, WebName("muted"))) || WebAsBool(WebGet(bridge, WebName("adPlaying"))) }
+        WebEnd(scope)
+    }
+    return muted
+}
+
+// The page fills these from CrazyGames after its bounded SDK startup. Keeping
+// the copy here avoids an async bridge in gameplay code.
+DataActive :: () -> bool {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        active := bridge != 0 && WebAsBool(WebGet(bridge, WebName("sdkActive")))
+        WebEnd(scope)
+        return active
+    } else {
+        return false
+    }
+}
+
+DataError :: () -> bool {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        failed := bridge != 0 && WebAsBool(WebGet(bridge, WebName("dataError")))
+        WebEnd(scope)
+        return failed
+    } else {
+        return false
+    }
+}
+
+SaveLimited :: () -> bool {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        limited := bridge != 0 && WebAsBool(WebGet(bridge, WebName("saveLimited")))
+        WebEnd(scope)
+        return limited
+    } else {
+        return false
+    }
+}
+
+HexValue :: (byte: u8, low: bool) -> u8 {
+    digit := ifx low then byte & 15 else byte >> 4
+    return ifx digit < 10 then cast(u8)(digit + 48) else cast(u8)(digit + 87)
+}
+
+HexDigit :: (byte: u8) -> s32 {
+    if byte >= 48 && byte <= 57 { return cast(s32)byte - 48 }
+    if byte >= 97 && byte <= 102 { return cast(s32)byte - 87 }
+    return -1
+}
+
+// SDK Data stores strings, so campaign records are encoded as hexadecimal.
+// A null result is a missing record; false means the portal storage failed.
+ReadRecord :: (name: string, output: []u8) -> s64 {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        if bridge == 0 { WebEnd(scope); return -1 }
+        result := WebCall1(bridge, WebName("recordRead"), WebText(name))
+        if result.tag == WebBoolTag && !WebAsBool(result) { WebEnd(scope); return -1 }
+        if result.tag != WebStringTag { WebEnd(scope); return -1 }
+        handle := WebAsObject(result)
+        length := WebStringLength(handle)
+        if length < 0 || length > output.count * 2 || length % 2 != 0 { WebEnd(scope); return -1 }
+        text: [513]u8
+        used := WebCopyString(handle, text[:])
+        if used != length || length > 512 { WebEnd(scope); return -1 }
+        for index: 0..length / 2 - 1 {
+            high := HexDigit(text[index * 2])
+            low := HexDigit(text[index * 2 + 1])
+            if high < 0 || low < 0 { WebEnd(scope); return -1 }
+            output[index] = cast(u8)(high * 16 + low)
+        }
+        WebEnd(scope)
+        return length / 2
+    } else {
+        return -1
+    }
+}
+
+WriteRecord :: (name: string, bytes: []u8) -> bool {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        if bytes.count > 256 { return false }
+        text: [512]u8
+        for index: 0..bytes.count - 1 {
+            text[index * 2] = HexValue(bytes[index], false)
+            text[index * 2 + 1] = HexValue(bytes[index], true)
+        }
+        scope := WebScope()
+        bridge := Bridge()
+        encoded := TextView(text[:bytes.count * 2])
+        saved := bridge != 0 && WebAsBool(WebCall2(bridge, WebName("recordWrite"),
+            WebText(name), WebText(encoded)))
+        WebEnd(scope)
+        return saved
+    } else {
+        return false
+    }
+}
+
+PumpAccount :: () {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        if bridge == 0 { WebEnd(scope); return }
+        account_available = WebAsBool(WebGet(bridge, WebName("accountAvailable")))
+        user := WebGet(bridge, WebName("username"))
+        if user.tag == WebStringTag {
+            length := WebCopyString(WebAsObject(user), username[:])
+            if length >= 0 && length < username.count { username[length] = 0 }
+            else { username[0] = 0 }
+        } else { username[0] = 0 }
+        signed_in = username[0] != 0
+        WebEnd(scope)
+    }
+}
+
+AccountAvailable :: () -> bool { PumpAccount(); return account_available }
+SignedIn :: () -> bool { PumpAccount(); return signed_in }
+ProfileVisible :: () -> bool { return profile_visible }
+OpenProfile :: () { PumpAccount(); if account_available { profile_visible = true } }
+BackProfile :: () { profile_visible = false }
+
+ProfileTitle :: () -> string {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        if !signed_in { return Locale.Text("Guest") }
+        return TextUntilNul(username[:])
+    } else {
+        return ""
+    }
+}
+
+// CrazyGames permits this prompt only from an explicit profile button.
+SignIn :: () {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        if bridge != 0 { unused WebCall0(bridge, WebName("authPrompt")) }
+        WebEnd(scope)
+    }
+}
+
+// Progress passes the actual best campaign score, including after reload.
+ReportBest :: (score: s32) {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        if bridge != 0 { unused WebCall1(bridge, WebName("submitBest"), WebNumber(cast(float64)score)) }
+        WebEnd(scope)
+    }
+}
+
+LevelFinished :: (score: s32) {
+    ReportBest(score)
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        Gameplay(false)
+        scope := WebScope()
+        bridge := Bridge()
+        if bridge != 0 { unused WebCall0(bridge, WebName("levelFinished")) }
+        WebEnd(scope)
+    }
+}
+
+AdPending :: () -> bool {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        bridge := Bridge()
+        pending := bridge != 0 && (WebAsBool(WebGet(bridge, WebName("adPending"))) || WebAsBool(WebGet(bridge, WebName("adPlaying"))))
+        WebEnd(scope)
+        return pending
+    } else { return false }
+}

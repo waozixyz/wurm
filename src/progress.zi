@@ -1,6 +1,7 @@
 // The current run carries lives and score. Unlocked levels survive new runs
 // and game overs, so Continue can always replay the furthest level reached.
 Records :: #import, file "controls.zi";
+Portal :: #import, file "portal.zi";
 Account :: #import, file "account.zi";
 Shared :: #import "entity/game_progress";
 #import "std/json_scan"
@@ -77,7 +78,11 @@ Load :: () {
             lives = cast(s32)bytes[1]
             score = saved
             has_run = true
-            if level > unlocked && level < 160 { unlocked = level }
+            #if #defined(WURM_CRAZYGAMES) {
+                if level > unlocked && level < LEVELS { unlocked = level }
+            } else {
+                if level > unlocked && level < 160 { unlocked = level }
+            }
         }
     }
     // Import both older save formats without letting a newer run erase unlocks.
@@ -135,6 +140,10 @@ RecordRun :: (reached: s32, run_score: s32) {
 
 // "run LEVEL SCORE" to the host's leaderboard, once per change.
 Report :: () {
+    #if #defined(WURM_CRAZYGAMES) {
+        Portal.ReportBest(best_score)
+        return
+    }
     if best_level == reported_level && best_score == reported_score { return }
     shown := ifx best_score > 100000 then 100000 else best_score
     out: Vec(u8)
@@ -198,7 +207,11 @@ Begin :: (at: s32, carried_lives: s32, carried_score: s32) -> bool {
     lives = carried_lives
     score = carried_score
     attempt += 1
-    if at > unlocked && at < 160 { unlocked = at }
+    #if #defined(WURM_CRAZYGAMES) {
+        if at > unlocked && at < LEVELS { unlocked = at }
+    } else {
+        if at > unlocked && at < 160 { unlocked = at }
+    }
     return Save()
 }
 
@@ -214,7 +227,13 @@ Restart :: () -> bool { return Begin(0, START_LIVES, 0) }
 Continue :: () -> bool { Load(); return Begin(unlocked, START_LIVES, 0) }
 Select :: (at: s32, mountains: bool = false) -> bool {
     Load()
-    if at < 0 || at >= LEVELS || (at >= 160 && !mountains) || (at < 160 && at > unlocked) { return false }
+    locked := false
+    #if #defined(WURM_CRAZYGAMES) {
+        locked = at > unlocked
+    } else {
+        locked = at < 160 && at > unlocked
+    }
+    if at < 0 || at >= LEVELS || (at >= 160 && !mountains) || locked { return false }
     return Begin(at, START_LIVES, 0)
 }
 
@@ -264,6 +283,10 @@ Complete :: (at: s32) {
 Pump :: (now: s64) -> bool {
     if now < poll_at { return false }
     poll_at = now + 5000
+    #if #defined(WURM_CRAZYGAMES) {
+        Load(); Report()
+        return false
+    }
     // A best run recorded before the leaderboard could take it goes now.
     Load()
     status := Account.Service("entity.records", "{\"operation\":\"status\"}")

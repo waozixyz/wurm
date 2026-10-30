@@ -1,0 +1,22 @@
+// Shared CrazyGames build configuration; the key is only serialized, never
+// logged.
+#import "std/format"
+#import "std/text_tools"
+
+Valid :: (key: string, ads: string) -> bool {
+    if ads != "" && ads != "true" && ads != "false" { return false }
+    if key.count == 0 { return true }
+    if key.count != 44 || key[43] != 61 { return false }
+    alphabet := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    for i: 0..42 {
+        found := TextFind(alphabet, key[i:i + 1])
+        if found < 0 || (i == 42 && found % 4 != 0) { return false }
+    }
+    return true
+}
+
+Text :: (key: string, ads: string) -> string {
+    config: Vec(u8)
+    BuilderPrint(*config, "window.WurmPortalConfig={leaderboardKey:'%',adsEnabled:%};\n", key, ifx ads == "true" then "true" else "false")
+    return BuilderFinish(config)
+}

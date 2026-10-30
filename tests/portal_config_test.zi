@@ -1,0 +1,30 @@
+// CrazyGames builds accept only a canonical 32-byte leaderboard key and a
+// strict ads boolean; this test keeps that boundary in the maintained suite.
+PortalConfig :: #import, file "../src/portal_config.zi";
+
+failures: s32;
+
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: portal_config: %\n", message); failures += 1 }
+}
+
+#program_export
+main :: () -> s32 {
+    public_key := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    noncanonical := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB="
+    invalid_character := "'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    short := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    long := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+    Expect(PortalConfig.Valid("", ""), "empty default configuration")
+    Expect(PortalConfig.Valid("", "true") && PortalConfig.Valid("", "false"), "default key with either ads mode")
+    Expect(PortalConfig.Valid(public_key, "true") && PortalConfig.Valid(public_key, "false"), "canonical key")
+    Expect(PortalConfig.Text("", "") == "window.WurmPortalConfig={leaderboardKey:'',adsEnabled:false};\n", "default serialization")
+    Expect(PortalConfig.Text(public_key, "true") == "window.WurmPortalConfig={leaderboardKey:'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',adsEnabled:true};\n", "configured serialization")
+
+    Expect(!PortalConfig.Valid(invalid_character, "false"), "key with quote injection")
+    Expect(!PortalConfig.Valid(short, "false") && !PortalConfig.Valid(long, "false"), "key with invalid length")
+    Expect(!PortalConfig.Valid(noncanonical, "false"), "noncanonical base64 padding")
+    Expect(!PortalConfig.Valid(public_key, "TRUE") && !PortalConfig.Valid(public_key, "'"), "strict ads boolean")
+    return ifx failures == 0 then 0 else 1
+}

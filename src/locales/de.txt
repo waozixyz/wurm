@@ -457,3 +457,9 @@ Wird hinzugefügt…
 [wurm_share_28]
 Zu Meine Level hinzugefügt.
 ---
+[wurm_portal_0]
+Gast
+---
+[wurm_portal_1]
+Der Fortschritt bleibt nur, bis diese Seite geschlossen wird.
+---

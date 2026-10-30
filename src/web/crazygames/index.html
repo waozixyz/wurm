@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#202b26">
+  <title>Apfelwurm</title>
+  <link rel="icon" href="data:,">
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#202b26;color:#e0e7d9;font:16px system-ui,sans-serif;overscroll-behavior:none}
+    body{overflow:hidden}#canvas-frame{position:fixed;inset:0}canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
+    #loading{position:absolute;inset:0;display:grid;place-content:center;gap:16px;text-align:center;background:linear-gradient(#303c33e8,#202b26e8),url('loading.webp') center/cover;font-size:18px}#loading strong{font-size:32px}#loading[hidden]{display:none}
+  </style>
+</head>
+<body>
+  <main id="canvas-frame"><canvas id="canvas" tabindex="0" aria-label="Apfelwurm game: choose swipe or direction pad, collect apples, then leave through the top gate."></canvas><div id="loading" role="status"><strong>A little worm.<br>A long journey.</strong><span>Opening Apfelwurm…</span></div></main>
+  <script src="portal-config.js"></script>
+  <script>
+    // The CrazyGames edition: every game file sits beside this page and only
+    // CrazyGames' own SDK comes from elsewhere. It chooses language, sound,
+    // profile and durable account data, and hears loading and gameplay events.
+    // The game opens without it when it fails, is slow or is disabled.
+    var WurmPortal={sdk:null,locale:'',muted:false,sdkActive:false,dataError:false,saveLimited:false,
+      sdkGameplay:false,accountAvailable:false,username:'',accountError:false,adPending:false,adPlaying:false,adsFailed:false,scoreBest:0,scoreSent:0,scoreBusy:false,scoreAt:0,gameplay:function(on){if(on===this.sdkGameplay)return;this.sdkGameplay=on;portal(on?'gameplayStart':'gameplayStop')},
+      recordRead(name){try{WurmPortal.dataError=false;return WurmPortal.sdk.data.getItem(name)}catch(e){WurmPortal.dataError=WurmPortal.saveLimited=true;return false}},
+      recordWrite(name,value){try{WurmPortal.dataError=false;WurmPortal.sdk.data.setItem(name,value);return true}catch(e){WurmPortal.dataError=WurmPortal.saveLimited=true;return false}},
+      authPrompt(){try{var result=WurmPortal.sdk.user.showAuthPrompt();Promise.resolve(result).catch(function(){WurmPortal.accountError=true}).then(function(){document.getElementById('canvas').focus()});return true}catch(e){WurmPortal.accountError=true;return false}}};
+    // Only WebCrypto and asynchronous SDK glue live here; the game chooses
+    // the campaign score and the completed-level boundary in Ziran.
+    WurmPortal.submitBest=function(score){
+      var p=WurmPortal,c=window.WurmPortalConfig||{};
+      if(!p.sdkActive||!c.leaderboardKey||!Number.isSafeInteger(score)||score<=0)return;
+      p.scoreBest=Math.max(p.scoreBest,score);
+      if(p.scoreBusy||p.scoreBest<=p.scoreSent||Date.now()<p.scoreAt)return;
+      p.scoreBusy=true;p.scoreAt=Date.now()+10000;score=p.scoreBest;
+      Promise.resolve().then(async function(){
+        var raw=Uint8Array.from(atob(c.leaderboardKey),x=>x.charCodeAt(0));
+        var key=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt']);
+        var iv=crypto.getRandomValues(new Uint8Array(12));
+        var encrypted=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(score.toString())));
+        var packed=new Uint8Array(12+encrypted.length);packed.set(iv);packed.set(encrypted,12);
+        await p.sdk.user.submitScore({encryptedScore:btoa(String.fromCharCode(...packed)),score:score});
+        p.scoreSent=score; // SDK completion, not server validation acknowledgement.
+      }).catch(function(){}).finally(function(){p.scoreBusy=false});
+    };
+    WurmPortal.levelFinished=function(){
+      var p=WurmPortal,c=window.WurmPortalConfig||{};
+      if(!p.sdkActive||!c.adsEnabled||p.adsFailed||p.adPending||p.adPlaying)return;
+      p.adPending=true;
+      var ended=false,timedOut=false,timer;
+      function end(){if(ended)return;ended=true;clearTimeout(timer);p.adPending=p.adPlaying=false;Module.canvas.focus()}
+      timer=setTimeout(function(){p.adsFailed=true;timedOut=true;end()},30000);
+      try{
+        var result=p.sdk.ad.requestAd('midgame',{
+          adStarted:function(){
+            // A timed-out request can still call back: freeze and mute again,
+            // and never allow another request during this page session.
+            if(ended&&!timedOut)return;
+            ended=false;timedOut=false;clearTimeout(timer);
+            p.adPending=p.adPlaying=true;p.gameplay(false);
+            // If playback loses its completion callback, reload the saved
+            // journey rather than resume underneath a possibly active ad.
+            timer=setTimeout(function(){location.reload()},180000)
+          },adFinished:end,adError:end});
+        Promise.resolve(result).catch(end);
+      }catch(e){end()}
+    };
+    // Discard input at the DOM boundary too, including held keys at release.
+    ['keydown','pointerdown','pointermove','touchstart','touchmove','click'].forEach(function(type){
+      window.addEventListener(type,function(e){if(WurmPortal.adPending||WurmPortal.adPlaying){e.preventDefault();e.stopImmediatePropagation()}},true)
+    });
+    function portal(name){try{if(WurmPortal.sdk)WurmPortal.sdk.game[name]()}catch(e){}}
+    function within(ms,promise){return Promise.race([promise,new Promise(function(done,fail){setTimeout(fail,ms)})])}
+    var Module={canvas:document.getElementById('canvas'),onRuntimeInitialized(){portal('loadingStop');document.getElementById('loading').hidden=true;Module.canvas.focus()},onAbort(){portal('loadingStop');document.getElementById('loading').hidden=false;document.getElementById('loading').textContent='The game could not open. Please reload to try again.'},printErr(text){console.error(text)}};
+    // Arrow keys and Space steer the worm, not the portal page around it.
+    window.addEventListener('keydown',function(e){if(/INPUT|TEXTAREA/.test(e.target.tagName))return;if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0)e.preventDefault()},{passive:false});
+    function connect(){
+      var SDK=window.CrazyGames&&window.CrazyGames.SDK;
+      if(!SDK)return;
+      return within(5000,SDK.init()).then(function(){
+        if(['local','crazygames'].indexOf(SDK.environment)<0)return;
+        WurmPortal.sdk=SDK;
+        WurmPortal.sdkActive=true;
+        try{WurmPortal.accountAvailable=!!SDK.user.isUserAccountAvailable}catch(e){WurmPortal.accountAvailable=false}
+        function user(){
+          if(!WurmPortal.accountAvailable)return Promise.resolve(null);
+          return within(5000,SDK.user.getUser()).then(function(profile){return profile||null}).catch(function(){WurmPortal.accountError=true;return null})
+        }
+        function showUser(profile){WurmPortal.username=profile&&profile.username?String(profile.username):''}
+        try{SDK.user.addAuthListener(function(){location.reload()})}catch(e){}
+        try{WurmPortal.locale=SDK.user.systemInfo.locale||''}catch(e){}
+        try{WurmPortal.muted=!!SDK.game.settings.muteAudio;SDK.game.addSettingsChangeListener(function(settings){WurmPortal.muted=!!settings.muteAudio})}catch(e){}
+        portal('loadingStart');
+        return user().then(showUser);
+      });
+    }
+    function start(){
+      var assets=document.createElement('script');
+      assets.src='asset-preloads.js';
+      assets.onload=function(){var game=document.createElement('script');game.src='game.js';game.onerror=Module.onAbort;document.body.appendChild(game)};
+      assets.onerror=Module.onAbort;
+      document.body.appendChild(assets);
+    }
+    var sdk=document.createElement('script');
+    sdk.src='https://sdk.crazygames.com/crazygames-sdk-v3.js';
+    within(5000,new Promise(function(done){sdk.onload=sdk.onerror=done;document.head.appendChild(sdk)})).then(connect).catch(function(){}).then(start);
+  </script>
+</body>
+</html>

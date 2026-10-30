@@ -1,6 +1,7 @@
 Account :: #import, file "account.zi";
 Progress :: #import, file "progress.zi";
 Rewards :: #import, file "rewards.zi";
+Portal :: #import, file "portal.zi";
 Records :: #import, file "controls.zi";
 #import "std/json_scan"
 #import "std/text_buffer"
@@ -62,7 +63,8 @@ Available :: (id: s32) -> bool {
     if id == 6 { return visited }
     return Rewards.Owns(id)
 }
-MountainsAvailable :: () -> bool { return (owned & 512) != 0 }
+// Portal copies sell nothing, so the Mountains come with the game.
+MountainsAvailable :: () -> bool { return Portal.Guest() || (owned & 512) != 0 }
 Select :: (id: s32) {
     if Available(id) {
         skin = id

@@ -1,5 +1,8 @@
 // Each edition keeps its choice with its private level records.
 Custom :: #import, file "custom_levels.zi";
+#if #defined(WURM_CRAZYGAMES) {
+    Portal :: #import, file "portal.zi";
+}
 #if #defined(PLATFORM_WEB) {
     BrowserStorage :: #import "kryon/bundle_storage_web";
 }
@@ -20,7 +23,59 @@ Custom :: #import, file "custom_levels.zi";
     }
 }
 
+#if #defined(WURM_CRAZYGAMES) {
+    session_names: [12][64]u8;
+    session_counts: [12]s64;
+    session_bytes: [12][512]u8;
+    session_used: [12]bool;
+
+    SessionIndex :: (name: string) -> s32 {
+        if name.count >= 64 { return -1 }
+        for record: 0..11 {
+            matches := session_used[record]
+            for index: 0..name.count - 1 {
+                if session_names[record][index] != cast(u8)name[index] { matches = false }
+            }
+            if matches && session_names[record][name.count] == 0 { return cast(s32)record }
+        }
+        return -1
+    }
+
+    SessionRead :: (name: string, output: []u8) -> s64 {
+        record := SessionIndex(name)
+        if record < 0 || session_counts[record] > output.count { return -1 }
+        for index: 0..session_counts[record] - 1 { output[index] = session_bytes[record][index] }
+        return session_counts[record]
+    }
+
+    SessionWrite :: (name: string, bytes: []u8) -> bool {
+        if name.count >= 64 || bytes.count > 512 { return false }
+        record := SessionIndex(name)
+        if record < 0 {
+            for candidate: 0..11 {
+                if !session_used[candidate] { record = cast(s32)candidate; break }
+            }
+            if record < 0 { return false }
+            for index: 0..name.count - 1 { session_names[record][index] = cast(u8)name[index] }
+            session_names[record][name.count] = 0
+            session_used[record] = true
+        }
+        if bytes.count > 512 { return false }
+        for index: 0..bytes.count - 1 { session_bytes[record][index] = bytes[index] }
+        session_counts[record] = bytes.count
+        return true
+    }
+}
+
 ReadRecord :: (name: string, output: []u8) -> s64 {
+    #if #defined(WURM_CRAZYGAMES) {
+        if Portal.DataActive() {
+            count := Portal.ReadRecord(name, output)
+            if count >= 0 { return count }
+            if Portal.DataError() { return SessionRead(name, output) }
+            return -1
+        }
+    }
     #if #defined(WURM_PORTABLE) {
         return Storage.ReadLevel(name, output)
     } else {
@@ -31,6 +86,13 @@ ReadRecord :: (name: string, output: []u8) -> s64 {
     }
 }
 WriteRecord :: (name: string, bytes: []u8) -> bool {
+    #if #defined(WURM_CRAZYGAMES) {
+        if Portal.DataActive() {
+            if Portal.WriteRecord(name, bytes) { return true }
+            if Portal.DataError() { return SessionWrite(name, bytes) }
+            return false
+        }
+    }
     #if #defined(WURM_PORTABLE) {
         return Storage.WriteLevel(name, bytes)
     } else {

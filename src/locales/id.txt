@@ -457,3 +457,9 @@ Menambahkan…
 [wurm_share_28]
 Ditambahkan ke Level saya.
 ---
+[wurm_portal_0]
+Tamu
+---
+[wurm_portal_1]
+Kemajuan hanya tersimpan sampai halaman ini ditutup.
+---

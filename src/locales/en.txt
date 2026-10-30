@@ -457,3 +457,9 @@ Adding…
 [wurm_share_28]
 Added to My levels.
 ---
+[wurm_portal_0]
+Guest
+---
+[wurm_portal_1]
+Progress is kept only until this page closes.
+---

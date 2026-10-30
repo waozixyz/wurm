@@ -180,6 +180,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "Přidat do Mých úrovní" }
         if source == "Adding…" { return "Přidávání…" }
         if source == "Added to My levels." { return "Přidáno do Mých úrovní." }
+        if source == "Guest" { return "Host" }
+        if source == "Progress is kept only until this page closes." { return "Postup zůstane uložen jen do zavření této stránky." }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
@@ -325,6 +327,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "Zu Meine Level" }
         if source == "Adding…" { return "Wird hinzugefügt…" }
         if source == "Added to My levels." { return "Zu Meine Level hinzugefügt." }
+        if source == "Guest" { return "Gast" }
+        if source == "Progress is kept only until this page closes." { return "Der Fortschritt bleibt nur, bis diese Seite geschlossen wird." }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
@@ -476,6 +480,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "Añadir a Mis niveles" }
         if source == "Adding…" { return "Añadiendo…" }
         if source == "Added to My levels." { return "Añadida a Mis niveles." }
+        if source == "Guest" { return "Invitado" }
+        if source == "Progress is kept only until this page closes." { return "El progreso solo se conserva hasta que cierres esta página." }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
@@ -623,6 +629,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "Ajouter à Mes niveaux" }
         if source == "Adding…" { return "Ajout…" }
         if source == "Added to My levels." { return "Ajoutée à Mes niveaux." }
+        if source == "Guest" { return "Invité" }
+        if source == "Progress is kept only until this page closes." { return "La progression n’est conservée que jusqu’à la fermeture de cette page." }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
@@ -771,6 +779,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "Tambah ke Level saya" }
         if source == "Adding…" { return "Menambahkan…" }
         if source == "Added to My levels." { return "Ditambahkan ke Level saya." }
+        if source == "Guest" { return "Tamu" }
+        if source == "Progress is kept only until this page closes." { return "Kemajuan hanya tersimpan sampai halaman ini ditutup." }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
@@ -921,6 +931,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "Aggiungi ai miei livelli" }
         if source == "Adding…" { return "Aggiunta…" }
         if source == "Added to My levels." { return "Aggiunta ai miei livelli." }
+        if source == "Guest" { return "Ospite" }
+        if source == "Progress is kept only until this page closes." { return "I progressi restano solo finché questa pagina è aperta." }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
@@ -1073,6 +1085,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "マイレベルに追加" }
         if source == "Adding…" { return "追加中…" }
         if source == "Added to My levels." { return "マイレベルに追加しました。" }
+        if source == "Guest" { return "ゲスト" }
+        if source == "Progress is kept only until this page closes." { return "進行状況はこのページを閉じるまでしか保存されません。" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
@@ -1225,6 +1239,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "내 레벨에 추가" }
         if source == "Adding…" { return "추가 중…" }
         if source == "Added to My levels." { return "내 레벨에 추가했습니다." }
+        if source == "Guest" { return "게스트" }
+        if source == "Progress is kept only until this page closes." { return "진행 상황은 이 페이지를 닫을 때까지만 유지됩니다." }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
@@ -1375,6 +1391,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "Adicionar a Meus níveis" }
         if source == "Adding…" { return "Adicionando…" }
         if source == "Added to My levels." { return "Adicionada a Meus níveis." }
+        if source == "Guest" { return "Convidado" }
+        if source == "Progress is kept only until this page closes." { return "O progresso só fica guardado até fechar esta página." }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
@@ -1527,6 +1545,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "В Мои уровни" }
         if source == "Adding…" { return "Добавление…" }
         if source == "Added to My levels." { return "Добавлено в Мои уровни." }
+        if source == "Guest" { return "Гость" }
+        if source == "Progress is kept only until this page closes." { return "Прогресс сохраняется только до закрытия этой страницы." }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
@@ -1679,6 +1699,8 @@ Text :: (source: string) -> string {
         if source == "Add to My levels" { return "添加到我的关卡" }
         if source == "Adding…" { return "正在添加…" }
         if source == "Added to My levels." { return "已添加到我的关卡。" }
+        if source == "Guest" { return "访客" }
+        if source == "Progress is kept only until this page closes." { return "进度只保留到关闭此页面为止。" }
     }
     return source
 }

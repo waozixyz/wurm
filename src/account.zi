@@ -196,5 +196,10 @@
     RefreshProfile :: () {}
     DrawProfile :: (session: Session, bounds: Rectangle, key: s32, dark: bool) {}
     Back :: () {}
-    VisitWebsite :: () -> bool { return OpenUri("https://waozi.xyz/") }
+    // Portal copies keep players in the game: no links away.
+    #if #defined(WURM_CRAZYGAMES) {
+        VisitWebsite :: () -> bool { return false }
+    } else {
+        VisitWebsite :: () -> bool { return OpenUri("https://waozi.xyz/") }
+    }
 }

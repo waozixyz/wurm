@@ -4,10 +4,12 @@
 // ziran.local.toml are used when present; CI has none and uses the lock.
 //
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- [ARCHIVE]
-//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web
+//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web | crazygames
 //
 // ui, account-ui and web run the private Xvfb, account and browser tests;
 // build the desktop, modal-test, account and web editions first.
+// crazygames checks the portal policy and plays work/crazygames.zip, unpacked
+// below a nested path; pack it first with tools/build_web.zi -- crazygames.
 #import "std/file"
 #import "std/file_tree_linux"
 #import "std/format"
@@ -80,6 +82,23 @@ Pair :: (name: string, path: string) -> string {
 }
 
 none: [0]string;
+
+// The portal policy in both editions, then the packed CrazyGames copy in
+// the private browser, as a portal serves it below its own path.
+CrazyGames :: () -> bool {
+    guest: [1]string = .["WURM_CRAZYGAMES"]
+    if !Test("portal_config_test", "portal-config-test", none[:], "-lz", none[:]) { return false }
+    if !Test("portal_test", "portal-test", none[:], "", none[:]) || !Test("portal_test", "portal-guest-test", guest[:], "", none[:]) { return false }
+    site := "build/crazygames-test/site"
+    unused RemoveTree(site)
+    folder := JoinPath(site, "games/apfelwurm")
+    if !CreateDirectories(folder) { return false }
+    unpack: [5]string = .["unzip", "-q", "work/crazygames.zip", "-d", folder]
+    if !Run(unpack[:], none[:]) { return false }
+    if !IsFile(JoinPath(folder, "index.html")) { return false }
+    served: [1]string = .[Pair("WURM_TEST_PORTAL", ResolvePath(site))]
+    return Test("web_test", "web-test-runner", none[:], "-lm", served[:])
+}
 
 // The real account frames headlessly, with a private profile under work/.
 AccountNavigation :: () -> bool {
@@ -207,6 +226,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if mode == "ui" { return ifx Interface("private_ui_test", "private-ui-test", "-lX11 -lcairo -lm") then 0 else Fail("private UI") }
     if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
     if mode == "web" { return ifx Interface("web_test", "web-test-runner", "-lm") then 0 else Fail("browser") }
+    if mode == "crazygames" { return ifx CrazyGames() then 0 else Fail("CrazyGames copy") }
     archive := ifx mode.count > 0 then mode else "/mnt/storage/Games/The-Worm_Win_EN"
     if !Test("recovery_test", "recovery-test", none[:], "-lz", none[:], archive) { return Fail("recovery") }
     if !Tool("design_levels", "--check") { return Fail("campaign design") }
@@ -223,7 +243,10 @@ main :: (argc: s32, argv: **u8) -> s32 {
     accounts: [1]string = .["WURM_ACCOUNT_TEST"]
     if !Test("account_test", "account-test", accounts[:], "", none[:]) { return Fail("account") }
     if !Test("rewards_test", "rewards-test", accounts[:], "", none[:]) { return Fail("rewards") }
+    guest: [1]string = .["WURM_CRAZYGAMES"]
+    if !Test("portal_test", "portal-test", none[:], "", none[:]) || !Test("portal_test", "portal-guest-test", guest[:], "", none[:]) { return Fail("portal policy") }
     if !Test("skin_art_test", "skin-art-test", none[:], "-lz", none[:]) { return Fail("skin art parity") }
+    if !Test("web_art_test", "web-art-test", none[:], "", none[:]) { return Fail("browser art") }
     if !Test("level_json_test", "level-json-test", none[:], "", none[:]) { return Fail("level JSON") }
     if !Test("own_levels_test", "own-levels-test", none[:], "", none[:]) { return Fail("own levels") }
     if !Test("level_sharing_test", "level-sharing-test", none[:], "", none[:]) { return Fail("level sharing") }

@@ -457,3 +457,9 @@ Přidávání…
 [wurm_share_28]
 Přidáno do Mých úrovní.
 ---
+[wurm_portal_0]
+Host
+---
+[wurm_portal_1]
+Postup zůstane uložen jen do zavření této stránky.
+---

@@ -33,6 +33,7 @@ Progress :: #import, file "progress.zi";
 Appearance :: #import, file "appearance.zi";
 Account :: #import, file "account.zi";
 Wardrobe :: #import, file "wardrobe.zi";
+Portal :: #import, file "portal.zi";
 Locale :: #import, file "localization.zi";
 Version :: #import, file "version.zi";
 #import "kryon/widget_palette"
@@ -458,7 +459,11 @@ TitleActions :: (session: Session, area: Rectangle) {
     // Painted icons float on the title like the chest, a little smaller on phones.
     size: float32 = ifx area.width < 600.0 then 56.0 else 76.0
     icon: float32 = ifx area.width < 600.0 then 48.0 else 60.0
-    #if !#defined(WURM_PORTABLE) {
+    // Portal copies are guest-only: no account, Dew, shop or daily chest.
+    #if #defined(WURM_CRAZYGAMES) {
+        if Portal.AccountAvailable() && TitleIcon(session, 28002,
+                Rectangle.{right - icon * 2.0 - 8.0, top, icon, icon}, 2, "Profile") { Portal.OpenProfile() }
+    } else #if !#defined(WURM_PORTABLE) {
         // The balance follows Dew earned or spent elsewhere: asked again
         // whenever the title comes back into view, then twice a minute.
         now := Timer.MonotonicMilliseconds()
@@ -472,8 +477,16 @@ TitleActions :: (session: Session, area: Rectangle) {
         if TitleIcon(session, 28004, Rectangle.{right - icon * 2.0 - 8.0, top, icon, icon}, 1, "Leaderboard") { Account.OpenLeaderboard() }
     }
     if TitleIcon(session, 28003, Rectangle.{right - icon, top, icon, icon}, 0, "Settings") { game.mode = MODE_SETTINGS }
-    TitleShop(session, Rectangle.{area.x + 12.0, top, size, size})
-    RewardChest(session, Rectangle.{area.x + 12.0, top + size + 10.0, size, size})
+    #if #defined(WURM_CRAZYGAMES) {
+        if Portal.SaveLimited() {
+            GameText(session, 28005, "Progress is kept only until this page closes.",
+                Rectangle.{area.x + 16.0, area.y + 12.0, area.width - 180.0, 24.0}, 15, false, true)
+        }
+    }
+    #if !#defined(WURM_CRAZYGAMES) {
+        TitleShop(session, Rectangle.{area.x + 12.0, top, size, size})
+        RewardChest(session, Rectangle.{area.x + 12.0, top + size + 10.0, size, size})
+    }
 }
 TitleIcon :: (session: Session, key: u64, bounds: Rectangle, cell: s32, label: string) -> bool {
     unused Image(session, ImageProps.{.key = key + 100, .asset_path = ART_TITLE_ICONS, .bounds = bounds,
@@ -603,11 +616,13 @@ DrawSettings :: (session: Session, area: Rectangle) {
     if width > 540.0 { width = 540.0 }
     scroller := Scroll(session, ScrollProps.{.key = 28200,
         .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + 76.0, width, area.height - 88.0},
-        .content_height = ifx KeyboardOnly() then 448 else 508, .scroll_offset = settings_scroll})
+        .content_height = (ifx KeyboardOnly() then 448 else 508) - (ifx Portal.Guest() then 150 else 0), .scroll_offset = settings_scroll})
     settings_scroll = scroller.scroll_offset
     if !scroller.opened { return }
     x := scroller.content.x; y := scroller.content.y; width = scroller.content.width
-    if Button(session, ButtonProps.{.key = 28201, .bounds = Rectangle.{x, y, width, 60.0},
+    // Appearance belongs to the shared profile, absent from portal copies.
+    if Portal.Guest() { y -= 150.0 }
+    else if Button(session, ButtonProps.{.key = 28201, .bounds = Rectangle.{x, y, width, 60.0},
             .label = Locale.Text("Appearance"), .class_name = 11}) != 0 { Account.OpenAppearance() }
     #if !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) && !#defined(WURM_PORTABLE) {
         // Local rounds share one keyboard, so only computers offer them.
@@ -3000,10 +3015,12 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
             .bounds = Rectangle.{footer_x, area.y + area.height - 56.0, footer_width, 40.0},
             .label = Locale.Text("Choose level"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 76 || key == 108 { return 3 }
-    if Button(session, ButtonProps.{.key = 811,
-            .bounds = Rectangle.{footer_x + footer_width + 12.0, area.y + area.height - 56.0, footer_width, 40.0},
-            .label = Locale.Text("Level editor"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
-            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { return 4 }
+    #if !#defined(WURM_CRAZYGAMES) {
+        if Button(session, ButtonProps.{.key = 811,
+                .bounds = Rectangle.{footer_x + footer_width + 12.0, area.y + area.height - 56.0, footer_width, 40.0},
+                .label = Locale.Text("Level editor"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
+                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { return 4 }
+    }
     width := area.width - 48.0
     if width > 280.0 { width = 280.0 }
     if Progress.unlocked > 0 {
@@ -3038,12 +3055,18 @@ requested_level: s32;
 StartChosenRun :: (now: s64) {
     if !Progress.Select(requested_level, Wardrobe.MountainsAvailable()) { return }
     StartRun(now)
+    if Portal.Guest() {
+        game.mode = MODE_PLAYING
+        game.next_step = now + TickInterval(game.level)
+        touch_steering.active = false
+    }
 }
 PlaySelected :: (level: s32, now: s64) -> bool {
     Progress.Load()
     if !LevelAvailable(level) { return false }
     requested_level = level
-    if Controls.Chosen() || KeyboardOnly() { StartChosenRun(now) }
+    if Portal.Guest() && !Controls.Chosen() { unused Controls.SetPad(false) }
+    if Controls.Chosen() || KeyboardOnly() || Portal.Guest() { StartChosenRun(now) }
     else { AskControls() }
     return true
 }
@@ -3056,7 +3079,8 @@ level_chapter: s32;
 mountains_confirm: bool;
 LevelAvailable :: (level: s32) -> bool {
     if level < 0 || level >= LEVEL_COUNT { return false }
-    if level >= 160 { return Wardrobe.MountainsAvailable() }
+    // A bought Mountains chapter opens whole; portal copies unlock it level by level.
+    if level >= 160 && !Portal.Guest() { return Wardrobe.MountainsAvailable() }
     return level <= Progress.unlocked
 }
 level_scroll: s32;
@@ -3219,6 +3243,9 @@ HandleInput :: (key: s32, now: s64) {
         else if key == 50 { ChooseControls(true, now) }
         else if key == Input.KeyEscape { game.mode = controls_previous_mode }
         return
+    }
+    #if #defined(WURM_CRAZYGAMES) {
+        if game.mode == MODE_STAGES && (key == 69 || key == 101) { return }
     }
     if game.mode == MODE_STAGES && (key == 69 || key == 101) {
         OpenEditorHome()
@@ -3403,8 +3430,11 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
     }
 }
 
+portal_ad_was_pending: bool;
+
 #program_export
 Frame :: (session: Session, viewport: Rectangle) -> s32 {
+    Portal.ConfigureLanguage()
     unused WidgetPaletteUse(session, Appearance.Palette())
     #if #defined(PLATFORM_WEB) {
         if !browser_storage_started {
@@ -3419,6 +3449,22 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         }
     }
     now := Timer.MonotonicMilliseconds()
+    #if #defined(PLATFORM_WEB) {
+        Audio.EnforceMute()
+    }
+    ad_pending := Portal.AdPending()
+    if ad_pending || portal_ad_was_pending {
+        portal_ad_was_pending = ad_pending
+        Portal.Gameplay(false)
+        #if !#defined(WURM_PORTABLE) {
+            while KeyboardTake(session) != 0 {}
+        }
+        touch_steering.active = false
+        game.next_step = now + 25
+        unused Box(session, BoxProps.{.key = 29990, .bounds = viewport, .fill = Appearance.Canvas()})
+        CentreText(session, 29991, "Please wait…", viewport, 20)
+        return 0
+    }
     #if !#defined(WURM_PORTABLE) {
         // Every scrollable page shares the same input path, including the
         // skin shop, calendar and settings on small windows and phones.
@@ -3427,6 +3473,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
             pointer.down, pointer.released, TreeInput.PointerWheelTake(session, viewport), cast(float64)now / 1000.0)
     }
     Account.Pump()
+    Portal.PumpAccount()
     Appearance.ApplyShared(Account.SharedTheme(), Account.SharedAccent(), Account.SharedMaterial(), Account.SystemDark())
     unused WidgetPaletteUse(session, Appearance.Palette())
     LoadSound()
@@ -3439,6 +3486,31 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
             game.mode = MODE_STAGES
             touch_steering.active = false
         }
+    }
+    if Portal.ProfileVisible() {
+        profile_key: s32
+        #if !#defined(WURM_PORTABLE) {
+            profile_key = KeyboardTake(session)
+        }
+        unused Box(session, BoxProps.{.key = 29000, .bounds = viewport, .fill = Appearance.Canvas()})
+        GameText(session, 29001, "Profile", Rectangle.{viewport.x + 100.0, viewport.y + 14.0, viewport.width - 112.0, 32.0}, 22)
+        PlainText(session, 29003, Portal.ProfileTitle(), Rectangle.{viewport.x + 32.0, viewport.y + 84.0, viewport.width - 64.0, 34.0}, 24)
+        if Portal.SaveLimited() {
+            GameText(session, 29004, "Progress is kept only until this page closes.",
+                Rectangle.{viewport.x + 32.0, viewport.y + 128.0, viewport.width - 64.0, 24.0}, 15, false, true)
+        }
+        if !Portal.SignedIn() {
+            width: float32 = 220.0
+            if Button(session, ButtonProps.{.key = 29005, .bounds =
+                    Rectangle.{viewport.x + (viewport.width - width) / 2.0, viewport.y + 180.0, width, 48.0},
+                    .label = Locale.Text("Sign in")}) != 0 { Portal.SignIn() }
+        }
+        if Button(session, ButtonProps.{.key = 29002, .bounds = Rectangle.{viewport.x + 12.0, viewport.y + 8.0, 76.0, 44.0},
+                .label = Locale.Text("Back")}) != 0 || profile_key == Input.KeyEscape { Portal.BackProfile(); Progress.poll_at = 0 }
+        #if #defined(PLATFORM_WEB) {
+            Audio.UpdateAudio(false, game.level, game.apples, game.death_ticks, game.transition_ticks, false)
+        }
+        return 0
     }
     if Account.ProfileVisible() {
         profile_key: s32
@@ -3481,6 +3553,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     }
     if game.mode == MODE_LOCAL {
         Audio.UpdateAudio(local_round.phase == Local.PLAYING || local_round.phase == Local.PAUSED, 0, 1, 0, 0)
+        Portal.Gameplay(local_round.phase == Local.PLAYING)
         DrawLocal(session, viewport, key, now)
         return 0
     }
@@ -3545,8 +3618,9 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         }
     }
     if game.mode == MODE_FINISHED && !editor.playtest && recorded_level != game.level {
-        if Progress.Begin(game.level + 1, game.lives, game.score) { recorded_level = game.level }
+        if Progress.Begin(game.level + 1, game.lives, game.score) || Portal.Guest() { recorded_level = game.level }
         Progress.RecordRun(game.level + 2, game.score)
+        Portal.LevelFinished(Progress.best_score)
     }
     if game.mode == MODE_FINISHED && editor.playtest && editor.own { EditorResume() }
     if game.mode == MODE_FINISHED {
@@ -3567,10 +3641,12 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     if game.mode == MODE_VICTORY && !editor.playtest && recorded_level != game.level {
         Progress.Complete(game.level)
         Progress.RecordRun(LEVEL_COUNT, game.score)
-        if Progress.Restart() { recorded_level = game.level }
+        Portal.LevelFinished(Progress.best_score)
+        if Progress.Restart() || Portal.Guest() { recorded_level = game.level }
     }
     Audio.UpdateAudio(game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || (game.mode == MODE_READY && Audio.was_playing),
         game.level, game.apples, game.death_ticks, game.transition_ticks, game.mode != MODE_READY)
+    Portal.Gameplay(game.mode == MODE_PLAYING && game.death_ticks == 0 && game.transition_ticks == 0)
     if game.mode == MODE_STAGES {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         action := DrawTitle(session, area, stage_key)
@@ -3612,7 +3688,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     else if game.mode == MODE_PAUSED { Overlay(session, viewport, "Paused", "Your worm is waiting.") }
     else if game.mode == MODE_DIED { Overlay(session, viewport, "Game over", "Another apple adventure?", game.score) }
     else if game.mode == MODE_VICTORY { Overlay(session, viewport, "You did it!", "You reached the mountain!", game.score) }
-    if now < reward_until && (Rewards.toast_coins > 0 || Rewards.toast_dew > 0) {
+    if !Portal.Guest() && now < reward_until && (Rewards.toast_coins > 0 || Rewards.toast_dew > 0) {
         toast := Rectangle.{viewport.x + (viewport.width - 200.0) / 2.0, viewport.y + 116.0, 200.0, 44.0}
         unused Box(session, BoxProps.{.key = 29990, .bounds = toast, .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 12.0})
         text: Vec(u8)

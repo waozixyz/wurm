@@ -1,7 +1,9 @@
 // Plays the browser edition in a private headless Chromium with its own
 // profile, served by this test's own HTTP server (or WURM_TEST_URL): touch
 // feedback, the direction pad, controls, play, portrait, music blending,
-// durable progress and the unlocked-level selector.
+// durable progress and the unlocked-level selector. With WURM_TEST_PORTAL,
+// the unpacked CrazyGames copy instead, below a nested path at the portal's
+// frame sizes, without pictures.
 #import "kryon/devtools_linux"
 #import "std/file"
 #import "std/file_tree_linux"
@@ -226,11 +228,246 @@ Play :: () -> bool {
     return true
 }
 
+// The whole canvas as one number, to tell motion from stillness.
+CANVAS_HASH :: "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let h=0;for(let i=0;i<p.length;i+=12)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()"
+
+Record :: (name: string) -> string {
+    text: Vec(u8)
+    BuilderPrint(*text, "(()=>{try{return JSON.stringify(Array.from(Module.FS.readFile('/kryon-apps/wurm/%')))}catch{return ''}})()", name)
+    return BrowserText(browser, BuilderFinish(text))
+}
+
+CloudRecord :: (name: string) -> string {
+    text: Vec(u8)
+    BuilderPrint(*text, "(()=>{try{const v=window.CrazyGames.SDK.data.getItem('%');return v===null?'':String(v)}catch{return ''}})()", name)
+    return BrowserText(browser, BuilderFinish(text))
+}
+
+CloudRunIs :: (bytes: string) -> string {
+    text: Vec(u8)
+    BuilderPrint(*text, "(()=>{try{return JSON.stringify(Array.from((()=>{const h=window.CrazyGames.SDK.data.getItem('run.dat'),a=[];for(let i=0;i<h.length;i+=2)a.push(parseInt(h.substr(i,2),16));return a})()))==='%'}catch{return false}})()", bytes)
+    return BuilderFinish(text)
+}
+
+SetCloudRecord :: (name: string, value: string) -> bool {
+    text: Vec(u8)
+    BuilderPrint(*text, "(()=>{window.CrazyGames.SDK.data.setItem('%','%');return true})()", name, value)
+    return BrowserEvaluate(browser, BuilderFinish(text))
+}
+
+// The title's hidden portal corners: where waozi.xyz shows the shop, daily
+// chest and Leaderboard. A press there must leave the title in place.
+PressHiddenCorners :: (width: s64) -> bool {
+    right := width - 12
+    return Click(50, 50) && Click(50, 136) && Click(right - 166, 42)
+}
+
+// CrazyGames' SDK as the portal serves it, reporting German and keeping a
+// log of what the game tells it; the real script stays blocked, so the page
+// takes this one. With wurm-no-sdk in sessionStorage the page has no SDK.
+// The log notes when the game reads the portal's language.
+PORTAL_SDK :: "https://sdk.crazygames.com/crazygames-sdk-v3.js"
+SDK_STUB :: "window.__scores=[];window.__portal=[];if(!sessionStorage.getItem('wurm-no-sdk')){const log=window.__portal,listeners=[],auth=[];let account=sessionStorage.getItem('wurm-account')||'guest';window.__portalConfigBuilt=false;const scoreFixtureKey='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';let fixtureKey='';const data=()=>({getItem(name){if(sessionStorage.getItem('wurm-data-fail')==='1')throw new Error('data');const value=sessionStorage.getItem('wurm-data:'+account+':'+name);return value===null?null:value},setItem(name,value){if(sessionStorage.getItem('wurm-data-fail')==='1')throw new Error('data');sessionStorage.setItem('wurm-data:'+account+':'+name,String(value))}});window.CrazyGames={SDK:{environment:'local',init(){log.push('init');return Promise.resolve()},user:{isUserAccountAvailable:sessionStorage.getItem('wurm-account-available')!=='false',systemInfo:{locale:'de-DE'},submitScore(payload){window.__scores.push(payload);if(window.__scoreFail)return Promise.reject(new Error('send'));return Promise.resolve()},getUser(){log.push('getUser');return sessionStorage.getItem('wurm-profile-fail')==='1'?Promise.reject(new Error('profile')):Promise.resolve(account==='guest'?null:{username:account})},showAuthPrompt(){log.push('showAuthPrompt');return sessionStorage.getItem('wurm-prompt-fail')==='1'?Promise.reject(new Error('cancelled')):Promise.resolve()},addAuthListener(f){auth.push(f)}},ad:{requestAd(kind,callbacks){window.__adKind=kind;window.__adCalls=(window.__adCalls||0)+1;window.__adCallbacks=callbacks;if(window.__adMode==='throw')throw new Error('ad');if(window.__adMode==='reject')return Promise.reject(new Error('ad'));if(window.__adMode==='nofill')callbacks.adError();}},data:data(),game:{settings:{muteAudio:false},addSettingsChangeListener(f){listeners.push(f)},loadingStart(){log.push('loadingStart')},loadingStop(){log.push('loadingStop')},gameplayStart(){log.push('gameplayStart')},gameplayStop(){log.push('gameplayStop')}}}};window.__portalSettings=s=>listeners.forEach(f=>f(s));window.__portalAccount=(name,changed)=>{account=name;sessionStorage.setItem('wurm-account',name);window.CrazyGames.SDK.data=data();if(changed)auth.forEach(f=>f())};window.__portalSignIn=name=>window.__portalAccount(name,true);window.__portalSignOut=()=>window.__portalAccount('guest',true);let bridge;Object.defineProperty(window,'WurmPortal',{configurable:true,get(){return bridge},set(v){bridge=v;if(!window.__portalConfigChecked){fixtureKey=window.WurmPortalConfig.leaderboardKey;window.__portalConfigBuilt=typeof fixtureKey==='string'&&/^(?:$|[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=)$/.test(fixtureKey)&&typeof window.WurmPortalConfig.adsEnabled==='boolean';WurmPortalConfig.leaderboardKey='';WurmPortalConfig.adsEnabled=false;window.__portalConfigChecked=true}if(sessionStorage.getItem('wurm-score-test'))window.WurmPortalConfig.leaderboardKey=scoreFixtureKey;let locale=v.locale;Object.defineProperty(v,'locale',{get(){log.push('locale');return locale},set(x){locale=x}})}})}"
+
+// Public fixture only. Decrypt the actual Progress.Report submission after
+// loading the SDK best record; subsequent calls exercise queue/error glue.
+PortalResults :: () -> bool {
+    if !True("__portalConfigBuilt&&!WurmPortalConfig.adsEnabled&&WurmPortalConfig.leaderboardKey===''") { return Fail("portal configuration shape was invalid or not isolated") }
+    if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-score-test','1');CrazyGames.SDK.data.setItem('best.dat','0700000039300000');true") || !Reload() { return false }
+    if !Until("window.__scores.length===1&&WurmPortal.scoreSent===12345&&WurmPortal.scoreAt>Date.now()+8000") { return Fail("Progress.Report did not send the stored best campaign score") }
+    if !True("(async()=>{const p=__scores[0],b=Uint8Array.from(atob(p.encryptedScore),c=>c.charCodeAt(0)),k=await crypto.subtle.importKey('raw',new Uint8Array(32),'AES-GCM',false,['decrypt']);return p.score===12345&&new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b.slice(0,12)},k,b.slice(12)))==='12345'})()") { return Fail("the real best score encryption is incorrect") }
+    if !BrowserEvaluate(browser, "WurmPortal.submitBest(12345);WurmPortal.submitBest(12346);true") || !True("__scores.length===1") { return Fail("score throttle/dedupe failed") }
+    if !BrowserEvaluate(browser, "window.__scoreFail=true;WurmPortal.scoreAt=0;WurmPortal.submitBest(12346);true") || !Until("!WurmPortal.scoreBusy&&__scores.length===2") { return false }
+    if !BrowserEvaluate(browser, "window.__scoreFail=false;WurmPortal.scoreAt=0;WurmPortal.submitBest(12347);true") || !Until("WurmPortal.scoreSent===12347&&__scores.length===3") { return Fail("newer best did not retry after rejection") }
+    if !True("new Set(__scores.map(p=>atob(p.encryptedScore).slice(0,12))).size===3") { return Fail("score IVs were reused") }
+    if !BrowserEvaluate(browser, "WurmPortal.levelFinished();true") || !True("!WurmPortal.adPending&&!window.__adCalls") { return Fail("Basic requested an ad") }
+    if !BrowserEvaluate(browser, "WurmPortalConfig.adsEnabled=true;WurmPortal.levelFinished();true") || !True("WurmPortal.adPending&&!WurmPortal.adPlaying&&__adKind==='midgame'&&__adCalls===1") { return Fail("midgame request did not block while pending") }
+    if !Key("Enter",13) || !Key("ArrowRight",39) || !True("WurmPortal.adPending&&__adCalls===1&&!__portal.includes('gameplayStart')") { return Fail("pending ad let input start gameplay") }
+    if !BrowserEvaluate(browser, "__adCallbacks.adStarted();true") || !Until("WurmPortal.adPlaying&&__wurmAudio.every(a=>a.muted)") { return Fail("actual ad playback did not mute") }
+    if !BrowserEvaluate(browser, "__portalSettings({muteAudio:true});__adCallbacks.adFinished();true") || !Until("!WurmPortal.adPending&&__wurmAudio.every(a=>a.muted)") { return Fail("SDK mute was lost after ad") }
+    if !BrowserEvaluate(browser, "__portalSettings({muteAudio:false});true") || !Until("__wurmAudio.every(a=>!a.muted)") { return Fail("sound did not restore after ad") }
+    if !BrowserEvaluate(browser, "window.__adMode='nofill';WurmPortal.levelFinished();true") || !True("!WurmPortal.adPending&&!WurmPortal.adPlaying") { return Fail("no fill froze the game") }
+    if !BrowserEvaluate(browser, "window.__adMode='throw';WurmPortal.levelFinished();true") || !True("!WurmPortal.adPending") { return Fail("throw froze the game") }
+    if !BrowserEvaluate(browser, "window.__adMode='reject';WurmPortal.levelFinished();true") || !Until("!WurmPortal.adPending") { return Fail("rejection froze the game") }
+    if !BrowserEvaluate(browser, "window.__adMode='';window.__realTimer=window.setTimeout;window.setTimeout=(f,ms,...args)=>ms===30000?(window.__adTimeout=f,987654):__realTimer(f,ms,...args);WurmPortal.levelFinished();window.setTimeout=__realTimer;window.__late=__adCallbacks;__adTimeout();true") || !True("!WurmPortal.adPending&&WurmPortal.adsFailed") { return Fail("missing callback did not recover") }
+    if !BrowserEvaluate(browser, "__late.adStarted();true") || !Until("WurmPortal.adPending&&WurmPortal.adPlaying&&__wurmAudio.every(a=>a.muted)") { return Fail("late ad was allowed over the game") }
+    if !BrowserEvaluate(browser, "__late.adFinished();WurmPortal.levelFinished();true") || !True("!WurmPortal.adPending") { return Fail("late ad did not finish safely") }
+    if !BrowserEvaluate(browser, "window.__oldEncrypt=crypto.subtle.encrypt;crypto.subtle.encrypt=()=>Promise.reject(new Error('encrypt'));WurmPortal.scoreAt=0;WurmPortal.submitBest(12348);true") || !Until("!WurmPortal.scoreBusy") || !True("__scores.length===3&&WurmPortal.scoreSent===12347") { return Fail("encryption failure sent a score") }
+    if !BrowserEvaluate(browser, "crypto.subtle.encrypt=__oldEncrypt;WurmPortalConfig.leaderboardKey='';WurmPortal.submitBest(12349);true") || !True("__scores.length===3") { return Fail("missing key sent a score") }
+    if !BrowserEvaluate(browser, "sessionStorage.removeItem('wurm-score-test');CrazyGames.SDK.data.setItem('best.dat','0000000000000000');CrazyGames.SDK.data.setItem('sound.dat','0164');true") || !Reload() { return false }
+    if !Until(LOADED) || !Until("__wurmAudio.length===7&&__wurmAudio.every(a=>a.muted)") { return Fail("saved mute did not load") }
+    if !BrowserEvaluate(browser, "WurmPortalConfig.adsEnabled=true;WurmPortal.levelFinished();__adCallbacks.adStarted();__adCallbacks.adFinished();true") || !Until("!WurmPortal.adPending&&__wurmAudio.every(a=>a.muted)") || CloudRecord("sound.dat") != "0164" { return Fail("ad changed saved user mute") }
+    if !BrowserEvaluate(browser, "CrazyGames.SDK.data.setItem('sound.dat','0064');true") || !Reload() { return false }
+    return Until(LOADED)
+}
+
+// Whether the SDK log's gameplay reports end with LAST and never repeat.
+GameplayEnds :: (last: string) -> string {
+    text: Vec(u8)
+    BuilderPrint(*text, "(()=>{const g=window.__portal.filter(e=>e.startsWith('gameplay'));return g.length>0&&g[g.length-1]==='%'&&g.every((e,i)=>i===0||e!==g[i-1])})()", last)
+    return BuilderFinish(text)
+}
+
+// The packaged guest copy from WURM_TEST_PORTAL, served below
+// /games/apfelwurm/ as a portal frame would load it.
+Portal :: (root: string) -> bool {
+    if !BrowserServe(browser, root) { return Fail("the HTTP server did not start") }
+    base := BrowserUrl(browser, "/games/apfelwurm/")
+    url := BrowserUrl(browser, "/games/apfelwurm/index.html")
+    profile := JoinPath(ResolvePath(OUT), "portal-profile")
+    unused RemoveTree(profile)
+    if !BrowserOpen(browser, profile) { return Fail("the private Chromium did not start") }
+    audio := "window.__wurmAudio=[];window.Audio=new Proxy(window.Audio,{construct(target,args){const audio=Reflect.construct(target,args);window.__wurmAudio.push(audio);return audio;}});"
+    if !BrowserCall(browser, "Page.enable", "{}") || !BrowserCall(browser, "Runtime.enable", "{}") { return false }
+    if !BrowserScriptOnLoad(browser, audio) || !BrowserScriptOnLoad(browser, SDK_STUB) || !Viewport(907, 510, false) { return false }
+    if !BrowserCall(browser, "Network.enable", "{}") || !BrowserCall(browser, "Network.setBlockedURLs", "{\"urls\":[\"*sdk.crazygames.com*\",\"https://*\"]}") { return false }
+    if !BrowserCall(browser, "Page.navigate", BrowserParams1("url", url)) { return false }
+    if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") { return Fail("the portal copy did not open") }
+    if !PortalResults() { return false }
+    // The SDK starts before the game loads, hears when loading ends, gives the
+    // game the player's language, and never asks the player to sign in there.
+    if !Until("(()=>{const l=window.__portal;return l[0]==='init'&&l[1]==='loadingStart'&&l.indexOf('loadingStop')>1&&l.includes('locale')&&WurmPortal.locale==='de-DE'&&WurmPortal.sdkActive&&WurmPortal.accountAvailable&&WurmPortal.username===''&&!l.includes('showAuthPrompt')})()") { return Fail("the SDK did not start, report loading or give its language") }
+    // A failed profile fetch is bounded and cannot stop the game from opening.
+    if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-profile-fail','1'),true") || !Reload() { return false }
+    if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") || !True("WurmPortal.accountError") { return Fail("a failed profile fetch blocked the copy") }
+    if !BrowserEvaluate(browser, "sessionStorage.removeItem('wurm-profile-fail'),true") || !Reload() { return false }
+    if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") { return Fail("the portal copy did not recover from a profile error") }
+    Pause(1800)
+    colorful := BrowserNumber(browser, "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data,s=new Set();for(let i=0;i<p.length;i+=80)s.add(p[i]+','+p[i+1]+','+p[i+2]);return s.size})()", 0.0)
+    if colorful < 200.0 { return Fail("title artwork did not render at 907x510") }
+    // Settings still opens and closes; the account-free corners open nothing.
+    if !Click(865, 42) || !Key("Escape", 27) || !PressHiddenCorners(907) { return false }
+    // The profile opens only from its button. A rejected sign-in stays bounded,
+    // leaves the player a guest, and a second explicit click reaches the prompt.
+    if !Click(797, 42) { return false }
+    Pause(300)
+    if !True("WurmPortal.username===''") { return Fail("the guest profile did not open") }
+    if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-prompt-fail','1'),true") || !Click(453, 204) { return false }
+    if !Until("WurmPortal.accountError&&WurmPortal.username===''") { return Fail("a cancelled sign-in changed the guest or blocked the profile") }
+    if !BrowserEvaluate(browser, "sessionStorage.removeItem('wurm-prompt-fail'),true") || !Click(453, 204) { return false }
+    if !Until("window.__portal.filter(e=>e==='showAuthPrompt').length===2") { return Fail("the explicit sign-in buttons did not reach CrazyGames") }
+    if !Click(50, 30) { return false }
+    Pause(200)
+    // One actual Play click starts a fresh guest without a controls prompt.
+    if !Click(453, 412) { return false }
+    if !Until(CloudRunIs("[0,3,0,0,0,0]")) {
+        if BrowserEvaluate(browser, "JSON.stringify({run:window.CrazyGames.SDK.data.getItem('run.dat'),unlocked:window.CrazyGames.SDK.data.getItem('unlocked.dat'),user:WurmPortal.username,saveLimited:WurmPortal.saveLimited,dataError:WurmPortal.dataError})") {
+            print("profile-flow records: %\n", browser.result)
+        }
+        return Fail("the title did not start level 1 after the profile flow")
+    }
+    // Arrow keys steer a moving worm; Space pauses it and starts it again.
+    if !Until(GameplayEnds("gameplayStart")) { return Fail("one Play click did not report gameplay to the SDK") }
+    first := BrowserNumber(browser, CANVAS_HASH, -1.0)
+    Pause(450)
+    if BrowserNumber(browser, CANVAS_HASH, -1.0) == first { return Fail("the worm did not move") }
+    if !Until(GameplayEnds("gameplayStart")) { return Fail("play was not reported to the SDK") }
+    // The portal's mute silences music and effects over the player's On,
+    // and lifting it brings the player's sound back.
+    if !BrowserEvaluate(browser, "window.__portalSettings({muteAudio:true}),true") { return false }
+    if !Until("window.__wurmAudio.length>=7&&window.__wurmAudio.every(a=>a.muted)") { return Fail("the portal's mute did not silence the game") }
+    if !BrowserEvaluate(browser, "window.__portalSettings({muteAudio:false}),true") { return false }
+    if !Until("window.__wurmAudio.every(a=>!a.muted)") { return Fail("the player's sound did not return after the portal's mute") }
+    if !Key(" ", 32) { return false }
+    Pause(300)
+    paused := BrowserNumber(browser, CANVAS_HASH, -1.0)
+    Pause(600)
+    if BrowserNumber(browser, CANVAS_HASH, -1.0) != paused { return Fail("Space did not pause") }
+    if !True(GameplayEnds("gameplayStop")) { return Fail("the pause was not reported to the SDK") }
+    if !Key(" ", 32) { return false }
+    Pause(450)
+    if BrowserNumber(browser, CANVAS_HASH, -1.0) == paused { return Fail("Space did not resume") }
+    if !True(GameplayEnds("gameplayStart")) { return Fail("resuming was not reported to the SDK") }
+    // Guest SDK Data survives a reload. Progress past the forest continues
+    // straight into the Mountains, with no Dew asked.
+    if !SetCloudRecord("unlocked.dat", "a4") || !SetCloudRecord("run.dat", "a40300000000") { return false }
+    if !Reload() { return false }
+    Pause(1500)
+    if CloudRecord("unlocked.dat") != "a4" { return Fail("guest progress did not survive a reload in SDK Data") }
+    if !Key("c", 67) || !Until(CloudRunIs("[164,3,0,0,0,0]")) { return Fail("Continue did not open Mountains level 165 for free") }
+    Pause(1500)
+    if !Reload() { return false }
+    Pause(1500)
+    if !Until(CloudRunIs("[164,3,0,0,0,0]")) { return Fail("the guest's run did not survive a reload") }
+    // A failing Data Module keeps this page's play alive in session memory and
+    // says so, instead of silently borrowing another account's browser save.
+    if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-data-fail','1'),true") || !Reload() { return false }
+    if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") || !True("WurmPortal.saveLimited") { return Fail("a SDK Data error blocked the title or hid its save limit") }
+    if !Click(797, 42) || !True("WurmPortal.saveLimited&&WurmPortal.username===''") || !Click(50, 30) { return Fail("the save warning did not stay visible in the guest profile") }
+    if !Key("Enter", 13) || !Key("1", 49) || !Key("Enter", 13) || !Key("ArrowRight", 39) { return false }
+    failed_still := BrowserNumber(browser, CANVAS_HASH, -1.0)
+    Pause(450)
+    if BrowserNumber(browser, CANVAS_HASH, -1.0) == failed_still { return Fail("a SDK Data error stopped session-only play") }
+    if !BrowserEvaluate(browser, "sessionStorage.removeItem('wurm-data-fail'),true") || !Reload() { return false }
+    if !Until(LOADED) || CloudRecord("unlocked.dat") != "a4" { return Fail("SDK Data did not return after its error") }
+    // Put an old guest save in browser IDB, then reload as Alice. Her missing
+    // cloud record must not borrow it; she starts a new journey in her own data.
+    if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-no-sdk','1'),true") || !Reload() { return false }
+    if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") { return false }
+    if !BrowserEvaluate(browser, "new Promise((resolve,reject)=>{Module.FS.writeFile('/kryon-apps/wurm/unlocked.dat',new Uint8Array([57]));Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})") { return false }
+    if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-account','Alice');sessionStorage.removeItem('wurm-no-sdk');true") || !Reload() { return false }
+    if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") || !True("WurmPortal.username==='Alice'") { return Fail("the signed account did not load") }
+    if CloudRecord("unlocked.dat") != "" {
+        if BrowserEvaluate(browser, "JSON.stringify({account:sessionStorage.getItem('wurm-account'),unlocked:window.CrazyGames.SDK.data.getItem('unlocked.dat')})") {
+            print("new-account cloud: %\n", browser.result)
+        }
+        return Fail("the new account inherited guest cloud progress")
+    }
+    if !Key("c", 67) { return false }
+    Pause(200)
+    if !Key("Enter", 13) || !Key("1", 49) || !Until(CloudRunIs("[0,3,0,0,0,0]")) { return Fail("Continue used another account's IDB save") }
+    if !Click(797, 42) || !True("WurmPortal.username==='Alice'") || !Click(50, 30) { return Fail("the signed profile did not show Alice") }
+    // The smaller portal frame: the title fits, the corners still open
+    // nothing and Play from start keeps the unlocked levels.
+    if !Viewport(800, 450, false) || !Reload() { return false }
+    Pause(1500)
+    if BrowserNumber(browser, "document.getElementById('canvas').getBoundingClientRect().width", 0.0) != 800.0 { return Fail("the canvas did not fill 800x450") }
+    if !BrowserEvaluate(browser, "window.__portalAccount('guest',false),true") || !Reload() { return false }
+    if !Until(LOADED) || CloudRecord("unlocked.dat") != "a4" { return Fail("guest progress did not return at 800x450") }
+    if !PressHiddenCorners(800) || !Key("Enter", 13) { return false }
+    if !Until(CloudRunIs("[0,3,0,0,0,0]")) { return Fail("Play from start did not begin at 800x450") }
+    if CloudRecord("unlocked.dat") != "a4" { return Fail("Play from start erased guest progress") }
+    // Every request stayed beside the page: no sign-in, shop or other site.
+    check: Vec(u8)
+    BuilderPrint(*check, "(()=>{const b='%';const urls=performance.getEntriesByType('resource').map(e=>e.name).concat(Array.from(document.querySelectorAll('[src]'),e=>e.src),window.__wurmAudio.map(a=>a.src).filter(Boolean)).filter(u=>u!=='%');return urls.length>5&&urls.every(u=>u.startsWith(b))&&location.href.startsWith(b)})()", base, PORTAL_SDK)
+    if !True(BuilderFinish(check)) {
+        unused BrowserEvaluate(browser, "JSON.stringify(performance.getEntriesByType('resource').map(e=>e.name))")
+        print("requests: %\n", browser.result)
+        return Fail("a request left the game's folder")
+    }
+    // Without the SDK the game keeps its ordinary local guest behaviour.
+    if !BrowserEvaluate(browser, "new Promise((resolve,reject)=>{for(const n of ['run.dat','unlocked.dat','controls.dat'])try{Module.FS.unlink('/kryon-apps/wurm/'+n)}catch{}Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})") { return false }
+    if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-no-sdk','1'),true") || !Reload() { return false }
+    if !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") || !True("WurmPortal.sdk===null&&WurmPortal.locale===''&&!WurmPortal.muted") { return Fail("the copy did not open without the SDK") }
+    Pause(1500)
+    if !Click(400, 352) || !Until(RunIs("[0,3,0,0,0,0]")) { return Fail("one Play click did not start a level without the SDK") }
+    still := BrowserNumber(browser, CANVAS_HASH, -1.0)
+    Pause(450)
+    if BrowserNumber(browser, CANVAS_HASH, -1.0) == still || !True("window.__portal.length===0") { return Fail("the copy did not play without the SDK") }
+    if browser.exceptions.count > 0 {
+        for i: 0..browser.exceptions.count - 1 { print("page exception: %\n", browser.exceptions[i]) }
+        return Fail("the page threw")
+    }
+    result: Vec(u8)
+    BuilderPrint(*result, "{\n  \"passed\": true,\n  \"url\": %,\n  \"frames\": [\"907x510\", \"800x450\"],\n", JsonQuote(url))
+    Append(*result, "  \"behaviors\": [\"nested relative loading\", \"title artwork\", \"settings\", \"no shop, daily chest or leaderboard\", \"guest profile and explicit sign-in\", \"sign-in cancel recovery\", \"control choice\", \"level 1\", \"arrow steering\", \"Space pause and resume\", \"guest SDK Data reload\", \"Mountains without Dew\", \"session-only play after Data errors\", \"account isolation from IDB\", \"signed Alice profile\", \"Play from start keeps guest progress\", \"no requests outside the game folder\", \"SDK start, loading, language, gameplay and mute\", \"plays without the SDK\"]\n}\n")
+    unused WriteEntireFile(JoinPath(OUT, "portal-result.json"), BuilderFinish(result))
+    print("Browser local test: the packaged CrazyGames copy loaded below a nested path at 907x510 and 800x450, showed guest and Alice profiles with explicit sign-in, kept account-scoped SDK Data, recovered from profile/Data errors without IDB mixing, played, paused, opened Mountains free, reported to a stand-in SDK, followed its language and mute, and played without it.\n")
+    return true
+}
+
 #program_export
 main :: () -> s32 {
     unused CreateDirectories(OUT)
     session: Browser
     browser = *session
+    portal := EnvironmentText("WURM_TEST_PORTAL")
+    if portal.count > 0 {
+        passed := Portal(portal)
+        BrowserClose(browser)
+        unused RemoveTree(JoinPath(ResolvePath(OUT), "portal-profile"))
+        return ifx passed then 0 else 1
+    }
     passed := Play()
     if !passed {
         if BrowserEvaluate(browser, "({audio:(window.__wurmAudio||[]).map(a=>({src:a.src,paused:a.paused,time:a.currentTime,duration:a.duration,volume:a.volume,ready:a.readyState,error:a.error?.code})),errors:window.__wurmAudioErrors})") {

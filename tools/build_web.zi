@@ -1,44 +1,47 @@
 // Builds the same native Wurm game for wurm.waozi.xyz with Canvas2D and
 // Wasm into build/web; deployment is separate. Emscripten's emcc and its
-// file packager come from EMCC or ~/emsdk.
+// file packager come from EMCC or ~/emsdk. With crazygames it builds the
+// guest-only portal copy into build/crazygames/web instead and packs it as
+// work/crazygames.zip; uploading stays a person's step.
 //
-//     LDLIBS=-lz ziran run --target=c tools/build_web.zi
+//     LDLIBS=-lz ziran run --target=c tools/build_web.zi [-- crazygames]
 #import "std/file"
 #import "std/file_tree_linux"
 #import "std/format"
 #import "std/text_tools"
 #import "std/environment_linux"
+#import "std/byte_text_linux"
 #import "crypto/sha256"
 #import, file "../src/account_build.zi";
+PortalConfig :: #import, file "../src/portal_config.zi";
+WebArt :: #import, file "../src/web_art.zi";
 
 OUT :: "build/web"
+PORTAL_OUT :: "build/crazygames/web"
+PORTAL_ARCHIVE :: "work/crazygames.zip"
+// The one script a portal page may load from elsewhere: CrazyGames' SDK.
+PORTAL_SDK :: "https://sdk.crazygames.com/crazygames-sdk-v3.js"
+// CrazyGames takes at most 50 MB and 1500 files, its SDK not counted.
+PORTAL_BYTES :: 50000000
+PORTAL_FILES :: 1500
 
-Fail :: (message: string) -> s32 {
+Fail :: (message: string) -> bool {
     print("tools/build_web: %\n", message)
-    return 1
+    return false
 }
 
-// Copies the game's art, leaving out cover studies, old previews and mirrors.
+// Replaces TARGET with the art the browser draws; it preloads every copy.
 CopyArt :: (source: string, target: string) -> bool {
+    unused RemoveTree(target)
     if !CreateDirectories(target) { return false }
     names: Vec(string)
     if !ListDirectory(source, *names) { return false }
-    // The editor's full-size paintings stay native; the browser draws the
-    // small copies.
-    unused_art: [5]string = .["garden-cover.png", "space-cover.png", "factory-cover.png",
-        "editor-title.png", "editor-title-portrait.png"]
     for i: 0..names.count - 1 {
         name := names[i]
         from := JoinPath(source, name)
         if IsDirectory(from) {
-            if name == "previews" { continue }
-            if !CopyArt(from, JoinPath(target, name)) { return false }
-            continue
-        }
-        if TextHasSuffix(name, ".argb") { continue }
-        skip := false
-        for unused_art { if it == name { skip = true } }
-        if !skip && !CopyFile(from, JoinPath(target, name)) { return false }
+            if name == WebArt.PREVIEWS && !CopyArt(from, JoinPath(target, name)) { return false }
+        } else if WebArt.Drawn(source, name) && !CopyFile(from, JoinPath(target, name)) { return false }
     }
     return true
 }
@@ -78,27 +81,35 @@ Steps :: (arguments: []string) -> bool {
     return ok
 }
 
-#program_export
-main :: () -> s32 {
+// The browser edition into OUT, or with PORTAL the guest copy into
+// PORTAL_OUT: no Entity profile, account libraries or link-preview picture,
+// and its art packed from a scratch folder instead of loose beside the page.
+BuildWeb :: (portal: bool) -> bool {
+    out := ifx portal then PORTAL_OUT else OUT
+    native := ifx portal then "build/crazygames" else "build/web-native"
     kryon := PackagePath("kryon")
     compiler := PackagePath("ziran")
     if kryon.count == 0 || compiler.count == 0 { return Fail("package checkouts are missing") }
-    profile := BuildProfile()
-    if profile.count == 0 { return Fail("the Profile bundle failed") }
+    profile := ""
     libraries: Vec(string)
-    if !AccountLibraries(true, *libraries) { return Fail("the account libraries failed") }
+    if !portal {
+        profile = BuildProfile()
+        if profile.count == 0 { return Fail("the Profile bundle failed") }
+        if !AccountLibraries(true, *libraries) { return Fail("the account libraries failed") }
+    }
     // Module names change with dependency revisions: never reuse IR or C
     // left by an earlier revision.
-    ir := "build/web-native/ir"
-    code := "build/web-native/c"
+    ir := JoinPath(native, "ir")
+    code := JoinPath(native, "c")
     unused RemoveTree(ir); unused RemoveTree(code)
-    if !CreateDirectories(OUT) || !CreateDirectories(ir) || !CreateDirectories(code) { return Fail("cannot create build folders") }
+    if portal { unused RemoveTree(out) }
+    if !CreateDirectories(out) || !CreateDirectories(ir) || !CreateDirectories(code) { return Fail("cannot create build folders") }
     host := JoinPath(kryon, "src/backend/canvas_run.zi")
     raster := JoinPath(kryon, "src/backend/canvas_raster.zi")
     emit: Vec(string)
     VecPush(emit, "ziran"); VecPush(emit, "ir")
     if Locked() { VecPush(emit, "--locked") }
-    rest: [9]string = .["--project", "--define", "PLATFORM_WEB", "--define", "WURM_ACCOUNTS", "-o", ir, host, raster]
+    rest: [9]string = .["--project", "--define", "PLATFORM_WEB", "--define", ifx portal then "WURM_CRAZYGAMES" else "WURM_ACCOUNTS", "-o", ir, host, raster]
     for rest { VecPush(emit, it) }
     if !Steps(VecSlice(emit, 0, emit.count)) { return Fail("Ziran IR failed") }
     lower: Vec(string)
@@ -109,13 +120,9 @@ main :: () -> s32 {
     unused ListDirectory(ir, *modules)
     for i: 0..modules.count - 1 { if TextHasSuffix(modules[i], ".zir") { VecPush(lower, JoinPath(ir, modules[i])) } }
     if !Steps(VecSlice(lower, 0, lower.count)) { return Fail("C generation failed") }
-    art := JoinPath(OUT, "assets/art")
-    unused RemoveTree(JoinPath(art, "previews"))
+    art := ifx portal then JoinPath(native, "art") else JoinPath(out, "assets/art")
+    if portal { unused RemoveTree(art) }
     if !CopyArt("assets/art", art) { return Fail("cannot copy the art") }
-    // Studies an earlier build copied stay out of the browser preload too.
-    studies: [5]string = .["garden-cover.png", "space-cover.png", "factory-cover.png",
-        "editor-title.png", "editor-title-portrait.png"]
-    for studies { unused RemoveFile(JoinPath(art, it)) }
     emcc := EnvironmentText("EMCC")
     if emcc.count == 0 { emcc = JoinPath(EnvironmentText("HOME"), "emsdk/upstream/emscripten/emcc") }
     packager := JoinPath(PathParent(ResolvePath(emcc)), "tools/file_packager.py")
@@ -139,14 +146,14 @@ main :: () -> s32 {
         VecPush(command, "--preload"); VecPush(command, BuilderFinish(mapping))
         if name == "art" { VecPush(command, "--exclude"); VecPush(command, "*/campaign-previews/*") }
         VecPush(command, BuilderFinish(output))
-        out, packed := Step(VecSlice(command, 0, command.count), false, no_extra[:], OUT)
+        packed_output, packed := Step(VecSlice(command, 0, command.count), false, no_extra[:], out)
         if !packed { return Fail("the asset packager failed") }
-        script, found := ReadEntireFile(JoinPath(OUT, loader_name))
+        script, found := ReadEntireFile(JoinPath(out, loader_name))
         if !found { return Fail("no asset loader") }
         Append(*preloads, script)
         Append(*preloads, "\n")
     }
-    if !WriteEntireFile(JoinPath(OUT, "asset-preloads.js"), BuilderFinish(preloads)) { return Fail("cannot write asset-preloads.js") }
+    if !WriteEntireFile(JoinPath(out, "asset-preloads.js"), BuilderFinish(preloads)) { return Fail("cannot write asset-preloads.js") }
     link: Vec(string)
     start: [3]string = .[emcc, "-O2", "-Wno-parentheses-equality"]
     for start { VecPush(link, it) }
@@ -160,22 +167,24 @@ main :: () -> s32 {
     for i: 0..libraries.count - 1 { VecPush(link, libraries[i]) }
     font: Vec(u8)
     BuilderPrint(*font, "%/assets/fonts/LiberationSans-Regular.ttf@/kryon-font.ttf", kryon)
-    bundled: Vec(u8)
-    BuilderPrint(*bundled, "%@/assets/entity.zx", profile)
-    flags: [14]string = .["-sUSE_ZLIB=1", "--js-library", JoinPath(compiler, "web/ziran_web.js"),
+    flags: [13]string = .["-sUSE_ZLIB=1", "--js-library", JoinPath(compiler, "web/ziran_web.js"),
         "-sEXPORTED_RUNTIME_METHODS=FS,FS_createPath,FS_createDataFile,addRunDependency,removeRunDependency",
         "-sFORCE_FILESYSTEM=1", "-lidbfs.js", "-sALLOW_MEMORY_GROWTH=1", "-sASYNCIFY", "-sENVIRONMENT=web",
-        "-sSTACK_SIZE=8388608", "-sASYNCIFY_STACK_SIZE=1048576", "--preload-file", BuilderFinish(font), "--preload-file"]
+        "-sSTACK_SIZE=8388608", "-sASYNCIFY_STACK_SIZE=1048576", "--preload-file", BuilderFinish(font)]
     for flags { VecPush(link, it) }
-    VecPush(link, BuilderFinish(bundled))
-    VecPush(link, "-o"); VecPush(link, JoinPath(OUT, "game.js"))
+    if !portal {
+        bundled: Vec(u8)
+        BuilderPrint(*bundled, "%@/assets/entity.zx", profile)
+        VecPush(link, "--preload-file"); VecPush(link, BuilderFinish(bundled))
+    }
+    VecPush(link, "-o"); VecPush(link, JoinPath(out, "game.js"))
     if !Steps(VecSlice(link, 0, link.count)) { return Fail("emcc failed") }
     packs: [3]string = .["game.data", "art.data", "previews.data"]
     for packs {
-        info := PathStatus(JoinPath(OUT, it))
-        if info.size > 25 * 1024 * 1024 { return Fail(JoinPath(it, "exceeds the Pages limit")) }
+        info := PathStatus(JoinPath(out, it))
+        if !portal && info.size > 25 * 1024 * 1024 { return Fail(JoinPath(it, "exceeds the Pages limit")) }
     }
-    sounds := JoinPath(OUT, "assets/sounds")
+    sounds := JoinPath(out, "assets/sounds")
     if !CreateDirectories(sounds) { return Fail("cannot create sounds") }
     effects: [4]string = .["start", "pickup", "lose", "exit"]
     for effects {
@@ -199,22 +208,24 @@ main :: () -> s32 {
         VecPush(command, BuilderFinish(target))
         if !Steps(VecSlice(command, 0, command.count)) { return Fail("ffmpeg failed") }
     }
+    // Portals get their own page: no shared sign-in or links away.
+    shell := ifx portal then "src/web/crazygames" else "src/web"
     page: Vec(string)
-    unused ListDirectory("src/web", *page)
+    unused ListDirectory(shell, *page)
     for i: 0..page.count - 1 {
-        from := JoinPath("src/web", page[i])
-        if IsFile(from) && !CopyFile(from, JoinPath(OUT, page[i])) { return Fail("cannot copy the page") }
+        from := JoinPath(shell, page[i])
+        if IsFile(from) && !CopyFile(from, JoinPath(out, page[i])) { return Fail("cannot copy the page") }
     }
     // The page shows the title art while the game loads and in link
     // previews; small copies keep that first paint fast.
     loading: [14]string = .["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", "assets/art/title.png",
-        "-vf", "scale=1280:853:flags=lanczos,format=yuv420p", "-quality", "86", "-compression_level", "6", JoinPath(OUT, "loading.webp")]
+        "-vf", "scale=1280:853:flags=lanczos,format=yuv420p", "-quality", "86", "-compression_level", "6", JoinPath(out, "loading.webp")]
     social: [11]string = .["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", "assets/art/title.png",
         "-vf", "scale=1200:800:flags=lanczos,format=yuvj420p", "-q:v", "2"]
     social_command: Vec(string)
     for social { VecPush(social_command, it) }
-    VecPush(social_command, JoinPath(OUT, "social.jpg"))
-    if !Steps(loading[:]) || !Steps(VecSlice(social_command, 0, social_command.count)) { return Fail("the title pictures failed") }
+    VecPush(social_command, JoinPath(out, "social.jpg"))
+    if !Steps(loading[:]) || (!portal && !Steps(VecSlice(social_command, 0, social_command.count))) { return Fail("the title pictures failed") }
     version_text, has_version := ReadEntireFile("version.json")
     at := TextFind(version_text, "\"version\": \"")
     end := TextFind(version_text, "\"", at + 12)
@@ -225,7 +236,74 @@ main :: () -> s32 {
     description: Vec(u8)
     BuilderPrint(*description, "{\"version\": \"%\", \"revision\": \"%\", \"game_sha256\": \"%\"}\n",
         version_text[at + 12:end], TextTrim(revision), Hex(game))
-    if !WriteEntireFile(JoinPath(OUT, "version.json"), BuilderFinish(description)) { return Fail("cannot write version.json") }
-    print("Built playable Wurm browser edition in build/web; deployment remains separate.\n")
-    return 0
+    if !WriteEntireFile(JoinPath(out, "version.json"), BuilderFinish(description)) { return Fail("cannot write version.json") }
+    print("Built playable Wurm browser edition in %; deployment remains separate.\n", out)
+    return true
+}
+
+// Adds up the bytes and files under FOLDER.
+Measure :: (folder: string, bytes: *s64, files: *s64) -> bool {
+    names: Vec(string)
+    if !ListDirectory(folder, *names) { return false }
+    for i: 0..names.count - 1 {
+        path := JoinPath(folder, names[i])
+        if IsDirectory(path) {
+            if !Measure(path, bytes, files) { return false }
+        } else {
+            bytes.* += cast(s64)PathStatus(path).size
+            files.* += 1
+        }
+    }
+    return true
+}
+
+// Whether FILE under PORTAL_OUT names the waozi.xyz accounts or shop.
+Mentions :: (file: string, text: string) -> bool {
+    data, found := ReadEntireFile(JoinPath(PORTAL_OUT, file))
+    return !found || TextFind(data, text) >= 0
+}
+
+// Builds the guest portal copy, checks it against CrazyGames' rules and
+// packs it with index.html at the archive's root.
+BuildCrazyGames :: () -> bool {
+    key := EnvironmentText("CRAZYGAMES_LEADERBOARD_KEY")
+    ads := EnvironmentText("CRAZYGAMES_ADS_ENABLED")
+    if !PortalConfig.Valid(key, ads) { return Fail("invalid CrazyGames configuration (expected a 32-byte base64 key and true/false ads)") }
+    if !BuildWeb(true) { return false }
+    if !WriteEntireFile(JoinPath(PORTAL_OUT, "portal-config.js"), PortalConfig.Text(key, ads)) { return Fail("cannot write portal configuration") }
+    bytes: s64
+    files: s64
+    if !Measure(PORTAL_OUT, *bytes, *files) { return Fail("cannot measure the portal copy") }
+    if bytes > PORTAL_BYTES || files > PORTAL_FILES { return Fail("the portal copy exceeds 50 MB or 1500 files") }
+    page, has_page := ReadEntireFile(JoinPath(PORTAL_OUT, "index.html"))
+    // Every file loads beside the page, apart from CrazyGames' SDK before
+    // the game; nothing signs in or links away.
+    sdk := TextFind(page, PORTAL_SDK)
+    if !has_page || sdk < 0 || sdk > TextFind(page, ".then(connect).catch(function(){}).then(start)") { return Fail("the portal page does not load CrazyGames' SDK before the game") }
+    if TextFind(TextReplace(page, PORTAL_SDK, ""), "http") >= 0 { return Fail("the portal page loads something from elsewhere") }
+    // The browser test checks that every request stays beside the page.
+    loaded: [3]string = .["game.js", "asset-preloads.js", "index.html"]
+    for loaded {
+        if Mentions(it, "waozi.xyz") || Mentions(it, "share.js") { return Fail(JoinPath(it, "reaches the waozi.xyz accounts")) }
+    }
+    if PathExists(JoinPath(PORTAL_OUT, "assets/art")) { return Fail("loose art duplicates art.data") }
+    unused CreateDirectories("work")
+    unused RemoveFile(PORTAL_ARCHIVE)
+    archive := ResolvePath("work")
+    target: Vec(u8)
+    BuilderPrint(*target, "%/crazygames.zip", archive)
+    pack: [6]string = .["zip", "-X", "-r", "-q", BuilderFinish(target), "."]
+    output, packed := Step(pack[:], false, no_extra[:], PORTAL_OUT)
+    test: [3]string = .["unzip", "-tq", PORTAL_ARCHIVE]
+    if !packed || !Steps(test[:]) { return Fail("cannot pack work/crazygames.zip") }
+    print("Packed the guest CrazyGames copy: % files, % bytes unpacked, in %; not uploaded.\n", files, bytes, PORTAL_ARCHIVE)
+    return true
+}
+
+#program_export
+main :: (argc: s32, argv: **u8) -> s32 {
+    mode := ifx argc > 1 then TextFromCString(argv[1]) else ""
+    if mode == "crazygames" { return ifx BuildCrazyGames() then 0 else 1 }
+    if mode.count > 0 { unused Fail("usage: build_web.zi [crazygames]"); return 2 }
+    return ifx BuildWeb(false) then 0 else 1
 }
