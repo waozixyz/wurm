@@ -67,16 +67,15 @@ Capture :: (name: string, size: string, image: *DisplayImage) -> bool {
     return true
 }
 
-// Bright pixels in a crop: an icon drawn on the green bar.
-Icon :: (image: *DisplayImage, x0: s32, y0: s32, x1: s32, y1: s32) -> bool {
-    count: s32
-    for y: y0..y1 - 1 {
-        for x: x0..x1 - 1 {
-            p := ImagePixel(image, cast(s32)x, cast(s32)y)
-            if PixelRed(p) > 130 && PixelGreen(p) > 130 && PixelBlue(p) > 130 { count += 1 }
-        }
+// A visible, enabled action at its painted-icon place in the title bar.
+ActionIcon :: (label: string, x0: float64, y0: float64, x1: float64, y1: float64) -> bool {
+    unused DriverTree(driver)
+    for i: 0..driver.nodes.count - 1 {
+        node := driver.nodes[i]
+        if node.label != label || !node.visible || !node.enabled { continue }
+        if node.x >= x0 && node.x < x1 && node.y >= y0 && node.y < y1 && node.width >= 40.0 { return true }
     }
-    return count >= 12
+    return false
 }
 
 Orientation :: (size: string, version: string) -> bool {
@@ -87,8 +86,8 @@ Orientation :: (size: string, version: string) -> bool {
     if !Capture("title", size, *image) { return Fail("cannot capture the title", size) }
     if size == "390x780" {
         if ImageColorCount(*image) <= 1000 { return Fail("title artwork is missing", size) }
-        if !Icon(*image, 250, 20, 271, 48) { return Fail("profile icon is missing", size) }
-        if !Icon(*image, 171, 20, 196, 48) { return Fail("dew icon is missing", size) }
+        if !ActionIcon("Profile", 214.0, 8.0, 222.0, 16.0) { return Fail("profile icon is missing", size) }
+        if !ActionIcon("Shop", 8.0, 8.0, 20.0, 20.0) { return Fail("shop action is missing", size) }
     }
     if !Press("Choose level") || !Show("Level board preview") { return Fail("no level selector", size) }
     maps: s32
@@ -102,7 +101,7 @@ Orientation :: (size: string, version: string) -> bool {
     if !locked { return Fail("locked levels must be disabled", size) }
     unused SleepMilliseconds(500)
     if !Capture("levels", size, *image) { return false }
-    settings: [5]string = .["Appearance", "Swipe", "Direction pad", "Version", version]
+    settings: [7]string = .["Appearance", "Local multiplayer", "Controls", "Arrow keys", "W A S D", "Version", version]
     if !Press("Back") || !Press("Settings") || !Shows(settings[:], 5000) { return Fail("settings are incomplete", size) }
     if !Capture("settings", size, *image) { return false }
     appearance: [4]string = .["System", "Light", "Dark", "Accent"]
@@ -111,7 +110,8 @@ Orientation :: (size: string, version: string) -> bool {
     if !Press("Back") || !Press("Leaderboard") || !Show("Leaderboard") { return Fail("no leaderboard", size) }
     if !Press("Back") || !Show("Choose level") { return Fail("title leaderboard Back must return to title", size) }
     if !Press("Leaderboard") || !Show("Leaderboard") { return Fail("a second leaderboard open must keep drawing the board", size) }
-    if !Press("Back") || !Press("Shop") || !Show("Mint") { return Fail("no skin catalog", size) }
+    shop: [4]string = .["Skins", "Coins", "Dew", "Mint"]
+    if !Press("Back") || !Press("Shop") || !Shows(shop[:], 5000) { return Fail("no skin catalog", size) }
     if !Capture("shop", size, *image) { return false }
     if !DriverPress(driver, .{label = "Buy", index = 0, enabled = true}) || !Show("Sign in") {
         return Fail("a purchase must ask for confirmation and sign-in", size)

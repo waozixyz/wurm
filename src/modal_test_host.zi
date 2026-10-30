@@ -94,9 +94,8 @@ ProgressProbe :: (session: Session) -> s32 {
     if App.game.mode != MODE_STAGES { return 44 }
     Controls.mode = -1
     App.OpenLevels()
-    if !App.PlaySelected(3, now) || App.game.mode != MODE_CONTROLS { return 45 }
-    App.ChooseControls(false, now)
-    if App.game.level != 3 || App.game.lives != 3 || App.game.score != 0 || Progress.unlocked != 40 { return 46 }
+    if !App.PlaySelected(3, now) || App.game.mode != MODE_PLAYING ||
+        App.game.level != 3 || App.game.lives != 3 || App.game.score != 0 || Progress.unlocked != 40 { return 45 }
     App.Play(now)
     if App.game.level != 0 || Progress.unlocked != 40 { return 38 }
     if !Progress.Begin(199, 7, 220) { return 39 }
@@ -111,7 +110,7 @@ ProgressProbe :: (session: Session) -> s32 {
     Wardrobe.owned = 512
     if !App.LevelAvailable(160) || !App.LevelAvailable(199) || App.LevelAvailable(79) ||
     !Progress.Select(160, true) || Progress.unlocked != 0 { return 56 }
-    print("Application progress local test: goal 12 to ready 13, frozen worm/enemies, deliberate start, carried stats, restart, editor isolation, game-over retry, locked levels, selected controls, Continue, Play and victory passed.\n")
+    print("Application progress local test: goal 12 to ready 13, frozen worm/enemies, deliberate start, carried stats, restart, editor isolation, game-over retry, locked levels, desktop selected level, Continue, Play and victory passed.\n")
     return 0
 }
 

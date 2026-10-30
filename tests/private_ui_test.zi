@@ -144,6 +144,25 @@ Key :: (code: s32) -> bool {
     return true
 }
 
+Shows :: (labels: []string, timeout_ms: s64) -> bool {
+    deadline := MonotonicMilliseconds() + timeout_ms
+    while true {
+        unused DriverTree(driver)
+        missing := false
+        for label: labels {
+            found := false
+            for i: 0..driver.nodes.count - 1 {
+                if driver.nodes[i].label == label && driver.nodes[i].visible { found = true; break }
+            }
+            if !found { missing = true; break }
+        }
+        if !missing { return true }
+        if MonotonicMilliseconds() >= deadline { return false }
+        Sleep(20)
+    }
+    return false
+}
+
 // A rested pointer, then a press and release there.
 Click :: (x: s64, y: s64) -> bool {
     fx := cast(float64)x; fy := cast(float64)y
@@ -220,6 +239,21 @@ Bright :: (image: *DisplayImage) -> float64 {
 
 Dark :: (r: s32, g: s32) -> bool { return r < 100 && g < 120 }
 
+// The ready daily chest bobs in this exact area; every other title pixel must
+// still be the same after a key that must not navigate.
+SameTitlePage :: (before: *DisplayImage, after: *DisplayImage) -> bool {
+    if before.width != after.width || before.height != after.height { return false }
+    for y: 0..449 {
+        for x: 0..cast(s64)before.width - 1 {
+            if x >= 4 && x < 96 && y >= 90 && y < 182 { continue }
+            before_at := y * cast(s64)before.width + x
+            after_at := y * cast(s64)after.width + x
+            if before.pixels[before_at] != after.pixels[after_at] { return false }
+        }
+    }
+    return true
+}
+
 // A rectangle of the picture, as numpy's clipped slices.
 Patch :: struct { x0: s64; y0: s64; x1: s64; y1: s64 }
 
@@ -265,10 +299,22 @@ Editor :: () -> bool {
     Sleep(400)
     returned: DisplayImage
     if !Capture("title-no-pages", *returned) { return false }
-    for i: 0..cast(s64)stages.width * 450 - 1 {
-        if returned.pixels[i] != stages.pixels[i] { return Fail("title unexpectedly changed pages") }
-    }
+    if !SameTitlePage(*stages, *returned) { return Fail("title unexpectedly changed pages") }
     if !Key(KEY_E) { return false }
+    Sleep(300)
+    home: [5]string = .["Level editor", "New level", "From a level", "My levels", "Community"]
+    if !Shows(home[:], 5000) { return Fail("the editor does not open on its own home") }
+    if !Capture("editor-home", *image) { return false }
+    if !Click(480, 478) { return false }  // From a level.
+    Sleep(300)
+    unlocked: [3]string = .["From a level", "Meadow", "Finish levels to unlock more"]
+    if !Shows(unlocked[:], 5000) { return Fail("the editor home does not follow unlocked landscapes") }
+    if !Capture("editor-stages", *image) { return false }
+    SetEnv("WURM_START", "editor")
+    SetNumber("WURM_LEVEL", 14)
+    if !Launch(desktop, "build", Out("app-editor", ".log")) { return false }
+    Unset("WURM_START")
+    Unset("WURM_LEVEL")
     Sleep(300)
     browser: DisplayImage
     if !Capture("editor-browser", *browser) { return false }
@@ -340,7 +386,7 @@ Editor :: () -> bool {
     portrait := Bytes("level14-portrait.dat")
     if portrait.count < 2401 || portrait[1 + 5 * 40 + 35] != 21 { return Fail("portrait lower-row edit was not saved") }
     if Bytes("level14.dat") != painted { return Fail("portrait save changed the landscape") }
-    if !Click(31, 20) || !Click(775, 518) { return false }  // Previous level, Save.
+    if !Click(31, 20) || !Click(223, 537) || !Click(775, 518) { return false }  // Previous level, paint, Save.
     if !PathExists(Join(levels, "level13-portrait.dat")) { return Fail("title-bar back did not switch levels") }
     if !Click(73, 20) || !Click(250, 20) { return false }  // Next level, landscape.
     if !Capture("editor-landscape-independent", *image) || !Click(349, 20) { return false }
@@ -352,7 +398,7 @@ Editor :: () -> bool {
     BuilderPrint(*receipt, "{\n  \"server_pid\": %,\n  \"server_executable\": \"%\",\n", display.server.pid, display.executable)
     BuilderPrint(*receipt, "  \"display\": \"%\",\n  \"app_pid\": %,\n  \"window\": %\n}\n", display.name, app_pid, window)
     unused WriteEntireFile(Out("receipt", ".json"), BuilderFinish(receipt))
-    print("Private UI local test played the standing level, opened the editor with E, browsed the Meadow levels and edited one.\n")
+    print("Private UI local test played the standing level, opened the editor home and unlocked Meadow, then edited a campaign level.\n")
     return true
 }
 
@@ -412,6 +458,31 @@ ProgressProbe :: () -> bool {
     return true
 }
 
+// A visible, enabled action entirely inside the owned viewport, clicked at
+// the semantic tree's centre rather than a layout-derived pixel row.
+ClickAction :: (title: string, label: string, key: u64, width: s64, height: s64) -> bool {
+    deadline := MonotonicMilliseconds() + 3000
+    while true {
+        unused DriverTree(driver)
+        for i: 0..driver.nodes.count - 1 {
+            node := driver.nodes[i]
+            if node.key != key || node.label != label || node.kind != "button" { continue }
+            if !node.visible || !node.enabled || node.width < 48.0 || node.height < 44.0 { continue }
+            if node.x < 4.0 || node.y < 4.0 ||
+               node.x + node.width > cast(float64)width - 4.0 ||
+               node.y + node.height > cast(float64)height - 4.0 {
+                return Fail(Words(title, "action does not fit"))
+            }
+            x := Round(node.x + node.width / 2.0)
+            y := Round(node.y + node.height / 2.0)
+            return Click(x, y)
+        }
+        if MonotonicMilliseconds() >= deadline { return Fail(Words(title, "semantic action is missing")) }
+        Sleep(20)
+    }
+    return false
+}
+
 // Each dialog in a narrow phone portrait and a short phone landscape window.
 Dialogs :: () -> bool {
     sizes: [4]s64 = .[320, 568, 640, 360]
@@ -438,20 +509,14 @@ Dialogs :: () -> bool {
             picture: DisplayImage
             if !Capture(title, *picture) { return false }
             if picture.width != cast(s32)width || picture.height != cast(s32)height { return Fail(Words("window size", title)) }
-            // Both full-width actions fit entirely inside the window.
-            compact := height < 400
-            card: s64 = ifx mode == 2 then (ifx compact then 252 else 292) else (ifx compact then 288 else 340)
-            if mode == 2 { card += 56 }
-            card_top := cast(float64)(height - card) / 2.0
-            primary := Round(card_top + cast(float64)card - cast(float64)(ifx mode == 2 then 152 else 96))
+            // Both the semantic bounds and the real transition validate the
+            // primary action at each orientation.
+            primary_label := "Resume"
+            primary_key: u64 = 57
+            if mode == 3 { primary_label = "Try again" }
+            else if mode == 5 { primary_label = "Play again" }
+            else if mode == 11 { primary_label = "Start level"; primary_key = 24204 }
             if mode == 11 {
-                // Start is centred on the playable board, below the HUD.
-                hud: s64 = ifx width < 520 then 104 else 72
-                ratio := ifx height > width then 4.0 / 3.0 else 0.75
-                board_height := Min(cast(float64)(height - hud), cast(float64)width * ratio)
-                ready: s64 = ifx board_height < 180.0 then 132 else 164
-                if label == "portal-ready" && board_height >= 216.0 { ready += 40 }
-                primary = Round(cast(float64)(height + hud) / 2.0 + cast(float64)ready / 2.0 - 40.0)
                 Sleep(1100)
                 if TextContains(Log(log), "mode=1 lives=") { return Fail("next level started without consent") }
                 if !Key(DRIVER_KEY_UP) { return false }
@@ -461,19 +526,14 @@ Dialogs :: () -> bool {
                 if !TextContains(Log(log), BuilderFinish(expected)) { return Fail("preview is not the selected level") }
                 if !Capture(Dash(title, "waiting"), *picture) { return false }
             }
-            secondary := Round(card_top + cast(float64)card - 36.0)
-            if !(24 < primary && primary < secondary && secondary < height - 24) { return Fail(Words("actions do not fit", title)) }
-            // Each primary action makes a real state change.
-            if !Click(width / 2, primary) { return false }
+            if !ClickAction(title, primary_label, primary_key, width, height) { return false }
             if !WaitLog(log, "mode=1 lives=", 1500) { return Fail(Words(title, "primary action did not start or resume play")) }
             if mode == 3 && !TextContains(Log(log), "mode=1 lives=3 level=57 score=0") {
                 return Fail("Try again did not use the furthest unlocked level")
             }
             if !Key(DRIVER_KEY_SPACE) { return false }
             Sleep(150)
-            // A reopened pause uses the pause card, including after game over.
-            pause: s64 = (ifx compact then 252 else 292) + 56
-            if !Click(width / 2, Round(cast(float64)(height + pause) / 2.0 - 36.0)) { return false }
+            if !ClickAction(title, "Back to title", 58, width, height) { return false }
             if !WaitLog(log, "mode=0", 1500) { return Fail(Words(title, "Back to title action failed")) }
         }
     }
@@ -546,7 +606,7 @@ ResponsiveTitles :: () -> bool {
     return true
 }
 
-// Held pointer input turns before release, for swipe and the direction pad.
+// Both saved preferences use the desktop free-field steering surface.
 HeldSteering :: (pad: bool) -> bool {
     sizes: [4]s64 = .[640, 480, 320, 568]
     for size: 0..1 {
@@ -559,24 +619,25 @@ HeldSteering :: (pad: bool) -> bool {
         SetEnv("WURM_PROBE_SCENE", "1"); SetEnv("WURM_PROBE_STEERING", "1"); SetEnv("WURM_PROBE_MODE", "1")
         if !Launch(modal_test, "", log) { return false }
         if !WaitLog(log, "steering=", 10000) { return Fail("steering probe did not finish its first frame") }
+        free_field := false; direction_pad := false
+        unused DriverTree(driver)
+        for i: 0..driver.nodes.count - 1 {
+            node := driver.nodes[i]
+            if node.key == 100000 && node.label == "Steer the worm" && node.visible && node.enabled {
+                free_field = true
+            }
+            if node.label == "Direction pad" && node.visible { direction_pad = true }
+        }
+        if !free_field { return Fail(Words(title, "has no desktop free-field steering surface")) }
+        if direction_pad { return Fail(Words(title, "shows an on-screen direction pad on desktop")) }
         // Each turn: direction, x, y.
         points: [9]s64
-        if pad {
-            short := Min(cast(float64)width, cast(float64)(height - (ifx width < 520 then 104 else 72)))
-            margin := Min(32.0, Max(24.0, short * 0.06))
-            side := Min(216.0, Max(168.0, short * 0.44))
-            left := margin; top := cast(float64)height - side - margin
-            points[0] = 2; points[1] = Round(left + side * 0.84); points[2] = Round(top + side * 0.5)
-            points[3] = 3; points[4] = Round(left + side * 0.5); points[5] = Round(top + side * 0.84)
-            points[6] = 0; points[7] = Round(left + side * 0.16); points[8] = Round(top + side * 0.5)
-        } else {
-            x := width / 2; y := height / 2
-            if !Hold(x, y, true) { return false }
-            Sleep(80)
-            points[0] = 2; points[1] = x + 14; points[2] = y
-            points[3] = 3; points[4] = x + 14; points[5] = y + 14
-            points[6] = 0; points[7] = x; points[8] = y + 14
-        }
+        x := width / 2; y := height / 2
+        if !Hold(x, y, true) { return false }
+        Sleep(80)
+        points[0] = 2; points[1] = x + 14; points[2] = y
+        points[3] = 3; points[4] = x + 14; points[5] = y + 14
+        points[6] = 0; points[7] = x; points[8] = y + 14
         for turn: 0..2 {
             if !Hold(points[turn * 3 + 1], points[turn * 3 + 2], true) { return false }
             wanted: Vec(u8)
@@ -588,12 +649,12 @@ HeldSteering :: (pad: bool) -> bool {
             }
         }
         image: DisplayImage
-        captured := Capture(Dash(ifx pad then "direction-pad" else "held-steering", title), *image)
+        captured := Capture(Dash("held-steering", title), *image)
         if !Hold(points[7], points[8], false) || !captured { return false }
     }
     Unset("WURM_PROBE_STEERING")
     if pad {
-        print("Private UI local test: saved direction-pad choice and held arm changes steer in both orientations.\n")
+        print("Private UI local test: saved direction-pad preference still uses desktop free-field held steering in both orientations.\n")
     } else {
         print("Private UI local test: right, down and left turns took effect before release in both orientations.\n")
     }
@@ -844,19 +905,24 @@ SettingsLocal :: () -> bool {
     if !Launch(desktop, "build", Out("settings-local", ".log")) { return false }
     Sleep(300)
     image: DisplayImage
-    if !Click(926, 34) || !Capture("settings-controls", *image) { return false }
-    if !Click(608, 282) { return false }
-    pad: [1]u8 = .[1]
-    if !Record("controls.dat", pad[:]) { return Fail("settings pad preview does not select pad controls") }
-    if !Click(340, 412) { return false }
-    swipe: [1]u8 = .[0]
-    if !Record("controls.dat", swipe[:]) { return Fail("settings swipe action does not select swipe controls") }
-    if !Click(36, 34) || !Click(96, 86) || !Capture("daily-rewards", *image) { return false }
+    if !ClickAction("title settings", "Settings", 28003, 960, 600) ||
+       !Capture("settings-controls", *image) { return false }
+    settings: [4]string = .["Controls", "Arrow keys", "W A S D", "Local multiplayer"]
+    if !Shows(settings[:], 3000) { return Fail("desktop settings keyboard controls are missing") }
+    if !Click(36, 34) || !ClickAction("daily rewards", "Daily rewards", 28006, 960, 600) ||
+       !Capture("daily-rewards", *image) { return false }
     if !Click(480, 144) || !Capture("daily-reward-claimed", *image) { return false }
     if !Click(36, 34) || !Click(568, 564) || !Capture("visible-level-editor", *image) { return false }
     if !Key(DRIVER_KEY_ESCAPE) || !Key(DRIVER_KEY_ESCAPE) { return false }
-    if !Click(866, 86) || !Capture("local-multiplayer-setup", *image) { return false }
-    if !Click(544, 146) || !Key(DRIVER_KEY_ENTER) { return false }
+    if !ClickAction("settings reopen", "Settings", 28003, 960, 600) { return false }
+    if !ClickAction("local multiplayer setup", "Local multiplayer", 28202, 960, 600) { return false }
+    setup: [4]string = .["Players", "Name", "Start round", "Arrow keys"]
+    if !Shows(setup[:], 3000) { return Fail("local multiplayer setup is missing") }
+    if !ClickAction("local multiplayer players", "4", 31014, 960, 600) { return false }
+    controls: [4]string = .["Arrow keys", "W A S D", "I J K L", "Numpad 8 4 5 6"]
+    if !Shows(controls[:], 3000) { return Fail("four-player local controls are missing") }
+    if !Capture("local-multiplayer-setup", *image) { return false }
+    if !ClickAction("local multiplayer round", "Start round", 31041, 960, 600) { return false }
     Sleep(600)
     if !Capture("local-multiplayer-four-players", *image) { return false }
     if !Key(DRIVER_KEY_ESCAPE) || !Capture("local-multiplayer-paused", *image) { return false }
