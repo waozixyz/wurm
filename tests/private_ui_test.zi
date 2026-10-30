@@ -222,6 +222,7 @@ WriteRecord :: (name: string, bytes: []u8) -> bool {
 Round :: (value: float64) -> s64 { return cast(s64)(value + 0.5) }
 Min :: (a: float64, b: float64) -> float64 { return ifx a < b then a else b }
 Max :: (a: float64, b: float64) -> float64 { return ifx a > b then a else b }
+Distance :: (a: s32, b: s32) -> s32 { return ifx a > b then a - b else b - a }
 
 Red :: (image: *DisplayImage, x: s64, y: s64) -> s32 { return PixelRed(ImagePixel(image, cast(s32)x, cast(s32)y)) }
 Green :: (image: *DisplayImage, x: s64, y: s64) -> s32 { return PixelGreen(ImagePixel(image, cast(s32)x, cast(s32)y)) }
@@ -885,6 +886,15 @@ Skins :: () -> bool {
         y := cast(s32)(top + (15.0 * 16.0 + 8.0) * scale)
         ImageRegion(*picture, x - 16, y - 16, 32, 32, *heads[id])
         if ImageColorCount(*heads[id]) < 60 { return Fail(Words(title, "draws a plain head instead of its art")) }
+        if id == 1 {
+            joined: s32
+            for offset: 4..40 {
+                delta := Distance(Red(*picture, x - offset, y), 80) + Distance(Green(*picture, x - offset, y), 216) +
+                    Distance(Blue(*picture, x - offset, y), 124)
+                if delta < 190 { joined += 1 }
+            }
+            if joined < 24 { return Fail("skin-1 body is not continuously joined") }
+        }
         for other: 0..id - 1 {
             same := true
             for i: 0..heads[id].pixels.count - 1 { if heads[id].pixels[i] != heads[other].pixels[i] { same = false; break } }
@@ -895,8 +905,118 @@ Skins :: () -> bool {
         Sleep(300)
         if !Capture(Dash(title, "portrait"), *picture) { return false }
     }
+    SetEnv("WURM_PROBE_WIDTH", "960"); SetEnv("WURM_PROBE_HEIGHT", "600")
+    SetEnv("WURM_PROBE_DIRECTION", "0")
+    SetNumber("WURM_PROBE_SKIN", 7)
+    if !Launch(modal_test, "", Out("skin-7-left", ".log")) { return false }
+    Sleep(300)
+    picture: DisplayImage
+    if !Capture("skin-7-left", *picture) { return false }
+    scale := Min(960.0 / 640.0, cast(float64)(600 - 72) / 480.0)
+    left := (960.0 - 640.0 * scale) / 2.0
+    top := 72.0 + (cast(float64)(600 - 72) - 480.0 * scale) / 2.0
+    x := cast(s32)(left + (20.0 * 16.0 + 8.0) * scale)
+    y := cast(s32)(top + (15.0 * 16.0 + 8.0) * scale)
+    left_head: DisplayImage
+    ImageRegion(*picture, x - 16, y - 16, 32, 32, *left_head)
+    same_head := true
+    for i: 0..left_head.pixels.count - 1 { if left_head.pixels[i] != heads[7].pixels[i] { same_head = false; break } }
+    if same_head { return Fail("skin-7 left head does not mirror the right head") }
+    Unset("WURM_PROBE_DIRECTION")
     Unset("WURM_PROBE_SKIN")
     print("Private UI local test: all thirteen skins, including Winter cheer, draw their own head in play.\n")
+    return true
+}
+
+WormBodyGeometry :: () -> bool {
+    SetEnv("WURM_PROBE_WIDTH", "960"); SetEnv("WURM_PROBE_HEIGHT", "600")
+    SetEnv("WURM_PROBE_SCENE", "9"); SetEnv("WURM_PROBE_MODE", "1"); SetEnv("WURM_PROBE_LEVEL", "0")
+    SetNumber("WURM_PROBE_SKIN", 0)
+    if !Launch(modal_test, "", Out("worm-discontinuity", ".log")) { return false }
+    Sleep(300)
+    picture: DisplayImage
+    if !Capture("worm-discontinuity", *picture) { return false }
+    Unset("WURM_PROBE_SKIN")
+    if !Orange(*picture, 178, 338) || !Orange(*picture, 700, 338) { return Fail("discontinuous worm groups are missing") }
+    for x: 250..650 {
+        if Orange(*picture, x, 338) { return Fail("connector crossed a discontinuous body gap") }
+    }
+    for x: 108..126 {
+        for y: 326..350 { if Orange(*picture, x, y) { return Fail("body leaked outside the board edge") } }
+    }
+    neck: s32; tail: s32
+    for y: 310..370 {
+        if Orange(*picture, 150, y) { neck += 1 }
+        if Orange(*picture, 718, y) { tail += 1 }
+    }
+    if tail >= neck || neck - tail < 2 { return Fail("tail is not slimmer than the neck") }
+    print("Private UI local test: tapered body stays connected, clipped at edges and separate across discontinuities.\n")
+    return true
+}
+
+RewardCheckColour :: (picture: *DisplayImage, x: s64, y: s64) -> bool {
+    red := Red(picture, x, y); green := Green(picture, x, y); blue := Blue(picture, x, y)
+    return red > 80 && green > red + 35 && green > blue + 25
+}
+
+RewardHistoryCase :: (name: string, width: s64, height: s64, today: s64,
+                      expected_checks: s32, claim_label: string, claim_ready: bool) -> bool {
+    SetNumber("WURM_PROBE_WIDTH", width); SetNumber("WURM_PROBE_HEIGHT", height)
+    SetEnv("WURM_PROBE_REWARDS", "1"); SetNumber("WURM_PROBE_TEST_DAY", today)
+    log := Out(name, ".log")
+    if !Launch(modal_test, "", log) { return false }
+    Sleep(300)
+    if !WaitLog(log, "rewards-history ", 10000) { return Fail(Words(name, "fixture did not start")) }
+    picture: DisplayImage
+    if !Capture(name, *picture) { return false }
+    if picture.width != cast(s32)width || picture.height != cast(s32)height { return Fail(Words("window size", name)) }
+    unused DriverTree(driver)
+    tiles: s32; checks: s32; action: bool
+    numbered_labels: [7]string = .["1", "2", "3", "4", "5", "6", "7"]
+    day_labels: [7]string = .["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"]
+    for tile: 0..6 {
+        for i: 0..driver.nodes.count - 1 {
+            node := driver.nodes[i]
+            label := ifx width < 410 then numbered_labels[tile] else day_labels[tile]
+            if node.label != label || !node.visible { continue }
+            tiles += 1
+            card_width := Min(cast(float64)width - 32.0, 440.0)
+            tile_width := (card_width - 32.0 - 36.0) / 7.0
+            x0 := Round((cast(float64)width - card_width) / 2.0 + 16.0 + cast(float64)tile * (tile_width + 6.0) + tile_width - 18.0)
+            y0 := Round(node.y + 18.0)
+            coloured: s32
+            for y: y0..y0 + 15 {
+                for x: x0..x0 + 15 {
+                    if RewardCheckColour(*picture, x, y) { coloured += 1 }
+                }
+            }
+            if coloured > 12 { checks += 1 }
+            break
+        }
+    }
+    if tiles != 7 {
+        return Fail(Words(name, "does not show seven reward days"))
+    }
+    if checks != expected_checks { return Fail(Words(name, "claim check count is wrong")) }
+    for i: 0..driver.nodes.count - 1 {
+        node := driver.nodes[i]
+        if node.key == 29671 && node.kind == "button" && node.visible && node.label == claim_label {
+            action = node.enabled == claim_ready
+            break
+        }
+    }
+    if !action { return Fail(Words(name, "claim button readiness is wrong")) }
+    return true
+}
+
+RewardHistory :: () -> bool {
+    Unset("WURM_PROBE_MODE"); Unset("WURM_PROBE_SCENE"); Unset("WURM_PROBE_SKIN")
+    if !RewardHistoryCase("daily-rewards-history-desktop", 960, 600, 20000, 3, "Come back tomorrow", false) { return false }
+    if !RewardHistoryCase("daily-rewards-history-portrait", 390, 780, 20000, 3, "Come back tomorrow", false) { return false }
+    if !RewardHistoryCase("daily-rewards-missed-desktop", 960, 600, 20002, 0, "Claim", true) { return false }
+    if !RewardHistoryCase("daily-rewards-missed-portrait", 390, 780, 20002, 0, "Claim", true) { return false }
+    Unset("WURM_PROBE_REWARDS"); Unset("WURM_PROBE_TEST_DAY")
+    print("Private UI local test: daily rewards showed three claims, then a missed-day reset in both orientations.\n")
     return true
 }
 
@@ -939,7 +1059,7 @@ Run :: () -> bool {
     if !HeldSteering(true) { return false }
     swipe: [1]u8 = .[0]
     unused WriteRecord("controls.dat", swipe[:])
-    return PlaytestLayouts() && Rotation() && Landscapes() && Gameplay() && Skins() && SettingsLocal()
+    return PlaytestLayouts() && Rotation() && Landscapes() && Gameplay() && Skins() && WormBodyGeometry() && SettingsLocal()
 }
 
 #program_export
@@ -967,7 +1087,8 @@ main :: () -> s32 {
     fixed: [6]string = .["SDL_RENDER_DRIVER=software", "SDL_FRAMEBUFFER_ACCELERATION=0", "SDL_AUDIODRIVER=dummy",
         "LP_NUM_THREADS=1", "ZIRAN_PAR_THREADS=1", "WURM_PROBE_SCENE=0"]
     for setting: fixed { VecPush(settings, setting) }
-    passed := Run()
+    only := EnvironmentText("WURM_UI_ONLY")
+    passed := ifx only == "skins" then Skins() && WormBodyGeometry() else ifx only == "rewards" then RewardHistory() else Run()
     Stop()
     ClosePrivateDisplay(display)
     return ifx passed then 0 else 1

@@ -12,6 +12,7 @@ App :: #import "app";
 Progress :: #import, file "progress.zi";
 Controls :: #import, file "controls.zi";
 Wardrobe :: #import, file "wardrobe.zi";
+Rewards :: #import, file "rewards.zi";
 Input :: #import "kryon/input_protocol";
 #import, file "game.zi";
 #import "std/environment_linux"
@@ -149,6 +150,16 @@ main :: () -> s32 {
     state.mode = Number("WURM_PROBE_MODE", 2)
     state.score = 1234
     if state.mode == 3 { state.lives = 0 }
+    if Number("WURM_PROBE_REWARDS", 0) != 0 {
+        Rewards.days = 3
+        Rewards.week = 3
+        Rewards.last_day = Number("WURM_PROBE_LAST_DAY", 20000)
+        Rewards.test_day = Number("WURM_PROBE_TEST_DAY", 20000)
+        Rewards.loaded = true
+        state.mode = App.MODE_REWARDS
+        print("rewards-history days=% week=% last=% today=% mode=%\n",
+            Rewards.days, Rewards.week, Rewards.last_day, Rewards.test_day, state.mode)
+    }
     // Deterministic, display-only scenes keep the gates and a long bent
     // worm visible without running the clock or modifying saved levels.
     scene := Number("WURM_PROBE_SCENE", 0)
@@ -183,6 +194,14 @@ main :: () -> s32 {
             for segment: 0..83 {
                 if segment < 40 { state.worm[segment] = Point.{head.x, head.y - cast(s32)segment * 4} }
                 else { state.worm[segment] = Point.{head.x - (cast(s32)segment - 39) * 4, head.y - 156} }
+            }
+        }
+        if scene == 9 {
+            state.length = 20
+            state.direction = 2
+            for segment: 0..19 {
+                x := ifx segment < 10 then 8 + cast(s32)segment * 4 else 500 + (cast(s32)segment - 10) * 4
+                state.worm[segment] = Point.{x, 240}
             }
         }
         state.apple = Point.{head.x + 80, head.y - 64}

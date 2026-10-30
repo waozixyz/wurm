@@ -692,13 +692,46 @@ SkinName :: (id: s32) -> string {
     if id == 12 { return "Aurora" }
     return "Apfelwurm"
 }
+
+SkinBodyColour :: (id: s32) -> Color {
+    colours: [13]Color = .[Color.{233, 141, 31, 255}, Color.{104, 194, 114, 255},
+        Color.{50, 26, 125, 255}, Color.{232, 116, 133, 255}, Color.{23, 50, 119, 255},
+        Color.{222, 114, 38, 255}, Color.{119, 127, 57, 255}, Color.{42, 64, 72, 255},
+        Color.{74, 67, 26, 255}, Color.{105, 153, 100, 255}, Color.{63, 147, 165, 255},
+        Color.{163, 117, 77, 255}, Color.{33, 53, 111, 255}]
+    if id < 0 || id >= colours.count { return colours[0] }
+    return colours[id]
+}
+
+ToneChannel :: (value: u8, amount: float32) -> u8 {
+    result := cast(float32)value + amount
+    if result < 0.0 { result = 0.0 }
+    if result > 255.0 { result = 255.0 }
+    return cast(u8)result
+}
+
+ToneColour :: (colour: Color, amount: float32) -> Color {
+    return Color.{ToneChannel(colour.r, amount), ToneChannel(colour.g, amount), ToneChannel(colour.b, amount), colour.a}
+}
+
 CharacterPreview :: (session: Session, key: u64, bounds: Rectangle, id: s32) {
-    // The body's balls touch, overlapping a little like the worm in play.
+    colour := SkinBodyColour(id)
     for segment: 0..2 {
-        size := 23.0 + cast(float32)segment * 2.0
-        x := bounds.x + 10.0 + cast(float32)segment * 16.0
-        y := bounds.y + 20.0 - cast(float32)segment * 4.0
-        Character(session, key + cast(u64)segment * 8, Rectangle.{x, y, size, size}, id, false)
+        size := 22.0 + cast(float32)segment * 3.0
+        x := bounds.x + 8.0 + cast(float32)segment * 17.0
+        y := bounds.y + bounds.height / 2.0 - size / 2.0 - cast(float32)segment * 1.5
+        body := Rectangle.{x, y, size, size}
+        shadow := ToneColour(colour, -42.0); main := ToneColour(colour, -12.0)
+        highlight := ToneColour(colour, 34.0); gloss := ToneColour(colour, 65.0)
+        unused Box(session, BoxProps.{.key = key + 600000 + cast(u64)segment * 4, .bounds = Rectangle.{x + 1.0, y + 1.0, size + 1.0, size + 1.0},
+            .fill = Color.{shadow.r, shadow.g, shadow.b, 105}, .radius = size / 2.0})
+        unused Box(session, BoxProps.{.key = key + 600001 + cast(u64)segment * 4, .bounds = body,
+            .fill = Color.{main.r, main.g, main.b, 235}, .radius = size / 2.0})
+        unused Box(session, BoxProps.{.key = key + 600002 + cast(u64)segment * 4, .bounds = Rectangle.{x + 2.0, y + 1.0, size - 5.0, size - 5.0},
+            .fill = Color.{highlight.r, highlight.g, highlight.b, 100}, .radius = (size - 5.0) / 2.0})
+        unused Box(session, BoxProps.{.key = key + 600003 + cast(u64)segment * 4, .bounds = Rectangle.{x + 4.0, y + 3.0, size - 10.0, size - 10.0},
+            .fill = Color.{gloss.r, gloss.g, gloss.b, 48}, .radius = (size - 10.0) / 2.0})
+        Character(session, key + cast(u64)segment * 8, body, id, false, 2, 120)
     }
     Character(session, key + 24, Rectangle.{bounds.x + 54.0, bounds.y + 2.0, 38.0, 38.0}, id, true, 2)
 }
@@ -735,7 +768,7 @@ Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool
     for corner: 0..3 {
         dx := (ifx corner % 2 == 0 then -width else width) / 2.0
         dy := (ifx corner < 2 then -height else height) / 2.0
-        if head && direction == 0 { dx = -dx; dy = -dy }
+        if head && direction == 0 { dx = -dx }
         else if head && direction == 1 { previous := dx; dx = dy; dy = -previous }
         else if head && direction == 3 { previous := dx; dx = -dy; dy = previous }
         corners[corner] = Vector2.{cx + dx, cy + dy}
@@ -1066,6 +1099,50 @@ Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source
     } else { Picture(session, key, sheet, bounds, fragment, alpha) }
 }
 
+DrawWormCapsules :: (session: Session, base_key: u64, stage: Rectangle, points: []Point,
+        count: s32, colour: Color, alpha: u8, scale: float32, size_adjust: float32,
+        offset_x: float32, offset_y: float32) {
+    if alpha == 0 || count <= 0 { return }
+    index := count - 1
+    while index > 0 {
+        from_tail := count - 1 - index
+        progress := ifx count > 1 then cast(float32)from_tail / cast(float32)(count - 1) else 1.0
+        size := 9.0 + 4.0 * progress + size_adjust
+        centre := points[index]
+        centre_x := cast(float32)centre.x + offset_x
+        centre_y := cast(float32)centre.y + offset_y
+        left := stage.x + (centre_x - size / 2.0) * scale
+        top := stage.y + (centre_y - size / 2.0) * scale
+        right := stage.x + (centre_x + size / 2.0) * scale
+        bottom := stage.y + (centre_y + size / 2.0) * scale
+        if left < stage.x { left = stage.x }
+        if top < stage.y { top = stage.y }
+        if right > stage.x + stage.width { right = stage.x + stage.width }
+        if bottom > stage.y + stage.height { bottom = stage.y + stage.height }
+        width := right - left; height := bottom - top
+        if width <= 0.0 || height <= 0.0 { index -= 2; continue }
+        radius := size * scale / 2.0
+        if radius > width / 2.0 { radius = width / 2.0 }
+        if radius > height / 2.0 { radius = height / 2.0 }
+        unused Box(session, BoxProps.{.key = base_key + cast(u64)index,
+            .bounds = Rectangle.{left, top, width, height},
+            .fill = Color.{colour.r, colour.g, colour.b, alpha}, .radius = radius})
+        index -= 2
+    }
+}
+
+DrawWormTube :: (session: Session, base_key: u64, stage: Rectangle, points: []Point,
+        count: s32, colour: Color, alpha: u8, scale: float32) {
+    DrawWormCapsules(session, base_key, stage, points, count, ToneColour(colour, -42.0),
+        cast(u8)(cast(float32)alpha * 0.41), scale, 0.6, 1.4, 1.3)
+    DrawWormCapsules(session, base_key + 1100, stage, points, count, ToneColour(colour, -12.0),
+        cast(u8)(cast(float32)alpha * 0.92), scale, 0.0, 0.0, 0.0)
+    DrawWormCapsules(session, base_key + 2200, stage, points, count, ToneColour(colour, 34.0),
+        cast(u8)(cast(float32)alpha * 0.39), scale, -2.5, -1.4, -1.6)
+    DrawWormCapsules(session, base_key + 3300, stage, points, count, ToneColour(colour, 65.0),
+        cast(u8)(cast(float32)alpha * 0.19), scale, -5.0, -2.2, -2.8)
+}
+
 // Garden-only dressage: animated water frames and grass floor variants,
 // both chosen per frame and per cell so boards feel alive without any
 // change to the level data.
@@ -1293,18 +1370,22 @@ DrawBoard :: (session: Session, stage: Rectangle) {
     // Painted art fills its cell, so it needs slimmer bounds than the sprite.
     fade: float32 = ifx game.death_ticks > 0 then cast(float32)game.death_ticks / 20.0 else 1.0
     alpha := cast(u8)(255.0 * fade * fade * (3.0 - 2.0 * fade))
-    draw_step: s32 = WORM_DRAW_STEP
-    body_size: float32 = ifx Wardrobe.skin != 0 then 12.0 else WORM_BODY_SIZE
-    head_size: float32 = ifx Wardrobe.skin != 0 then 17.0 else WORM_HEAD_SIZE
+    draw_step: s32 = WORM_DRAW_STEP * 2
+    head_size: float32 = ifx Wardrobe.skin != 0 then 22.0 else 21.0
+    DrawWormTube(session, 18000, stage, game.worm[:], game.length, SkinBodyColour(Wardrobe.skin), alpha,
+        stage.width / (cast(float32)board_columns * 16.0))
     index := game.length - 1
     while index > 0 {
         column := 4
         from_tail := game.length - 1 - index
         if from_tail < 2 { column = 6 }
         else if from_tail < 8 { column = 5 }
+        progress := ifx game.length > 1 then cast(float32)from_tail / cast(float32)(game.length - 1) else 1.0
+        body_size := ifx Wardrobe.skin != 0 then 11.0 + 3.0 * progress else 13.0 + 2.0 * progress
         if alpha > 0 {
             Sprite(session, 2000 + cast(u64)index, stage, game.worm[index],
-                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, body_size, alpha)
+                Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, body_size,
+                cast(u8)(cast(float32)alpha * 0.34))
         }
         index -= draw_step
     }
@@ -2663,9 +2744,10 @@ CoinText :: (amount: s32) -> string {
     return TextUntilNul(coin_text[:])
 }
 
-// The chest's card: today's gift and the next days, one icon each, so there
-// is always a reason to come back tomorrow. Later days stay a surprise.
-reward_day_label: [5][32]u8;
+// The chest's card: this week's days in a row, the claimed ones ticked, then
+// today's gift and the next days, one icon each, so there is always a reason
+// to come back tomorrow. Later weeks stay a surprise.
+reward_day_label: [7][32]u8;
 DrawRewardsModal :: (session: Session, area: Rectangle) {
     unused Box(session, BoxProps.{.key = 29620, .bounds = area, .fill = Color.{8, 18, 12, 150}})
     width := area.width - 32.0
@@ -2695,51 +2777,57 @@ DrawRewardsModal :: (session: Session, area: Rectangle) {
     CentreText(session, 29624, "Daily rewards", Rectangle.{card.x + 16.0, card.y + 66.0, width - 32.0, 32.0}, 24)
     GameText(session, 29625, ifx ready then "Your gift is ready!" else "Come back tomorrow",
         Rectangle.{card.x + 16.0, card.y + 100.0, width - 32.0, 22.0}, 15, true, true)
-    // The next five plan days, the one to claim first.
-    gap: float32 = 8.0
-    tile_width := (width - 32.0 - gap * 4.0) / 5.0
-    for index: 0..4 {
-        day := Rewards.Day() + 1 + cast(s32)index
-        key := cast(u64)(29630 + index * 8)
+    // Seven days: those claimed in a row, then the one to claim next.
+    claimed := Rewards.WeekClaimed()
+    first_day := Rewards.Day() - claimed + 1
+    gap: float32 = 6.0
+    tile_width := (width - 32.0 - gap * 6.0) / 7.0
+    narrow := tile_width < 44.0
+    for index: 0..6 {
+        day := first_day + cast(s32)index
+        done := cast(s32)index < claimed
+        next := cast(s32)index == claimed
+        key := cast(u64)(29630 + index * 5)
         tile := Rectangle.{card.x + 16.0 + cast(float32)index * (tile_width + gap), card.y + 136.0, tile_width, 112.0}
-        first := index == 0
         unused Box(session, BoxProps.{.key = key, .bounds = tile,
             // A warm wash keeps the theme's text readable on today's gift.
-            .fill = ifx first && ready then Color.{255, 190, 64, 64} else Appearance.Canvas(),
-            .border = ifx first then ColorFromPacked(Appearance.Palette().selected) else Appearance.Border(), .radius = 14.0})
-        // Today or tomorrow by name, later days by number.
-        label := ""
-        if first { label = Locale.Text(ifx ready then "Today" else "Tomorrow") }
-        else if index == 1 && ready { label = Locale.Text("Tomorrow") }
-        else {
-            digits: [21]u8
-            number := FormatInteger(cast(s64)((day - 1) % Rewards.DAILY_DAYS + 1), digits[:])
-            // Each language places the number at its "%".
-            pattern := Locale.Text("Day %")
-            at: s32 = 0
-            for byte: pattern {
-                if byte == #char "%" { at = CopyInto(reward_day_label[index][:], at, number) }
-                else if at < 31 { reward_day_label[index][at] = byte; at += 1 }
-            }
-            reward_day_label[index][at] = 0
-            label = TextUntilNul(reward_day_label[index][:])
+            .fill = ifx next && ready then Color.{255, 190, 64, 64} else ifx done then Color.{80, 200, 120, 48} else Appearance.Canvas(),
+            .border = ifx next || done then ColorFromPacked(Appearance.Palette().selected) else Appearance.Border(), .radius = 12.0})
+        // The week's days by number; a narrow card shows the number alone.
+        digits: [21]u8
+        number := FormatInteger(cast(s64)(index + 1), digits[:])
+        // Each language places the number at its "%".
+        pattern := ifx narrow then "%" else Locale.Text("Day %")
+        at: s32 = 0
+        for byte: pattern {
+            if byte == #char "%" { at = CopyInto(reward_day_label[index][:], at, number) }
+            else if at < 31 { reward_day_label[index][at] = byte; at += 1 }
         }
-        unused Text(session, TextProps.{.key = key + 1, .bounds = Rectangle.{tile.x + 2.0, tile.y + 6.0, tile.width - 4.0, 18.0},
-            .text = label, .font = 12, .align = TextAlign.TextAlignCenter, .wrap = TextWrap.TextWrapNone})
-        icon_size: float32 = ifx tile_width < 64.0 then tile_width - 12.0 else 52.0
+        reward_day_label[index][at] = 0
+        unused Text(session, TextProps.{.key = key + 1, .bounds = Rectangle.{tile.x + 1.0, tile.y + 6.0, tile.width - 2.0, 18.0},
+            .text = TextUntilNul(reward_day_label[index][:]), .font = 12, .align = TextAlign.TextAlignCenter, .wrap = TextWrap.TextWrapNone})
+        icon_size: float32 = ifx tile_width < 58.0 then tile_width - 8.0 else 50.0
         icon := Rectangle.{tile.x + (tile.width - icon_size) / 2.0, tile.y + 28.0, icon_size, icon_size}
         skin := Rewards.DaySkin(day)
         amount: s32 = 0
         if skin > 0 {
             Character(session, key + 2, icon, skin, true)
         } else {
+            // A claimed Dew day shows the coins a guest received instead.
             dew := Rewards.DayDew(day)
+            if done && Rewards.DayCoins(day) > 0 { dew = 0 }
             amount = ifx dew > 0 then dew else Rewards.DayCoins(day)
             RewardIcon(session, key + 2, icon, ifx dew > 0 then 3 else 2, ifx dew > 0 then "Dew" else "Coins")
         }
-        digits: [21]u8
-        GameText(session, key + 3, ifx skin > 0 then SkinName(skin) else FormatInteger(cast(s64)amount, digits[:]),
-            Rectangle.{tile.x + 2.0, tile.y + 84.0, tile.width - 4.0, 22.0}, ifx skin > 0 then 11 else 17, false, true)
+        if done {
+            SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{tile.x + tile.width - 18.0, tile.y + 24.0, 16.0, 16.0},
+                .shape = "S2rr:M5 12L10 17L20 6", .color = ColorFromPacked(Appearance.Palette().selected)})
+        }
+        if skin == 0 || !narrow {
+            amount_digits: [21]u8
+            GameText(session, key + 3, ifx skin > 0 then SkinName(skin) else FormatInteger(cast(s64)amount, amount_digits[:]),
+                Rectangle.{tile.x + 1.0, tile.y + 84.0, tile.width - 2.0, 22.0}, ifx skin > 0 then 11 else ifx narrow then 13 else 16, false, true)
+        }
     }
     y := card.y + 262.0
     #if !#defined(WURM_PORTABLE) {
@@ -2856,16 +2944,17 @@ LocalKey :: (key: s32, now: s64) {
         else if local_round.phase == Local.PAUSED { local_round.phase = Local.PLAYING; local_round.next_step = now + 44 }
     } else { unused Local.Input(*local_round, key) }
 }
-DrawLocalPiece :: (session: Session, key: u64, stage: Rectangle, at: Point, id: s32, head: bool, direction: s32) {
+DrawLocalPiece :: (session: Session, key: u64, stage: Rectangle, at: Point, id: s32, head: bool,
+        direction: s32, alpha: u8 = 255) {
     scale := stage.width / 640.0
     skin := local_skins[id]
-    size: float32 = ifx head then (ifx skin > 0 then 17.0 else 19.0) else 16.5
+    size: float32 = ifx head then (ifx skin > 0 then 20.0 else 20.5) else (ifx skin > 0 then 14.0 else 16.5)
     bounds := Rectangle.{stage.x + (cast(float32)at.x - size / 2.0) * scale,
         stage.y + (cast(float32)at.y - size / 2.0) * scale, size * scale, size * scale}
     if bounds.y < stage.y || bounds.y + bounds.height > stage.y + stage.height { return }
     if skin > 0 {
         if !head { bounds.x += 2.25 * scale; bounds.y += 2.25 * scale; bounds.width = 12.0 * scale; bounds.height = bounds.width }
-        Character(session, key, bounds, skin, head, direction)
+        Character(session, key, bounds, skin, head, direction, alpha)
         return
     }
     source := Rectangle.{cast(float32)(ifx head then direction else 4) * 32.0, 96.0, 32.0, 32.0}
@@ -2972,9 +3061,12 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64, input: Inpu
     for id: 0..local_round.count - 1 {
         player := *local_round.players[id]
         if !player.alive { continue }
+        DrawWormTube(session, cast(u64)(500000 + id * 5000), stage, player.worm[:], player.length,
+            ColorFromPacked(LocalColour(id)), 255, stage.width / 640.0)
         index := player.length - 1
         while index > 0 {
-            DrawLocalPiece(session, cast(u64)(34000 + id * 1100 + index), stage, player.worm[index], cast(s32)id, false, player.direction)
+            DrawLocalPiece(session, cast(u64)(34000 + id * 1100 + index), stage, player.worm[index], cast(s32)id,
+                false, player.direction, 115)
             index -= 3
         }
         DrawLocalPiece(session, cast(u64)(34000 + id * 1100), stage, player.worm[0], cast(s32)id, true, player.direction)

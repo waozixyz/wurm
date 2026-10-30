@@ -183,7 +183,19 @@ main :: () -> s32 {
     Expect(Rewards.ClaimReady() && ClaimDay(20000), "claim the first day")
     Expect(Rewards.Day() == 1 && Rewards.Coins() == 32 && Rewards.toast_coins == 20, "day one gives twenty coins")
     Expect(!Rewards.ClaimReady() && !Rewards.Claim(), "a day is claimed once")
-    Expect(ClaimDay(20001) && ClaimDay(20004), "a missed day does not reset the plan")
+    Expect(Rewards.WeekClaimed() == 1, "today's claim stays shown in the week")
+    Expect(ClaimDay(20001) && Rewards.WeekClaimed() == 2, "consecutive claims fill the week")
+    Rewards.test_day = 20002
+    Expect(Rewards.ClaimReady() && Rewards.WeekClaimed() == 2, "the next day keeps the week until it is claimed")
+    Expect(File.RemoveFile("build/rewards-test-data/rewards.dat") && File.CreateDirectory("build/rewards-test-data/rewards.dat"), "block a private claim save")
+    Expect(!Rewards.Claim() && Rewards.Day() == 2 && Rewards.WeekClaimed() == 2 && Rewards.ClaimReady(), "a failed save keeps the week")
+    unused RemoveTree("build/rewards-test-data/rewards.dat")
+    Expect(Rewards.Save(), "restore the test's reward record")
+    Rewards.test_day = 20003
+    Expect(Rewards.WeekClaimed() == 0 && Rewards.Day() == 2 && Rewards.Coins() == 32 + 25, "a missed day clears the week but keeps claimed days and coins")
+    Expect(ClaimDay(20004) && Rewards.WeekClaimed() == 1, "the claim after a missed day starts a new week")
+    Rewards.Reset()
+    Expect(Rewards.WeekClaimed() == 1 && Rewards.Day() == 3, "the week survives a restart")
     Expect(Rewards.Day() == 3 && Rewards.Coins() == 32 + 25 + 30, "days two and three give their coins")
     Rewards.test_day = 20003
     Expect(!Rewards.ClaimReady(), "an earlier clock cannot claim again")
@@ -196,6 +208,7 @@ main :: () -> s32 {
     Expect(!Rewards.Owns(11) && !Wardrobe.Available(11), "the day-seven skin waits for day seven")
     Expect(ClaimDay(20007) && ClaimDay(20008), "claim days six and seven")
     Expect(Rewards.Owns(11) && Wardrobe.Available(11) && Rewards.DaySkin(7) == 11 && Rewards.DayCoins(7) == 0, "day seven gives Mushroom")
+    Expect(Rewards.WeekClaimed() == 5, "plan day seven after a missed day is the week's fifth")
     coins := Rewards.Coins()
     Expect(coins == 32 + 25 + 30 + 35 + 40 + 40, "the gift skin day gives no coins")
     Expect(File.RemoveFile("build/rewards-test-data/rewards.dat") && File.CreateDirectory("build/rewards-test-data/rewards.dat"), "block a private purchase save")
@@ -211,10 +224,16 @@ main :: () -> s32 {
     Wardrobe.Select(9)
     Wardrobe.Reset()
     Expect(Wardrobe.skin == 9 && Wardrobe.Available(9) && Rewards.Day() == 7 && Rewards.Coins() == coins - 120, "coin skins, the plan and the chosen skin survive a restart")
+    // A record from before the week shows only its latest claim.
+    Rewards.week = 0
+    Expect(Rewards.Save(), "write a record without a week")
+    Rewards.Reset()
+    Expect(Rewards.WeekClaimed() == 1 && Rewards.Day() == 7 && Rewards.Coins() == coins - 120 && Rewards.Owns(11), "an older record keeps its plan and shows one claimed day")
 
     // A signed-in account starts its own plan; the node grants Dew days.
     SignIn(alice)
     Expect(Rewards.Day() == 0 && Rewards.Coins() == 0 && !Rewards.Owns(9) && !Rewards.Owns(11), "an account keeps its own plan, coins and skins")
+    Expect(Rewards.WeekClaimed() == 0, "an account keeps its own week")
     Expect(ClaimDay(20010), "an account claims its first day")
     Expect(claims == 1 && checkin_count[0] == 1 && credits == 0, "every signed-in claim checks in with the node")
     Expect(Rewards.DewState(10) == 0, "the first Dew day is still ahead")
@@ -246,15 +265,20 @@ main :: () -> s32 {
     for day: cast(s64)20020..20029 {
         records_account = bob
         Rewards.test_day = day
+        if day == 20027 { Expect(Rewards.WeekClaimed() == 0 && Rewards.Day() == 7, "the next day starts another week") }
         Expect(Rewards.Claim(), "an offline claim")
+        if day == 20026 { Expect(Rewards.WeekClaimed() == 7, "seven days in a row fill the week") }
     }
-    Expect(Rewards.Day() == 10 && Rewards.DewState(10) == 1, "day ten Dew is collecting")
+    Expect(Rewards.Day() == 10 && Rewards.DewState(10) == 1 && Rewards.WeekClaimed() == 3, "day ten Dew is collecting")
     Frames(3)
     Expect(checkin_count[1] == 1 && credits == 1 && Rewards.DewState(10) == 1, "the node counted only the day it was reached")
 
     // Another device's purchases and claims merge; nothing is lost.
     SignIn(alice)
     Expect(Rewards.Day() == 10, "alice's plan reloads")
+    Expect(Rewards.WeekClaimed() == 0, "alice's week ended with her missed days")
+    Rewards.test_day = 20019
+    Expect(Rewards.WeekClaimed() == 3, "alice keeps her own week")
     unused CopyCString("{\"days\":12,\"last\":20030,\"skins\":1024,\"dew\":2}", plan[:])
     plan_owner = alice
     Rewards.poll_at = 0
@@ -262,6 +286,7 @@ main :: () -> s32 {
     Expect(Rewards.Day() == 12 && Rewards.Owns(10) && Rewards.Owns(11), "a purchase and claims from another device arrive")
     Rewards.test_day = 20030
     Expect(!Rewards.ClaimReady(), "a day claimed on another device is not claimed again")
+    Expect(Rewards.WeekClaimed() == 1, "another device's claims after a gap start a new week")
     other_replays = 5
     Wardrobe.poll_at = 0
     Wardrobe.Pump(now, false)
@@ -281,6 +306,18 @@ main :: () -> s32 {
     Expect(!Rewards.Owns(12) && Rewards.DaySkin(30) == 12, "Aurora waits for day thirty")
     Expect(ClaimDay(test_day) && Rewards.Owns(12) && Rewards.Day() == 30, "day thirty gives Aurora")
     Expect(credits == 2 && credited[0] == 18, "each Dew day is credited once by the node")
+    Expect(Rewards.WeekClaimed() == 5, "eighteen more days in a row")
+    // Another device's claim the next day continues the week.
+    {
+        out: Vec(u8)
+        BuilderPrint(*out, "{\"days\":31,\"last\":%,\"skins\":1024,\"dew\":18}", test_day + 1)
+        unused CopyCString(BuilderFinish(out), plan[:])
+    }
+    plan_owner = alice
+    Rewards.test_day = test_day + 1
+    Rewards.poll_at = 0
+    Frames(1)
+    Expect(Rewards.Day() == 31 && Rewards.WeekClaimed() == 6 && !Rewards.ClaimReady(), "another device's next-day claim continues the week")
     Expect(Rewards.DayCoins(35) == 40 && Rewards.DayCoins(40) == 50 && Rewards.DayCoins(37) == 100 && Rewards.DayCoins(60) == 100 && Rewards.DayDew(40) == 0, "later plans give coins on Dew and skin days")
     total: s32 = 0
     for plan_day: cast(s32)1..30 { total += Rewards.PlanCoins(plan_day) }

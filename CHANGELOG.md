@@ -9,6 +9,8 @@
 - Collection names and community searches keep text selection and Unicode edits consistent.
 
 - Meadow level 19 has wide garden paths instead of narrow corridors, tiny pockets and dead ends.
+- All thirteen skins have connected, shaded bodies, tapered tails and clearer heads that stay upright when turning left.
+- Daily rewards show the seven-day streak with claimed gifts marked. Missing a day starts a new streak without taking away earned coins or skins.
 
 - The separate CrazyGames edition starts with one Play click, uses your portal profile and cloud saves, and unlocks every chapter through play without Dew purchases.
 - It supports CrazyGames leaderboards and optional platform-approved video ads between levels, while respecting platform language and sound settings.

@@ -36,6 +36,9 @@ owner: [65]u8;
 // Claimed days, and the UTC day of the latest claim (days since 1970).
 days: s32;
 last_day: s64 = -1;
+// The latest claim's place in its week of consecutive days, 1 to 7; 0 none.
+// Only the chest's week follows it: a missed day never takes back a plan day.
+week: s32;
 coin_skins: s32;
 // Bit N: the node credited Dew milestone N.
 dew_done: s32;
@@ -106,7 +109,7 @@ Load :: () {
     if loaded && TextUntilNul(owner[:]) == TextUntilNul(Progress.owner[:]) { return }
     loaded = true
     owner = Progress.owner
-    days = 0; last_day = -1; coin_skins = 0; dew_done = 0; checkin = false; dirty = false
+    days = 0; last_day = -1; week = 0; coin_skins = 0; dew_done = 0; checkin = false; dirty = false
     other_replays = 0; poll_at = 0; claim_active = -1; claim_at = 0
     bytes: [13]u8
     if Records.ReadRecord(Progress.RecordName("rewards.dat"), bytes[:]) != 12 || bytes[0] != 1 { return }
@@ -118,6 +121,9 @@ Load :: () {
     dew_done = cast(s32)bytes[9] & 31
     dirty = (bytes[10] & 1) != 0
     checkin = (bytes[10] & 2) != 0
+    // Records from before the week count only their latest claim.
+    week = cast(s32)bytes[11]
+    if week > 7 || (week == 0 && days > 0) { week = 1 }
 }
 Save :: () -> bool {
     bytes: [12]u8
@@ -128,6 +134,7 @@ Save :: () -> bool {
     bytes[7] = cast(u8)(coin_skins & 255); bytes[8] = cast(u8)((coin_skins >> 8) & 255)
     bytes[9] = cast(u8)dew_done
     bytes[10] = cast(u8)((ifx dirty then 1 else 0) | (ifx checkin then 2 else 0))
+    bytes[11] = cast(u8)week
     return Records.WriteRecord(Progress.RecordName("rewards.dat"), bytes[:])
 }
 Reset :: () {
@@ -189,6 +196,17 @@ DewState :: (day: s32) -> s32 {
 }
 
 Day :: () -> s32 { Load(); return days }
+// Days of the chest's week already claimed. Today's claim stays shown, and a
+// full week until the next day starts another; a missed UTC day clears it.
+WeekClaimed :: () -> s32 {
+    Load()
+    if week <= 0 || last_day < 0 { return 0 }
+    current := CurrentDay()
+    claimed := week
+    if current == last_day + 1 { claimed = week % 7 }
+    else if current > last_day + 1 { claimed = 0 }
+    return ifx claimed > days then days else claimed
+}
 ClaimReady :: () -> bool {
     Load()
     current := CurrentDay()
@@ -201,11 +219,13 @@ Claim :: () -> bool {
     previous_day := last_day
     previous_dirty := dirty
     previous_checkin := checkin
+    previous_week := week
     days += 1
+    week = ifx week > 0 && CurrentDay() == last_day + 1 then week % 7 + 1 else 1
     last_day = CurrentDay()
     if SignedIn() { dirty = true; checkin = true; claim_at = 0; poll_at = 0 }
     if !Save() {
-        days -= 1; last_day = previous_day
+        days -= 1; last_day = previous_day; week = previous_week
         dirty = previous_dirty; checkin = previous_checkin
         return false
     }
@@ -358,6 +378,11 @@ SyncPump :: (now: s64) {
             stored_last := cast(s64)remote_last.value
             stored_skins := cast(s32)remote_skins.value
             stored_dew := cast(s32)remote_dew.value
+            // Another device's next-day claim continues the week; anything
+            // else it claimed starts a new one there.
+            if stored_last > last_day {
+                week = ifx week > 0 && stored_last == last_day + 1 && stored_days == days + 1 then week % 7 + 1 else 1
+            }
             if stored_days > days { days = stored_days }
             if stored_last > last_day { last_day = stored_last }
             coin_skins |= stored_skins & REWARD_SKINS

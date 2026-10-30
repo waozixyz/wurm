@@ -1,5 +1,9 @@
 # Apfelwurm Editor changelog
 
+## [Unreleased]
+
+- Playtest worms have connected, shaded bodies, tapered tails and clearer heads for every skin.
+
 ## [0.1.1] - 2026-10-30
 
 - The title and Arcade cover show the Apfelwurm Editor logo.
