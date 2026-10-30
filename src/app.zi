@@ -38,6 +38,7 @@ Locale :: #import, file "localization.zi";
 Version :: #import, file "version.zi";
 #import "kryon/widget_palette"
 #import "std/json_scan"
+Utf8 :: #import "std/utf8";
 #import "entity/dew_model"
 ShopModel :: #import "entity/game_shop";
 FingerSwipe :: #import "mingcute/mingcute_filled_finger_swipe";
@@ -1716,7 +1717,8 @@ mine_scroll: s32;
 mine_armed: s32 = -1;
 changes_scroll: s32;
 changes_armed: s32 = -1;
-NameField :: struct { bytes: [96]u8; length: s32; cursor: s32; anchor: s32; scroll_x: s32; focused: bool }
+// Own the array; state.bytes is bound only while drawing, never across moves.
+NameField :: struct { bytes: [96]u8; using state: TextFieldState }
 mine_name: NameField;
 // The collection whose level the editor board shows.
 editor_collection: [33]u8;
@@ -1755,31 +1757,38 @@ DrawNameField :: (session: Session, field: *NameField, key: u64, bounds: Rectang
             input = TextFieldInputFor(editor_field_key, KeyboardModifiers(session), TypedTextTake(session, typed[:]))
         }
     }
+    // A bounded, valid display copy keeps malformed legacy names editable.
+    // Keep the original bytes until an accepted edit; queued paint borrows shown.
     shown: [96]u8
-    for index: 0..field.length - 1 { shown[index] = field.bytes[index] }
-    edited := TextField(session, TextFieldProps.{.key = key, .bounds = bounds,
-        .value = TextView(shown[0:field.length]), .label = label, .placeholder = label,
-        .cursor = field.cursor, .anchor = field.anchor, .scroll_x = field.scroll_x, .focused = field.focused,
-        .focus_id = cast(s32)key, .max_bytes = max_bytes, .max_codepoints = max_bytes, .input = input})
-    if edited.edit.changed {
-        start := edited.edit.start; end := edited.edit.end
-        replacement := edited.edit.replacement
-        if start >= 0 && end >= start && end <= field.length &&
-        cast(s64)(field.length - (end - start)) + replacement.count <= cast(s64)max_bytes {
-            joined: [192]u8
-            length: s32 = 0
-            for index: 0..start - 1 { joined[length] = field.bytes[index]; length += 1 }
-            for byte: replacement { joined[length] = byte; length += 1 }
-            for index: end..field.length - 1 { joined[length] = field.bytes[index]; length += 1 }
-            for index: 0..length - 1 { field.bytes[index] = joined[index] }
-            field.length = length
-        }
+    shown_length: s32
+    {
+        copied := Utf8.Copy(field.bytes[:field.length], shown[:])
+        shown_length = cast(s32)copied.count
     }
-    field.cursor = edited.cursor
-    field.anchor = edited.anchor
-    field.scroll_x = edited.scroll_x
-    field.focused = edited.focused
-    return edited.committed
+    editing: [96]u8
+    for index: 0..shown_length - 1 { editing[index] = shown[index] }
+    next := field.state
+    committed: bool
+    {
+        state := next
+        state.length = shown_length
+        state.bytes = shown[:]
+        edited := TextField(session, TextFieldStateProps(state, TextFieldProps.{.key = key, .bounds = bounds,
+            .label = label, .placeholder = label, .focus_id = cast(s32)key,
+            .max_bytes = max_bytes, .max_codepoints = max_bytes, .input = input}))
+        state.bytes = editing[:]
+        if TextFieldStateApplyResult(*state, edited) {
+            if edited.edit.changed {
+                for index: 0..state.length - 1 { field.bytes[index] = editing[index] }
+            } else { state.length = field.length }
+            empty: []u8
+            state.bytes = empty
+            next = state
+        }
+        committed = edited.committed
+    }
+    field.state = next
+    return committed
 }
 
 EditorCollectionOpened :: () {

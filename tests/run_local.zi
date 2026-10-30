@@ -225,6 +225,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     mode := ifx argc > 1 then TextFromCString(argv[1]) else ""
     if mode == "ui" { return ifx Interface("private_ui_test", "private-ui-test", "-lX11 -lcairo -lm") then 0 else Fail("private UI") }
     if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
+    if mode == "name-field" { return ifx Hosted() then 0 else Fail("name field consumer") }
     if mode == "web" { return ifx Interface("web_test", "web-test-runner", "-lm") then 0 else Fail("browser") }
     if mode == "crazygames" { return ifx CrazyGames() then 0 else Fail("CrazyGames copy") }
     archive := ifx mode.count > 0 then mode else "/mnt/storage/Games/The-Worm_Win_EN"

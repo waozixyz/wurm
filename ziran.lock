@@ -11,19 +11,11 @@
     },
     {
       "commit": "cabc0424e45a4a8ef652944b5e2226e9375177c3",
-      "dependencies": {"crypto": "pc23fbf455e97614d", "kryon": "p13e45c6bd7dbca34"},
+      "dependencies": {"crypto": "pc23fbf455e97614d", "kryon": "p927a889ddda52ef8"},
       "id": "p1065a3c915ffa1e1",
       "name": "Apps",
       "ref": "master",
       "url": "https://github.com/waozixyz/apps.git"
-    },
-    {
-      "commit": "edffc8bf8086e4015d2b499d9afce394e45503e8",
-      "dependencies": {"raylib": "p5a77c9c35110e925"},
-      "id": "p13e45c6bd7dbca34",
-      "name": "kryon",
-      "ref": "master",
-      "url": "https://github.com/kryonlabs/kryon.git"
     },
     {
       "commit": "a9ad1876e14c2be093a538aca41fd3468fe3cf19",
@@ -69,6 +61,14 @@
       "url": "https://github.com/LoupVaillant/Monocypher.git"
     },
     {
+      "commit": "e565b99d171b1a69ed615d8f73096049c61e006b",
+      "dependencies": {"raylib": "p5a77c9c35110e925"},
+      "id": "p927a889ddda52ef8",
+      "name": "kryon",
+      "ref": "master",
+      "url": "https://github.com/kryonlabs/kryon.git"
+    },
+    {
       "commit": "944826f70779a6b6cd53f6b06a75b36f4d8a2558",
       "dependencies": {},
       "id": "pc23fbf455e97614d",
@@ -86,7 +86,7 @@
     },
     {
       "commit": "5ccba10b6a4a7d1a75c5af64032dad130e075083",
-      "dependencies": {"daochi_client": "p7de54c8ad98fe034", "kryon": "p13e45c6bd7dbca34", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
+      "dependencies": {"daochi_client": "p7de54c8ad98fe034", "kryon": "p927a889ddda52ef8", "monocypher": "p809b4d31a48625a3", "qrcode": "p0dfa70137405b096"},
       "id": "pf2f2fbe13ab86f54",
       "name": "Entity",
       "ref": "master",
@@ -94,11 +94,11 @@
     }
   ],
   "root": {
-    "dependencies": {"apps": "p1065a3c915ffa1e1", "crypto": "pc23fbf455e97614d", "entity": "pf2f2fbe13ab86f54", "kryon": "p13e45c6bd7dbca34", "mingcute": "pe1027b9d16704793"},
+    "dependencies": {"apps": "p1065a3c915ffa1e1", "crypto": "pc23fbf455e97614d", "entity": "pf2f2fbe13ab86f54", "kryon": "p927a889ddda52ef8", "mingcute": "pe1027b9d16704793"},
     "name": "Apfelwurm"
   },
   "toolchain": {
-    "commit": "68e76ca202cc4080a5d2b4996756370314d80e8c",
+    "commit": "eb0e596b5e2802abe43b76e17ff8b8621c90d28c",
     "ref": "master",
     "url": "https://github.com/ziranlang/ziran.git"
   }

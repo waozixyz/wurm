@@ -17,6 +17,8 @@ App :: #import, file "../src/app.zi";
 Game :: #import, file "../src/game.zi";
 Account :: #import, file "../src/account.zi";
 Progress :: #import, file "../src/progress.zi";
+Own :: #import, file "../src/own_levels.zi";
+#import "std/json_scan"
 using WidgetKind;
 
 message: AppMessage;
@@ -39,9 +41,10 @@ ReadAppHost :: () -> AppMessage { return message }
 WriteAppHost :: (value: AppMessage) { message = value }
 #program_export
 ReadAppUiHost :: () -> AppUiFrame { return frame }
-// No typing reaches a name field in this fixture.
+field_input: TextFieldInput;
+// Scripted input reaches the real collection/search field widget.
 #program_export
-AppFieldInputHost :: () -> TextFieldInput { return TextFieldInput.{} }
+AppFieldInputHost :: () -> TextFieldInput { return field_input }
 #program_export
 AppKeyHost :: () -> s32 { return 0 }
 #program_export
@@ -125,8 +128,116 @@ Click :: (label: string) {
     unused TreePointerUpdate(frame.session, pointer)
     Draw()
 }
+// Draw the actual consumer, including applying edits before queued paint flushes.
+NameFrame :: (session: Session, field: *App.NameField, input: TextFieldInput, limit: s32 = 60) -> bool {
+    field_input = input
+    Expect(cast(s32)BeginFrame(session, 1, Rectangle.{0.0, 0.0, 400.0, 150.0}) == 0, "name frame starts")
+    committed := App.DrawNameField(session, field, 908, Rectangle.{10.0, 10.0, 160.0, 52.0}, "Collection name", limit)
+    Expect(field.state.bytes.count == 0, "name state retains no local or moved buffer view")
+    Expect(cast(s32)EndFrame(session) == 0, "name frame paints after edit application")
+    return committed
+}
+name_document: [2048]u8;
+name_reply: [2304]u8;
+name_saves: s32;
+NameService :: (name: string, request: string) -> string {
+    unused name
+    operation: [16]u8
+    unused ReadStringText(request, FieldAt(request, 0, "operation"), operation[:])
+    if TextUntilNul(operation[:]) == "put" {
+        start := FieldAt(request, 0, "document")
+        end := ValueEnd(request, start, 0)
+        Expect(start >= 0 && end > start && CopyCString(request[start:end], name_document[:]), "collection save captures document")
+        name_saves += 1
+        return "{\"status\":\"done\",\"id\":\"00000000000000000000000000000001\"}"
+    }
+    if TextUntilNul(operation[:]) == "get" {
+        out: Vec(u8)
+        BuilderPrint(*out, "{\"status\":\"done\",\"id\":\"00000000000000000000000000000001\",\"document\":%}", TextUntilNul(name_document[:]))
+        unused CopyCString(BuilderFinish(out), name_reply[:])
+        return TextUntilNul(name_reply[:])
+    }
+    return ""
+}
+NameFields :: () {
+    session := SessionOpen()
+    field: App.NameField
+    App.NameFieldSet(*field, "Meadow")
+    field.focused = true
+    Expect(!NameFrame(session, *field, .{.focus = true, .select_all = true}), "selection is not Enter commit")
+    Expect(field.cursor != field.anchor && field.focused, "selection and focus survive")
+    Expect(!NameFrame(session, *field, .{.text = "Äpfel 🐛"}), "accepted Unicode edit is not Enter commit")
+    Expect(TextView(field.bytes[:field.length]) == "Äpfel 🐛" && field.cursor == field.length && field.anchor == field.cursor, "Unicode replaces selected text")
+    unused NameFrame(session, *field, .{.left = true, .shift = true})
+    unused NameFrame(session, *field, .{.text = "é"})
+    Expect(TextView(field.bytes[:field.length]) == "Äpfel é", "shift selection replaces a whole Unicode character")
+    malformed: [1]u8 = .[255]
+    prior := field
+    unused NameFrame(session, *field, .{.text = TextView(malformed[:])})
+    Expect(TextView(field.bytes[:field.length]) == "Äpfel é" && field.cursor == prior.cursor && field.anchor == prior.anchor && field.focused == prior.focused && field.scroll_x == prior.scroll_x, "malformed host typing preserves text and interaction state atomically")
+    before := field
+    unused NameFrame(session, *field, .{.text = "too long"}, field.length)
+    Expect(field.length == before.length && field.cursor == before.cursor && field.anchor == before.anchor && TextView(field.bytes[:field.length]) == "Äpfel é", "capacity rejection preserves value and selection")
+    Expect(NameFrame(session, *field, .{.commit = true}), "only Enter reports commit")
+    unused NameFrame(session, *field, .{.blur = true})
+    Expect(!field.focused, "blur updates focus")
+    unused NameFrame(session, *field, .{.text = "ignored"})
+    Expect(TextView(field.bytes[:field.length]) == "Äpfel é", "unfocused field ignores typing")
+    App.NameFieldSet(*field, "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefgh")
+    field.focused = true
+    unused NameFrame(session, *field, .{.focus = true, .end = true})
+    Expect(field.scroll_x > 0, "long name reveals its caret")
+    unused NameFrame(session, *field, .{.home = true})
+    Expect(field.cursor == 0 && field.anchor == 0 && field.scroll_x == 0, "Home restores cursor and scroll")
+    moved := field
+    unused NameFrame(session, *moved, .{.text = "é"}, 95)
+    Expect(moved.length == field.length + 2 && field.bytes[0] == cast(u8)97 && field.state.bytes.count == 0, "copied name owns its bytes independently")
+    // Legacy initialization remains byte-preserving, including a split scalar.
+    legacy: [96]u8
+    for index: 0..93 { legacy[index] = cast(u8)97 }
+    legacy[94] = 195; legacy[95] = 169
+    App.NameFieldSet(*field, TextView(legacy[:]))
+    Expect(field.length == 95 && field.bytes[94] == cast(u8)195, "legacy byte truncation is preserved")
+    unused NameFrame(session, *field, .{.focus = true}, 95)
+    Expect(field.length == 95 && field.bytes[94] == cast(u8)195, "invalid legacy text is never silently rewritten")
+    Expect(NameFrame(session, *field, .{.commit = true}, 95) && field.length == 95 && field.bytes[94] == cast(u8)195, "Enter without editing preserves raw legacy bytes")
+    Expect(field.focused, "invalid legacy name remains focusable")
+    unused NameFrame(session, *field, .{.select_all = true}, 95)
+    unused NameFrame(session, *field, .{.text = "Repaired é"}, 95)
+    Expect(TextView(field.bytes[:field.length]) == "Repaired é", "user can replace an invalid legacy name")
+    unused SessionClose(session)
+
+    // The collection screen keeps edits as drafts until Enter, then persists.
+    saved_service := Own.own_service
+    Own.own_service = NameService
+    Own.OwnNew("Original", 1)
+    App.EditorCollectionOpened()
+    session = SessionOpen()
+    field_input = .{}
+    unused BeginFrame(session, 1, .{0.0, 0.0, 844.0, 390.0})
+    App.DrawEditorMine(session, .{0.0, 0.0, 844.0, 390.0}, 0)
+    unused EndFrame(session)
+    App.mine_name.focused = true
+    field_input = .{.focus = true, .select_all = true, .text = "Renamed é"}
+    unused BeginFrame(session, 1, .{0.0, 0.0, 844.0, 390.0})
+    App.DrawEditorMine(session, .{0.0, 0.0, 844.0, 390.0}, 0)
+    unused EndFrame(session)
+    Expect(TextView(App.mine_name.bytes[:App.mine_name.length]) == "Renamed é" && TextUntilNul(Own.own_title[:]) == "Original" && name_saves == 0, "typed collection draft does not save as Enter")
+    field_input = .{.commit = true}
+    unused BeginFrame(session, 1, .{0.0, 0.0, 844.0, 390.0})
+    App.DrawEditorMine(session, .{0.0, 0.0, 844.0, 390.0}, 0)
+    unused EndFrame(session)
+    Expect(name_saves == 1 && !App.mine_name.focused && TextUntilNul(Own.own_title[:]) == "Renamed é", "Enter commits and saves collection name once")
+    Own.OwnRename("temporary")
+    Expect(Own.OwnOpen("00000000000000000000000000000001") && TextUntilNul(Own.own_title[:]) == "Renamed é", "collection name reloads from saved draft")
+    Own.own_service = saved_service
+    field_input = .{}
+    unused SessionClose(session)
+    print("Name field consumer local tests: % failures\n", failures)
+}
 #program_export
 main :: () -> s32 {
+    NameFields()
     message.abi = MODULE_ABI
     message.locale = "en"
     frame.session = SessionOpen()
