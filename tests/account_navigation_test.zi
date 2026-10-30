@@ -4,7 +4,11 @@ Game :: #import, file "../src/game.zi";
 Account :: #import, file "../src/account.zi";
 Progress :: #import, file "../src/progress.zi";
 Custom :: #import, file "../src/custom_levels.zi";
+Sharing :: #import, file "../src/level_sharing.zi";
+#import, file "../src/level_json.zi";
+#import, file "../src/own_levels.zi";
 Entity :: #import "entity/native_host";
+Collections :: #import "entity/level_collections";
 EntityModel :: #import "entity/model";
 Management :: #import "entity/management";
 Board :: #import "entity/leaderboard_native";
@@ -19,6 +23,8 @@ Model :: #import "entity/leaderboard_model";
 #import "std/c_string"
 #import "std/text_buffer"
 #import "std/json_scan"
+#import "std/json_document"
+#import "std/vec"
 #import "std/bundle_host"
 File :: #import "std/file";
 
@@ -39,6 +45,125 @@ HasLabel :: (session: Session, key: u64, label: string) -> bool {
         if node.key == key && node.semantic_label == label { return true }
     }
     return false
+}
+HasKey :: (session: Session, key: u64) -> bool {
+    for index: cast(s32)0..TreeCount(session) - 1 {
+        if TreeNodeAt(session, index).key == key { return true }
+    }
+    return false
+}
+// Presses and releases the control with KEY, drawing a frame for each.
+Click :: (session: Session, key: u64) -> bool {
+    for index: cast(s32)0..TreeCount(session) - 1 {
+        node := TreeNodeAt(session, index)
+        if node.key != key { continue }
+        x := node.bounds.x + node.bounds.width / 2.0
+        y := node.bounds.y + node.bounds.height / 2.0
+        unused TreePointerUpdate(session, PointerFrame.{x, y, true, true, false})
+        Draw(session, 390.0, 780.0)
+        unused TreePointerUpdate(session, PointerFrame.{x, y, false, false, true})
+        Draw(session, 390.0, 780.0)
+        // A click that changes page or notice shows in the next frame.
+        Draw(session, 390.0, 780.0)
+        return true
+    }
+    return false
+}
+
+// A fake publications service: every request answers pending, then the next
+// status poll answers done (or the configured refusal). Drafts go to the real
+// provider.
+fake_pub_op: [16]u8;
+fake_pub_mode: s32;          // 0 normal, 1 signed out
+fake_pub_polls: s32;
+fake_publish_id: [96]u8;
+fake_find_count: s32;
+fake_fetch_document: [40000]u8;
+fake_answer: [65536]u8;
+
+FakeMeta :: (out: *Vec(u8), id: string, title: string, visibility: string) {
+    BuilderPrint(out, "{\"id\":")
+    JsonQuoteInto(out, id, false)
+    BuilderPrint(out, ",\"title\":")
+    JsonQuoteInto(out, title, false)
+    BuilderPrint(out, ",\"format\":\"%\",\"levels\":2,\"visibility\":\"%\",\"updated_at\":5,\"mine\":true,\"author\":{\"alias\":\"ada\",\"public_id\":\"p1\"}}",
+        WURM_LEVELS_FORMAT, visibility)
+}
+
+FakePublications :: (request: string) -> string {
+    operation: [16]u8
+    unused ReadStringText(request, FieldAt(request, 0, "operation"), operation[:])
+    op := TextUntilNul(operation[:])
+    out: Vec(u8)
+    if op != "status" {
+        if fake_pub_mode == 1 { return "{\"status\":\"rejected\",\"error\":\"signed-out\"}" }
+        unused CopyCString(op, fake_pub_op[:])
+        fake_pub_polls = 0
+        if op == "publish" {
+            fake_publish_id[0] = 0
+            unused ReadStringText(request, FieldAt(request, 0, "id"), fake_publish_id[:])
+        }
+        return "{\"status\":\"pending\",\"request\":7}"
+    }
+    if fake_pub_polls == 0 {
+        fake_pub_polls += 1
+        return "{\"status\":\"pending\"}"
+    }
+    pending := TextUntilNul(fake_pub_op[:])
+    if pending == "publish" {
+        id := ifx TextUntilNul(fake_publish_id[:]) != "" then TextUntilNul(fake_publish_id[:]) else "pub-1"
+        BuilderPrint(*out, "{\"status\":\"done\",\"publication\":")
+        FakeMeta(*out, id, "Published", "public")
+        BuilderPrint(*out, "}")
+    } else if pending == "unpublish" {
+        BuilderPrint(*out, "{\"status\":\"done\"}")
+    } else if pending == "find" {
+        BuilderPrint(*out, "{\"status\":\"done\",\"publications\":[")
+        for index: 0..fake_find_count - 1 {
+            if index > 0 { BuilderPrint(*out, ",") }
+            FakeMeta(*out, ifx index == 0 then "other-1" else "other-2", ifx index == 0 then "Alpha" else "Beta", "public")
+        }
+        BuilderPrint(*out, "]}")
+    } else {
+        BuilderPrint(*out, "{\"status\":\"done\",\"publication\":")
+        FakeMeta(*out, "other-1", "Alpha", "public")
+        BuilderPrint(*out, ",\"document\":%}", TextUntilNul(fake_fetch_document[:]))
+    }
+    text := BuilderFinish(out)
+    unused CopyCString(text, fake_answer[:])
+    return TextUntilNul(fake_answer[:])
+}
+
+FakeService :: (name: string, request: string) -> string {
+    if name == Collections.COLLECTIONS_PUBLISH_SERVICE { return FakePublications(request) }
+    return Account.Service(name, request)
+}
+
+// Polls the request in flight, a second apart, until it leaves the air.
+FinishShare :: (session: Session) {
+    count := 0
+    while Sharing.share_kind != Sharing.SHARE_IDLE && count < 10 {
+        App.share_poll_at = 0
+        App.EditorSharePump(5000)
+        count += 1
+    }
+    Draw(session, 390.0, 780.0)
+}
+
+SameBoard :: (left: []u8, right: []u8) -> bool {
+    for at: 0..Game.CELLS - 1 {
+        if left[at] != right[at] { return false }
+    }
+    return true
+}
+SameFrame :: (left: []u8, right: []u8) -> bool {
+    for y: 0..Game.ROWS - 1 {
+        for x: 0..Game.COLUMNS - 1 {
+            edge := x == 0 || x == Game.COLUMNS - 1 || y == 0 || y == Game.ROWS - 1
+            if edge && left[Custom.At(x, y)] != right[Custom.At(x, y)] { return false }
+        }
+    }
+    return true
 }
 
 #program_export
@@ -125,6 +250,242 @@ main :: () -> s32 {
     Draw(session, 390.0, 780.0)
     Expect(App.game.mode == Game.MODE_STAGES && KeyboardTake(session) == 0, "Settings consumes Back before returning to the title")
     Expect(!App.NavigateBack(0), "title has no in-app Back destination")
+
+    // The title's floating chest opens a small card; Back closes it.
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 28006, "Daily rewards"), "the title shows the daily chest")
+    Expect(!HasLabel(session, 812, "Local multiplayer"), "local multiplayer moved into Settings")
+    App.game.mode = App.MODE_REWARDS
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 29671, "Claim") || HasLabel(session, 29671, "Come back tomorrow"), "the chest card offers today's gift")
+    Expect(!HasLabel(session, 29672, "See all days"), "later days stay a surprise")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.game.mode == Game.MODE_STAGES, "Back closes the chest card")
+    Expect(HasLabel(session, 28000, "Shop") && HasLabel(session, 28003, "Settings"), "the title's painted shop and settings icons")
+    App.OpenShop()
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 28340, "Skins") && HasLabel(session, 28341, "Coins") && HasLabel(session, 28342, "Dew"), "the shop has skin, coin and Dew tabs")
+    App.shop_tab = App.SHOP_COINS
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 28626, "2"), "coin packs are offered for Dew")
+    App.shop_tab = App.SHOP_SKINS
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.game.mode == Game.MODE_STAGES, "Back leaves the shop")
+
+    // The game's editor offers only the landscapes and levels reached.
+    App.OpenEditorHome()
+    Draw(session, 390.0, 780.0)
+    Expect(App.editor_page == App.EDITOR_PAGE_HOME && HasLabel(session, 40011, "New level") &&
+        HasLabel(session, 40012, "From a level") && HasLabel(session, 40013, "My levels"), "the editor opens on its own title")
+    Expect(App.EditorStageOpen(0) && !App.EditorStageOpen(1) && !App.EditorStageOpen(4), "only reached landscapes open")
+    Expect(App.EditorOpenLevels(0) == Progress.unlocked + 1, "only reached levels open")
+    App.EditorOpenStages()
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 40111, "Meadow") && !HasLabel(session, 40119, "Leafwood"), "the landscapes page lists only Meadow")
+    App.EditorOpenStage(1)
+    Expect(App.editor_page == App.EDITOR_PAGE_STAGES, "a locked landscape does not open")
+    App.EditorOpenStage(0)
+    Draw(session, 390.0, 780.0)
+    Expect(App.editor.browsing && App.editor_stage == 0, "Meadow opens its level grid")
+    App.OpenEditor(0)
+    App.EditorSwitch(1)
+    Expect(App.EditorLevelOpen(App.editor.level), "next level skips locked levels")
+    App.EditorTurn()
+    App.EditorBrowse()
+    Expect(!Custom.HasCustomLevel(App.editor.level, true), "an untouched portrait stays a mirror")
+    App.EditorTurn()
+    App.editor.browsing = false
+    // Back climbs: board, levels, landscapes, editor title, game title.
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.editor.browsing, "Back from a board shows its levels")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.editor_page == App.EDITOR_PAGE_STAGES, "Back from levels shows the landscapes")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.editor_page == App.EDITOR_PAGE_HOME, "Back from landscapes shows the editor title")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.game.mode == Game.MODE_STAGES, "Back from the editor title returns to the game")
+
+    // Own levels are private, named collections that remain playable in the editor.
+    App.OpenEditorHome()
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 40011, "New level") && HasLabel(session, 40012, "From a level") &&
+        HasLabel(session, 40013, "My levels") && !HasLabel(session, 40014, "Campaign changes"),
+        "the editor title offers own levels but no empty campaign-change list")
+    App.EditorPick(App.EDITOR_PICK_BLANK)
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 40105, "New level"), "a blank own level starts from the landscapes")
+    App.EditorNewOwn(0, -1)
+    Expect(App.editor.own && App.editor_page == App.EDITOR_PAGE_EDIT && own_level_count == 1 &&
+        TextUntilNul(own_title[:]) == "My levels", "a blank level opens the default private collection")
+    published: [1200]u8
+    Custom.EffectiveBoard(0, published[:], false)
+    Expect(App.editor.board[Custom.At(5, 5)] == 0 && SameFrame(App.editor.board[:], published[:]),
+        "a blank level keeps only the landscape frame")
+    first_record: [33]u8
+    unused CopyCString(TextUntilNul(own_record[:]), first_record[:])
+    App.editor.board[Custom.At(5, 5)] = 20
+    App.editor.dirty = true
+    App.EditorSave()
+    Expect(!App.editor.save_failed, "an own landscape edit saves privately")
+    Expect(OwnOpen(TextUntilNul(first_record[:])) && own_levels[0].board[Custom.At(5, 5)] == 20,
+        "an own landscape edit survives reopening its collection")
+    App.EditorOpenOwn(0)
+    App.EditorTurn()
+    Expect(App.editor.turned && !own_levels[0].has_portrait, "an own portrait starts as a mirror")
+    App.editor.board[Custom.At(5, 5, true)] = 21
+    App.editor.dirty = true
+    App.EditorSave()
+    Expect(!App.editor.save_failed && own_levels[0].has_portrait, "an edited own portrait saves independently")
+    App.EditorReset()
+    Expect(!own_levels[0].has_portrait, "reset returns an own portrait to its mirror")
+    play_index := App.editor.own_index
+    App.EditorPlaytest(1000)
+    Expect(App.game.mode != Game.MODE_EDITOR && App.editor.playtest && App.editor.own &&
+        App.editor.own_index == play_index, "an own level playtests from its editor board")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.game.mode == Game.MODE_PAUSED, "Escape pauses an own playtest like a game")
+    App.LeavePlay()
+    Draw(session, 390.0, 780.0)
+    Expect(App.game.mode == Game.MODE_EDITOR && App.editor.own &&
+        App.editor.own_index == play_index && App.editor_page == App.EDITOR_PAGE_EDIT,
+        "leaving an own playtest returns to the same editor board")
+    App.EditorBrowse()
+    Draw(session, 390.0, 780.0)
+    Expect(App.editor_page == App.EDITOR_PAGE_MINE && HasLabel(session, 40503, "Meadow 1") &&
+        HasLabel(session, 40409, "Private: only you can see it."), "My levels lists the private own level")
+    // Sharing: private by default; Friends and Everyone publish; Stop sharing returns to private.
+    own_service = FakeService
+    Expect(Account.SharingAvailable(), "the desktop account build can share")
+    Expect(own_visibility == Collections.COLLECTION_PRIVATE && TextUntilNul(own_publication[:]) == "",
+        "a new collection is private and unpublished")
+    Expect(HasLabel(session, 40409, "Private: only you can see it.") && HasLabel(session, 40420, "Share"),
+        "My levels shows the private line and a Share button")
+    Expect(Click(session, 40420) && App.editor_page == App.EDITOR_PAGE_SHARE, "Share opens the share page")
+    Expect(HasLabel(session, 43010, "Only you") && HasLabel(session, 43011, "Friends") && HasLabel(session, 43012, "Everyone") &&
+        !HasKey(session, 43020), "the share page preselects Only you and offers no action")
+    Expect(Click(session, 43011) && HasLabel(session, 43020, "Share now"), "choosing Friends offers Share now")
+    Expect(Click(session, 43020), "press Share now")
+    FinishShare(session)
+    Expect(HasLabel(session, 43021, "Shared with your friends.") && own_visibility == Collections.COLLECTION_FRIENDS &&
+        TextUntilNul(own_publication[:]) != "", "sharing with friends stores the publication")
+    Expect(HasLabel(session, 43020, "Update share"), "a shared collection offers Update share")
+    Expect(Click(session, 43010) && HasLabel(session, 43020, "Stop sharing"), "choosing Only you offers Stop sharing")
+    Expect(Click(session, 43020), "press Stop sharing")
+    FinishShare(session)
+    Expect(HasLabel(session, 43021, "Only you can see it now.") && own_visibility == Collections.COLLECTION_PRIVATE &&
+        TextUntilNul(own_publication[:]) == "", "stopping returns the collection to private")
+    fake_pub_mode = 1
+    Expect(Click(session, 43011) && Click(session, 43020) && HasLabel(session, 43021, "Sign in to share levels."),
+        "a signed-out reply asks to sign in")
+    fake_pub_mode = 0
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.editor_page == App.EDITOR_PAGE_MINE, "Escape from the share page returns to My levels")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.editor_page == App.EDITOR_PAGE_HOME, "My levels returns to the editor title")
+    App.EditorPick(App.EDITOR_PICK_TEMPLATE)
+    App.EditorOpenStage(0)
+    Draw(session, 390.0, 780.0)
+    App.EditorNewOwn(0, 0)
+    Custom.EffectiveBoard(0, published[:], false)
+    Expect(own_level_count == 2 && SameBoard(own_levels[1].board[:], published[:]),
+        "From a level copies the published landscape board")
+    Expect(App.EditorNewCollection() && OwnRefresh() && own_collection_count == 2,
+        "a player can make another own collection")
+    second_record: [33]u8
+    unused CopyCString(TextUntilNul(own_record[:]), second_record[:])
+    Expect(OwnOpen(TextUntilNul(first_record[:])) && own_level_count == 2,
+        "the previous collection keeps both of its levels")
+    App.EditorOpenOwn(1)
+    App.EditorBrowse()
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    campaign_board: [1200]u8
+    campaign_objects: [1200]u8
+    campaign_board[Custom.At(5, 5)] = 20
+    Expect(Custom.SaveCustomLevel(0, campaign_board[:], campaign_objects[:], 3, false),
+        "an old personal campaign edit remains representable")
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 40014, "Campaign changes"), "a personal campaign edit appears on the editor title")
+    App.editor_page = App.EDITOR_PAGE_CHANGES
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 40711, "Meadow 1 · Landscape"), "campaign changes list the personal edit")
+    Expect(Custom.ClearCustomLevel(0, false) && App.EditorChangeCount() == 0,
+        "a personal campaign edit can be removed")
+    App.editor_page = App.EDITOR_PAGE_HOME
+    Draw(session, 390.0, 780.0)
+    Expect(!HasLabel(session, 40014, "Campaign changes"), "no campaign-change offer remains after reset")
+    Expect(OwnOpen(TextUntilNul(first_record[:])) && own_level_count == 2 && OwnDelete(),
+        "cleanup removes the default own collection")
+    Expect(OwnOpen(TextUntilNul(second_record[:])) && OwnDelete() && OwnRefresh() &&
+        own_collection_count == 0, "cleanup removes the named own collection")
+    Expect(!Custom.HasCustomLevel(0, false), "no personal campaign record remains")
+
+    // Community: other players' collections, added as private copies.
+    fake_find_count = 2
+    level: WurmLevel = .{}
+    for byte, place: "Alpha" { level.name[place] = byte }
+    level.stage = 2
+    level.apples = 1
+    level.board[10] = 1
+    level.objects[11] = Game.OBJECT_SNAIL
+    shared: Vec(u8)
+    Collections.CollectionDocumentBegin(*shared, WURM_LEVELS_FORMAT, WURM_LEVELS_EDITION, "Alpha")
+    json: Vec(u8)
+    WurmLevelWrite(*json, *level)
+    Collections.CollectionDocumentLevel(*shared, TextView(VecSlice(json, 0, json.count)), true)
+    VecFree(json)
+    Collections.CollectionDocumentEnd(*shared)
+    unused CopyCString(TextView(VecSlice(shared, 0, shared.count)), fake_fetch_document[:])
+    VecFree(shared)
+    App.editor_page = App.EDITOR_PAGE_HOME
+    Draw(session, 390.0, 780.0)
+    Expect(Click(session, 40017) && App.editor_page == App.EDITOR_PAGE_COMMUNITY, "Community opens from the editor title")
+    FinishShare(session)
+    Expect(HasLabel(session, 43103, "Player name") || HasKey(session, 43103), "Community offers a player-name search")
+    Expect(HasLabel(session, 43111, "Alpha") && HasLabel(session, 43112, "2 · ada") && HasLabel(session, 43113, "Add to My levels") &&
+        HasLabel(session, 43117, "Beta"), "Community lists the shared collections")
+    Expect(Click(session, 43113), "press Add to My levels")
+    FinishShare(session)
+    Expect(App.editor_page == App.EDITOR_PAGE_MINE && App.editor_notice == "Added to My levels." &&
+        TextUntilNul(own_title[:]) == "Alpha" && own_level_count == 1 &&
+        own_visibility == Collections.COLLECTION_PRIVATE && TextUntilNul(own_publication[:]) == "",
+        "adding opens a new private collection with the fetched levels")
+    Expect(HasLabel(session, 40409, "Private: only you can see it."), "the added collection is shown as private")
+    Expect(OwnDelete() && OwnRefresh() && own_collection_count == 0, "cleanup removes the added collection")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    fake_find_count = 0
+    Expect(Click(session, 40017), "open Community again")
+    FinishShare(session)
+    Expect(HasLabel(session, 43105, "No shared collections found."), "an empty find says nothing was found")
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 390.0, 780.0)
+    Expect(App.editor_page == App.EDITOR_PAGE_HOME, "Escape from Community returns to the editor title")
+
+    // Local players: a name each, and owned skins only, never shared.
+    App.OpenLocalSetup()
+    App.local_players = 4
+    Draw(session, 1280.0, 760.0)
+    for id: 0..3 { Expect(App.LocalSkinFree(cast(s32)id, App.local_skins[id]), "every player wears a skin it may use") }
+    name: [48]u8
+    Expect(App.LocalPlayerText(1, name[:]) == "Player 2", "an unnamed player reads Player N")
+    App.local_names[1].bytes[0] = #char "M"
+    App.local_names[1].bytes[1] = #char "o"
+    App.local_names[1].length = 2
+    Expect(App.LocalPlayerText(1, name[:]) == "Mo", "a named player shows the name")
+    App.local_names[1].length = 0
+    unused KeyboardSend(session, KeyEscape)
+    Draw(session, 1280.0, 760.0)
+    Expect(App.game.mode == Game.MODE_STAGES, "Back leaves the multiplayer setup")
     print("Account navigation local test failures: %\n", failures)
     return failures
 }

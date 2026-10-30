@@ -8,6 +8,7 @@ using UI :: #import "kryon/Widgets";
 #import "kryon/Frame";
 App :: #import "app";
 Game :: #import, file "game.zi";
+Local :: #import, file "multiplayer.zi";
 File :: #import "std/file_linux";
 using Vectors :: #import "std/vec";
 #import "std/environment_linux"
@@ -94,6 +95,18 @@ main :: () -> s32 {
         App.game.next_step = 9223372036854775000
     }
     if EnvironmentText("WORM_SHOT_VOLUME") != "" { App.sound_popup = true }
+    if EnvironmentText("WORM_SHOT_LOCAL") != "" {
+        // A four-player round a moment after the start, tails still in the openings.
+        App.game.started = true
+        App.local_players = 4
+        unused Local.Start(*App.local_round, 4, 0, 7)
+        for i: 0..5 { Local.TickRound(*App.local_round) }
+        App.game.mode = App.MODE_LOCAL
+    }
+    if EnvironmentText("WORM_SHOT_SETTINGS") != "" {
+        App.game.started = true
+        App.game.mode = Game.MODE_SETTINGS
+    }
     if EnvironmentText("WORM_SHOT_STAGES") != "" {
         App.game.started = true
         App.OpenStages()

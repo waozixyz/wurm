@@ -4,6 +4,7 @@
 #import "kryon/tree_draw"
 #import "kryon/geometry"
 #import "kryon/widget_kind"
+#import "kryon/text_input_props"
 #import "kryon/input_protocol"
 #import "kryon/pixmap"
 #import "kryon/scroll_device"
@@ -38,6 +39,9 @@ ReadAppHost :: () -> AppMessage { return message }
 WriteAppHost :: (value: AppMessage) { message = value }
 #program_export
 ReadAppUiHost :: () -> AppUiFrame { return frame }
+// No typing reaches a name field in this fixture.
+#program_export
+AppFieldInputHost :: () -> TextFieldInput { return TextFieldInput.{} }
 #program_export
 AppKeyHost :: () -> s32 { return 0 }
 #program_export
@@ -132,7 +136,7 @@ main :: () -> s32 {
         frame.width = ifx portrait == 1 then 390 else 844
         frame.height = ifx portrait == 1 then 844 else 390
         Draw()
-        Expect(Find("Play") >= 0 && Find("Skin shop") >= 0 && Find("Settings") >= 0, "hosted title retains play, shop and settings")
+        Expect(Find("Play") >= 0 && Find("Shop") >= 0 && Find("Settings") >= 0, "hosted title retains play, shop and settings")
         Expect(Find("Back") < 0 && Find("Profile") < 0 && Find("123") < 0, "host owns title navigation and account controls")
         Expect(balance_reads == 0, "hosted title does not duplicate the host wallet")
         Expect(TextUntilNul(Progress.owner[:]) == host_account, "game uses the enclosing host account")
@@ -145,7 +149,7 @@ main :: () -> s32 {
         unused Portable.Main()
         Expect(message.succeeded, "settings Back returns inside the game")
         Draw()
-        Click("Skin shop")
+        Click("Shop")
         Expect(Find("Buy") >= 0, "shop remains available inside a host")
         message.action = APP_BACK
         unused Portable.Main()
@@ -212,7 +216,7 @@ main :: () -> s32 {
     connected = false
     Progress.poll_at = 0
     Draw()
-    Click("Skin shop")
+    Click("Shop")
     Click("Buy")
     Expect(Find("Sign in") >= 0, "signed-out shop offers the host sign-in")
     Click("Sign in")

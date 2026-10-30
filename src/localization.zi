@@ -34,7 +34,7 @@ Text :: (source: string) -> string {
         if source == "Back" { return "Zpět" }
         if source == "Profile" { return "Profil" }
         if source == "Settings" { return "Nastavení" }
-        if source == "Skin shop" { return "Obchod se vzhledy" }
+        if source == "Shop" { return "Obchod" }
         if source == "A little change of character." { return "Malá změna postavičky." }
         if source == "Appearance" { return "Vzhled" }
         if source == "Softer colours for your apple adventure." { return "Jemnější barvy pro tvé dobrodružství." }
@@ -109,13 +109,83 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "Zpět na úvod" }
         if source == "Try the direction pad" { return "Vyzkoušet směrový ovladač" }
         if source == "Come back tomorrow" { return "Vrať se zítra" }
+        if source == "Name" { return "Jméno" }
+        if source == "Previous skin" { return "Předchozí vzhled" }
+        if source == "Next skin" { return "Další vzhled" }
+        if source == "Choose landscape" { return "Vyber krajinu" }
+        if source == "Continue editing" { return "Pokračovat v úpravách" }
+        if source == "Shape every level you have reached." { return "Uprav každou úroveň, které jsi už dosáhl." }
+        if source == "Mirrored — edit and save" { return "Zrcadleno – uprav a ulož" }
+        if source == "Best guess — edit and save" { return "Nejlepší odhad – uprav a ulož" }
+        if source == "Close" { return "Zavřít" }
+        if source == "Today" { return "Dnes" }
+        if source == "Tomorrow" { return "Zítra" }
+        if source == "Day %" { return "Den %" }
+        if source == "See all days" { return "Zobrazit všechny dny" }
+        if source == "Your gift is ready!" { return "Tvůj dárek je připraven!" }
+        if source == "Sign in to collect Dew" { return "Přihlas se a sbírej Dew" }
+        if source == "Skins" { return "Vzhledy" }
+        if source == "Not enough Dew." { return "Nemáš dost Dew." }
+        if source == "Top up Dew" { return "Dobít Dew" }
+        if source == "Make levels of your own." { return "Tvoř vlastní úrovně." }
+        if source == "Campaign changes" { return "Změny v kampani" }
+        if source == "Edit campaign" { return "Upravit kampaň" }
+        if source == "My levels" { return "Moje úrovně" }
+        if source == "From a level" { return "Z úrovně" }
+        if source == "New level" { return "Nová úroveň" }
+        if source == "Your levels could not be saved." { return "Tvé úrovně se nepodařilo uložit." }
+        if source == "This collection is full." { return "Tato sbírka je plná." }
+        if source == "New collection" { return "Nová sbírka" }
+        if source == "No levels yet. Start one with New level." { return "Zatím žádné úrovně. Začni tlačítkem Nová úroveň." }
+        if source == "All collections" { return "Všechny sbírky" }
+        if source == "Collection name" { return "Název sbírky" }
+        if source == "Private: only you can see it." { return "Soukromé: vidíš ji jen ty." }
+        if source == "Private" { return "Soukromé" }
+        if source == "Play" { return "Hrát" }
+        if source == "Move up" { return "Posunout nahoru" }
+        if source == "Move down" { return "Posunout dolů" }
+        if source == "Sure?" { return "Opravdu?" }
+        if source == "Delete" { return "Smazat" }
+        if source == "Delete collection" { return "Smazat sbírku" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "Tyto úrovně se hrají tak, jak jsi je upravil. Obnov úroveň a hraj zase původní." }
+        if source == "Reset" { return "Obnovit" }
+        if source == "Portrait" { return "Na výšku" }
+        if source == "Landscape" { return "Na šířku" }
+        if source == "Community" { return "Komunita" }
+        if source == "Share" { return "Sdílet" }
+        if source == "Share collection" { return "Sdílet sbírku" }
+        if source == "Everyone can see it." { return "Vidí ji všichni." }
+        if source == "Your friends can see it." { return "Vidí ji tví přátelé." }
+        if source == "Only you" { return "Jen ty" }
+        if source == "Friends" { return "Přátelé" }
+        if source == "Everyone" { return "Všichni" }
+        if source == "Share now" { return "Sdílet teď" }
+        if source == "Update share" { return "Aktualizovat sdílení" }
+        if source == "Stop sharing" { return "Přestat sdílet" }
+        if source == "Sharing…" { return "Sdílení…" }
+        if source == "Shared with everyone." { return "Sdíleno se všemi." }
+        if source == "Shared with your friends." { return "Sdíleno s přáteli." }
+        if source == "Only you can see it now." { return "Teď ji vidíš jen ty." }
+        if source == "Sharing is not available here." { return "Sdílení tu není dostupné." }
+        if source == "Sign in to share levels." { return "Přihlas se a sdílej úrovně." }
+        if source == "You are offline. Try again later." { return "Jsi offline. Zkus to později." }
+        if source == "That collection is no longer shared." { return "Tato sbírka už není sdílená." }
+        if source == "This collection is too large to share." { return "Tato sbírka je na sdílení příliš velká." }
+        if source == "Please wait a moment and try again." { return "Chvíli počkej a zkus to znovu." }
+        if source == "Sharing was refused." { return "Sdílení bylo odmítnuto." }
+        if source == "Player name" { return "Jméno hráče" }
+        if source == "Search" { return "Hledat" }
+        if source == "Searching…" { return "Hledání…" }
+        if source == "No shared collections found." { return "Žádné sdílené sbírky nenalezeny." }
+        if source == "Add to My levels" { return "Přidat do Mých úrovní" }
+        if source == "Adding…" { return "Přidávání…" }
+        if source == "Added to My levels." { return "Přidáno do Mých úrovní." }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
         if source == "Back" { return "Zurück" }
         if source == "Profile" { return "Profil" }
         if source == "Settings" { return "Einstellungen" }
-        if source == "Skin shop" { return "Skin-Shop" }
         if source == "A little change of character." { return "Ein kleiner Typwechsel." }
         if source == "Appearance" { return "Aussehen" }
         if source == "Softer colours for your apple adventure." { return "Sanftere Farben für dein Apfelabenteuer." }
@@ -187,13 +257,81 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "Zurück zum Titel" }
         if source == "Try the direction pad" { return "Steuerkreuz ausprobieren" }
         if source == "Come back tomorrow" { return "Komm morgen wieder" }
+        if source == "Previous skin" { return "Vorheriger Skin" }
+        if source == "Next skin" { return "Nächster Skin" }
+        if source == "Choose landscape" { return "Landschaft wählen" }
+        if source == "Continue editing" { return "Weiter bearbeiten" }
+        if source == "Shape every level you have reached." { return "Gestalte jedes Level, das du erreicht hast." }
+        if source == "Mirrored — edit and save" { return "Gespiegelt – bearbeiten und speichern" }
+        if source == "Best guess — edit and save" { return "Bester Entwurf – bearbeiten und speichern" }
+        if source == "Close" { return "Schließen" }
+        if source == "Today" { return "Heute" }
+        if source == "Tomorrow" { return "Morgen" }
+        if source == "Day %" { return "Tag %" }
+        if source == "See all days" { return "Alle Tage ansehen" }
+        if source == "Your gift is ready!" { return "Dein Geschenk ist bereit!" }
+        if source == "Sign in to collect Dew" { return "Anmelden und Dew sammeln" }
+        if source == "Not enough Dew." { return "Nicht genug Dew." }
+        if source == "Top up Dew" { return "Dew aufladen" }
+        if source == "Make levels of your own." { return "Baue deine eigenen Level." }
+        if source == "Campaign changes" { return "Kampagnen-Änderungen" }
+        if source == "Edit campaign" { return "Kampagne bearbeiten" }
+        if source == "My levels" { return "Meine Level" }
+        if source == "From a level" { return "Aus einem Level" }
+        if source == "New level" { return "Neues Level" }
+        if source == "Your levels could not be saved." { return "Deine Level konnten nicht gespeichert werden." }
+        if source == "This collection is full." { return "Diese Sammlung ist voll." }
+        if source == "New collection" { return "Neue Sammlung" }
+        if source == "No levels yet. Start one with New level." { return "Noch keine Level. Beginne mit Neues Level." }
+        if source == "All collections" { return "Alle Sammlungen" }
+        if source == "Collection name" { return "Name der Sammlung" }
+        if source == "Private: only you can see it." { return "Privat: Nur du kannst sie sehen." }
+        if source == "Private" { return "Privat" }
+        if source == "Play" { return "Spielen" }
+        if source == "Move up" { return "Nach oben" }
+        if source == "Move down" { return "Nach unten" }
+        if source == "Sure?" { return "Sicher?" }
+        if source == "Delete" { return "Löschen" }
+        if source == "Delete collection" { return "Sammlung löschen" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "Diese Level spielen sich so, wie du sie geändert hast. Setze eines zurück, um wieder das Original zu spielen." }
+        if source == "Reset" { return "Zurücksetzen" }
+        if source == "Portrait" { return "Hochformat" }
+        if source == "Landscape" { return "Querformat" }
+        if source == "Share" { return "Teilen" }
+        if source == "Share collection" { return "Sammlung teilen" }
+        if source == "Everyone can see it." { return "Alle können sie sehen." }
+        if source == "Your friends can see it." { return "Deine Freunde können sie sehen." }
+        if source == "Only you" { return "Nur du" }
+        if source == "Friends" { return "Freunde" }
+        if source == "Everyone" { return "Alle" }
+        if source == "Share now" { return "Jetzt teilen" }
+        if source == "Update share" { return "Freigabe aktualisieren" }
+        if source == "Stop sharing" { return "Nicht mehr teilen" }
+        if source == "Sharing…" { return "Wird geteilt…" }
+        if source == "Shared with everyone." { return "Mit allen geteilt." }
+        if source == "Shared with your friends." { return "Mit deinen Freunden geteilt." }
+        if source == "Only you can see it now." { return "Jetzt kannst nur du sie sehen." }
+        if source == "Sharing is not available here." { return "Teilen ist hier nicht verfügbar." }
+        if source == "Sign in to share levels." { return "Melde dich an, um Level zu teilen." }
+        if source == "You are offline. Try again later." { return "Du bist offline. Versuche es später erneut." }
+        if source == "That collection is no longer shared." { return "Diese Sammlung wird nicht mehr geteilt." }
+        if source == "This collection is too large to share." { return "Diese Sammlung ist zu groß zum Teilen." }
+        if source == "Please wait a moment and try again." { return "Warte kurz und versuche es erneut." }
+        if source == "Sharing was refused." { return "Teilen wurde abgelehnt." }
+        if source == "Player name" { return "Spielername" }
+        if source == "Search" { return "Suchen" }
+        if source == "Searching…" { return "Suche läuft…" }
+        if source == "No shared collections found." { return "Keine geteilten Sammlungen gefunden." }
+        if source == "Add to My levels" { return "Zu Meine Level" }
+        if source == "Adding…" { return "Wird hinzugefügt…" }
+        if source == "Added to My levels." { return "Zu Meine Level hinzugefügt." }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
         if source == "Back" { return "Atrás" }
         if source == "Profile" { return "Perfil" }
         if source == "Settings" { return "Ajustes" }
-        if source == "Skin shop" { return "Tienda de aspectos" }
+        if source == "Shop" { return "Tienda" }
         if source == "A little change of character." { return "Un pequeño cambio de personaje." }
         if source == "Appearance" { return "Apariencia" }
         if source == "Softer colours for your apple adventure." { return "Colores suaves para tu aventura." }
@@ -267,13 +405,84 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "Volver al inicio" }
         if source == "Try the direction pad" { return "Prueba el mando direccional" }
         if source == "Come back tomorrow" { return "Vuelve mañana" }
+        if source == "Name" { return "Nombre" }
+        if source == "Previous skin" { return "Aspecto anterior" }
+        if source == "Next skin" { return "Aspecto siguiente" }
+        if source == "Choose landscape" { return "Elige un paisaje" }
+        if source == "Continue editing" { return "Seguir editando" }
+        if source == "Shape every level you have reached." { return "Da forma a cada nivel que hayas alcanzado." }
+        if source == "Mirrored — edit and save" { return "Reflejado: edita y guarda" }
+        if source == "Best guess — edit and save" { return "Mejor estimación: edita y guarda" }
+        if source == "Close" { return "Cerrar" }
+        if source == "Today" { return "Hoy" }
+        if source == "Tomorrow" { return "Mañana" }
+        if source == "Day %" { return "Día %" }
+        if source == "See all days" { return "Ver todos los días" }
+        if source == "Your gift is ready!" { return "¡Tu regalo está listo!" }
+        if source == "Sign in to collect Dew" { return "Inicia sesión para conseguir Dew" }
+        if source == "Skins" { return "Aspectos" }
+        if source == "Not enough Dew." { return "No tienes suficiente Dew." }
+        if source == "Top up Dew" { return "Recargar Dew" }
+        if source == "Make levels of your own." { return "Crea tus propios niveles." }
+        if source == "Campaign changes" { return "Cambios en la campaña" }
+        if source == "Edit campaign" { return "Editar campaña" }
+        if source == "My levels" { return "Mis niveles" }
+        if source == "From a level" { return "A partir de un nivel" }
+        if source == "New level" { return "Nuevo nivel" }
+        if source == "Your levels could not be saved." { return "No se pudieron guardar tus niveles." }
+        if source == "This collection is full." { return "Esta colección está llena." }
+        if source == "New collection" { return "Nueva colección" }
+        if source == "No levels yet. Start one with New level." { return "Aún no hay niveles. Empieza con Nuevo nivel." }
+        if source == "All collections" { return "Todas las colecciones" }
+        if source == "Collection name" { return "Nombre de la colección" }
+        if source == "Private: only you can see it." { return "Privada: solo tú puedes verla." }
+        if source == "Private" { return "Privada" }
+        if source == "Play" { return "Jugar" }
+        if source == "Move up" { return "Subir" }
+        if source == "Move down" { return "Bajar" }
+        if source == "Sure?" { return "¿Seguro?" }
+        if source == "Delete" { return "Eliminar" }
+        if source == "Delete collection" { return "Eliminar colección" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "Estos niveles se juegan tal como los cambiaste. Restablece uno para volver a jugar el original." }
+        if source == "Reset" { return "Restablecer" }
+        if source == "Portrait" { return "Vertical" }
+        if source == "Landscape" { return "Horizontal" }
+        if source == "Community" { return "Comunidad" }
+        if source == "Share" { return "Compartir" }
+        if source == "Share collection" { return "Compartir colección" }
+        if source == "Everyone can see it." { return "Todos pueden verla." }
+        if source == "Your friends can see it." { return "Tus amigos pueden verla." }
+        if source == "Only you" { return "Solo tú" }
+        if source == "Friends" { return "Amigos" }
+        if source == "Everyone" { return "Todos" }
+        if source == "Share now" { return "Compartir ahora" }
+        if source == "Update share" { return "Actualizar lo compartido" }
+        if source == "Stop sharing" { return "Dejar de compartir" }
+        if source == "Sharing…" { return "Compartiendo…" }
+        if source == "Shared with everyone." { return "Compartida con todos." }
+        if source == "Shared with your friends." { return "Compartida con tus amigos." }
+        if source == "Only you can see it now." { return "Ahora solo tú puedes verla." }
+        if source == "Sharing is not available here." { return "Compartir no está disponible aquí." }
+        if source == "Sign in to share levels." { return "Inicia sesión para compartir niveles." }
+        if source == "You are offline. Try again later." { return "Estás sin conexión. Inténtalo más tarde." }
+        if source == "That collection is no longer shared." { return "Esa colección ya no está compartida." }
+        if source == "This collection is too large to share." { return "Esta colección es demasiado grande para compartir." }
+        if source == "Please wait a moment and try again." { return "Espera un momento e inténtalo de nuevo." }
+        if source == "Sharing was refused." { return "Se rechazó compartir." }
+        if source == "Player name" { return "Nombre del jugador" }
+        if source == "Search" { return "Buscar" }
+        if source == "Searching…" { return "Buscando…" }
+        if source == "No shared collections found." { return "No se encontraron colecciones compartidas." }
+        if source == "Add to My levels" { return "Añadir a Mis niveles" }
+        if source == "Adding…" { return "Añadiendo…" }
+        if source == "Added to My levels." { return "Añadida a Mis niveles." }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
         if source == "Back" { return "Retour" }
         if source == "Profile" { return "Profil" }
         if source == "Settings" { return "Réglages" }
-        if source == "Skin shop" { return "Boutique de styles" }
+        if source == "Shop" { return "Boutique" }
         if source == "A little change of character." { return "Un petit changement de personnage." }
         if source == "Appearance" { return "Apparence" }
         if source == "Softer colours for your apple adventure." { return "Des couleurs douces pour votre aventure." }
@@ -344,13 +553,83 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "Retour au titre" }
         if source == "Try the direction pad" { return "Essayer la croix directionnelle" }
         if source == "Come back tomorrow" { return "Reviens demain" }
+        if source == "Name" { return "Nom" }
+        if source == "Previous skin" { return "Apparence précédente" }
+        if source == "Next skin" { return "Apparence suivante" }
+        if source == "Choose landscape" { return "Choisir un paysage" }
+        if source == "Continue editing" { return "Continuer l’édition" }
+        if source == "Shape every level you have reached." { return "Façonne chaque niveau que tu as atteint." }
+        if source == "Mirrored — edit and save" { return "En miroir — modifie et enregistre" }
+        if source == "Best guess — edit and save" { return "Meilleure estimation — modifie et enregistre" }
+        if source == "Close" { return "Fermer" }
+        if source == "Today" { return "Aujourd’hui" }
+        if source == "Tomorrow" { return "Demain" }
+        if source == "Day %" { return "Jour %" }
+        if source == "See all days" { return "Voir tous les jours" }
+        if source == "Your gift is ready!" { return "Ton cadeau est prêt !" }
+        if source == "Sign in to collect Dew" { return "Connecte-toi pour recevoir des Dew" }
+        if source == "Skins" { return "Styles" }
+        if source == "Not enough Dew." { return "Pas assez de Dew." }
+        if source == "Top up Dew" { return "Recharger des Dew" }
+        if source == "Make levels of your own." { return "Crée tes propres niveaux." }
+        if source == "Campaign changes" { return "Modifications de la campagne" }
+        if source == "Edit campaign" { return "Modifier la campagne" }
+        if source == "My levels" { return "Mes niveaux" }
+        if source == "From a level" { return "À partir d’un niveau" }
+        if source == "New level" { return "Nouveau niveau" }
+        if source == "Your levels could not be saved." { return "Impossible d’enregistrer tes niveaux." }
+        if source == "This collection is full." { return "Cette collection est pleine." }
+        if source == "New collection" { return "Nouvelle collection" }
+        if source == "No levels yet. Start one with New level." { return "Pas encore de niveaux. Commence avec Nouveau niveau." }
+        if source == "All collections" { return "Toutes les collections" }
+        if source == "Collection name" { return "Nom de la collection" }
+        if source == "Private: only you can see it." { return "Privée : toi seul peux la voir." }
+        if source == "Private" { return "Privée" }
+        if source == "Play" { return "Jouer" }
+        if source == "Move up" { return "Monter" }
+        if source == "Move down" { return "Descendre" }
+        if source == "Sure?" { return "Sûr ?" }
+        if source == "Delete" { return "Supprimer" }
+        if source == "Delete collection" { return "Supprimer la collection" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "Ces niveaux se jouent tels que tu les as modifiés. Réinitialise-en un pour rejouer l’original." }
+        if source == "Reset" { return "Réinitialiser" }
+        if source == "Landscape" { return "Paysage" }
+        if source == "Community" { return "Communauté" }
+        if source == "Share" { return "Partager" }
+        if source == "Share collection" { return "Partager la collection" }
+        if source == "Everyone can see it." { return "Tout le monde peut la voir." }
+        if source == "Your friends can see it." { return "Tes amis peuvent la voir." }
+        if source == "Only you" { return "Toi seul" }
+        if source == "Friends" { return "Amis" }
+        if source == "Everyone" { return "Tout le monde" }
+        if source == "Share now" { return "Partager maintenant" }
+        if source == "Update share" { return "Mettre à jour le partage" }
+        if source == "Stop sharing" { return "Arrêter le partage" }
+        if source == "Sharing…" { return "Partage…" }
+        if source == "Shared with everyone." { return "Partagée avec tout le monde." }
+        if source == "Shared with your friends." { return "Partagée avec tes amis." }
+        if source == "Only you can see it now." { return "Désormais, toi seul peux la voir." }
+        if source == "Sharing is not available here." { return "Le partage n’est pas disponible ici." }
+        if source == "Sign in to share levels." { return "Connecte-toi pour partager des niveaux." }
+        if source == "You are offline. Try again later." { return "Tu es hors ligne. Réessaie plus tard." }
+        if source == "That collection is no longer shared." { return "Cette collection n’est plus partagée." }
+        if source == "This collection is too large to share." { return "Cette collection est trop grande pour être partagée." }
+        if source == "Please wait a moment and try again." { return "Patiente un instant et réessaie." }
+        if source == "Sharing was refused." { return "Le partage a été refusé." }
+        if source == "Player name" { return "Nom du joueur" }
+        if source == "Search" { return "Rechercher" }
+        if source == "Searching…" { return "Recherche…" }
+        if source == "No shared collections found." { return "Aucune collection partagée trouvée." }
+        if source == "Add to My levels" { return "Ajouter à Mes niveaux" }
+        if source == "Adding…" { return "Ajout…" }
+        if source == "Added to My levels." { return "Ajoutée à Mes niveaux." }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
         if source == "Back" { return "Kembali" }
         if source == "Profile" { return "Profil" }
         if source == "Settings" { return "Pengaturan" }
-        if source == "Skin shop" { return "Toko tampilan" }
+        if source == "Shop" { return "Toko" }
         if source == "A little change of character." { return "Sedikit perubahan karakter." }
         if source == "Appearance" { return "Tampilan" }
         if source == "Softer colours for your apple adventure." { return "Warna lembut untuk petualanganmu." }
@@ -421,13 +700,84 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "Kembali ke judul" }
         if source == "Try the direction pad" { return "Coba tombol arah" }
         if source == "Come back tomorrow" { return "Kembali besok" }
+        if source == "Name" { return "Nama" }
+        if source == "Previous skin" { return "Skin sebelumnya" }
+        if source == "Next skin" { return "Skin berikutnya" }
+        if source == "Choose landscape" { return "Pilih lanskap" }
+        if source == "Continue editing" { return "Lanjutkan menyunting" }
+        if source == "Shape every level you have reached." { return "Bentuk setiap level yang sudah kamu capai." }
+        if source == "Mirrored — edit and save" { return "Dicerminkan — sunting dan simpan" }
+        if source == "Best guess — edit and save" { return "Tebakan terbaik — sunting dan simpan" }
+        if source == "Close" { return "Tutup" }
+        if source == "Today" { return "Hari ini" }
+        if source == "Tomorrow" { return "Besok" }
+        if source == "Day %" { return "Hari %" }
+        if source == "See all days" { return "Lihat semua hari" }
+        if source == "Your gift is ready!" { return "Hadiahmu sudah siap!" }
+        if source == "Sign in to collect Dew" { return "Masuk untuk mengumpulkan Dew" }
+        if source == "Skins" { return "Tampilan" }
+        if source == "Not enough Dew." { return "Dew tidak cukup." }
+        if source == "Top up Dew" { return "Isi ulang Dew" }
+        if source == "Make levels of your own." { return "Buat level milikmu sendiri." }
+        if source == "Campaign changes" { return "Perubahan kampanye" }
+        if source == "Edit campaign" { return "Edit kampanye" }
+        if source == "My levels" { return "Level saya" }
+        if source == "From a level" { return "Dari sebuah level" }
+        if source == "New level" { return "Level baru" }
+        if source == "Your levels could not be saved." { return "Level-mu tidak dapat disimpan." }
+        if source == "This collection is full." { return "Koleksi ini sudah penuh." }
+        if source == "New collection" { return "Koleksi baru" }
+        if source == "No levels yet. Start one with New level." { return "Belum ada level. Mulai dengan Level baru." }
+        if source == "All collections" { return "Semua koleksi" }
+        if source == "Collection name" { return "Nama koleksi" }
+        if source == "Private: only you can see it." { return "Pribadi: hanya kamu yang bisa melihatnya." }
+        if source == "Private" { return "Pribadi" }
+        if source == "Play" { return "Main" }
+        if source == "Move up" { return "Pindah ke atas" }
+        if source == "Move down" { return "Pindah ke bawah" }
+        if source == "Sure?" { return "Yakin?" }
+        if source == "Delete" { return "Hapus" }
+        if source == "Delete collection" { return "Hapus koleksi" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "Level ini dimainkan sesuai perubahanmu. Atur ulang satu untuk memainkan versi aslinya lagi." }
+        if source == "Reset" { return "Atur ulang" }
+        if source == "Portrait" { return "Potret" }
+        if source == "Landscape" { return "Lanskap" }
+        if source == "Community" { return "Komunitas" }
+        if source == "Share" { return "Bagikan" }
+        if source == "Share collection" { return "Bagikan koleksi" }
+        if source == "Everyone can see it." { return "Semua orang bisa melihatnya." }
+        if source == "Your friends can see it." { return "Teman-temanmu bisa melihatnya." }
+        if source == "Only you" { return "Hanya kamu" }
+        if source == "Friends" { return "Teman" }
+        if source == "Everyone" { return "Semua orang" }
+        if source == "Share now" { return "Bagikan sekarang" }
+        if source == "Update share" { return "Perbarui bagikan" }
+        if source == "Stop sharing" { return "Berhenti membagikan" }
+        if source == "Sharing…" { return "Membagikan…" }
+        if source == "Shared with everyone." { return "Dibagikan ke semua orang." }
+        if source == "Shared with your friends." { return "Dibagikan ke teman-temanmu." }
+        if source == "Only you can see it now." { return "Sekarang hanya kamu yang bisa melihatnya." }
+        if source == "Sharing is not available here." { return "Berbagi tidak tersedia di sini." }
+        if source == "Sign in to share levels." { return "Masuk untuk membagikan level." }
+        if source == "You are offline. Try again later." { return "Kamu sedang offline. Coba lagi nanti." }
+        if source == "That collection is no longer shared." { return "Koleksi itu tidak lagi dibagikan." }
+        if source == "This collection is too large to share." { return "Koleksi ini terlalu besar untuk dibagikan." }
+        if source == "Please wait a moment and try again." { return "Tunggu sebentar lalu coba lagi." }
+        if source == "Sharing was refused." { return "Berbagi ditolak." }
+        if source == "Player name" { return "Nama pemain" }
+        if source == "Search" { return "Cari" }
+        if source == "Searching…" { return "Mencari…" }
+        if source == "No shared collections found." { return "Tidak ada koleksi yang dibagikan." }
+        if source == "Add to My levels" { return "Tambah ke Level saya" }
+        if source == "Adding…" { return "Menambahkan…" }
+        if source == "Added to My levels." { return "Ditambahkan ke Level saya." }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
         if source == "Back" { return "Indietro" }
         if source == "Profile" { return "Profilo" }
         if source == "Settings" { return "Impostazioni" }
-        if source == "Skin shop" { return "Negozio di aspetti" }
+        if source == "Shop" { return "Negozio" }
         if source == "A little change of character." { return "Un piccolo cambio di personaggio." }
         if source == "Appearance" { return "Aspetto" }
         if source == "Softer colours for your apple adventure." { return "Colori tenui per la tua avventura." }
@@ -500,13 +850,84 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "Torna al titolo" }
         if source == "Try the direction pad" { return "Prova il pad direzionale" }
         if source == "Come back tomorrow" { return "Torna domani" }
+        if source == "Name" { return "Nome" }
+        if source == "Previous skin" { return "Aspetto precedente" }
+        if source == "Next skin" { return "Aspetto successivo" }
+        if source == "Choose landscape" { return "Scegli un paesaggio" }
+        if source == "Continue editing" { return "Continua a modificare" }
+        if source == "Shape every level you have reached." { return "Dai forma a ogni livello che hai raggiunto." }
+        if source == "Mirrored — edit and save" { return "Specchiato — modifica e salva" }
+        if source == "Best guess — edit and save" { return "Ipotesi migliore — modifica e salva" }
+        if source == "Close" { return "Chiudi" }
+        if source == "Today" { return "Oggi" }
+        if source == "Tomorrow" { return "Domani" }
+        if source == "Day %" { return "Giorno %" }
+        if source == "See all days" { return "Vedi tutti i giorni" }
+        if source == "Your gift is ready!" { return "Il tuo regalo è pronto!" }
+        if source == "Sign in to collect Dew" { return "Accedi per raccogliere Dew" }
+        if source == "Skins" { return "Aspetti" }
+        if source == "Not enough Dew." { return "Dew insufficienti." }
+        if source == "Top up Dew" { return "Ricarica Dew" }
+        if source == "Make levels of your own." { return "Crea i tuoi livelli." }
+        if source == "Campaign changes" { return "Modifiche alla campagna" }
+        if source == "Edit campaign" { return "Modifica campagna" }
+        if source == "My levels" { return "I miei livelli" }
+        if source == "From a level" { return "Da un livello" }
+        if source == "New level" { return "Nuovo livello" }
+        if source == "Your levels could not be saved." { return "Impossibile salvare i tuoi livelli." }
+        if source == "This collection is full." { return "Questa raccolta è piena." }
+        if source == "New collection" { return "Nuova raccolta" }
+        if source == "No levels yet. Start one with New level." { return "Ancora nessun livello. Inizia con Nuovo livello." }
+        if source == "All collections" { return "Tutte le raccolte" }
+        if source == "Collection name" { return "Nome della raccolta" }
+        if source == "Private: only you can see it." { return "Privata: solo tu puoi vederla." }
+        if source == "Private" { return "Privata" }
+        if source == "Play" { return "Gioca" }
+        if source == "Move up" { return "Sposta su" }
+        if source == "Move down" { return "Sposta giù" }
+        if source == "Sure?" { return "Sicuro?" }
+        if source == "Delete" { return "Elimina" }
+        if source == "Delete collection" { return "Elimina raccolta" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "Questi livelli si giocano come li hai modificati. Ripristinane uno per giocare di nuovo l’originale." }
+        if source == "Reset" { return "Ripristina" }
+        if source == "Portrait" { return "Verticale" }
+        if source == "Landscape" { return "Orizzontale" }
+        if source == "Community" { return "Comunità" }
+        if source == "Share" { return "Condividi" }
+        if source == "Share collection" { return "Condividi raccolta" }
+        if source == "Everyone can see it." { return "Tutti possono vederla." }
+        if source == "Your friends can see it." { return "I tuoi amici possono vederla." }
+        if source == "Only you" { return "Solo tu" }
+        if source == "Friends" { return "Amici" }
+        if source == "Everyone" { return "Tutti" }
+        if source == "Share now" { return "Condividi ora" }
+        if source == "Update share" { return "Aggiorna condivisione" }
+        if source == "Stop sharing" { return "Smetti di condividere" }
+        if source == "Sharing…" { return "Condivisione…" }
+        if source == "Shared with everyone." { return "Condivisa con tutti." }
+        if source == "Shared with your friends." { return "Condivisa con i tuoi amici." }
+        if source == "Only you can see it now." { return "Ora solo tu puoi vederla." }
+        if source == "Sharing is not available here." { return "La condivisione non è disponibile qui." }
+        if source == "Sign in to share levels." { return "Accedi per condividere i livelli." }
+        if source == "You are offline. Try again later." { return "Sei offline. Riprova più tardi." }
+        if source == "That collection is no longer shared." { return "Quella raccolta non è più condivisa." }
+        if source == "This collection is too large to share." { return "Questa raccolta è troppo grande da condividere." }
+        if source == "Please wait a moment and try again." { return "Attendi un momento e riprova." }
+        if source == "Sharing was refused." { return "La condivisione è stata rifiutata." }
+        if source == "Player name" { return "Nome del giocatore" }
+        if source == "Search" { return "Cerca" }
+        if source == "Searching…" { return "Ricerca…" }
+        if source == "No shared collections found." { return "Nessuna raccolta condivisa trovata." }
+        if source == "Add to My levels" { return "Aggiungi ai miei livelli" }
+        if source == "Adding…" { return "Aggiunta…" }
+        if source == "Added to My levels." { return "Aggiunta ai miei livelli." }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
         if source == "Back" { return "戻る" }
         if source == "Profile" { return "プロフィール" }
         if source == "Settings" { return "設定" }
-        if source == "Skin shop" { return "スキンショップ" }
+        if source == "Shop" { return "ショップ" }
         if source == "A little change of character." { return "ちょっと違う姿で冒険。" }
         if source == "Appearance" { return "外観" }
         if source == "Softer colours for your apple adventure." { return "冒険をやさしい色合いで。" }
@@ -581,13 +1002,84 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "タイトルに戻る" }
         if source == "Try the direction pad" { return "方向パッドを試す" }
         if source == "Come back tomorrow" { return "また明日" }
+        if source == "Name" { return "名前" }
+        if source == "Previous skin" { return "前のスキン" }
+        if source == "Next skin" { return "次のスキン" }
+        if source == "Choose landscape" { return "景色を選ぶ" }
+        if source == "Continue editing" { return "編集を続ける" }
+        if source == "Shape every level you have reached." { return "たどり着いたレベルを自由に作り変えよう。" }
+        if source == "Mirrored — edit and save" { return "反転コピー — 編集して保存" }
+        if source == "Best guess — edit and save" { return "おすすめ案 — 編集して保存" }
+        if source == "Close" { return "閉じる" }
+        if source == "Today" { return "今日" }
+        if source == "Tomorrow" { return "明日" }
+        if source == "Day %" { return "%日目" }
+        if source == "See all days" { return "すべての日を見る" }
+        if source == "Your gift is ready!" { return "今日のプレゼントが届いたよ!" }
+        if source == "Sign in to collect Dew" { return "ログインして Dew を集めよう" }
+        if source == "Skins" { return "スキン" }
+        if source == "Not enough Dew." { return "Dewが足りません。" }
+        if source == "Top up Dew" { return "Dewをチャージ" }
+        if source == "Make levels of your own." { return "自分だけのレベルを作ろう。" }
+        if source == "Campaign changes" { return "キャンペーンの変更" }
+        if source == "Edit campaign" { return "キャンペーンを編集" }
+        if source == "My levels" { return "マイレベル" }
+        if source == "From a level" { return "レベルから作る" }
+        if source == "New level" { return "新しいレベル" }
+        if source == "Your levels could not be saved." { return "レベルを保存できませんでした。" }
+        if source == "This collection is full." { return "このコレクションはいっぱいです。" }
+        if source == "New collection" { return "新しいコレクション" }
+        if source == "No levels yet. Start one with New level." { return "まだレベルがありません。「新しいレベル」から始めましょう。" }
+        if source == "All collections" { return "すべてのコレクション" }
+        if source == "Collection name" { return "コレクション名" }
+        if source == "Private: only you can see it." { return "非公開：あなただけが見られます。" }
+        if source == "Private" { return "非公開" }
+        if source == "Play" { return "プレイ" }
+        if source == "Move up" { return "上へ移動" }
+        if source == "Move down" { return "下へ移動" }
+        if source == "Sure?" { return "本当に？" }
+        if source == "Delete" { return "削除" }
+        if source == "Delete collection" { return "コレクションを削除" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "これらのレベルは変更したとおりに遊べます。リセットすると元のレベルに戻ります。" }
+        if source == "Reset" { return "リセット" }
+        if source == "Portrait" { return "縦向き" }
+        if source == "Landscape" { return "横向き" }
+        if source == "Community" { return "コミュニティ" }
+        if source == "Share" { return "共有" }
+        if source == "Share collection" { return "コレクションを共有" }
+        if source == "Everyone can see it." { return "誰でも見られます。" }
+        if source == "Your friends can see it." { return "友だちが見られます。" }
+        if source == "Only you" { return "自分だけ" }
+        if source == "Friends" { return "友だち" }
+        if source == "Everyone" { return "全員" }
+        if source == "Share now" { return "今すぐ共有" }
+        if source == "Update share" { return "共有を更新" }
+        if source == "Stop sharing" { return "共有をやめる" }
+        if source == "Sharing…" { return "共有中…" }
+        if source == "Shared with everyone." { return "全員に共有しました。" }
+        if source == "Shared with your friends." { return "友だちに共有しました。" }
+        if source == "Only you can see it now." { return "今はあなただけが見られます。" }
+        if source == "Sharing is not available here." { return "ここでは共有できません。" }
+        if source == "Sign in to share levels." { return "レベルを共有するにはサインインしてください。" }
+        if source == "You are offline. Try again later." { return "オフラインです。後でもう一度お試しください。" }
+        if source == "That collection is no longer shared." { return "そのコレクションは共有されていません。" }
+        if source == "This collection is too large to share." { return "このコレクションは大きすぎて共有できません。" }
+        if source == "Please wait a moment and try again." { return "少し待ってからもう一度お試しください。" }
+        if source == "Sharing was refused." { return "共有できませんでした。" }
+        if source == "Player name" { return "プレイヤー名" }
+        if source == "Search" { return "検索" }
+        if source == "Searching…" { return "検索中…" }
+        if source == "No shared collections found." { return "共有コレクションが見つかりません。" }
+        if source == "Add to My levels" { return "マイレベルに追加" }
+        if source == "Adding…" { return "追加中…" }
+        if source == "Added to My levels." { return "マイレベルに追加しました。" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
         if source == "Back" { return "뒤로" }
         if source == "Profile" { return "프로필" }
         if source == "Settings" { return "설정" }
-        if source == "Skin shop" { return "스킨 상점" }
+        if source == "Shop" { return "상점" }
         if source == "A little change of character." { return "조금 다른 모습으로 모험해요." }
         if source == "Appearance" { return "화면" }
         if source == "Softer colours for your apple adventure." { return "부드러운 색으로 즐기는 모험." }
@@ -662,13 +1154,84 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "타이틀로 돌아가기" }
         if source == "Try the direction pad" { return "방향 패드 체험" }
         if source == "Come back tomorrow" { return "내일 다시 오세요" }
+        if source == "Name" { return "이름" }
+        if source == "Previous skin" { return "이전 스킨" }
+        if source == "Next skin" { return "다음 스킨" }
+        if source == "Choose landscape" { return "풍경 선택" }
+        if source == "Continue editing" { return "계속 편집" }
+        if source == "Shape every level you have reached." { return "도달한 모든 레벨을 직접 꾸며 보세요." }
+        if source == "Mirrored — edit and save" { return "거울 배치 — 편집 후 저장" }
+        if source == "Best guess — edit and save" { return "추천 배치 — 편집 후 저장" }
+        if source == "Close" { return "닫기" }
+        if source == "Today" { return "오늘" }
+        if source == "Tomorrow" { return "내일" }
+        if source == "Day %" { return "%일차" }
+        if source == "See all days" { return "모든 날 보기" }
+        if source == "Your gift is ready!" { return "선물이 준비됐어요!" }
+        if source == "Sign in to collect Dew" { return "로그인하고 Dew 받기" }
+        if source == "Skins" { return "스킨" }
+        if source == "Not enough Dew." { return "Dew가 부족해요." }
+        if source == "Top up Dew" { return "Dew 충전" }
+        if source == "Make levels of your own." { return "나만의 레벨을 만들어 보세요." }
+        if source == "Campaign changes" { return "캠페인 변경 사항" }
+        if source == "Edit campaign" { return "캠페인 편집" }
+        if source == "My levels" { return "내 레벨" }
+        if source == "From a level" { return "레벨에서 시작" }
+        if source == "New level" { return "새 레벨" }
+        if source == "Your levels could not be saved." { return "레벨을 저장하지 못했습니다." }
+        if source == "This collection is full." { return "이 컬렉션이 가득 찼습니다." }
+        if source == "New collection" { return "새 컬렉션" }
+        if source == "No levels yet. Start one with New level." { return "아직 레벨이 없습니다. 새 레벨로 시작하세요." }
+        if source == "All collections" { return "모든 컬렉션" }
+        if source == "Collection name" { return "컬렉션 이름" }
+        if source == "Private: only you can see it." { return "비공개: 나만 볼 수 있습니다." }
+        if source == "Private" { return "비공개" }
+        if source == "Play" { return "플레이" }
+        if source == "Move up" { return "위로 이동" }
+        if source == "Move down" { return "아래로 이동" }
+        if source == "Sure?" { return "확실한가요?" }
+        if source == "Delete" { return "삭제" }
+        if source == "Delete collection" { return "컬렉션 삭제" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "이 레벨들은 바꾼 그대로 플레이됩니다. 원래 레벨로 되돌리려면 초기화하세요." }
+        if source == "Reset" { return "초기화" }
+        if source == "Portrait" { return "세로" }
+        if source == "Landscape" { return "가로" }
+        if source == "Community" { return "커뮤니티" }
+        if source == "Share" { return "공유" }
+        if source == "Share collection" { return "컬렉션 공유" }
+        if source == "Everyone can see it." { return "모두가 볼 수 있습니다." }
+        if source == "Your friends can see it." { return "친구가 볼 수 있습니다." }
+        if source == "Only you" { return "나만" }
+        if source == "Friends" { return "친구" }
+        if source == "Everyone" { return "모두" }
+        if source == "Share now" { return "지금 공유" }
+        if source == "Update share" { return "공유 업데이트" }
+        if source == "Stop sharing" { return "공유 중지" }
+        if source == "Sharing…" { return "공유 중…" }
+        if source == "Shared with everyone." { return "모두와 공유했습니다." }
+        if source == "Shared with your friends." { return "친구와 공유했습니다." }
+        if source == "Only you can see it now." { return "이제 나만 볼 수 있습니다." }
+        if source == "Sharing is not available here." { return "여기서는 공유할 수 없습니다." }
+        if source == "Sign in to share levels." { return "레벨을 공유하려면 로그인하세요." }
+        if source == "You are offline. Try again later." { return "오프라인입니다. 나중에 다시 시도하세요." }
+        if source == "That collection is no longer shared." { return "그 컬렉션은 더 이상 공유되지 않습니다." }
+        if source == "This collection is too large to share." { return "이 컬렉션은 너무 커서 공유할 수 없습니다." }
+        if source == "Please wait a moment and try again." { return "잠시 후 다시 시도하세요." }
+        if source == "Sharing was refused." { return "공유가 거부되었습니다." }
+        if source == "Player name" { return "플레이어 이름" }
+        if source == "Search" { return "검색" }
+        if source == "Searching…" { return "검색 중…" }
+        if source == "No shared collections found." { return "공유된 컬렉션이 없습니다." }
+        if source == "Add to My levels" { return "내 레벨에 추가" }
+        if source == "Adding…" { return "추가 중…" }
+        if source == "Added to My levels." { return "내 레벨에 추가했습니다." }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
         if source == "Back" { return "Voltar" }
         if source == "Profile" { return "Perfil" }
         if source == "Settings" { return "Configurações" }
-        if source == "Skin shop" { return "Loja de visuais" }
+        if source == "Shop" { return "Loja" }
         if source == "A little change of character." { return "Uma pequena mudança de personagem." }
         if source == "Appearance" { return "Aparência" }
         if source == "Softer colours for your apple adventure." { return "Cores suaves para sua aventura." }
@@ -741,13 +1304,84 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "Voltar ao início" }
         if source == "Try the direction pad" { return "Experimente o direcional" }
         if source == "Come back tomorrow" { return "Volte amanhã" }
+        if source == "Name" { return "Nome" }
+        if source == "Previous skin" { return "Visual anterior" }
+        if source == "Next skin" { return "Próximo visual" }
+        if source == "Choose landscape" { return "Escolher paisagem" }
+        if source == "Continue editing" { return "Continuar a editar" }
+        if source == "Shape every level you have reached." { return "Molda cada nível que já alcançaste." }
+        if source == "Mirrored — edit and save" { return "Espelhado — edita e guarda" }
+        if source == "Best guess — edit and save" { return "Melhor estimativa — edita e guarda" }
+        if source == "Close" { return "Fechar" }
+        if source == "Today" { return "Hoje" }
+        if source == "Tomorrow" { return "Amanhã" }
+        if source == "Day %" { return "Dia %" }
+        if source == "See all days" { return "Ver todos os dias" }
+        if source == "Your gift is ready!" { return "O teu presente está pronto!" }
+        if source == "Sign in to collect Dew" { return "Inicia sessão para receber Dew" }
+        if source == "Skins" { return "Visuais" }
+        if source == "Not enough Dew." { return "Dew insuficiente." }
+        if source == "Top up Dew" { return "Recarregar Dew" }
+        if source == "Make levels of your own." { return "Crie seus próprios níveis." }
+        if source == "Campaign changes" { return "Alterações na campanha" }
+        if source == "Edit campaign" { return "Editar campanha" }
+        if source == "My levels" { return "Meus níveis" }
+        if source == "From a level" { return "A partir de um nível" }
+        if source == "New level" { return "Novo nível" }
+        if source == "Your levels could not be saved." { return "Não foi possível salvar seus níveis." }
+        if source == "This collection is full." { return "Esta coleção está cheia." }
+        if source == "New collection" { return "Nova coleção" }
+        if source == "No levels yet. Start one with New level." { return "Ainda não há níveis. Comece com Novo nível." }
+        if source == "All collections" { return "Todas as coleções" }
+        if source == "Collection name" { return "Nome da coleção" }
+        if source == "Private: only you can see it." { return "Privada: só você pode vê-la." }
+        if source == "Private" { return "Privada" }
+        if source == "Play" { return "Jogar" }
+        if source == "Move up" { return "Mover para cima" }
+        if source == "Move down" { return "Mover para baixo" }
+        if source == "Sure?" { return "Certeza?" }
+        if source == "Delete" { return "Excluir" }
+        if source == "Delete collection" { return "Excluir coleção" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "Estes níveis são jogados como você os alterou. Redefina um para jogar o original novamente." }
+        if source == "Reset" { return "Redefinir" }
+        if source == "Portrait" { return "Retrato" }
+        if source == "Landscape" { return "Paisagem" }
+        if source == "Community" { return "Comunidade" }
+        if source == "Share" { return "Compartilhar" }
+        if source == "Share collection" { return "Compartilhar coleção" }
+        if source == "Everyone can see it." { return "Todos podem vê-la." }
+        if source == "Your friends can see it." { return "Seus amigos podem vê-la." }
+        if source == "Only you" { return "Só você" }
+        if source == "Friends" { return "Amigos" }
+        if source == "Everyone" { return "Todos" }
+        if source == "Share now" { return "Compartilhar agora" }
+        if source == "Update share" { return "Atualizar compartilhamento" }
+        if source == "Stop sharing" { return "Parar de compartilhar" }
+        if source == "Sharing…" { return "Compartilhando…" }
+        if source == "Shared with everyone." { return "Compartilhada com todos." }
+        if source == "Shared with your friends." { return "Compartilhada com seus amigos." }
+        if source == "Only you can see it now." { return "Agora só você pode vê-la." }
+        if source == "Sharing is not available here." { return "Compartilhar não está disponível aqui." }
+        if source == "Sign in to share levels." { return "Entre para compartilhar níveis." }
+        if source == "You are offline. Try again later." { return "Você está offline. Tente mais tarde." }
+        if source == "That collection is no longer shared." { return "Essa coleção não está mais compartilhada." }
+        if source == "This collection is too large to share." { return "Esta coleção é grande demais para compartilhar." }
+        if source == "Please wait a moment and try again." { return "Aguarde um momento e tente novamente." }
+        if source == "Sharing was refused." { return "O compartilhamento foi recusado." }
+        if source == "Player name" { return "Nome do jogador" }
+        if source == "Search" { return "Pesquisar" }
+        if source == "Searching…" { return "Pesquisando…" }
+        if source == "No shared collections found." { return "Nenhuma coleção compartilhada encontrada." }
+        if source == "Add to My levels" { return "Adicionar a Meus níveis" }
+        if source == "Adding…" { return "Adicionando…" }
+        if source == "Added to My levels." { return "Adicionada a Meus níveis." }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
         if source == "Back" { return "Назад" }
         if source == "Profile" { return "Профиль" }
         if source == "Settings" { return "Настройки" }
-        if source == "Skin shop" { return "Магазин обликов" }
+        if source == "Shop" { return "Магазин" }
         if source == "A little change of character." { return "Немного нового в облике." }
         if source == "Appearance" { return "Внешний вид" }
         if source == "Softer colours for your apple adventure." { return "Мягкие цвета для приключений." }
@@ -822,13 +1456,84 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "На главный экран" }
         if source == "Try the direction pad" { return "Попробуйте крестовину" }
         if source == "Come back tomorrow" { return "Возвращайтесь завтра" }
+        if source == "Name" { return "Имя" }
+        if source == "Previous skin" { return "Предыдущий облик" }
+        if source == "Next skin" { return "Следующий облик" }
+        if source == "Choose landscape" { return "Выбрать местность" }
+        if source == "Continue editing" { return "Продолжить правку" }
+        if source == "Shape every level you have reached." { return "Измени каждый уровень, до которого ты дошёл." }
+        if source == "Mirrored — edit and save" { return "Зеркально — измени и сохрани" }
+        if source == "Best guess — edit and save" { return "Лучшая догадка — измени и сохрани" }
+        if source == "Close" { return "Закрыть" }
+        if source == "Today" { return "Сегодня" }
+        if source == "Tomorrow" { return "Завтра" }
+        if source == "Day %" { return "День %" }
+        if source == "See all days" { return "Все дни" }
+        if source == "Your gift is ready!" { return "Подарок ждёт тебя!" }
+        if source == "Sign in to collect Dew" { return "Войди, чтобы получать Dew" }
+        if source == "Skins" { return "Облики" }
+        if source == "Not enough Dew." { return "Недостаточно Dew." }
+        if source == "Top up Dew" { return "Пополнить Dew" }
+        if source == "Make levels of your own." { return "Создавай свои уровни." }
+        if source == "Campaign changes" { return "Изменения кампании" }
+        if source == "Edit campaign" { return "Изменить кампанию" }
+        if source == "My levels" { return "Мои уровни" }
+        if source == "From a level" { return "Из уровня" }
+        if source == "New level" { return "Новый уровень" }
+        if source == "Your levels could not be saved." { return "Не удалось сохранить твои уровни." }
+        if source == "This collection is full." { return "Эта коллекция заполнена." }
+        if source == "New collection" { return "Новая коллекция" }
+        if source == "No levels yet. Start one with New level." { return "Уровней пока нет. Начни с «Новый уровень»." }
+        if source == "All collections" { return "Все коллекции" }
+        if source == "Collection name" { return "Название коллекции" }
+        if source == "Private: only you can see it." { return "Личная: её видишь только ты." }
+        if source == "Private" { return "Личная" }
+        if source == "Play" { return "Играть" }
+        if source == "Move up" { return "Выше" }
+        if source == "Move down" { return "Ниже" }
+        if source == "Sure?" { return "Точно?" }
+        if source == "Delete" { return "Удалить" }
+        if source == "Delete collection" { return "Удалить коллекцию" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "Эти уровни играются так, как ты их изменил. Сбрось уровень, чтобы снова играть оригинал." }
+        if source == "Reset" { return "Сбросить" }
+        if source == "Portrait" { return "Книжная" }
+        if source == "Landscape" { return "Альбомная" }
+        if source == "Community" { return "Сообщество" }
+        if source == "Share" { return "Поделиться" }
+        if source == "Share collection" { return "Поделиться коллекцией" }
+        if source == "Everyone can see it." { return "Её видят все." }
+        if source == "Your friends can see it." { return "Её видят твои друзья." }
+        if source == "Only you" { return "Только ты" }
+        if source == "Friends" { return "Друзья" }
+        if source == "Everyone" { return "Все" }
+        if source == "Share now" { return "Поделиться сейчас" }
+        if source == "Update share" { return "Обновить" }
+        if source == "Stop sharing" { return "Перестать делиться" }
+        if source == "Sharing…" { return "Отправка…" }
+        if source == "Shared with everyone." { return "Доступно всем." }
+        if source == "Shared with your friends." { return "Доступно твоим друзьям." }
+        if source == "Only you can see it now." { return "Теперь её видишь только ты." }
+        if source == "Sharing is not available here." { return "Здесь нельзя делиться." }
+        if source == "Sign in to share levels." { return "Войди, чтобы делиться уровнями." }
+        if source == "You are offline. Try again later." { return "Нет подключения. Попробуй позже." }
+        if source == "That collection is no longer shared." { return "Эта коллекция больше не доступна." }
+        if source == "This collection is too large to share." { return "Коллекция слишком велика для отправки." }
+        if source == "Please wait a moment and try again." { return "Подожди немного и попробуй снова." }
+        if source == "Sharing was refused." { return "Отправка отклонена." }
+        if source == "Player name" { return "Имя игрока" }
+        if source == "Search" { return "Найти" }
+        if source == "Searching…" { return "Поиск…" }
+        if source == "No shared collections found." { return "Общих коллекций не найдено." }
+        if source == "Add to My levels" { return "В Мои уровни" }
+        if source == "Adding…" { return "Добавление…" }
+        if source == "Added to My levels." { return "Добавлено в Мои уровни." }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
         if source == "Back" { return "返回" }
         if source == "Profile" { return "个人资料" }
         if source == "Settings" { return "设置" }
-        if source == "Skin shop" { return "皮肤商店" }
+        if source == "Shop" { return "商店" }
         if source == "A little change of character." { return "换个造型去冒险。" }
         if source == "Appearance" { return "外观" }
         if source == "Softer colours for your apple adventure." { return "柔和色彩，轻松冒险。" }
@@ -903,6 +1608,77 @@ Text :: (source: string) -> string {
         if source == "Back to title" { return "返回标题画面" }
         if source == "Try the direction pad" { return "试用方向键" }
         if source == "Come back tomorrow" { return "明天再来" }
+        if source == "Name" { return "名字" }
+        if source == "Previous skin" { return "上一个皮肤" }
+        if source == "Next skin" { return "下一个皮肤" }
+        if source == "Choose landscape" { return "选择风景" }
+        if source == "Continue editing" { return "继续编辑" }
+        if source == "Shape every level you have reached." { return "打造你已到达的每一关。" }
+        if source == "Mirrored — edit and save" { return "镜像 — 编辑并保存" }
+        if source == "Best guess — edit and save" { return "最佳推测 — 编辑并保存" }
+        if source == "Close" { return "关闭" }
+        if source == "Today" { return "今天" }
+        if source == "Tomorrow" { return "明天" }
+        if source == "Day %" { return "第%天" }
+        if source == "See all days" { return "查看全部日子" }
+        if source == "Your gift is ready!" { return "你的礼物准备好了!" }
+        if source == "Sign in to collect Dew" { return "登录领取 Dew" }
+        if source == "Skins" { return "皮肤" }
+        if source == "Not enough Dew." { return "Dew 不足。" }
+        if source == "Top up Dew" { return "充值 Dew" }
+        if source == "Make levels of your own." { return "制作你自己的关卡。" }
+        if source == "Campaign changes" { return "战役改动" }
+        if source == "Edit campaign" { return "编辑战役" }
+        if source == "My levels" { return "我的关卡" }
+        if source == "From a level" { return "从关卡开始" }
+        if source == "New level" { return "新关卡" }
+        if source == "Your levels could not be saved." { return "无法保存你的关卡。" }
+        if source == "This collection is full." { return "这个合集已满。" }
+        if source == "New collection" { return "新合集" }
+        if source == "No levels yet. Start one with New level." { return "还没有关卡。从“新关卡”开始吧。" }
+        if source == "All collections" { return "全部合集" }
+        if source == "Collection name" { return "合集名称" }
+        if source == "Private: only you can see it." { return "私密：只有你能看到。" }
+        if source == "Private" { return "私密" }
+        if source == "Play" { return "开始" }
+        if source == "Move up" { return "上移" }
+        if source == "Move down" { return "下移" }
+        if source == "Sure?" { return "确定？" }
+        if source == "Delete" { return "删除" }
+        if source == "Delete collection" { return "删除合集" }
+        if source == "These levels play as you changed them. Reset one to play the original again." { return "这些关卡会按你的改动来玩。重置后即可再次游玩原版。" }
+        if source == "Reset" { return "重置" }
+        if source == "Portrait" { return "竖屏" }
+        if source == "Landscape" { return "横屏" }
+        if source == "Community" { return "社区" }
+        if source == "Share" { return "分享" }
+        if source == "Share collection" { return "分享合集" }
+        if source == "Everyone can see it." { return "所有人都能看到。" }
+        if source == "Your friends can see it." { return "你的好友能看到。" }
+        if source == "Only you" { return "仅自己" }
+        if source == "Friends" { return "好友" }
+        if source == "Everyone" { return "所有人" }
+        if source == "Share now" { return "立即分享" }
+        if source == "Update share" { return "更新分享" }
+        if source == "Stop sharing" { return "停止分享" }
+        if source == "Sharing…" { return "正在分享…" }
+        if source == "Shared with everyone." { return "已分享给所有人。" }
+        if source == "Shared with your friends." { return "已分享给好友。" }
+        if source == "Only you can see it now." { return "现在只有你能看到。" }
+        if source == "Sharing is not available here." { return "此处无法分享。" }
+        if source == "Sign in to share levels." { return "登录后即可分享关卡。" }
+        if source == "You are offline. Try again later." { return "你已离线，请稍后再试。" }
+        if source == "That collection is no longer shared." { return "该合集已不再分享。" }
+        if source == "This collection is too large to share." { return "这个合集太大，无法分享。" }
+        if source == "Please wait a moment and try again." { return "请稍等片刻再试。" }
+        if source == "Sharing was refused." { return "分享被拒绝。" }
+        if source == "Player name" { return "玩家名称" }
+        if source == "Search" { return "搜索" }
+        if source == "Searching…" { return "正在搜索…" }
+        if source == "No shared collections found." { return "未找到分享的合集。" }
+        if source == "Add to My levels" { return "添加到我的关卡" }
+        if source == "Adding…" { return "正在添加…" }
+        if source == "Added to My levels." { return "已添加到我的关卡。" }
     }
     return source
 }

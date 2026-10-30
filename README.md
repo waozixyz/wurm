@@ -58,14 +58,17 @@ three lives and a fresh score.
 
 ## Play your way
 
-Choose **swipe steering** or a **direction pad** on first play. With swipe
-steering, move your finger in the direction you want to turn and keep it on
-the screen for the next corner. Change your choice from Pause at any time.
+On a phone or tablet, choose **swipe steering** or a **direction pad** on first
+play. With swipe steering, move your finger in the direction you want to turn
+and keep it on the screen for the next corner. Change your choice from Pause at
+any time.
 
-On a keyboard, use the arrow keys or WASD. Space or Escape pauses; M mutes.
+On a computer, steer with the arrow keys or WASD; Settings shows those keys.
+Space or Escape pauses; M mutes.
 Collect every apple, then leave through the opening at the top of the board.
 
-Desktop **Local multiplayer** puts two to four players on one keyboard. Everyone
+Desktop **Local multiplayer**, in Settings, puts two to four players on one
+keyboard; give each player a name and a skin you own. Everyone
 enters through a separate bottom lane. Collect the shared apples, grow, and stay
 clear of every worm: the last one alive wins. Player 1 uses the arrows, Player 2
 WASD, Player 3 IJKL, and Player 4 the numeric keypad's 8/4/5/6. Space or Escape
@@ -77,12 +80,24 @@ are loaded. Signing in syncs earned completion marks and preferences.
 
 ## Make a path of your own
 
-Open **Level editor** from the title, or press **E**. Browse all 200 boards,
-paint terrain and enemies, adjust the apple goal, then playtest from the entrance.
+Open **Level editor** from the title, or press **E**. Start a **New level**
+on an empty board in any landscape you have reached, or copy a level you have
+reached with **From a level**. Paint terrain and enemies, adjust the apple
+goal, then playtest from the entrance. In Arcade, the editor is also its own
+**Apfelwurm Editor** app.
 
-**Landscape** and **Portrait** are independent editor modes. A layout you
-have not saved shows the mirror of the other, so both play alike; refine it
-and save without changing the other version. Playtest always uses the
+Your levels live in **My levels**, in collections you can name, reorder and
+delete. They are private: only you see them, and they follow your account.
+**Share** a collection with your friends or everyone, or make it private
+again; Shovey uses the same sharing. **Community** shows collections other
+players shared, newest first or by player name. **Add to My levels** keeps
+a private copy you can rename, play and change.
+Campaign levels you changed in older versions still play as you made them;
+**Campaign changes** lists them so you can reset each one.
+
+**Landscape** and **Portrait** are independent editor modes. A portrait you
+have not made yet shows the mirror of the landscape, so both play alike;
+refine it and save without changing the landscape. Playtest always uses the
 selected layout.
 
 <p align="center"><img src="assets/marketing/editor.png" alt="The portrait level editor with separate Landscape and Portrait modes, terrain brushes and six enemies" width="85%"></p>
@@ -98,8 +113,10 @@ Completion marks, active playtime, preferences and your chosen skin follow the
 signed-in account. Guest progress and each account stay separate. Your
 unfinished run and personal editor records stay on this device.
 
-The title's **Skin shop** offers Mint for **10 Dew**, Berry for **20 Dew** and
-Rose for **30 Dew**, with confirmation before buying. Retrying a purchase,
+The title's **Shop** shows your coins and Dew beside it. Its **Skins** tab
+offers Mint for **10 Dew**, Berry for **20 Dew** and Rose for **30 Dew**, with
+confirmation before buying. **Coins** sells 150, 400 or 900 coins for 2, 5 or
+10 Dew, and **Dew** tops up your Dew. Retrying a purchase,
 including from another device, cannot charge for that skin twice. Earn
 **Night owl** by playing actively for **5 hours**, **Golden apple** by
 reaching **level 40**, or **Explorer** by opening **waozi.xyz** from the shop.
@@ -107,10 +124,11 @@ Levels unlock through play; Dew buys optional cosmetics.
 
 Earn **10 coins** for a level's first clear and **2 coins** when replaying it.
 Coins unlock **Moss** for 120, **River** for 240 and **Mushroom** for 360.
-The **Daily rewards** calendar gives mostly coins, Mushroom on day 7 and
-**Aurora** on day 30. A connected account can collect 1/2/2/2/3 Dew on days
-5/10/15/20/25, once the node has counted those daily check-ins. Guests receive
-coins on those days. Claims reset at midnight UTC; missing a day keeps your
+The chest on the title glows when a **Daily reward** is ready; tap it to see
+the next few days. The 30-day plan gives mostly coins, Mushroom on day 7 and
+**Aurora** on day 30. Dew is rare: a connected account collects 2 Dew on day 10
+and 3 Dew on day 25, once, after the node has counted that many daily
+check-ins. Guests receive coins on those days. Claims reset at midnight UTC; missing a day keeps your
 place. Later calendars give coins in place of Dew and skin gifts. Already-owned
 gift skins give 100 coins. Winter cheer remains claimable in December 2026.
 

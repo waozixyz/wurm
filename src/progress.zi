@@ -97,6 +97,8 @@ Load :: () {
             if !has_run { level = reached }
         }
     }
+    reach := GameReach()
+    if reach > unlocked { unlocked = reach }
     // Preserve imported progress before Play or a game over replaces run.dat.
     if unlocked > 0 { unused SaveUnlocked() }
     earned: [201]u8
@@ -151,7 +153,33 @@ Report :: () {
 
 SaveUnlocked :: () -> bool {
     bytes: [1]u8 = .[cast(u8)unlocked]
+    #if #defined(WURM_PORTABLE) && !#defined(WURM_EDITOR_APP) {
+        // Arcade's Apfelwurm Editor may read this one fixed record; the host
+        // already keeps it to the current account.
+        unused Records.WriteRecord("reach.dat", bytes[:])
+    }
     return Records.WriteRecord(RecordName("unlocked.dat"), bytes[:])
+}
+
+// The editor app opens the levels Apfelwurm itself has reached.
+GameReach :: () -> s32 {
+    #if #defined(WURM_EDITOR_APP) {
+        reply := Account.Service("apps.records", "{\"operation\":\"get\",\"app\":\"xyz.waozi.wurm\",\"record\":\"reach.dat\"}")
+        status: [16]u8
+        text: [8]u8
+        if ReadStringText(reply, FieldAt(reply, 0, "status"), status[:]) < 0 || TextUntilNul(status[:]) != "done" { return 0 }
+        if ReadStringText(reply, FieldAt(reply, 0, "text"), text[:]) != 2 { return 0 }
+        reached: s32 = 0
+        for at: 0..1 {
+            byte := text[at]
+            digit := ifx byte >= 48 && byte <= 57 then cast(s32)byte - 48 else ifx byte >= 97 && byte <= 102 then cast(s32)byte - 87 else -1
+            if digit < 0 { return 0 }
+            reached = reached * 16 + digit
+        }
+        return ifx reached < LEVELS then reached else 0
+    } else {
+        return 0
+    }
 }
 
 Save :: () -> bool {
@@ -225,7 +253,7 @@ Complete :: (at: s32) {
     current: [65]u8
     if ReadStringText(status, FieldAt(status, 0, "account"), current[:]) >= 0 &&
     TextUntilNul(current[:]) != TextUntilNul(owner[:]) { return }
-    if rewarded_attempt == attempt { return }
+    if rewarded_attempt == attempt && (completed[at] == 1 || pending_completed[at]) { return }
     rewarded_attempt = attempt
     if completed[at] != 1 && !pending_completed[at] { pending_completed[at] = true }
     else { pending_replays += 1 }

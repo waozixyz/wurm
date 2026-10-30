@@ -1,0 +1,19 @@
+{
+  "id": "xyz.waozi.wurm-editor",
+  "name": "wurm-editor",
+  "title": "Apfelwurm Editor",
+  "kind": "game",
+  "contract_version": 1,
+  "module_api": 2,
+  "host_api": 41,
+  "save_schema": 1,
+  "build_defines": ["WURM_PORTABLE", "WURM_EDITOR_APP"],
+  "prepare_assets": "tools/portable_assets.zi",
+  "harnesses": ["arcade"],
+  "entry": "portable:Main",
+  "source": "src/portable.zi",
+  "assets": "editor",
+  "locales": "src/locales",
+  "locale_prefix": "wurm_",
+  "preview": "assets/art/editor-title.png"
+}

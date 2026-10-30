@@ -1,0 +1,160 @@
+#import, file "game.zi";
+#import, file "original_levels.zi";
+#import "std/json_document"
+#import "std/json_scan"
+#import "std/format"
+#import "std/text_buffer"
+
+WURM_LEVELS_FORMAT :: "wurm-levels-1";
+WURM_LEVELS_EDITION :: "apfelwurm";
+
+WurmLevel :: struct {
+    name: [96]u8
+    stage: s32
+    apples: s32
+    board: [CELLS]u8
+    objects: [CELLS]u8
+    has_portrait: bool
+    portrait: [CELLS]u8
+    portrait_objects: [CELLS]u8
+}
+
+HEX_LOWER :: "0123456789abcdef";
+
+HasAnyBytes :: (bytes: []u8) -> bool {
+    for byte: bytes {
+        if byte != 0 { return true }
+    }
+    return false
+}
+
+WriteHexPlane :: (out: *Vec(u8), bytes: []u8) {
+    for byte: bytes {
+        value := cast(s32)byte
+        unused VecPush(out.*, HEX_LOWER[(value >> 4) & 15])
+        unused VecPush(out.*, HEX_LOWER[value & 15])
+    }
+}
+
+WurmLevelWrite :: (out: *Vec(u8), level: *WurmLevel) {
+    BuilderPrint(out, "{\"name\":")
+    JsonQuoteInto(out, TextUntilNul(level.name[:]), true)
+    BuilderPrint(out, ",\"stage\":%,\"apples\":%,\"board\":\"", level.stage, level.apples)
+    WriteHexPlane(out, level.board[:])
+    if HasAnyBytes(level.objects[:]) {
+        BuilderPrint(out, "\",\"objects\":\"")
+        WriteHexPlane(out, level.objects[:])
+    }
+    if level.has_portrait {
+        BuilderPrint(out, "\",\"portrait\":\"")
+        WriteHexPlane(out, level.portrait[:])
+        if HasAnyBytes(level.portrait_objects[:]) {
+            BuilderPrint(out, "\",\"portrait_objects\":\"")
+            WriteHexPlane(out, level.portrait_objects[:])
+        }
+    }
+    BuilderPrint(out, "\"}")
+}
+
+HexValue :: (byte: u8) -> s32 {
+    if byte >= #char "0" && byte <= #char "9" { return cast(s32)byte - cast(s32)#char "0" }
+    if byte >= #char "a" && byte <= #char "f" { return cast(s32)byte - cast(s32)#char "a" + 10 }
+    if byte >= #char "A" && byte <= #char "F" { return cast(s32)byte - cast(s32)#char "A" + 10 }
+    return -1
+}
+
+LoadableTile :: (tile: u8) -> bool {
+    for known: OriginalCodebook {
+        if tile == known { return true }
+    }
+    return tile >= 50 && tile <= 58
+}
+
+ReadHexPlane :: (text: string, at: s32, bytes: []u8, objects: bool) -> bool {
+    hex: [CELLS * 2 + 1]u8
+    length := ReadStringText(text, at, hex[:])
+    if length != CELLS * 2 { return false }
+    for index: 0..CELLS - 1 {
+        high := HexValue(hex[index * 2])
+        low := HexValue(hex[index * 2 + 1])
+        if high < 0 || low < 0 { return false }
+        value := cast(u8)(high * 16 + low)
+        if objects {
+            if value > OBJECT_BIRD { return false }
+        } else if !LoadableTile(value) {
+            return false
+        }
+        bytes[index] = value
+    }
+    return true
+}
+
+TruncateUTF8 :: (text: []u8, limit: s32) -> s32 {
+    length := ifx cast(s32)text.count < limit then cast(s32)text.count else limit
+    if length == cast(s32)text.count { return length }
+    while length > 0 && (text[length] & 192) == 128 { length -= 1 }
+    if length == 0 { return 0 }
+    lead := text[length - 1]
+    width: s32 = 1
+    if lead >= 240 { width = 4 }
+    else if lead >= 224 { width = 3 }
+    else if lead >= 192 { width = 2 }
+    if length - 1 + width > limit { length -= 1 }
+    return length
+}
+
+ReadName :: (text: string, at: s32, output: []u8) -> bool {
+    decoded: Vec(u8)
+    for 0..text.count {
+        unused VecPush(decoded, 0)
+    }
+    length := ReadStringText(text, at, VecSlice(decoded, 0, decoded.count))
+    if length < 0 {
+        VecFree(decoded)
+        return false
+    }
+    length = TruncateUTF8(VecSlice(decoded, 0, length), cast(s32)output.count - 1)
+    for index: 0..length - 1 { output[index] = decoded[index] }
+    output[length] = 0
+    VecFree(decoded)
+    return true
+}
+
+ReadWholeNumber :: (text: string, at: s32, minimum: s32, maximum: s32, value: *s32) -> bool {
+    number := ReadNumber(text, at)
+    if !number.valid { return false }
+    if number.value < cast(float64)minimum || number.value > cast(float64)maximum { return false }
+    whole := cast(s32)number.value
+    if cast(float64)whole != number.value { return false }
+    value.* = whole
+    return true
+}
+
+WurmLevelRead :: (text: string, at: s32, level: *WurmLevel) -> bool {
+    parsed: WurmLevel
+
+    name_at := FieldAt(text, at, "name")
+    stage_at := FieldAt(text, at, "stage")
+    apples_at := FieldAt(text, at, "apples")
+    board_at := FieldAt(text, at, "board")
+    if name_at < 0 || stage_at < 0 || apples_at < 0 || board_at < 0 { return false }
+    if !ReadName(text, name_at, parsed.name[:]) { return false }
+    if !ReadWholeNumber(text, stage_at, 0, STAGE_COUNT - 1, *parsed.stage) { return false }
+    if !ReadWholeNumber(text, apples_at, 1, 99, *parsed.apples) { return false }
+    if !ReadHexPlane(text, board_at, parsed.board[:], false) { return false }
+
+    objects_at := FieldAt(text, at, "objects")
+    if objects_at >= 0 && !ReadHexPlane(text, objects_at, parsed.objects[:], true) { return false }
+
+    portrait_at := FieldAt(text, at, "portrait")
+    if portrait_at >= 0 {
+        parsed.has_portrait = true
+        if !ReadHexPlane(text, portrait_at, parsed.portrait[:], false) { return false }
+        portrait_objects_at := FieldAt(text, at, "portrait_objects")
+        if portrait_objects_at >= 0 &&
+        !ReadHexPlane(text, portrait_objects_at, parsed.portrait_objects[:], true) { return false }
+    }
+
+    level.* = parsed
+    return true
+}

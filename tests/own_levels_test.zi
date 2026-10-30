@@ -1,0 +1,264 @@
+#import, file "../src/own_levels.zi";
+#import, file "../src/game.zi";
+#import, file "../src/level_json.zi";
+Collections :: #import "entity/level_collections";
+#import "std/json_document"
+#import "std/json_scan"
+#import "std/text_buffer"
+#import "std/c_string"
+#import "std/vec"
+
+FAKE_RECORDS :: 4;
+FAKE_DOCUMENT_MAX :: 40000;
+
+FakeRecord :: struct {
+    id: [33]u8
+    document: [FAKE_DOCUMENT_MAX]u8
+    document_count: s32
+    deleted: bool
+}
+
+fake_records: [FAKE_RECORDS]FakeRecord;
+fake_record_count: s32;
+fake_next_id: s32 = 1;
+fake_answer: [65536]u8;
+failures: s32;
+
+Check :: (value: bool) {
+    if !value { failures += 1 }
+}
+
+FakeText :: (out: Vec(u8)) -> string {
+    text := BuilderFinish(out)
+    unused CopyCString(text, fake_answer[:])
+    return TextUntilNul(fake_answer[:])
+}
+
+FakeNextID :: () -> string {
+    if fake_next_id == 1 { return "00000000000000000000000000000001" }
+    if fake_next_id == 2 { return "00000000000000000000000000000002" }
+    if fake_next_id == 3 { return "00000000000000000000000000000003" }
+    return "00000000000000000000000000000004"
+}
+
+FakeFind :: (record: string) -> s32 {
+    for index: 0..fake_record_count - 1 {
+        if !fake_records[index].deleted && TextUntilNul(fake_records[index].id[:]) == record { return index }
+    }
+    return -1
+}
+
+FakeStore :: (record: string, document: string) -> bool {
+    index := FakeFind(record)
+    if index < 0 {
+        if fake_record_count >= FAKE_RECORDS { return false }
+        index = fake_record_count
+        fake_record_count += 1
+        fake_records[index] = .{}
+        for byte, place: record { fake_records[index].id[place] = byte }
+        fake_records[index].id[record.count] = 0
+    }
+
+    document_at := FieldAt(document, 0, "format")
+    if document_at < 0 { return false }
+    end := ValueEnd(document, 0, 0)
+    if end < 0 || end > FAKE_DOCUMENT_MAX { return false }
+    fake_records[index].document_count = end
+    for byte, place: document[0:end] {
+        fake_records[index].document[place] = byte
+    }
+    fake_records[index].deleted = false
+    return true
+}
+
+FakeFieldText :: (index: s32, field: string, output: []u8) -> bool {
+    return ReadStringText(TextUntilNul(fake_records[index].document[:]),
+        FieldAt(TextUntilNul(fake_records[index].document[:]), 0, field), output) >= 0
+}
+
+FakeService :: (name: string, request: string) -> string {
+    if name != Collections.COLLECTIONS_DRAFTS_SERVICE { return "" }
+    operation: [16]u8
+    kind: [24]u8
+    unused ReadStringText(request, FieldAt(request, 0, "operation"), operation[:])
+    unused ReadStringText(request, FieldAt(request, 0, "kind"), kind[:])
+    if TextUntilNul(kind[:]) != Collections.COLLECTIONS_KIND { return "" }
+
+    out: Vec(u8)
+    op := TextUntilNul(operation[:])
+    if op == "list" {
+        BuilderPrint(*out, "{\"status\":\"done\",\"records\":[")
+        first := true
+        for index: 0..fake_record_count - 1 {
+            if fake_records[index].deleted { continue }
+            if !first { BuilderPrint(*out, ",") }
+            first = false
+            format: [32]u8
+            edition: [24]u8
+            title: [160]u8
+            if !FakeFieldText(index, "format", format[:]) ||
+            !FakeFieldText(index, "edition", edition[:]) ||
+            !FakeFieldText(index, "title", title[:]) { return "" }
+            document := TextUntilNul(fake_records[index].document[:])
+            order := ReadNumber(document, FieldAt(document, 0, "order"))
+            if !order.valid { return "" }
+            BuilderPrint(*out, "{\"id\":\"%\",\"format\":", TextUntilNul(fake_records[index].id[:]))
+            JsonQuoteInto(*out, TextUntilNul(format[:]), false)
+            BuilderPrint(*out, ",\"edition\":")
+            JsonQuoteInto(*out, TextUntilNul(edition[:]), false)
+            BuilderPrint(*out, ",\"title\":")
+            JsonQuoteInto(*out, TextUntilNul(title[:]), false)
+            BuilderPrint(*out, ",\"order\":%}", cast(s64)order.value)
+        }
+        BuilderPrint(*out, "]}")
+        return FakeText(out)
+    }
+
+    if op == "get" {
+        record: [33]u8
+        length := ReadStringText(request, FieldAt(request, 0, "id"), record[:])
+        index := FakeFind(TextUntilNul(record[:]))
+        if length != 32 || index < 0 { return "{\"status\":\"missing\"}" }
+        document := TextView(fake_records[index].document[0:fake_records[index].document_count])
+        BuilderPrint(*out, "{\"status\":\"done\",\"id\":\"%\",\"document\":%}",
+            TextUntilNul(fake_records[index].id[:]), document)
+        return FakeText(out)
+    }
+
+    if op == "put" {
+        record: [33]u8
+        length := ReadStringText(request, FieldAt(request, 0, "id"), record[:])
+        saved := TextUntilNul(record[:])
+        if length < 0 { saved = FakeNextID(); fake_next_id += 1 }
+        else if length != 32 { return "" }
+        document_at := FieldAt(request, 0, "document")
+        document_end := ifx document_at >= 0 then ValueEnd(request, document_at, 0) else -1
+        stored := document_end >= 0 && FakeStore(saved, request[document_at:document_end])
+        if !stored { return "" }
+        BuilderPrint(*out, "{\"status\":\"done\",\"id\":\"%\"}", saved)
+        return FakeText(out)
+    }
+
+    if op == "delete" {
+        record: [33]u8
+        length := ReadStringText(request, FieldAt(request, 0, "id"), record[:])
+        index := FakeFind(TextUntilNul(record[:]))
+        if length != 32 || index < 0 { return "{\"status\":\"missing\"}" }
+        fake_records[index].deleted = true
+        return "{\"status\":\"done\"}"
+    }
+
+    return ""
+}
+
+CopyName :: (level: *WurmLevel, name: string) {
+    length := ifx cast(s32)name.count < cast(s32)level.name.count - 1 then cast(s32)name.count else cast(s32)level.name.count - 1
+    for index: 0..length - 1 { level.name[index] = name[index] }
+    level.name[length] = 0
+}
+
+SameBoard :: (left: []u8, right: []u8) -> bool {
+    for index: 0..CELLS - 1 {
+        if left[index] != right[index] { return false }
+    }
+    return true
+}
+
+SameLevel :: (left: *WurmLevel, right: *WurmLevel) -> bool {
+    if TextUntilNul(left.name[:]) != TextUntilNul(right.name[:]) { return false }
+    if left.stage != right.stage || left.apples != right.apples { return false }
+    if !SameBoard(left.board[:], right.board[:]) { return false }
+    if !SameBoard(left.objects[:], right.objects[:]) { return false }
+    if left.has_portrait != right.has_portrait { return false }
+    if left.has_portrait {
+        if !SameBoard(left.portrait[:], right.portrait[:]) { return false }
+        if !SameBoard(left.portrait_objects[:], right.portrait_objects[:]) { return false }
+    }
+    return true
+}
+
+MakeLevel :: (name: string, portrait: bool) -> WurmLevel {
+    level: WurmLevel = .{}
+    CopyName(*level, name)
+    level.stage = 2
+    level.apples = 1
+    level.board[10] = 1
+    level.objects[11] = OBJECT_SNAIL
+    if portrait {
+        level.has_portrait = true
+        TurnForward(level.board[:], level.portrait[:])
+        TurnForward(level.objects[:], level.portrait_objects[:])
+    }
+    return level
+}
+
+#program_export
+main :: () -> s32 {
+    own_service = FakeService
+    OwnNew("Wurm — Ö", 100)
+    Check(TextUntilNul(own_record[:]) == "")
+    Check(TextUntilNul(own_title[:]) == "Wurm — Ö")
+    Check(own_order == 100 && own_level_count == 0)
+
+    plain := MakeLevel("plain", false)
+    portrait := MakeLevel("portrait", true)
+    Check(OwnAdd(*plain) == 0)
+    Check(OwnAdd(*portrait) == 1)
+    Check(OwnSave())
+    first_id: [33]u8
+    unused CopyCString(TextUntilNul(own_record[:]), first_id[:])
+    Check(TextUntilNul(first_id[:]) == "00000000000000000000000000000001")
+
+    Check(OwnRefresh())
+    Check(own_collection_count == 1)
+    Check(TextUntilNul(own_collections[0].record[:]) == TextUntilNul(first_id[:]))
+    Check(TextUntilNul(own_collections[0].title[:]) == "Wurm — Ö")
+    Check(own_collections[0].order == 100)
+
+    Check(OwnOpen(TextUntilNul(first_id[:])))
+    Check(TextUntilNul(own_record[:]) == TextUntilNul(first_id[:]))
+    Check(TextUntilNul(own_title[:]) == "Wurm — Ö")
+    Check(own_order == 100 && own_level_count == 2)
+    Check(SameLevel(*plain, *own_levels[0]))
+    Check(SameLevel(*portrait, *own_levels[1]))
+
+    OwnRename("Renamed — Á")
+    Check(OwnMove(1, -1))
+    Check(SameLevel(*portrait, *own_levels[0]))
+    OwnRemove(0)
+    Check(own_level_count == 1 && SameLevel(*plain, *own_levels[0]))
+    Check(OwnSave())
+    Check(TextUntilNul(own_record[:]) == TextUntilNul(first_id[:]))
+
+    OwnNew("Second", 200)
+    Check(OwnAdd(*plain) == 0)
+    Check(OwnSave())
+    second_id: [33]u8
+    unused CopyCString(TextUntilNul(own_record[:]), second_id[:])
+    Check(TextUntilNul(second_id[:]) == "00000000000000000000000000000002")
+    Check(OwnRefresh())
+    Check(own_collection_count == 2)
+    Check(TextUntilNul(own_collections[0].title[:]) == "Renamed — Á")
+    Check(TextUntilNul(own_collections[1].title[:]) == "Second")
+
+    Check(FakeStore("00000000000000000000000000000099",
+        "{\"order\":300,\"format\":\"shovey-levels\",\"edition\":\"x\",\"title\":\"Wrong\",\"levels\":[]}"))
+    Check(OwnRefresh())
+    Check(own_collection_count == 2)
+
+    Check(OwnDelete())
+    Check(TextUntilNul(own_record[:]) == "")
+    Check(OwnRefresh())
+    Check(own_collection_count == 1)
+    Check(TextUntilNul(own_collections[0].record[:]) == TextUntilNul(first_id[:]))
+
+    own_service = OwnUnavailable
+    OwnNew("offline", -1)
+    Check(!OwnRefresh())
+    Check(!OwnOpen(TextUntilNul(first_id[:])))
+    Check(!OwnSave())
+    Check(!OwnDelete())
+
+    print("Own levels local test failures: %\n", failures)
+    return failures
+}

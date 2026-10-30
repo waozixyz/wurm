@@ -100,6 +100,12 @@ Pump :: (now: s64, playing: bool) {
     if value.valid && value.value >= 0.0 && value.value <= 910.0 { owned = cast(s32)value.value & 910 }
     christmas_claimable = MatchLiteral(shop, FieldAt(shop, 0, "christmas_claimable"), "true")
     special_supported = MatchLiteral(shop, FieldAt(shop, 0, "special_skins"), "true")
+    // Coins bought with Dew belong to the account that paid for them.
+    shop_owner: [65]u8
+    unused ReadStringText(shop, FieldAt(shop, 0, "owner"), shop_owner[:])
+    bought := ReadNumber(shop, FieldAt(shop, 0, "coins"))
+    same := Progress.owner[0] != 0 && TextUntilNul(shop_owner[:]) == TextUntilNul(Progress.owner[:])
+    Rewards.bought_coins = ifx same && bought.valid && bought.value >= 0.0 && bought.value <= 1000000000.0 then cast(s32)bought.value else 0
     if Progress.owner[0] == 0 || device[0] == 0 { return }
     reply := Account.Service("entity.records", "{\"operation\":\"list\",\"kind\":\"wurm-player\",\"fields\":[\"played_ms\",\"visited\",\"skin\",\"replays\"]}")
     records := FieldAt(reply, 0, "records")

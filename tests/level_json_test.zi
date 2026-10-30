@@ -1,0 +1,161 @@
+#import, file "../src/game.zi";
+#import, file "../src/level_json.zi";
+#import "std/format";
+#import "std/json_document";
+#import "std/text_buffer";
+Custom :: #import, file "../src/custom_levels.zi";
+File :: #import "std/file_linux";
+
+failures: s32;
+
+Check :: (value: bool) {
+    if !value { failures += 1 }
+}
+
+CopyName :: (level: *WurmLevel, name: string) {
+    length := ifx name.count < level.name.count - 1 then cast(s32)name.count else cast(s32)level.name.count - 1
+    for index: 0..length - 1 { level.name[index] = name[index] }
+    level.name[length] = 0
+}
+
+SameBoard :: (left: []u8, right: []u8) -> bool {
+    for index: 0..CELLS - 1 {
+        if left[index] != right[index] { return false }
+    }
+    return true
+}
+
+SameLevel :: (left: *WurmLevel, right: *WurmLevel) -> bool {
+    if TextUntilNul(left.name[:]) != TextUntilNul(right.name[:]) { return false }
+    if left.stage != right.stage || left.apples != right.apples { return false }
+    if !SameBoard(left.board[:], right.board[:]) { return false }
+    if !SameBoard(left.objects[:], right.objects[:]) { return false }
+    if left.has_portrait != right.has_portrait { return false }
+    if left.has_portrait {
+        if !SameBoard(left.portrait[:], right.portrait[:]) { return false }
+        if !SameBoard(left.portrait_objects[:], right.portrait_objects[:]) { return false }
+    }
+    return true
+}
+
+Contains :: (text: string, part: string) -> bool {
+    if part.count == 0 { return true }
+    last := text.count - part.count
+    for at: 0..last {
+        same := true
+        for index: 0..part.count - 1 {
+            if text[at + index] != part[index] { same = false; break }
+        }
+        if same { return true }
+    }
+    return false
+}
+
+LoadFixture :: (level: *WurmLevel) -> bool {
+    file := File.OpenRead("assets/authored-levels/level19.dat")
+    if !file.valid { return false }
+    bytes: [2401]u8
+    read := File.ReadAt(file, bytes[:], 0)
+    File.CloseFile(file)
+    if read != 2401 { return false }
+
+    level.* = .{}
+    level.apples = cast(s32)bytes[0]
+    level.stage = 3
+    for column: 0..COLUMNS - 1 {
+        for row: 0..ROWS - 1 {
+            level.board[Custom.At(column, row)] = bytes[1 + column * ROWS + row]
+            level.objects[Custom.At(column, row)] = bytes[1 + CELLS + column * ROWS + row]
+        }
+    }
+    return true
+}
+
+RoundTrip :: (source: *WurmLevel) -> bool {
+    out: Vec(u8)
+    WurmLevelWrite(*out, source)
+    text := TextView(VecSlice(out, 0, out.count))
+    parsed: WurmLevel
+    without_portrait := WurmLevelRead(text, 0, *parsed)
+
+    preloaded: WurmLevel
+    preloaded.has_portrait = true
+    with_portrait := WurmLevelRead(text, 0, *preloaded)
+    VecFree(out)
+    return without_portrait && with_portrait && SameLevel(source, *parsed) && SameLevel(source, *preloaded)
+}
+
+BoardText :: (board: []u8) -> string {
+    out: Vec(u8)
+    for tile: board {
+        value := cast(s32)tile
+        unused VecPush(out, HEX_LOWER[(value >> 4) & 15])
+        unused VecPush(out, HEX_LOWER[value & 15])
+    }
+    return BuilderFinish(out)
+}
+
+RecordText :: (stage: s32, apples: s32, board: string) -> string {
+    out: Vec(u8)
+    BuilderPrint(*out, "{\"name\":")
+    JsonQuoteInto(*out, "broken", true)
+    BuilderPrint(*out, ",\"stage\":%,\"apples\":%,\"board\":\"%\"}", stage, apples, board)
+    return BuilderFinish(out)
+}
+
+InvalidBoard :: (board: string, length: s64, broken_digit: bool) -> string {
+    out: Vec(u8)
+    for index: 0..length - 1 {
+        byte := board[index]
+        if broken_digit && index == 11 { byte = #char "g" }
+        unused VecPush(out, byte)
+    }
+    return BuilderFinish(out)
+}
+
+Rejects :: (text: string) -> bool {
+    level: WurmLevel
+    return !WurmLevelRead(text, 0, *level)
+}
+
+#program_export
+main :: () -> s32 {
+    fixture: WurmLevel
+    if !LoadFixture(*fixture) {
+        print("Level JSON local test failures: 1\n")
+        return 1
+    }
+
+    CopyName(*fixture, "plain")
+    out: Vec(u8)
+    WurmLevelWrite(*out, *fixture)
+    plain := TextView(VecSlice(out, 0, out.count))
+    Check(!Contains(plain, "\"objects\""))
+    Check(!Contains(plain, "\"portrait\""))
+    VecFree(out)
+    Check(RoundTrip(*fixture))
+
+    CopyName(*fixture, "Wurm \"Ö\" \\ 19")
+    fixture.board[Custom.At(7, 11)] = 58
+    fixture.objects[Custom.At(8, 12)] = OBJECT_SNAIL
+    Check(RoundTrip(*fixture))
+
+    portrait: WurmLevel
+    portrait = fixture
+    portrait.has_portrait = true
+    TurnForward(fixture.board[:], portrait.portrait[:])
+    TurnForward(fixture.objects[:], portrait.portrait_objects[:])
+    Check(RoundTrip(*portrait))
+
+    valid_board := BoardText(fixture.board[:])
+    short := InvalidBoard(valid_board, CELLS * 2 - 2, false)
+    bad_digit := InvalidBoard(valid_board, CELLS * 2, true)
+    Check(Rejects(RecordText(0, 6, short)))
+    Check(Rejects(RecordText(0, 6, bad_digit)))
+    Check(Rejects(RecordText(5, 6, valid_board)))
+    Check(Rejects(RecordText(0, 0, valid_board)))
+    Check(Rejects("{\"name\":\"missing\",\"stage\":0,\"apples\":6}"))
+
+    print("Level JSON local test failures: %\n", failures)
+    return failures
+}

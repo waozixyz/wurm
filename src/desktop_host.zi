@@ -2,6 +2,7 @@
 // the size WURM_WINDOW=WxH gives, so the mobile-first layout can be checked
 // in landscape and portrait.
 #import "kryon/desktop_loop"
+DesktopInput :: #import "kryon/Desktop";
 #import "std/environment_linux"
 #import "std/number_text"
 App :: #import "app";
@@ -17,9 +18,11 @@ WindowSize :: () -> (width: s32, height: s32) {
 }
 
 // WURM_START=editor opens straight into the level editor, optionally at
-// WURM_LEVEL=n (1-based), instead of the stage screen.
+// WURM_LEVEL=n (1-based), instead of the stage screen; WURM_START=rewards
+// opens the daily reward chest.
 StartScreen :: () {
     start := EnvironmentText("WURM_START")
+    if start.count > 0 && (start[0] == #char "r" || start[0] == #char "R") { App.RewardsAtStartup(); return }
     if start.count == 0 || (start[0] != #char "e" && start[0] != #char "E") { return }
     level := EnvironmentNumber("WURM_LEVEL", 1) - 1
     if level < 0 { level = 0 }
@@ -34,6 +37,7 @@ main :: () -> s32 {
         return 1
     }
     StartScreen()
+    App.UseNativeKeys(DesktopInput.DesktopNextKey)
     width, height := WindowSize()
     return RunDesktop(width, height)
 }

@@ -23,12 +23,23 @@ previous_transition: s32;
 was_playing: bool;
 was_active: bool;
 ToggleMute :: () { muted = !muted }
+#if #defined(WURM_EDITOR_APP) {
+    SOUND_START :: "assets/wurm-editor/sounds/start.wav";
+    SOUND_PICKUP :: "assets/wurm-editor/sounds/pickup.wav";
+    SOUND_LOSE :: "assets/wurm-editor/sounds/lose.wav";
+    SOUND_EXIT :: "assets/wurm-editor/sounds/exit.wav";
+} else {
+    SOUND_START :: "assets/wurm/sounds/start.wav";
+    SOUND_PICKUP :: "assets/wurm/sounds/pickup.wav";
+    SOUND_LOSE :: "assets/wurm/sounds/lose.wav";
+    SOUND_EXIT :: "assets/wurm/sounds/exit.wav";
+}
 UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: s32, active: bool = true) {
     path := ""
-    if playing && active && (!was_active || previous_level != level) { path = "assets/wurm/sounds/start.wav" }
-    else if active && playing && apples < previous_apples { path = "assets/wurm/sounds/pickup.wav" }
-    else if active && death > previous_death { path = "assets/wurm/sounds/lose.wav" }
-    else if active && transition > previous_transition { path = "assets/wurm/sounds/exit.wav" }
+    if playing && active && (!was_active || previous_level != level) { path = SOUND_START }
+    else if active && playing && apples < previous_apples { path = SOUND_PICKUP }
+    else if active && death > previous_death { path = SOUND_LOSE }
+    else if active && transition > previous_transition { path = SOUND_EXIT }
     if !muted && volume > 0 && path != "" { unused AppSoundHost(path) }
     was_playing = playing
     was_active = playing && active

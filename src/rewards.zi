@@ -49,6 +49,8 @@ today_at: s64;
 test_day: s64 = -1;
 // Replays on this account's other devices, summed by the wardrobe sync.
 other_replays: s64;
+// Coins the signed-in account bought with Dew, from the node's receipts.
+bought_coins: s32;
 // Each award a player should see: coins and whole Dew.
 toast_coins: s32;
 toast_dew: s32;
@@ -58,16 +60,19 @@ claim_active: s32 = -1;
 claim_at: s64;
 
 PlanCoins :: (day: s32) -> s32 {
-    plan: [30]s32 = .[20, 25, 30, 35, 0, 40, 0, 30, 35, 0, 40, 45, 50, 75, 0,
-        40, 45, 50, 55, 0, 60, 50, 55, 60, 0, 65, 70, 75, 80, 0]
+    plan: [30]s32 = .[20, 25, 30, 35, 40, 40, 0, 30, 35, 0, 40, 45, 50, 75, 50,
+        40, 45, 50, 55, 60, 60, 50, 55, 60, 0, 65, 70, 75, 80, 0]
     if day < 1 || day > DAILY_DAYS { return 0 }
     return plan[day - 1]
 }
-// Dew days 5, 10, 15, 20 and 25 are milestones 0 to 4.
+// Dew is rare: only days 10 and 25, milestones 1 and 4. The node's other
+// daily rewards (milestones 0, 2 and 3) are no longer offered.
 Milestone :: (day: s32) -> s32 {
-    if day < 5 || day > 25 || day % 5 != 0 { return -1 }
-    return day / 5 - 1
+    if day == 10 { return 1 }
+    if day == 25 { return 4 }
+    return -1
 }
+Offered :: (index: s32) -> bool { return index == 1 || index == 4 }
 MilestoneDew :: (index: s32) -> s32 {
     if index == 0 { return 1 }
     if index >= 1 && index <= 3 { return 2 }
@@ -226,6 +231,7 @@ Coins :: () -> s32 {
     earned += REPLAY_COINS * (Progress.replays + other_replays)
     day: s32 = 1
     while day <= days { earned += cast(s64)DayCoins(day); day += 1 }
+    if SignedIn() { earned += cast(s64)bought_coins }
     for id: 9..11 { if (coin_skins & (1 << id)) != 0 { earned -= cast(s64)CoinPrice(cast(s32)id) } }
     if earned < 0 { return 0 }
     if earned > 2000000000 { return 2000000000 }
@@ -301,7 +307,7 @@ DewPump :: (now: s64) {
     }
     if now < claim_at { return }
     index: s32 = 0
-    while index < MILESTONES && (dew_done & (1 << index)) != 0 { index += 1 }
+    while index < MILESTONES && (!Offered(index) || (dew_done & (1 << index)) != 0) { index += 1 }
     if index >= MILESTONES { checkin = false; return }
     due := (index + 1) * 5 <= days
     if !checkin && !due { return }

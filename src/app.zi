@@ -21,6 +21,8 @@
     #import "kryon/overlay_props"
     #import "kryon/slider_widget"
     #import "kryon/slider_props"
+    #import "kryon/text_input_props"
+    #import "kryon/text_field_widget"
 } else {
     using UI :: #import "kryon/Widgets";
 }
@@ -44,9 +46,12 @@ Touch :: #import, file "steering.zi";
 HeartIcon :: #import "mingcute/mingcute_filled_heart";
 AppleIcon :: #import "mingcute/mingcute_filled_apple_fruit";
 StarIcon :: #import "mingcute/mingcute_filled_star";
-ProfileIcon :: #import "mingcute/mingcute_regular_user_4";
 DewIcon :: #import "mingcute/mingcute_filled_drop";
 LockIcon :: #import "mingcute/mingcute_filled_lock";
+ArrowUp :: #import "mingcute/mingcute_filled_arrow_up";
+ArrowDown :: #import "mingcute/mingcute_filled_arrow_down";
+ArrowLeft :: #import "mingcute/mingcute_filled_arrow_left";
+ArrowRight :: #import "mingcute/mingcute_filled_arrow_right";
 Input :: #import "kryon/input_protocol";
 #if #defined(WURM_PORTABLE) {
     Timer :: #import "portable_runtime";
@@ -63,18 +68,43 @@ Input :: #import "kryon/input_protocol";
         Audio :: #import, file "audio.zi";
     }
 }
+// A computer steers with its keyboard; only touch editions offer swipe
+// or the on-screen direction pad.
+KeyboardOnly :: () -> bool {
+    #if !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) && !#defined(WURM_PORTABLE) {
+        return true
+    } else {
+        return false
+    }
+}
+// Arcade's separate Apfelwurm Editor app opens straight into the editor.
+EditorApp :: () -> bool {
+    #if #defined(WURM_EDITOR_APP) {
+        return true
+    } else {
+        return false
+    }
+}
 #if !#defined(WURM_PORTABLE) {
     ScrollDevice :: #import "kryon/scroll_device";
     TreeInput :: #import "kryon/tree_input";
 }
-#if !#defined(WURM_PORTABLE) && !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) {
-    DesktopInput :: #import "kryon/Desktop";
-}
+// The desktop host hands over its ordered key queue for local rounds, so the
+// app links no window backend of its own and headless hosts can draw it.
+NativeKeys :: #type () -> s32;
+native_next_key: NativeKeys;
+native_keys_ready: bool;
+UseNativeKeys :: (next: NativeKeys) { native_next_key = next; native_keys_ready = true }
 #import "std/number_text"
 #import "std/text_buffer"
 #import, file "game.zi";
 #import, file "original_levels.zi";
 Custom :: #import, file "custom_levels.zi";
+Own :: #import, file "own_levels.zi";
+Sharing :: #import, file "level_sharing.zi";
+Collections :: #import "entity/level_collections";
+LevelJson :: #import, file "level_json.zi";
+Mirror :: #import, file "board_orientation.zi";
 Local :: #import, file "multiplayer.zi";
 Rewards :: #import, file "rewards.zi";
 
@@ -82,26 +112,59 @@ MODE_LOCAL :: 12;
 MODE_REWARDS :: 13;
 local_round: Local.Round;
 local_players: s32 = 2;
-daily_scroll: s32;
+// Each local player's own skin and name; an empty name reads "Player N".
+LocalName :: struct { bytes: [24]u8; length: s32; cursor: s32; anchor: s32; scroll_x: s32; focused: bool }
+local_skins: [4]s32;
+local_names: [4]LocalName;
+local_skins_chosen: bool;
+// The chest opens a small card over the title; the full calendar is a page.
 reward_serial: s32;
 reward_until: s64;
 
 #if #defined(WURM_PORTABLE) {
-    ART_MEADOW :: "assets/wurm/art/campaign-meadow.png";
-    ART_LEAFWOOD :: "assets/wurm/art/campaign-leafwood.png";
-    ART_PINEWOOD :: "assets/wurm/art/campaign-pinewood.png";
-    ART_LAKE :: "assets/wurm/art/campaign-lake.png";
-    ART_MOUNTAINS :: "assets/wurm/art/campaign-mountains.png";
-    ART_CANOPY :: "assets/wurm/art/forest-canopy.png";
-    ART_CANOPY_PORTRAIT :: "assets/wurm/art/forest-canopy-portrait.png";
-    ART_TITLE :: "assets/wurm/art/title.png";
-    ART_TITLE_PORTRAIT :: "assets/wurm/art/title-portrait.png";
-    ART_PREVIEWS :: "assets/wurm/art/campaign-previews/";
-    ART_GROUND :: "assets/wurm/art/ground-meadow.png";
-    ART_WATER :: "assets/wurm/art/water-field.png";
-    ART_SKINS :: "assets/wurm/art/skins.png";
-    ART_SPECIAL_SKINS :: "assets/wurm/art/special-skins.png";
-    ART_REWARD_SKINS :: "assets/wurm/art/reward-skins.png";
+    #if #defined(WURM_EDITOR_APP) {
+        ART_MEADOW :: "assets/wurm-editor/art/campaign-meadow.png";
+        ART_LEAFWOOD :: "assets/wurm-editor/art/campaign-leafwood.png";
+        ART_PINEWOOD :: "assets/wurm-editor/art/campaign-pinewood.png";
+        ART_LAKE :: "assets/wurm-editor/art/campaign-lake.png";
+        ART_MOUNTAINS :: "assets/wurm-editor/art/campaign-mountains.png";
+        ART_CANOPY :: "assets/wurm-editor/art/forest-canopy.png";
+        ART_CANOPY_PORTRAIT :: "assets/wurm-editor/art/forest-canopy-portrait.png";
+        ART_TITLE :: "assets/wurm-editor/art/title.png";
+        ART_TITLE_PORTRAIT :: "assets/wurm-editor/art/title-portrait.png";
+        ART_PREVIEWS :: "assets/wurm-editor/art/campaign-previews/";
+        ART_GROUND :: "assets/wurm-editor/art/ground-meadow.png";
+        ART_WATER :: "assets/wurm-editor/art/water-field.png";
+        ART_SKINS :: "assets/wurm-editor/art/skins.png";
+        ART_SPECIAL_SKINS :: "assets/wurm-editor/art/special-skins.png";
+        ART_REWARD_SKINS :: "assets/wurm-editor/art/reward-skins.png";
+        ART_EDITOR_TITLE :: "assets/wurm-editor/art/editor-title-small.png";
+        ART_EDITOR_TITLE_PORTRAIT :: "assets/wurm-editor/art/editor-title-portrait-small.png";
+        ART_STAGE_COVERS :: "assets/wurm-editor/art/stage-covers.png";
+        ART_REWARD_ICONS :: "assets/wurm-editor/art/reward-icons.png";
+        ART_TITLE_ICONS :: "assets/wurm-editor/art/title-icons.png";
+    } else {
+        ART_MEADOW :: "assets/wurm/art/campaign-meadow.png";
+        ART_LEAFWOOD :: "assets/wurm/art/campaign-leafwood.png";
+        ART_PINEWOOD :: "assets/wurm/art/campaign-pinewood.png";
+        ART_LAKE :: "assets/wurm/art/campaign-lake.png";
+        ART_MOUNTAINS :: "assets/wurm/art/campaign-mountains.png";
+        ART_CANOPY :: "assets/wurm/art/forest-canopy.png";
+        ART_CANOPY_PORTRAIT :: "assets/wurm/art/forest-canopy-portrait.png";
+        ART_TITLE :: "assets/wurm/art/title.png";
+        ART_TITLE_PORTRAIT :: "assets/wurm/art/title-portrait.png";
+        ART_PREVIEWS :: "assets/wurm/art/campaign-previews/";
+        ART_GROUND :: "assets/wurm/art/ground-meadow.png";
+        ART_WATER :: "assets/wurm/art/water-field.png";
+        ART_SKINS :: "assets/wurm/art/skins.png";
+        ART_SPECIAL_SKINS :: "assets/wurm/art/special-skins.png";
+        ART_REWARD_SKINS :: "assets/wurm/art/reward-skins.png";
+        ART_EDITOR_TITLE :: "assets/wurm/art/editor-title-small.png";
+        ART_EDITOR_TITLE_PORTRAIT :: "assets/wurm/art/editor-title-portrait-small.png";
+        ART_STAGE_COVERS :: "assets/wurm/art/stage-covers.png";
+        ART_REWARD_ICONS :: "assets/wurm/art/reward-icons.png";
+        ART_TITLE_ICONS :: "assets/wurm/art/title-icons.png";
+    }
 } else {
     ART_MEADOW :: "assets/art/campaign-meadow.png";
     ART_LEAFWOOD :: "assets/art/campaign-leafwood.png";
@@ -118,6 +181,17 @@ reward_until: s64;
     ART_SKINS :: "assets/art/skins.png";
     ART_SPECIAL_SKINS :: "assets/art/special-skins.png";
     ART_REWARD_SKINS :: "assets/art/reward-skins.png";
+    // Browsers preload every picture, so they get half-size editor paintings.
+    #if #defined(PLATFORM_WEB) {
+        ART_EDITOR_TITLE :: "assets/art/editor-title-small.png";
+        ART_EDITOR_TITLE_PORTRAIT :: "assets/art/editor-title-portrait-small.png";
+    } else {
+        ART_EDITOR_TITLE :: "assets/art/editor-title.png";
+        ART_EDITOR_TITLE_PORTRAIT :: "assets/art/editor-title-portrait.png";
+    }
+    ART_STAGE_COVERS :: "assets/art/stage-covers.png";
+    ART_REWARD_ICONS :: "assets/art/reward-icons.png";
+    ART_TITLE_ICONS :: "assets/art/title-icons.png";
 }
 
 PLAY_STEERING_KEY :: 100000;
@@ -154,7 +228,36 @@ EditorState :: struct {
     browsing: bool
     turned: bool
     stroke: EditorInput.StrokeState
+    // An own level: the open collection's level own_index, played in the
+    // landscape of level (its first level).
+    own: bool
+    own_index: s32
 }
+// The editor's pages before a board: its title, then the landscapes. The
+// level grid (editor.browsing) and the board share EDITOR_PAGE_EDIT.
+EDITOR_PAGE_EDIT :: 0;
+EDITOR_PAGE_HOME :: 1;
+EDITOR_PAGE_STAGES :: 2;
+// Your own levels in named collections, and the campaign levels you changed.
+EDITOR_PAGE_MINE :: 3;
+EDITOR_PAGE_CHANGES :: 4;
+EDITOR_PAGE_SHARE :: 5;
+EDITOR_PAGE_COMMUNITY :: 6;
+// What the landscape and level pages start: an empty board in a landscape,
+// a copy of a level reached, or (developer entry only) the campaign itself.
+EDITOR_PICK_BLANK :: 0;
+EDITOR_PICK_TEMPLATE :: 1;
+EDITOR_PICK_CAMPAIGN :: 2;
+editor_pick: s32;
+editor_page: s32;
+editor_stage: s32;
+editor_stage_scroll: s32;
+editor_board_open: bool;
+// WURM_START=editor is the developer's entry and opens every level; the
+// game's own editor offers only the levels and landscapes reached.
+editor_everything: bool;
+// stage-covers.png holds one 960x320 painting per landscape.
+COVER_HEIGHT :: 320.0;
 editor: EditorState;
 editor_digits: [21]u8;
 brush_digits: [21]u8;
@@ -236,6 +339,7 @@ GameSecondaryPointer :: (session: Session) -> Input.SecondaryPointerFrame {
 
 NavigateBack :: (now: s64) -> bool {
     if game.mode == MODE_STAGES { return false }
+    if EditorApp() && game.mode == MODE_EDITOR && editor_page == EDITOR_PAGE_HOME { return false }
     HandleInput(Input.KeyEscape, now)
     return true
 }
@@ -340,17 +444,6 @@ DrawSoundPopup :: (session: Session, hud: Rectangle, trigger: Rectangle) {
     unused End(session)
 }
 dew_text: [32]u8;
-skin_price_text: [64]u8;
-SkinPriceText :: (id: s32) -> string {
-    coin_price := Rewards.CoinPrice(id)
-    if coin_price > 0 { return CoinText(coin_price) }
-    digits: [32]u8
-    if !DewFormat(ShopModel.GameShopPrice(id), DewUnits, digits[:]) { return "" }
-    at := CopyInto(skin_price_text[:], 0, TextUntilNul(digits[:]))
-    at = CopyInto(skin_price_text[:], at, " Dew")
-    skin_price_text[at] = 0
-    return TextUntilNul(skin_price_text[:])
-}
 DewText :: () -> string {
     reply := Account.Service("entity.dew", "balance")
     units := ReadNumber(reply, FieldAt(reply, 0, "units"))
@@ -362,39 +455,110 @@ DewText :: () -> string {
 TitleActions :: (session: Session, area: Rectangle) {
     right := area.x + area.width - 12.0
     top := area.y + 12.0
-    shop_right := right - 224.0
-    #if #defined(WURM_PORTABLE) {
-        // Embedded games use the enclosing host's navigation and account UI.
-        shop_right = right - 48.0
-    }
-    if Button(session, ButtonProps.{.key = 28000, .bounds = Rectangle.{shop_right - 44.0, top, 44.0, 44.0},
-            .label = Locale.Text("Skin shop"), .icon_only = true, .icon_shape = "S1.8rr:M5 8H19L20 21H4ZM8 8V6C8 1 16 1 16 6V8",
-            .class_name = 11}) != 0 { game.mode = MODE_SHOP; Wardrobe.poll_at = 0; unused Account.Service("entity.game-shop", "refresh") }
+    // Painted icons float on the title like the chest, a little smaller on phones.
+    size: float32 = ifx area.width < 600.0 then 56.0 else 76.0
+    icon: float32 = ifx area.width < 600.0 then 48.0 else 60.0
     #if !#defined(WURM_PORTABLE) {
-        if Button(session, ButtonProps.{.key = 28001, .bounds = Rectangle.{right - 216.0, top, 68.0, 44.0},
-                .label = DewText(), .icon_shape = DewIcon.Shape,
-                .class_name = 11}) != 0 { Account.OpenDew() }
-        if Button(session, ButtonProps.{.key = 28002, .bounds = Rectangle.{right - 140.0, top, 44.0, 44.0},
-                .label = Locale.Text("Profile"), .icon_only = true, .icon_shape = ProfileIcon.Shape,
-                .class_name = 11}) != 0 { Account.OpenProfile() }
-        if Button(session, ButtonProps.{.key = 28004, .bounds = Rectangle.{right - 92.0, top, 44.0, 44.0},
-                .label = Locale.Text("Leaderboard"), .icon_only = true, .icon_shape = "S1.8rr:M4 21V13H8V21M10 21V4H14V21M16 21V9H20V21",
-                .class_name = 11}) != 0 { Account.OpenLeaderboard() }
-    }
-    if Button(session, ButtonProps.{.key = 28003, .bounds = Rectangle.{right - 44.0, top, 44.0, 44.0},
-            .label = Locale.Text("Settings"), .icon_only = true, .icon_shape = "S1.8rr:M4 6H20M4 12H20M4 18H20M8 3V9M16 9V15M10 15V21",
-            .class_name = 11}) != 0 { game.mode = MODE_SETTINGS }
-    auxiliary_width := (area.width - 36.0) / 2.0
-    if auxiliary_width > 164.0 { auxiliary_width = 164.0 }
-    if Button(session, ButtonProps.{.key = 28005,
-            .bounds = Rectangle.{area.x + 12.0, top + 54.0, auxiliary_width, 40.0},
-            .label = Locale.Text("Daily rewards"), .class_name = 11}) != 0 { game.mode = MODE_REWARDS }
-    #if !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) && !#defined(WURM_PORTABLE) {
-        if Button(session, ButtonProps.{.key = 812,
-                .bounds = Rectangle.{area.x + area.width - 12.0 - auxiliary_width, top + 54.0, auxiliary_width, 40.0},
-                .label = Locale.Text("Local multiplayer"), .pill = true, .class_name = 11}) != 0 {
-            local_round.phase = Local.SETUP; game.mode = MODE_LOCAL
+        // The balance follows Dew earned or spent elsewhere: asked again
+        // whenever the title comes back into view, then twice a minute.
+        now := Timer.MonotonicMilliseconds()
+        if Rewards.SignedIn() && (now >= dew_refresh_at || now - dew_title_seen > 1000) {
+            unused Account.Service("entity.dew", "refresh")
+            dew_refresh_at = now + 30000
         }
+        dew_title_seen = now
+        // Embedded games use the enclosing host's navigation and account UI.
+        if TitleIcon(session, 28002, Rectangle.{right - icon * 3.0 - 16.0, top, icon, icon}, 2, "Profile") { Account.OpenProfile() }
+        if TitleIcon(session, 28004, Rectangle.{right - icon * 2.0 - 8.0, top, icon, icon}, 1, "Leaderboard") { Account.OpenLeaderboard() }
+    }
+    if TitleIcon(session, 28003, Rectangle.{right - icon, top, icon, icon}, 0, "Settings") { game.mode = MODE_SETTINGS }
+    TitleShop(session, Rectangle.{area.x + 12.0, top, size, size})
+    RewardChest(session, Rectangle.{area.x + 12.0, top + size + 10.0, size, size})
+}
+TitleIcon :: (session: Session, key: u64, bounds: Rectangle, cell: s32, label: string) -> bool {
+    unused Image(session, ImageProps.{.key = key + 100, .asset_path = ART_TITLE_ICONS, .bounds = bounds,
+        .source = Rectangle.{cast(float32)cell * 256.0, 0.0, 256.0, 256.0},
+        .fit = ImageFit.ImageFitContain, .smooth = true})
+    return Button(session, ButtonProps.{.key = key, .bounds = bounds, .label = Locale.Text(label), .invisible = true}) != 0
+}
+dew_refresh_at: s64;
+dew_title_seen: s64;
+OpenShop :: () { game.mode = MODE_SHOP; Wardrobe.poll_at = 0; unused Account.Service("entity.game-shop", "refresh") }
+// The shop's stall with the wallet beside it: coins, then Dew below.
+TitleShop :: (session: Session, bounds: Rectangle) {
+    // The button below names the stall.
+    RewardIcon(session, 28010, bounds, 4, "")
+    digits: [21]u8
+    coins := FormatInteger(cast(s64)Rewards.Coins(), digits[:])
+    dew := ""
+    #if !#defined(WURM_PORTABLE) {
+        if Rewards.SignedIn() { dew = DewText() }
+    }
+    pill_width := AmountWidth(coins, 15)
+    if AmountWidth(dew, 15) > pill_width { pill_width = AmountWidth(dew, 15) }
+    pill_width += 20.0
+    rows: float32 = ifx dew.count > 0 then 2.0 else 1.0
+    pill := Rectangle.{bounds.x + bounds.width - 4.0, bounds.y + bounds.height / 2.0 - 15.0 * rows - 2.0 * (rows - 1.0), pill_width, 30.0}
+    unused Box(session, BoxProps.{.key = 28011, .bounds = pill, .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 15.0})
+    Amount(session, 28012, Rectangle.{pill.x + 6.0, pill.y + 3.0, pill.width - 8.0, 24.0}, false, coins, 15, false)
+    if dew.count > 0 {
+        wallet := Rectangle.{pill.x, pill.y + 34.0, pill_width, 30.0}
+        unused Box(session, BoxProps.{.key = 28014, .bounds = wallet, .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 15.0})
+        Amount(session, 28015, Rectangle.{wallet.x + 6.0, wallet.y + 3.0, wallet.width - 8.0, 24.0}, true, dew, 15, false)
+    }
+    if Button(session, ButtonProps.{.key = 28000, .bounds = Rectangle.{bounds.x, bounds.y, pill.x + pill_width - bounds.x, bounds.height},
+            .label = Locale.Text("Shop"), .invisible = true}) != 0 { OpenShop() }
+}
+// An amount with its currency's picture: a coin or a Dew drop. It uses
+// key and key + 1.
+AmountWidth :: (text: string, size: s32) -> float32 {
+    return cast(float32)size * 1.3 + 4.0 + cast(float32)text.count * cast(float32)size * 0.62
+}
+Amount :: (session: Session, key: u64, bounds: Rectangle, dew: bool, text: string, size: s32, centre: bool) {
+    icon := cast(float32)size * 1.3
+    x := bounds.x
+    if centre { x += (bounds.width - AmountWidth(text, size)) / 2.0 }
+    top := bounds.y + (bounds.height - icon) / 2.0
+    RewardIcon(session, key, Rectangle.{x, top, icon, icon}, ifx dew then 3 else 2, ifx dew then "Dew" else "Coins")
+    unused Text(session, TextProps.{.key = key + 1, .bounds = Rectangle.{x + icon + 4.0, bounds.y, bounds.x + bounds.width - x - icon - 4.0, bounds.height},
+        .text = text, .font = size, .vertical_align = TextAlign.TextAlignCenter, .wrap = TextWrap.TextWrapNone})
+}
+// A skin's price as its number beside a coin or a Dew drop.
+SkinPrice :: (session: Session, key: u64, bounds: Rectangle, id: s32, size: s32) {
+    coin_price := Rewards.CoinPrice(id)
+    digits: [32]u8
+    if coin_price > 0 {
+        Amount(session, key, bounds, false, FormatInteger(cast(s64)coin_price, digits[:]), size, true)
+    } else if DewFormat(ShopModel.GameShopPrice(id), DewUnits, digits[:]) {
+        Amount(session, key, bounds, true, TextUntilNul(digits[:]), size, true)
+    }
+}
+// The daily chest floats on the title. While a gift waits it bobs, glows
+// and wears a dot, inviting a visit every day.
+RewardIcon :: (session: Session, key: u64, bounds: Rectangle, cell: s32, label: string) {
+    unused Image(session, ImageProps.{.key = key, .asset_path = ART_REWARD_ICONS, .bounds = bounds,
+        .source = Rectangle.{cast(float32)cell * 256.0, 0.0, 256.0, 256.0},
+        .fit = ImageFit.ImageFitContain, .smooth = true, .alt_text = ifx label.count > 0 then Locale.Text(label) else ""})
+}
+RewardBob :: () -> float32 {
+    phase := cast(s32)((Timer.MonotonicMilliseconds() / 25) % 80)
+    return cast(float32)(ifx phase < 40 then phase else 80 - phase) / 5.0 - 4.0
+}
+RewardChest :: (session: Session, bounds: Rectangle) {
+    ready := Rewards.ClaimReady()
+    chest := bounds
+    if ready {
+        chest.y += RewardBob()
+        unused Box(session, BoxProps.{.key = 28008, .bounds = Rectangle.{chest.x + 4.0, chest.y + 6.0, chest.width - 8.0, chest.height - 8.0},
+            .fill = Color.{255, 214, 102, 90}, .radius = chest.width / 2.0})
+    }
+    // An open chest has a gift to collect; a closed one waits for tomorrow.
+    RewardIcon(session, 28009, chest, ifx ready then 1 else 0, "Daily rewards")
+    if Button(session, ButtonProps.{.key = 28006, .bounds = bounds, .label = Locale.Text("Daily rewards"),
+            .invisible = true}) != 0 { game.mode = MODE_REWARDS }
+    if ready {
+        unused Box(session, BoxProps.{.key = 28007, .bounds = Rectangle.{chest.x + chest.width - 22.0, chest.y + 4.0, 18.0, 18.0},
+            .fill = Color.{236, 72, 60, 255}, .border = Color.{255, 255, 255, 255}, .radius = 9.0})
     }
 }
 PageHeading :: (session: Session, area: Rectangle, title: string) {
@@ -403,6 +567,35 @@ PageHeading :: (session: Session, area: Rectangle, title: string) {
     if Button(session, ButtonProps.{.key = 28102, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 84.0, 44.0},
             .label = Locale.Text("Back"), .class_name = 11}) != 0 { game.mode = MODE_STAGES; buy_skin = 0 }
 }
+// One keyboard key: a raised cap showing its letter or arrow.
+KeyCap :: (session: Session, key: u64, bounds: Rectangle, label: string, shape: string) {
+    unused Box(session, BoxProps.{.key = key, .bounds = Rectangle.{bounds.x, bounds.y + 3.0, bounds.width, bounds.height},
+        .fill = Appearance.Border(), .radius = 7.0})
+    unused Box(session, BoxProps.{.key = key + 1, .bounds = bounds, .fill = Appearance.Canvas(),
+        .border = Appearance.Border(), .radius = 7.0})
+    if shape != "" {
+        SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{bounds.x + 7.0, bounds.y + 7.0, bounds.width - 14.0, bounds.height - 14.0},
+            .shape = shape, .color = Appearance.TextColor()})
+    } else {
+        unused Text(session, TextProps.{.key = key + 2, .bounds = Rectangle.{bounds.x, bounds.y + (bounds.height - 22.0) / 2.0 + 3.0, bounds.width, 22.0},
+            .text = label, .font = 16, .align = TextAlign.TextAlignCenter})
+    }
+}
+// Four steering keys in the keyboard's inverted T, 98 by 64 points.
+KeyCluster :: (session: Session, key: u64, origin: Point, arrows: bool) {
+    size: float32 = 30.0
+    gap: float32 = 4.0
+    left := cast(float32)origin.x
+    top := cast(float32)origin.y
+    labels: [4]string = .["W", "A", "S", "D"]
+    shapes: [4]string = .[ArrowUp.Shape, ArrowLeft.Shape, ArrowDown.Shape, ArrowRight.Shape]
+    for cap: 0..3 {
+        column: float32 = ifx cap == 0 then 1.0 else cast(float32)(cap - 1)
+        row: float32 = ifx cap == 0 then 0.0 else 1.0
+        bounds := Rectangle.{left + column * (size + gap), top + row * (size + gap), size, size}
+        KeyCap(session, key + cast(u64)cap * 3, bounds, labels[cap], ifx arrows then shapes[cap] else "")
+    }
+}
 settings_scroll: s32;
 DrawSettings :: (session: Session, area: Rectangle) {
     PageHeading(session, area, "Settings")
@@ -410,34 +603,54 @@ DrawSettings :: (session: Session, area: Rectangle) {
     if width > 540.0 { width = 540.0 }
     scroller := Scroll(session, ScrollProps.{.key = 28200,
         .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + 76.0, width, area.height - 88.0},
-        .content_height = 508, .scroll_offset = settings_scroll})
+        .content_height = ifx KeyboardOnly() then 448 else 508, .scroll_offset = settings_scroll})
     settings_scroll = scroller.scroll_offset
     if !scroller.opened { return }
     x := scroller.content.x; y := scroller.content.y; width = scroller.content.width
     if Button(session, ButtonProps.{.key = 28201, .bounds = Rectangle.{x, y, width, 60.0},
             .label = Locale.Text("Appearance"), .class_name = 11}) != 0 { Account.OpenAppearance() }
+    #if !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) && !#defined(WURM_PORTABLE) {
+        // Local rounds share one keyboard, so only computers offer them.
+        if Button(session, ButtonProps.{.key = 28202, .bounds = Rectangle.{x, y + 72.0, width, 60.0},
+                .label = Locale.Text("Local multiplayer"), .class_name = 11}) != 0 { OpenLocalSetup() }
+    }
     GameText(session, 28220, "Controls", Rectangle.{x, y + 150.0, width, 28.0}, 20)
     half := (width - 8.0) / 2.0
-    for choice: 0..1 {
-        preview := Rectangle.{x + cast(float32)choice * (half + 8.0), y + 186.0, half, 116.0}
-        unused Box(session, BoxProps.{.key = 28250 + cast(u64)choice, .bounds = preview,
-            .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 12.0})
-        side: float32 = 88.0
-        square := Rectangle.{preview.x + (preview.width - side) / 2.0, preview.y + 10.0, side, side}
-        if choice == 0 {
-            Character(session, 28260, Rectangle.{square.x + 4.0, square.y + 18.0, 46.0, 46.0}, Wardrobe.skin, true)
-            SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{square.x + 34.0, square.y + 32.0, 54.0, 54.0},
-                .shape = FingerSwipe.Shape, .color = Appearance.TextColor()})
-        } else {
-            pad := DirectionPad(session, DirectionPadProps.{.key = 28261, .bounds = square,
-                .label = Locale.Text("Try the direction pad"), .now = cast(float64)Timer.MonotonicMilliseconds() / 1000.0})
-            if pad.step { unused Controls.SetPad(true); PreferencesChanged() }
+    lower: float32 = 0.0
+    if KeyboardOnly() {
+        // The keys that steer, drawn as the keyboard's own caps.
+        lower = -60.0
+        for choice: 0..1 {
+            preview := Rectangle.{x + cast(float32)choice * (half + 8.0), y + 186.0, half, 116.0}
+            unused Box(session, BoxProps.{.key = 28250 + cast(u64)choice, .bounds = preview,
+                .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 12.0})
+            KeyCluster(session, 28270 + cast(u64)choice * 12, Point.{cast(s32)(preview.x + (preview.width - 98.0) / 2.0), cast(s32)preview.y + 12}, choice == 0)
+            GameText(session, 28252 + cast(u64)choice, ifx choice == 0 then "Arrow keys" else "W A S D",
+                Rectangle.{preview.x + 8.0, preview.y + 84.0, preview.width - 16.0, 24.0}, 15, true, true)
         }
+    } else {
+        for choice: 0..1 {
+            preview := Rectangle.{x + cast(float32)choice * (half + 8.0), y + 186.0, half, 116.0}
+            unused Box(session, BoxProps.{.key = 28250 + cast(u64)choice, .bounds = preview,
+                .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 12.0})
+            side: float32 = 88.0
+            square := Rectangle.{preview.x + (preview.width - side) / 2.0, preview.y + 10.0, side, side}
+            if choice == 0 {
+                Character(session, 28260, Rectangle.{square.x + 4.0, square.y + 18.0, 46.0, 46.0}, Wardrobe.skin, true)
+                SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{square.x + 34.0, square.y + 32.0, 54.0, 54.0},
+                    .shape = FingerSwipe.Shape, .color = Appearance.TextColor()})
+            } else {
+                pad := DirectionPad(session, DirectionPadProps.{.key = 28261, .bounds = square,
+                    .label = Locale.Text("Try the direction pad"), .now = cast(float64)Timer.MonotonicMilliseconds() / 1000.0})
+                if pad.step { unused Controls.SetPad(true); PreferencesChanged() }
+            }
+        }
+        if Button(session, ButtonProps.{.key = 28221, .bounds = Rectangle.{x, y + 310.0, half, 52.0},
+                .label = Locale.Text("Swipe"), .selected = !Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(false); PreferencesChanged() }
+        if Button(session, ButtonProps.{.key = 28222, .bounds = Rectangle.{x + half + 8.0, y + 310.0, half, 52.0},
+                .label = Locale.Text("Direction pad"), .selected = Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(true); PreferencesChanged() }
     }
-    if Button(session, ButtonProps.{.key = 28221, .bounds = Rectangle.{x, y + 310.0, half, 52.0},
-            .label = Locale.Text("Swipe"), .selected = !Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(false); PreferencesChanged() }
-    if Button(session, ButtonProps.{.key = 28222, .bounds = Rectangle.{x + half + 8.0, y + 310.0, half, 52.0},
-            .label = Locale.Text("Direction pad"), .selected = Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(true); PreferencesChanged() }
+    y += lower
     GameText(session, 28230, "Sound", Rectangle.{x, y + 402.0, width - 104.0, 32.0}, 20)
     if Button(session, ButtonProps.{.key = 28231, .bounds = Rectangle.{x + width - 100.0, y + 392.0, 100.0, 52.0},
             .label = Locale.Text(ifx Audio.muted then "Off" else "On"), .selected = !Audio.muted, .class_name = 11}) != 0 { ToggleSound() }
@@ -462,13 +675,14 @@ SkinName :: (id: s32) -> string {
     return "Apfelwurm"
 }
 CharacterPreview :: (session: Session, key: u64, bounds: Rectangle, id: s32) {
+    // The body's balls touch, overlapping a little like the worm in play.
     for segment: 0..2 {
-        size := 21.0 + cast(float32)segment * 2.0
-        x := bounds.x + cast(float32)segment * 20.0
-        y := bounds.y + 22.0 - cast(float32)segment * 5.0
+        size := 23.0 + cast(float32)segment * 2.0
+        x := bounds.x + 10.0 + cast(float32)segment * 16.0
+        y := bounds.y + 20.0 - cast(float32)segment * 4.0
         Character(session, key + cast(u64)segment * 8, Rectangle.{x, y, size, size}, id, false)
     }
-    Character(session, key + 24, Rectangle.{bounds.x + 58.0, bounds.y + 2.0, 38.0, 38.0}, id, true, 2)
+    Character(session, key + 24, Rectangle.{bounds.x + 54.0, bounds.y + 2.0, 38.0, 38.0}, id, true, 2)
 }
 Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool, direction: s32 = 2, alpha: u8 = 255, clip: Rectangle = .{}) {
     if id == 0 {
@@ -514,8 +728,18 @@ Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool
 }
 shop_scroll: s32;
 buy_skin: s32;
+// The shop's tabs: skins, coin packs bought with Dew, and Dew top-ups.
+SHOP_SKINS :: 0;
+SHOP_COINS :: 1;
+SHOP_DEW :: 2;
+shop_tab: s32;
+buy_pack: s32;
+// The bought coins when a pack was asked for; -1 while none is waiting.
+pack_from: s32 = -1;
+pack_grace: s32;
 DrawShop :: (session: Session, area: Rectangle) {
-    PageHeading(session, area, "Skin shop")
+    PageHeading(session, area, "Shop")
+    if buy_pack > 0 { DrawPackConfirm(session, area); return }
     if buy_skin > 0 {
         id := buy_skin
         width := area.width - 32.0
@@ -523,8 +747,7 @@ DrawShop :: (session: Session, area: Rectangle) {
         x := area.x + (area.width - width) / 2.0; y := area.y + 112.0
         Character(session, 28320, Rectangle.{x + width / 2.0 - 26.0, y, 52.0, 52.0}, id, true)
         GameText(session, 28311, SkinName(id), Rectangle.{x, y + 68.0, width, 28.0}, 22, false, true)
-        price := SkinPriceText(id)
-        GameText(session, 28312, price, Rectangle.{x, y + 106.0, width, 24.0}, 18, false, true)
+        SkinPrice(session, 28316, Rectangle.{x, y + 104.0, width, 28.0}, id, 18)
         pending := TextUntilNul(Wardrobe.status[:]) == "pending"
         coin_purchase := Rewards.CoinPrice(id) > 0
         signin := !coin_purchase && (Progress.owner[0] == 0 || TextUntilNul(Wardrobe.status[:]) == "signin")
@@ -548,28 +771,75 @@ DrawShop :: (session: Session, area: Rectangle) {
         Wardrobe.poll_at = 0
         return
     }
-    GameText(session, 28330, CoinText(Rewards.Coins()), Rectangle.{area.x + 16.0, area.y + 84.0, area.width - 192.0, 28.0}, 18)
-    if Button(session, ButtonProps.{.key = 28331, .bounds = Rectangle.{area.x + area.width - 168.0, area.y + 76.0, 152.0, 44.0},
-            .label = Locale.Text("Daily rewards"), .class_name = 11}) != 0 { game.mode = MODE_REWARDS; return }
-    grid := Rectangle.{area.x + 16.0, area.y + 136.0, area.width - 32.0, area.height - 148.0}
+    // The wallet: coins, and Dew for a signed-in account.
+    {
+        digits: [21]u8
+        coins := FormatInteger(cast(s64)Rewards.Coins(), digits[:])
+        badge := Rectangle.{area.x + 16.0, area.y + 78.0, AmountWidth(coins, 18) + 24.0, 40.0}
+        unused Box(session, BoxProps.{.key = 28330, .bounds = badge, .fill = Appearance.Surface(), .radius = 20.0})
+        Amount(session, 28331, Rectangle.{badge.x + 10.0, badge.y + 4.0, badge.width - 12.0, 32.0}, false, coins, 18, false)
+        #if !#defined(WURM_PORTABLE) {
+            if Rewards.SignedIn() {
+                dew := DewText()
+                wallet := Rectangle.{badge.x + badge.width + 10.0, badge.y, AmountWidth(dew, 18) + 24.0, 40.0}
+                unused Box(session, BoxProps.{.key = 28333, .bounds = wallet, .fill = Appearance.Surface(), .radius = 20.0})
+                Amount(session, 28334, Rectangle.{wallet.x + 10.0, wallet.y + 4.0, wallet.width - 12.0, 32.0}, true, dew, 18, false)
+            }
+        }
+    }
+    top := area.y + 136.0
+    #if !#defined(WURM_PORTABLE) {
+        // Inside Arcade or Breeze the host sells Dew; the game keeps skins.
+        tabs: [3]string = .["Skins", "Coins", "Dew"]
+        tab_width := (area.width - 32.0 - 16.0) / 3.0
+        if tab_width > 160.0 { tab_width = 160.0 }
+        left := area.x + (area.width - tab_width * 3.0 - 16.0) / 2.0
+        for tab: cast(s32)0..2 {
+            if Button(session, ButtonProps.{.key = cast(u64)(28340 + tab),
+                    .bounds = Rectangle.{left + cast(float32)tab * (tab_width + 8.0), top, tab_width, 40.0},
+                    .label = Locale.Text(tabs[tab]), .selected = shop_tab == tab, .pill = true, .class_name = 11}) != 0 {
+                shop_tab = tab
+                if tab == SHOP_DEW { Account.ShowDew() }
+            }
+        }
+        top += 52.0
+        content := Rectangle.{area.x + 16.0, top, area.width - 32.0, area.y + area.height - top - 12.0}
+        if shop_tab == SHOP_COINS { DrawCoinPacks(session, content); return }
+        if shop_tab == SHOP_DEW {
+            Account.DrawProfile(session, content, 0, Appearance.mode != 2)
+            return
+        }
+    }
+    grid := Rectangle.{area.x + 16.0, top, area.width - 32.0, area.y + area.height - top - 12.0}
     columns: s32 = ifx grid.width >= 650.0 then 3 else 2
     width := (grid.width - 16.0 - cast(float32)(columns - 1) * 12.0) / cast(float32)columns
-    skin_count: s32 = 13
+    // Winter cheer only appears in its season or once owned.
+    shown: [13]s32
+    skin_count: s32 = 0
+    for skin: cast(s32)0..12 {
+        if skin == 8 && !Wardrobe.Available(8) && !Wardrobe.christmas_claimable { continue }
+        shown[skin_count] = skin; skin_count += 1
+    }
     rows := (skin_count + columns - 1) / columns
     scroller := Scroll(session, ScrollProps.{.key = 28400, .bounds = grid, .content_height = rows * 196, .scroll_offset = shop_scroll})
     shop_scroll = scroller.scroll_offset
     if !scroller.opened { return }
-    for id: 0..skin_count - 1 {
-        x := scroller.content.x + cast(float32)(id % columns) * (width + 12.0)
-        y := scroller.content.y + cast(float32)(id / columns) * 196.0
+    for slot: 0..skin_count - 1 {
+        id := shown[slot]
+        x := scroller.content.x + cast(float32)(slot % columns) * (width + 12.0)
+        y := scroller.content.y + cast(float32)(slot / columns) * 196.0
         key := cast(u64)28500 + cast(u64)id * 100
         unused Box(session, BoxProps.{.key = key, .bounds = Rectangle.{x, y, width, 184.0}, .fill = Appearance.Surface(), .radius = 16.0})
         CharacterPreview(session, key + 20, Rectangle.{x + width / 2.0 - 48.0, y + 10.0, 96.0, 50.0}, cast(s32)id)
         GameText(session, key + 8, SkinName(cast(s32)id), Rectangle.{x + 4.0, y + 68.0, width - 8.0, 24.0}, 17, false, true)
         available := Wardrobe.Available(cast(s32)id)
         if !available {
-            detail := ifx id <= 3 || id == 7 || Rewards.CoinPrice(cast(s32)id) > 0 then SkinPriceText(cast(s32)id) else ifx id == 12 then "Day 30 reward" else ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Reach level 40" else ifx id == 8 then "Free · December 2026" else "Visit waozi.xyz"
-            GameText(session, key + 9, detail, Rectangle.{x + 4.0, y + 99.0, width - 8.0, 22.0}, 12, true, true)
+            if id <= 3 || id == 7 || Rewards.CoinPrice(cast(s32)id) > 0 {
+                SkinPrice(session, key + 12, Rectangle.{x + 4.0, y + 96.0, width - 8.0, 28.0}, cast(s32)id, 16)
+            } else {
+                detail := ifx id == 12 then "Day 30 reward" else ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Reach level 40" else ifx id == 8 then "Free · December 2026" else "Visit waozi.xyz"
+                GameText(session, key + 9, detail, Rectangle.{x + 4.0, y + 99.0, width - 8.0, 22.0}, 12, true, true)
+            }
         }
         label := ifx Wardrobe.skin == id then "Wearing" else ifx available then "Wear" else ifx id <= 3 || id == 7 || Rewards.CoinPrice(cast(s32)id) > 0 then "Buy" else ifx id == 8 && Wardrobe.christmas_claimable then "Claim" else ifx id == 6 then "Visit" else "Locked"
         if Button(session, ButtonProps.{.key = key + 10, .bounds = Rectangle.{x + 10.0, y + 132.0, width - 20.0, 42.0},
@@ -584,6 +854,82 @@ DrawShop :: (session: Session, area: Rectangle) {
     unused End(session)
 }
 
+// Coin packs, bought with Dew. The node's receipts are the coins.
+DrawCoinPacks :: (session: Session, bounds: Rectangle) {
+    wide := bounds.width >= 560.0
+    gap: float32 = 12.0
+    for pack: cast(s32)1..ShopModel.COIN_PACKS {
+        key := cast(u64)(28600 + pack * 20)
+        card := ifx wide then Rectangle.{bounds.x + cast(float32)(pack - 1) * (bounds.width + gap) / 3.0, bounds.y, (bounds.width - gap * 2.0) / 3.0, 232.0}
+            else Rectangle.{bounds.x, bounds.y + cast(float32)(pack - 1) * (104.0 + gap), bounds.width, 104.0}
+        unused Box(session, BoxProps.{.key = key, .bounds = card, .fill = Appearance.Surface(), .radius = 16.0})
+        // Bigger packs show a bigger pile.
+        icon: float32 = ifx wide then 64.0 + cast(float32)pack * 12.0 else 72.0
+        digits: [21]u8
+        coins := FormatInteger(cast(s64)ShopModel.CoinPackCoins(pack), digits[:])
+        price: [32]u8
+        unused DewFormat(ShopModel.CoinPackPrice(pack), DewUnits, price[:])
+        buy := Rectangle.{}
+        if wide {
+            RewardIcon(session, key + 1, Rectangle.{card.x + (card.width - icon) / 2.0, card.y + 12.0 + (100.0 - icon) / 2.0, icon, icon}, 2, "")
+            Amount(session, key + 2, Rectangle.{card.x + 8.0, card.y + 124.0, card.width - 16.0, 36.0}, false, coins, 22, true)
+            buy = Rectangle.{card.x + 12.0, card.y + 176.0, card.width - 24.0, 44.0}
+        } else {
+            RewardIcon(session, key + 1, Rectangle.{card.x + 12.0, card.y + 16.0, icon, icon}, 2, "")
+            Amount(session, key + 2, Rectangle.{card.x + 96.0, card.y + 34.0, card.width - 220.0, 36.0}, false, coins, 22, false)
+            buy = Rectangle.{card.x + card.width - 112.0, card.y + 30.0, 100.0, 44.0}
+        }
+        // The Dew it costs sits on the button.
+        if Button(session, ButtonProps.{.key = key + 6, .bounds = buy, .label = TextUntilNul(price[:]), .icon_shape = DewIcon.Shape,
+                .class_name = 11}) != 0 {
+            buy_pack = pack; pack_from = -1
+        }
+    }
+}
+// Confirms a coin pack; the coins arrive with the node's receipt.
+DrawPackConfirm :: (session: Session, area: Rectangle) {
+    pack := buy_pack
+    width := area.width - 32.0
+    if width > 360.0 { width = 360.0 }
+    x := area.x + (area.width - width) / 2.0; y := area.y + 112.0
+    coins := ShopModel.CoinPackCoins(pack)
+    if pack_from >= 0 && Rewards.bought_coins >= pack_from + coins { buy_pack = 0; pack_from = -1; return }
+    RewardIcon(session, 28660, Rectangle.{x + width / 2.0 - 32.0, y, 64.0, 64.0}, 2, "")
+    digits: [21]u8
+    Amount(session, 28661, Rectangle.{x, y + 72.0, width, 32.0}, false, FormatInteger(cast(s64)coins, digits[:]), 22, true)
+    price: [32]u8
+    unused DewFormat(ShopModel.CoinPackPrice(pack), DewUnits, price[:])
+    Amount(session, 28663, Rectangle.{x, y + 108.0, width, 28.0}, true, TextUntilNul(price[:]), 18, true)
+    state := TextUntilNul(Wardrobe.status[:])
+    if pack_grace > 0 { pack_grace -= 1; state = "pending" }
+    if pack_from >= 0 && (state == "failed" || state == "insufficient" || state == "signin") { pack_from = -1 }
+    signin := Progress.owner[0] == 0 || state == "signin"
+    waiting := pack_from >= 0
+    if Button(session, ButtonProps.{.key = 28665, .bounds = Rectangle.{x, y + 150.0, width, 48.0},
+            .label = Locale.Text(ifx signin then "Sign in" else ifx waiting then "Please wait…" else "Confirm purchase"),
+            .disabled = !signin && waiting, .class_name = 10}) != 0 {
+        if signin { Account.OpenProfile() }
+        else {
+            pack_from = Rewards.bought_coins
+            request := ifx pack == 1 then "coins:1" else ifx pack == 2 then "coins:2" else "coins:3"
+            unused Account.Service("entity.game-shop", request)
+            // The wardrobe's status is from before this request until it polls.
+            pack_grace = 3
+        }
+    }
+    if Button(session, ButtonProps.{.key = 28666, .bounds = Rectangle.{x, y + 210.0, width, 44.0}, .label = Locale.Text("Cancel"), .class_name = 11}) != 0 {
+        buy_pack = 0; pack_from = -1
+    }
+    if !waiting && state == "insufficient" {
+        GameText(session, 28667, "Not enough Dew.", Rectangle.{x, y + 264.0, width, 24.0}, 13, true, true)
+        if Button(session, ButtonProps.{.key = 28668, .bounds = Rectangle.{x, y + 294.0, width, 44.0}, .label = Locale.Text("Top up Dew"),
+                .icon_shape = DewIcon.Shape, .class_name = 11}) != 0 { buy_pack = 0; shop_tab = SHOP_DEW; Account.ShowDew() }
+    } else if !waiting && state == "failed" {
+        GameText(session, 28667, "Purchase not confirmed. Check your Dew and retry.", Rectangle.{x, y + 264.0, width, 24.0}, 12, true, true)
+    }
+    Wardrobe.poll_at = 0
+}
+
 // Pause, game over and completion use the same roomy card, with full-width
 // touch actions. Short landscape screens use the compact composition.
 Overlay :: (session: Session, area: Rectangle, title: string, message: string, score: s32 = -1) {
@@ -593,7 +939,7 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     if width > 360.0 { width = 360.0 }
     height: float32 = ifx compact then 252.0 else 292.0
     if score >= 0 { height = ifx compact then 288.0 else 340.0 }
-    if game.mode == MODE_PAUSED { height += 56.0 }
+    if game.mode == MODE_PAUSED && !KeyboardOnly() { height += 56.0 }
     card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0, width, height}
     unused Box(session, BoxProps.{.key = 51,
         .bounds = Rectangle.{card.x, card.y + 6.0, card.width, card.height},
@@ -623,7 +969,7 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     }
     primary := ifx game.mode == MODE_PAUSED then "Resume" else "Try again"
     if game.mode == MODE_VICTORY { primary = "Play again" }
-    primary_offset: float32 = ifx game.mode == MODE_PAUSED then 176.0 else 120.0
+    primary_offset: float32 = ifx game.mode == MODE_PAUSED && !KeyboardOnly() then 176.0 else 120.0
     if Button(session, ButtonProps.{.key = 57,
             .bounds = Rectangle.{card.x + 20.0, card.y + card.height - primary_offset, card.width - 40.0, 48.0},
             .label = primary, .class_name = 10, .tone = ButtonTone.ButtonToneSuccess,
@@ -631,7 +977,7 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
         key: s32 = cast(s32)(ifx game.mode == MODE_PAUSED then Input.KeyEscape else Input.KeyEnter)
         HandleInput(key, Timer.MonotonicMilliseconds())
     }
-    if game.mode == MODE_PAUSED {
+    if game.mode == MODE_PAUSED && !KeyboardOnly() {
         if Button(session, ButtonProps.{.key = 61,
                 .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 120.0, card.width - 40.0, 48.0},
                 .label = Locale.Text("Controls"), .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { AskControls() }
@@ -984,9 +1330,16 @@ PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, layout: s32 = -1) 
     board: [CELLS]u8
     objects: [CELLS]u8
     portrait := ifx layout < 0 then game_portrait else layout == 1
-    Custom.EffectiveBoard(level,board[:],portrait)
-    Custom.EffectiveObjects(level,objects[:],portrait)
-    apples := Custom.EffectiveApples(level,portrait)
+    apples: s32
+    if editor.playtest && editor.own {
+        portrait = editor.turned
+        for at: 0..CELLS - 1 { board[at] = editor.board[at]; objects[at] = editor.objects[at] }
+        apples = editor.apples
+    } else {
+        Custom.EffectiveBoard(level,board[:],portrait)
+        Custom.EffectiveObjects(level,objects[:],portrait)
+        apples = Custom.EffectiveApples(level,portrait)
+    }
     columns: s32 = ifx portrait then ROWS else COLUMNS
     rows: s32 = ifx portrait then COLUMNS else ROWS
     if restart { LoadLevelData(*game,level,now,board[:],apples,columns,rows,objects[:]) }
@@ -1002,7 +1355,7 @@ ReloadLevel :: (level: s32, now: s64) {
 // Leaving a paused or finished playtest returns to the editor; a normal game
 // returns to the stages.
 LeavePlay :: () {
-    if editor.playtest { OpenEditor(editor.level) }
+    if editor.playtest { EditorResume() }
     else { OpenStages() }
 }
 
@@ -1010,11 +1363,92 @@ LeavePlay :: () {
 // facing its all-levels view.
 EditorAtStartup :: (level: s32) {
     game.started = true
+    editor_everything = true
     editor.browsing = true
     OpenEditor(level)
 }
 
+// WURM_START=rewards opens the title with the daily reward chest open.
+rewards_at_start: bool;
+RewardsAtStartup :: () { rewards_at_start = true }
+
+EditorLevelOpen :: (level: s32) -> bool { return editor_everything || LevelAvailable(level) }
+EditorStageOpen :: (stage: s32) -> bool { return EditorLevelOpen(StageFirst(stage)) }
+// How many of a landscape's levels are open; unlocking runs in order.
+EditorOpenLevels :: (stage: s32) -> s32 {
+    open: s32 = 0
+    for index: 0..StageLevels(stage) - 1 {
+        if EditorLevelOpen(StageFirst(stage) + cast(s32)index) { open = cast(s32)index + 1 }
+    }
+    return open
+}
+// The furthest landscape reached; its painting backs the editor's pages, so
+// they change as the journey goes on.
+EditorFurthestStage :: () -> s32 {
+    furthest: s32 = 0
+    for stage: 0..STAGE_COUNT - 1 { if EditorStageOpen(cast(s32)stage) { furthest = cast(s32)stage } }
+    return furthest
+}
+OpenEditorHome :: () {
+    Progress.Load()
+    Own.own_service = Account.Service
+    editor_everything = false
+    editor.browsing = false
+    editor.playtest = false
+    editor_page = EDITOR_PAGE_HOME
+    game.mode = MODE_EDITOR
+}
+EditorOpenStages :: () {
+    EditorSave()
+    if editor.save_failed { return }
+    editor.browsing = false
+    editor_stage_scroll = 0
+    editor_page = EDITOR_PAGE_STAGES
+}
+EditorOpenStage :: (stage: s32) {
+    if !EditorStageOpen(stage) { return }
+    editor_stage = stage
+    editor.browsing = true
+    editor_page = EDITOR_PAGE_EDIT
+}
+// The level grid of the board's own landscape.
+EditorBrowse :: () {
+    EditorSave()
+    if editor.save_failed { return }
+    if editor.own { EditorOpenMine(); return }
+    editor_stage = StageOf(editor.level)
+    editor.browsing = true
+}
+// The next open landscape in either direction, for the grid's arrows.
+EditorStageStep :: (stage: s32, delta: s32) -> s32 {
+    next := stage
+    for tries: 1..STAGE_COUNT {
+        next = (next + delta + STAGE_COUNT) % STAGE_COUNT
+        if EditorStageOpen(next) { return next }
+    }
+    return stage
+}
+
 EditorLoad :: (level: s32) {
+    if editor.own {
+        own := *Own.own_levels[editor.own_index]
+        if !editor.turned {
+            for at: 0..CELLS - 1 { editor.board[at] = own.board[at]; editor.objects[at] = own.objects[at] }
+        } else if own.has_portrait {
+            for at: 0..CELLS - 1 { editor.board[at] = own.portrait[at]; editor.objects[at] = own.portrait_objects[at] }
+        } else {
+            // An own portrait not made yet mirrors the landscape, as campaign
+            // portraits do.
+            problems := Mirror.MirrorLevel(level, own.board[:], own.objects[:], true, editor.board[:], editor.objects[:])
+            if (problems & Mirror.MIRROR_TOPOLOGY) != 0 {
+                GuessPortrait(own.board[:], editor.board[:])
+                TurnForward(own.objects[:], editor.objects[:])
+            }
+        }
+        BoardSize(ifx editor.turned then ROWS else COLUMNS,ifx editor.turned then COLUMNS else ROWS)
+        editor.apples = own.apples
+        return
+    }
     Custom.EffectiveBoard(level,editor.board[:],editor.turned)
     Custom.EffectiveObjects(level,editor.objects[:],editor.turned)
     BoardSize(ifx editor.turned then ROWS else COLUMNS,ifx editor.turned then COLUMNS else ROWS)
@@ -1024,11 +1458,18 @@ EditorLoad :: (level: s32) {
 OpenEditor :: (level: s32) {
     if level < 0 { level = 0 }
     if level >= LEVEL_COUNT { level = LEVEL_COUNT - 1 }
-    if game.mode != MODE_EDITOR || editor.level != level { EditorLoad(level); editor.dirty = false }
+    if game.mode != MODE_EDITOR || editor.level != level || editor.own {
+        editor.own = false
+        EditorLoad(level)
+        editor.dirty = false
+    }
     editor.level = level
     editor.reset_armed = false
     editor.save_failed = false
     EditorInput.StrokeReset(*editor.stroke)
+    editor_stage = StageOf(level)
+    editor_page = EDITOR_PAGE_EDIT
+    editor_board_open = true
     game.mode = MODE_EDITOR
 }
 
@@ -1044,8 +1485,22 @@ EditorTurn :: () {
     editor.reset_armed = false
 }
 
+// Only an edited layout is saved: an untouched one stays the mirror of the
+// other orientation, or the published board.
 EditorSave :: () {
-    if !editor.dirty && (!editor.turned || Custom.HasCustomLevel(editor.level,true)) { return }
+    if !editor.dirty { return }
+    if editor.own {
+        own := *Own.own_levels[editor.own_index]
+        for at: 0..CELLS - 1 {
+            if editor.turned { own.portrait[at] = editor.board[at]; own.portrait_objects[at] = editor.objects[at] }
+            else { own.board[at] = editor.board[at]; own.objects[at] = editor.objects[at] }
+        }
+        if editor.turned { own.has_portrait = true }
+        own.apples = editor.apples
+        editor.save_failed = !Own.OwnSave()
+        editor.dirty = editor.save_failed
+        return
+    }
     if Custom.SaveCustomLevel(editor.level,editor.board[:],editor.objects[:],editor.apples,editor.turned) {
         editor.dirty = false
         editor.save_failed = false
@@ -1054,6 +1509,17 @@ EditorSave :: () {
 
 // Deleting the override restores the recovered original in the working copy.
 EditorReset :: () {
+    if editor.own {
+        // An own portrait goes back to mirroring its landscape.
+        if editor.turned {
+            Own.own_levels[editor.own_index].has_portrait = false
+            editor.save_failed = !Own.OwnSave()
+        }
+        EditorLoad(editor.level)
+        editor.dirty = false
+        editor.reset_armed = false
+        return
+    }
     unused Custom.ClearCustomLevel(editor.level,editor.turned)
     EditorLoad(editor.level)
     editor.dirty = false
@@ -1081,10 +1547,20 @@ EditorPlaytest :: (now: s64) {
     PlayBoard(editor.level, now, cast(u32)(now & 4294967295), false, ifx editor.turned then 1 else 0)
 }
 
+// Previous and next skip the levels not reached yet.
 EditorSwitch :: (delta: s32) {
     EditorSave()
     if editor.save_failed { return }
-    level := (editor.level + delta + LEVEL_COUNT) % LEVEL_COUNT
+    if editor.own {
+        count := Own.own_level_count
+        if count > 0 { EditorOpenOwn((editor.own_index + delta + count) % count) }
+        return
+    }
+    level := editor.level
+    for tries: 1..LEVEL_COUNT {
+        level = (level + delta + LEVEL_COUNT) % LEVEL_COUNT
+        if EditorLevelOpen(level) { break }
+    }
     OpenEditor(level)
 }
 
@@ -1143,22 +1619,28 @@ DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32,
 // sampled small as the picture, the number as the caption, a green frame on
 // saved edits, the current level filled, one click to edit. Back returns.
 DrawLevelBrowser :: (session: Session, area: Rectangle) {
+    chapter := editor_stage
     unused Box(session, BoxProps.{.key = 8700, .bounds = area, .fill = Appearance.Canvas()})
+    // The landscape's painting stays faintly behind its levels.
+    unused Image(session, ImageProps.{.key = 8706, .asset_path = ART_STAGE_COVERS, .bounds = area,
+        .source = Rectangle.{0.0, cast(float32)chapter * COVER_HEIGHT, 960.0, COVER_HEIGHT},
+        .fit = ImageFit.ImageFitCover, .smooth = true, .tint = cast(u32)0xffffff38, .alt_text = StageName(chapter)})
     if Button(session, ButtonProps.{.key = 8703, .bounds = Rectangle.{area.x + 10.0, area.y + 8.0, 88.0, 36.0},
-            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { editor.browsing = false; return }
-    chapter := StageOf(editor.level)
+            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorOpenStages(); return }
+    previous := EditorStageStep(chapter, -1)
+    following := EditorStageStep(chapter, 1)
     if Button(session, ButtonProps.{.key = 8704, .bounds = Rectangle.{area.x + area.width - 94.0, area.y + 8.0, 38.0, 36.0},
-            .label = Locale.Text("Previous landscape"), .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18"}) != 0 {
-        EditorSave(); OpenEditor(StageFirst((chapter + STAGE_COUNT - 1) % STAGE_COUNT)); editor.browsing = true; return
-    }
+            .label = Locale.Text("Previous landscape"), .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18",
+            .disabled = previous == chapter}) != 0 { editor_stage = previous; return }
     if Button(session, ButtonProps.{.key = 8705, .bounds = Rectangle.{area.x + area.width - 48.0, area.y + 8.0, 38.0, 36.0},
-            .label = Locale.Text("Next landscape"), .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18"}) != 0 {
-        EditorSave(); OpenEditor(StageFirst((chapter + 1) % STAGE_COUNT)); editor.browsing = true; return
-    }
+            .label = Locale.Text("Next landscape"), .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18",
+            .disabled = following == chapter}) != 0 { editor_stage = following; return }
     CentreText(session, 8701, StageName(chapter),
         Rectangle.{area.x + 102.0, area.y + 10.0, area.width - 204.0, 28.0}, 18)
     first := StageFirst(chapter)
     count := StageLevels(chapter)
+    // Cards keep the size of a full landscape; only the open levels show.
+    open := EditorOpenLevels(chapter)
     columns: s32 = 8
     for candidate: 4..11 {
         rows := (count + candidate - 1) / candidate
@@ -1166,22 +1648,22 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
         total := cast(float32)rows * (item_width * 0.75 + 30.0) + cast(float32)(rows - 1) * 8.0 + 56.0
         if total <= area.height { columns = cast(s32)candidate; break }
     }
-    rows := (count + columns - 1) / columns
     item_width := (area.width - 16.0 - cast(float32)(columns - 1) * 8.0) / cast(float32)columns
     item_height := item_width * 0.75 + 30.0
     pointer := GamePointer(session)
-    for index: 0..count - 1 {
+    for index: 0..open - 1 {
         column := index % columns
         row := index / columns
         bounds := Rectangle.{area.x + 8.0 + cast(float32)column * (item_width + 8.0),
             area.y + 56.0 + cast(float32)row * (item_height + 8.0), item_width, item_height}
         level := first + cast(s32)index
-        current := level == editor.level
+        current := editor_board_open && level == editor.level
         edited := Custom.HasCustomLevel(level,editor.turned)
         if pointer.pressed && Input.PointInBounds(pointer.x, pointer.y, bounds) {
             EditorSave()
             editor.browsing = false
-            OpenEditor(level)
+            if editor_pick == EDITOR_PICK_TEMPLATE { EditorNewOwn(StageOf(level), level) }
+            else { OpenEditor(level) }
             return
         }
         unused Box(session, BoxProps.{.key = 8710 + cast(u64)index, .bounds = bounds,
@@ -1191,7 +1673,7 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
         // The picture: the level's rendered preview board.
         thumb := Rectangle.{bounds.x + 6.0, bounds.y + 6.0, bounds.width - 12.0, (bounds.width - 12.0) * 0.75}
         unused Image(session, ImageProps.{.key = 88000 + cast(u64)index,
-            .asset_path = PreviewPath(StageOf(editor.level), cast(s32)index + 1,editor.turned),
+            .asset_path = PreviewPath(chapter, cast(s32)index + 1,editor.turned),
             .bounds = thumb, .fit = ImageFit.ImageFitContain, .smooth = true, .alt_text = "Level board preview"})
         number := FormatInteger(cast(s64)(index + 1), editor_digits[:])
         CentreText(session, 8760 + cast(u64)index, number,
@@ -1202,9 +1684,780 @@ DrawLevelBrowser :: (session: Session, area: Rectangle) {
                 .fill = Color.{120, 220, 150, 255}, .radius = 4.0})
         }
     }
+    if open < count {
+        rows := (open + columns - 1) / columns
+        GameText(session, 8707, "Finish levels to unlock more",
+            Rectangle.{area.x + 16.0, area.y + 64.0 + cast(float32)rows * (item_height + 8.0), area.width - 32.0, 24.0}, 15, true, true)
+    }
+}
+
+
+// Own levels. New levels join the open collection; the first one is made
+// for you and, like every collection, stays private until you share it.
+own_open: bool;
+editor_notice: string;
+mine_list: bool;
+mine_scroll: s32;
+mine_armed: s32 = -1;
+changes_scroll: s32;
+changes_armed: s32 = -1;
+NameField :: struct { bytes: [96]u8; length: s32; cursor: s32; anchor: s32; scroll_x: s32; focused: bool }
+mine_name: NameField;
+// The collection whose level the editor board shows.
+editor_collection: [33]u8;
+// Sharing: a collection stays private until you choose Friends or Everyone.
+share_choice: s32 = Collections.COLLECTION_PRIVATE;
+share_notice: string;
+share_poll_at: s64;
+community_query: NameField;
+community_scroll: s32;
+// The key a focused field takes instead of the editor's shortcuts.
+editor_field_key: s32;
+#if #defined(WURM_PORTABLE) {
+    field_api :: #system_library "host_api";
+    AppFieldInputHost :: () -> TextFieldInput #foreign field_api;
+}
+NameFieldSet :: (field: *NameField, text: string) {
+    length: s32 = 0
+    for byte: text {
+        if length >= 95 { break }
+        field.bytes[length] = byte
+        length += 1
+    }
+    field.length = length
+    field.cursor = length
+    field.anchor = length
+    field.scroll_x = 0
+}
+// Draws a name field and applies its edit; true when Enter committed it.
+DrawNameField :: (session: Session, field: *NameField, key: u64, bounds: Rectangle, label: string, max_bytes: s32) -> bool {
+    input: TextFieldInput
+    typed: [256]u8
+    if field.focused {
+        #if #defined(WURM_PORTABLE) {
+            input = AppFieldInputHost()
+        } else {
+            input = TextFieldInputFor(editor_field_key, KeyboardModifiers(session), TypedTextTake(session, typed[:]))
+        }
+    }
+    shown: [96]u8
+    for index: 0..field.length - 1 { shown[index] = field.bytes[index] }
+    edited := TextField(session, TextFieldProps.{.key = key, .bounds = bounds,
+        .value = TextView(shown[0:field.length]), .label = label, .placeholder = label,
+        .cursor = field.cursor, .anchor = field.anchor, .scroll_x = field.scroll_x, .focused = field.focused,
+        .focus_id = cast(s32)key, .max_bytes = max_bytes, .max_codepoints = max_bytes, .input = input})
+    if edited.edit.changed {
+        start := edited.edit.start; end := edited.edit.end
+        replacement := edited.edit.replacement
+        if start >= 0 && end >= start && end <= field.length &&
+        cast(s64)(field.length - (end - start)) + replacement.count <= cast(s64)max_bytes {
+            joined: [192]u8
+            length: s32 = 0
+            for index: 0..start - 1 { joined[length] = field.bytes[index]; length += 1 }
+            for byte: replacement { joined[length] = byte; length += 1 }
+            for index: end..field.length - 1 { joined[length] = field.bytes[index]; length += 1 }
+            for index: 0..length - 1 { field.bytes[index] = joined[index] }
+            field.length = length
+        }
+    }
+    field.cursor = edited.cursor
+    field.anchor = edited.anchor
+    field.scroll_x = edited.scroll_x
+    field.focused = edited.focused
+    return edited.committed
+}
+
+EditorCollectionOpened :: () {
+    if editor.own && TextUntilNul(Own.own_record[:]) != TextUntilNul(editor_collection[:]) {
+        editor.own = false
+        editor_board_open = false
+    }
+    unused CopyInto(editor_collection[:], 0, TextUntilNul(Own.own_record[:]))
+    own_open = true
+    mine_list = false
+    mine_armed = -1
+    mine_scroll = 0
+    NameFieldSet(*mine_name, TextUntilNul(Own.own_title[:]))
+}
+// The open collection, else the newest saved one, else a new "My levels".
+EditorEnsureCollection :: () -> bool {
+    if own_open { return true }
+    if Own.OwnRefresh() && Own.own_collection_count > 0 {
+        newest := Own.own_collections[Own.own_collection_count - 1]
+        if Own.OwnOpen(TextUntilNul(newest.record[:])) { EditorCollectionOpened(); return true }
+    }
+    return EditorNewCollection()
+}
+EditorNewCollection :: () -> bool {
+    order: s64 = 1
+    for index: 0..Own.own_collection_count - 1 {
+        if Own.own_collections[index].order >= order { order = Own.own_collections[index].order + 1 }
+    }
+    Own.OwnNew(Locale.Text("My levels"), order)
+    if !Own.OwnSave() { editor_notice = "Your levels could not be saved."; return false }
+    unused Own.OwnRefresh()
+    EditorCollectionOpened()
+    return true
+}
+own_name: [96]u8;
+// A new own level: an empty board inside the landscape's frame, or a copy of
+// a level reached (with its own portrait, if it has one).
+EditorNewOwn :: (stage: s32, template: s32) {
+    editor_notice = ""
+    if !EditorEnsureCollection() { return }
+    level: LevelJson.WurmLevel
+    level.stage = stage
+    source := ifx template >= 0 then template else StageFirst(stage)
+    Custom.EffectiveBoard(source, level.board[:], false)
+    Custom.EffectiveObjects(source, level.objects[:], false)
+    level.apples = Custom.EffectiveApples(source, false)
+    if template >= 0 {
+        if !Custom.IsMirroredLayout(source, true) {
+            level.has_portrait = true
+            Custom.EffectiveBoard(source, level.portrait[:], true)
+            Custom.EffectiveObjects(source, level.portrait_objects[:], true)
+        }
+    } else {
+        for y: 1..ROWS - 2 {
+            for x: 1..COLUMNS - 2 { level.board[Custom.At(x, y)] = 0 }
+        }
+        for at: 0..CELLS - 1 { level.objects[at] = 0 }
+    }
+    digits: [21]u8
+    at := CopyInto(own_name[:], 0, Locale.Text(StageName(stage)))
+    at = CopyInto(own_name[:], at, " ")
+    at = CopyInto(own_name[:], at, FormatInteger(cast(s64)(Own.own_level_count + 1), digits[:]))
+    own_name[at] = 0
+    for index: 0..at { level.name[index] = own_name[index] }
+    index := Own.OwnAdd(*level)
+    if index < 0 { editor_notice = "This collection is full."; EditorOpenMine(); return }
+    if !Own.OwnSave() {
+        Own.OwnRemove(index)
+        editor_notice = "Your levels could not be saved."
+        EditorOpenMine()
+        return
+    }
+    EditorOpenOwn(index)
+}
+EditorOpenOwn :: (index: s32) {
+    if index < 0 || index >= Own.own_level_count { return }
+    editor.own = true
+    editor.own_index = index
+    editor.level = StageFirst(Own.own_levels[index].stage)
+    EditorLoad(editor.level)
+    editor.dirty = false
+    editor.reset_armed = false
+    editor.save_failed = false
+    editor.browsing = false
+    EditorInput.StrokeReset(*editor.stroke)
+    editor_stage = StageOf(editor.level)
+    editor_page = EDITOR_PAGE_EDIT
+    editor_board_open = true
+    game.mode = MODE_EDITOR
+}
+// Back to the board last open: an own level or, in the developer's entry,
+// a campaign level.
+EditorResume :: () {
+    if editor.own { EditorOpenOwn(editor.own_index) }
+    else { OpenEditor(editor.level) }
+}
+EditorOpenMine :: () {
+    unused Own.OwnRefresh()
+    if !own_open && Own.own_collection_count > 0 { unused EditorEnsureCollection() }
+    mine_list = !own_open
+    mine_armed = -1
+    editor_page = EDITOR_PAGE_MINE
+    game.mode = MODE_EDITOR
+}
+EditorPick :: (pick: s32) {
+    editor_pick = pick
+    EditorOpenStages()
+}
+// Campaign levels with a personal layout, landscape then portrait.
+EditorChangeCount :: () -> s32 {
+    count: s32 = 0
+    for level: 0..LEVEL_COUNT - 1 {
+        if Custom.HasCustomLevel(cast(s32)level, false) { count += 1 }
+        if Custom.HasCustomLevel(cast(s32)level, true) { count += 1 }
+    }
+    return count
+}
+EditorChangeAt :: (index: s32, portrait: *bool) -> s32 {
+    seen: s32 = 0
+    for level: 0..LEVEL_COUNT - 1 {
+        for turn: 0..1 {
+            if Custom.HasCustomLevel(cast(s32)level, turn == 1) {
+                if seen == index { portrait.* = turn == 1; return cast(s32)level }
+                seen += 1
+            }
+        }
+    }
+    return -1
+}
+editor_label: [160]u8;
+// A player's own words, shown as written rather than translated.
+PlainText :: (session: Session, key: u64, text: string, bounds: Rectangle, size: s32) {
+    unused Text(session, TextProps.{.key = key, .bounds = bounds, .text = text, .font = size,
+        .wrap = TextWrap.TextWrapNone})
+}
+
+// The editor's own title, like the game's: its painting, a heading, and the
+// way on to the landscapes or back to the last board.
+editor_continue: [64]u8;
+DrawEditorHome :: (session: Session, area: Rectangle, now: s64) {
+    // Cover fit without a pixel crop, so the half-size copies fit too.
+    portrait := area.height > area.width
+    unused Box(session, BoxProps.{.key = 40000, .bounds = area, .fill = Color.{34, 66, 39, 255}})
+    unused Image(session, ImageProps.{.key = 40001, .asset_path = ifx portrait then ART_EDITOR_TITLE_PORTRAIT else ART_EDITOR_TITLE,
+        .bounds = area, .fit = ImageFit.ImageFitCover, .smooth = true,
+        .alt_text = "The little worm laying out a hedge maze on a meadow workbench"})
+    unused Box(session, BoxProps.{.key = 40002, .bounds = area, .fill = Appearance.ArtworkShade()})
+    unused Box(session, BoxProps.{.key = 40003,
+        .bounds = Rectangle.{area.x, area.y + area.height - 380.0, area.width, 380.0},
+        .fill = Color.{20, 47, 22, 0}, .fill_bottom = Color.{20, 47, 22, 200}, .has_fill_bottom = true})
+    if !EditorApp() && Button(session, ButtonProps.{.key = 40004, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 84.0, 44.0},
+            .label = Locale.Text("Back"), .class_name = 11}) != 0 { OpenStages(); return }
+    heading_width := area.width - 120.0
+    if heading_width > 420.0 { heading_width = 420.0 }
+    heading := Rectangle.{area.x + (area.width - heading_width) / 2.0, area.y + 64.0, heading_width, 84.0}
+    surface := Appearance.Surface()
+    surface.a = 225
+    unused Box(session, BoxProps.{.key = 40005, .bounds = heading, .fill = surface, .border = Appearance.Border(), .radius = 18.0})
+    CentreText(session, 40006, "Level editor", Rectangle.{heading.x + 8.0, heading.y + 10.0, heading.width - 16.0, 34.0}, 26)
+    CentreText(session, 40007, "Make levels of your own.",
+        Rectangle.{heading.x + 8.0, heading.y + 48.0, heading.width - 16.0, 24.0}, 15)
+    width := area.width - 48.0
+    if width > 300.0 { width = 300.0 }
+    left := area.x + (area.width - width) / 2.0
+    // The column grows upwards from the bottom: My levels, From a level,
+    // New level, then Continue when a board is open.
+    y := area.y + area.height - 84.0
+    changes := ifx editor_everything then 0 else EditorChangeCount()
+    if changes > 0 {
+        if Button(session, ButtonProps.{.key = 40014, .bounds = Rectangle.{left, y + 26.0, width, 40.0},
+                .label = Locale.Text("Campaign changes"), .tone = ButtonTone.ButtonToneNeutral,
+                .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
+            changes_armed = -1; editor_page = EDITOR_PAGE_CHANGES; return
+        }
+        y -= 52.0
+    }
+    if editor_everything {
+        if Button(session, ButtonProps.{.key = 40015, .bounds = Rectangle.{left, y, width, 52.0},
+                .label = Locale.Text("Edit campaign"), .class_name = 13, .pill = true,
+                .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorPick(EDITOR_PICK_CAMPAIGN); return }
+        y -= 64.0
+    }
+    half := (width - 10.0) / 2.0
+    if Button(session, ButtonProps.{.key = 40013, .bounds = Rectangle.{left, y, half, 52.0},
+            .label = Locale.Text("My levels"), .class_name = 13, .pill = true,
+            .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorOpenMine(); return }
+    if Button(session, ButtonProps.{.key = 40017, .bounds = Rectangle.{left + half + 10.0, y, half, 52.0},
+            .label = Locale.Text("Community"), .class_name = 13, .pill = true,
+            .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorOpenCommunity(now); return }
+    y -= 64.0
+    if Button(session, ButtonProps.{.key = 40012, .bounds = Rectangle.{left, y, width, 52.0},
+            .label = Locale.Text("From a level"), .class_name = 13, .pill = true,
+            .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorPick(EDITOR_PICK_TEMPLATE); return }
+    y -= 72.0
+    if Button(session, ButtonProps.{.key = 40011, .bounds = Rectangle.{left, y, width, 60.0},
+            .label = Locale.Text("New level"), .class_name = 13, .pill = true,
+            .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneSuccess,
+            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { EditorPick(EDITOR_PICK_BLANK); return }
+    y -= 72.0
+    resumable := editor_board_open && (ifx editor.own then editor.own_index < Own.own_level_count else EditorLevelOpen(editor.level))
+    if resumable {
+        at := CopyInto(editor_continue[:], 0, Locale.Text("Continue editing"))
+        at = CopyInto(editor_continue[:], at, " · ")
+        if editor.own {
+            at = CopyInto(editor_continue[:], at, TextUntilNul(Own.own_levels[editor.own_index].name[:]))
+        } else {
+            digits: [21]u8
+            at = CopyInto(editor_continue[:], at, FormatInteger(cast(s64)(editor.level + 1), digits[:]))
+        }
+        editor_continue[at] = 0
+        if Button(session, ButtonProps.{.key = 40010, .bounds = Rectangle.{left, y, width, 60.0},
+                .label = TextUntilNul(editor_continue[:]), .class_name = 13, .pill = true,
+                .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneNeutral,
+                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { EditorResume(); return }
+    }
+    if editor_notice != "" {
+        GameText(session, 40016, editor_notice, Rectangle.{area.x + 16.0, heading.y + heading.height + 12.0, area.width - 32.0, 24.0}, 15, false, true)
+    }
+}
+
+// Your collections, or the open one: its name, its levels and the ways to
+// add more. Every collection is private: only you see it.
+DrawEditorMine :: (session: Session, area: Rectangle, now: s64) {
+    unused Box(session, BoxProps.{.key = 40400, .bounds = area, .fill = Appearance.Canvas()})
+    furthest := EditorFurthestStage()
+    unused Image(session, ImageProps.{.key = 40401, .asset_path = ART_STAGE_COVERS, .bounds = area,
+        .source = Rectangle.{0.0, cast(float32)furthest * COVER_HEIGHT, 960.0, COVER_HEIGHT},
+        .fit = ImageFit.ImageFitCover, .smooth = true, .tint = cast(u32)0xffffff30, .alt_text = StageName(furthest)})
+    if Button(session, ButtonProps.{.key = 40402, .bounds = Rectangle.{area.x + 12.0, area.y + 10.0, 84.0, 40.0},
+            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 {
+        mine_name.focused = false
+        editor_page = EDITOR_PAGE_HOME
+        return
+    }
+    content_width := area.width - 24.0
+    if content_width > 640.0 { content_width = 640.0 }
+    left := area.x + (area.width - content_width) / 2.0
+    if mine_list || !own_open {
+        CentreText(session, 40403, "My levels", Rectangle.{area.x + 104.0, area.y + 14.0, area.width - 208.0, 30.0}, 22)
+        if Button(session, ButtonProps.{.key = 40404, .bounds = Rectangle.{left, area.y + 62.0, content_width, 48.0},
+                .label = Locale.Text("New collection"), .pill = true, .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
+            if EditorNewCollection() { mine_name.focused = true }
+            return
+        }
+        list := Rectangle.{left, area.y + 122.0, content_width, area.height - 134.0}
+        if Own.own_collection_count == 0 {
+            GameText(session, 40405, "No levels yet. Start one with New level.", list, 15, true, true)
+            return
+        }
+        scroller := Scroll(session, ScrollProps.{.key = 40406, .bounds = list,
+            .content_height = Own.own_collection_count * 64, .scroll_offset = mine_scroll})
+        mine_scroll = scroller.scroll_offset
+        if !scroller.opened { return }
+        chosen: s32 = -1
+        for index: 0..Own.own_collection_count - 1 {
+            entry := Own.own_collections[Own.own_collection_count - 1 - index]
+            key := cast(u64)(40410 + index * 4)
+            bounds := Rectangle.{list.x, scroller.content.y + cast(float32)index * 64.0, list.width, 56.0}
+            unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
+                .border = Appearance.Border(), .radius = 14.0})
+            if Button(session, ButtonProps.{.key = key + 1, .bounds = bounds, .label = TextUntilNul(entry.title[:]),
+                    .invisible = true}) != 0 { chosen = cast(s32)(Own.own_collection_count - 1 - index) }
+            PlainText(session, key + 2, TextUntilNul(entry.title[:]), Rectangle.{bounds.x + 16.0, bounds.y + 15.0, bounds.width - 120.0, 26.0}, 18)
+            GameText(session, key + 3, VisibilityName(entry.visibility), Rectangle.{bounds.x + bounds.width - 100.0, bounds.y + 18.0, 86.0, 22.0}, 14, true)
+        }
+        unused End(session)
+        if chosen >= 0 && Own.OwnOpen(TextUntilNul(Own.own_collections[chosen].record[:])) { EditorCollectionOpened() }
+        return
+    }
+    // The open collection: rename it in place, then its levels.
+    if Button(session, ButtonProps.{.key = 40407, .bounds = Rectangle.{area.x + area.width - 168.0, area.y + 10.0, 156.0, 40.0},
+            .label = Locale.Text("All collections"), .tone = ButtonTone.ButtonToneNeutral}) != 0 {
+        mine_name.focused = false
+        unused Own.OwnRefresh()
+        mine_list = true
+        mine_scroll = 0
+        return
+    }
+    was_focused := mine_name.focused
+    committed := DrawNameField(session, *mine_name, 40408, Rectangle.{left, area.y + 60.0, content_width, 52.0},
+        Locale.Text("Collection name"), 60)
+    if (committed || (was_focused && !mine_name.focused)) && mine_name.length > 0 {
+        mine_name.focused = false
+        Own.OwnRename(TextView(mine_name.bytes[0:mine_name.length]))
+        if !Own.OwnSave() { editor_notice = "Your levels could not be saved." }
+    }
+    GameText(session, 40409, VisibilityLine(Own.own_visibility), Rectangle.{left + 4.0, area.y + 118.0, content_width - 120.0, 22.0}, 14, true)
+    if Account.SharingAvailable() && Own.own_level_count > 0 &&
+    Button(session, ButtonProps.{.key = 40420, .bounds = Rectangle.{left + content_width - 104.0, area.y + 112.0, 104.0, 34.0},
+            .label = Locale.Text("Share"), .tone = ButtonTone.ButtonToneNeutral,
+            .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
+        mine_name.focused = false
+        share_choice = Own.own_visibility
+        share_notice = ""
+        editor_page = EDITOR_PAGE_SHARE
+        return
+    }
+    buttons_y := area.y + area.height - 60.0
+    half := (content_width - 12.0) / 2.0
+    if Button(session, ButtonProps.{.key = 40480, .bounds = Rectangle.{left, buttons_y, half, 48.0},
+            .label = Locale.Text("New level"), .pill = true, .tone = ButtonTone.ButtonToneSuccess,
+            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { EditorPick(EDITOR_PICK_BLANK); return }
+    if Button(session, ButtonProps.{.key = 40481, .bounds = Rectangle.{left + half + 12.0, buttons_y, half, 48.0},
+            .label = Locale.Text("From a level"), .pill = true, .tone = ButtonTone.ButtonToneNeutral}) != 0 {
+        EditorPick(EDITOR_PICK_TEMPLATE); return
+    }
+    list := Rectangle.{left, area.y + 148.0, content_width, buttons_y - area.y - 160.0}
+    rows := Own.own_level_count + 1
+    scroller := Scroll(session, ScrollProps.{.key = 40411, .bounds = list,
+        .content_height = rows * 76, .scroll_offset = mine_scroll})
+    mine_scroll = scroller.scroll_offset
+    if !scroller.opened { return }
+    action: s32 = 0
+    target: s32 = -1
+    if Own.own_level_count == 0 {
+        GameText(session, 40412, "No levels yet. Start one with New level.",
+            Rectangle.{list.x, scroller.content.y + 12.0, list.width, 24.0}, 15, true, true)
+    }
+    for index: 0..Own.own_level_count - 1 {
+        own := *Own.own_levels[index]
+        key := cast(u64)(40500 + index * 10)
+        bounds := Rectangle.{list.x, scroller.content.y + cast(float32)index * 76.0, list.width, 68.0}
+        unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
+            .border = ifx editor.own && editor.own_index == cast(s32)index then ColorFromPacked(Appearance.Palette().selected) else Appearance.Border(),
+            .radius = 14.0})
+        if Button(session, ButtonProps.{.key = key + 1, .bounds = Rectangle.{bounds.x, bounds.y, bounds.width - 214.0, bounds.height},
+                .label = TextUntilNul(own.name[:]), .invisible = true}) != 0 { action = 1; target = cast(s32)index }
+        unused Image(session, ImageProps.{.key = key + 2, .asset_path = ART_STAGE_COVERS,
+            .bounds = Rectangle.{bounds.x + 8.0, bounds.y + 8.0, 78.0, 52.0},
+            .source = Rectangle.{0.0, cast(float32)own.stage * COVER_HEIGHT, 960.0, COVER_HEIGHT},
+            .fit = ImageFit.ImageFitCover, .smooth = true, .radius = 10.0, .alt_text = StageName(own.stage)})
+        PlainText(session, key + 3, TextUntilNul(own.name[:]), Rectangle.{bounds.x + 96.0, bounds.y + 12.0, bounds.width - 316.0, 24.0}, 17)
+        GameText(session, key + 4, StageName(own.stage), Rectangle.{bounds.x + 96.0, bounds.y + 38.0, bounds.width - 316.0, 20.0}, 13, true)
+        x := bounds.x + bounds.width - 208.0
+        if Button(session, ButtonProps.{.key = key + 5, .bounds = Rectangle.{x, bounds.y + 14.0, 64.0, 40.0},
+                .label = Locale.Text("Play"), .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 { action = 2; target = cast(s32)index }
+        if Button(session, ButtonProps.{.key = key + 6, .bounds = Rectangle.{x + 70.0, bounds.y + 14.0, 40.0, 40.0},
+                .label = Locale.Text("Move up"), .icon_only = true, .icon_shape = "S2rr:M6 15L12 9L18 15",
+                .disabled = index == 0}) != 0 { action = 3; target = cast(s32)index }
+        if Button(session, ButtonProps.{.key = key + 7, .bounds = Rectangle.{x + 114.0, bounds.y + 14.0, 40.0, 40.0},
+                .label = Locale.Text("Move down"), .icon_only = true, .icon_shape = "S2rr:M6 9L12 15L18 9",
+                .disabled = cast(s32)index == Own.own_level_count - 1}) != 0 { action = 4; target = cast(s32)index }
+        armed := mine_armed == cast(s32)index
+        if Button(session, ButtonProps.{.key = key + 8, .bounds = Rectangle.{x + 158.0, bounds.y + 14.0, 44.0, 40.0},
+                .label = Locale.Text(ifx armed then "Sure?" else "Delete"), .icon_only = !armed,
+                .icon_shape = "S2rr:M6 7L18 7M9 7L9 5L15 5L15 7M8 7L9 19L15 19L16 7",
+                .tone = ButtonTone.ButtonToneNeutral,
+                .emphasis = ifx armed then ButtonEmphasis.ButtonEmphasisFilled else ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
+            action = 5; target = cast(s32)index
+        }
+    }
+    // The whole collection goes only after a second press.
+    delete_bounds := Rectangle.{list.x, scroller.content.y + cast(float32)Own.own_level_count * 76.0 + 8.0, list.width, 44.0}
+    if Button(session, ButtonProps.{.key = 40490, .bounds = delete_bounds,
+            .label = Locale.Text(ifx mine_armed == -2 then "Sure?" else "Delete collection"),
+            .tone = ButtonTone.ButtonToneNeutral, .emphasis = ifx mine_armed == -2 then ButtonEmphasis.ButtonEmphasisFilled
+                else ButtonEmphasis.ButtonEmphasisSoft}) != 0 { action = 6 }
+    unused End(session)
+    if action == 1 { EditorOpenOwn(target) }
+    else if action == 2 { EditorOpenOwn(target); EditorPlaytest(now) }
+    else if action == 3 || action == 4 {
+        mine_armed = -1
+        if Own.OwnMove(target, ifx action == 3 then -1 else 1) {
+            if editor.own && editor.own_index == target { editor.own_index += ifx action == 3 then -1 else 1 }
+            else if editor.own && editor.own_index == target + (ifx action == 3 then -1 else 1) { editor.own_index = target }
+            if !Own.OwnSave() { editor_notice = "Your levels could not be saved." }
+        }
+    } else if action == 5 {
+        if mine_armed != target { mine_armed = target; return }
+        mine_armed = -1
+        Own.OwnRemove(target)
+        if editor.own {
+            if editor.own_index == target { editor_board_open = false; editor.own = false }
+            else if editor.own_index > target { editor.own_index -= 1 }
+        }
+        if !Own.OwnSave() { editor_notice = "Your levels could not be saved." }
+    } else if action == 6 {
+        if mine_armed != -2 { mine_armed = -2; return }
+        mine_armed = -1
+        if Own.OwnDelete() {
+            own_open = false
+            if editor.own { editor_board_open = false; editor.own = false }
+            unused Own.OwnRefresh()
+            mine_list = true
+        } else { editor_notice = "Your levels could not be saved." }
+    }
+}
+
+// Sharing uses the same publications service and permissions as Shovey:
+// Private (the default), Friends or Everyone.
+VisibilityName :: (visibility: s32) -> string {
+    if visibility == Collections.COLLECTION_PUBLIC { return "Everyone" }
+    if visibility == Collections.COLLECTION_FRIENDS { return "Friends" }
+    return "Private"
+}
+VisibilityLine :: (visibility: s32) -> string {
+    if visibility == Collections.COLLECTION_PUBLIC { return "Everyone can see it." }
+    if visibility == Collections.COLLECTION_FRIENDS { return "Your friends can see it." }
+    return "Private: only you can see it."
+}
+ShareProblem :: (result: s32) -> string {
+    if result == Sharing.SHARE_UNAVAILABLE { return "Sharing is not available here." }
+    if result == Sharing.SHARE_SIGNED_OUT { return "Sign in to share levels." }
+    if result == Sharing.SHARE_OFFLINE { return "You are offline. Try again later." }
+    if result == Sharing.SHARE_NOT_FOUND { return "That collection is no longer shared." }
+    if result == Sharing.SHARE_TOO_LARGE { return "This collection is too large to share." }
+    if result == Sharing.SHARE_BUSY { return "Please wait a moment and try again." }
+    return "Sharing was refused."
+}
+EditorShareStarted :: (result: s32, waiting: string, now: s64) {
+    if result == Sharing.SHARE_WAITING { share_notice = waiting; share_poll_at = now + 600 }
+    else { share_notice = ShareProblem(result) }
+}
+// Polls the request in flight about once a second.
+EditorSharePump :: (now: s64) {
+    if Sharing.share_kind == Sharing.SHARE_IDLE || now < share_poll_at { return }
+    share_poll_at = now + 1000
+    kind := Sharing.share_kind
+    result := Sharing.SharePoll()
+    if result == Sharing.SHARE_WAITING { return }
+    if result != Sharing.SHARE_OK { share_notice = ShareProblem(result); return }
+    if kind == Sharing.SHARE_PUBLISH {
+        share_notice = ifx Own.own_visibility == Collections.COLLECTION_PUBLIC then "Shared with everyone." else "Shared with your friends."
+    } else if kind == Sharing.SHARE_UNPUBLISH {
+        share_notice = "Only you can see it now."
+    } else if kind == Sharing.SHARE_FIND {
+        share_notice = ifx Sharing.share_result_count == 0 then "No shared collections found." else ""
+    } else if kind == Sharing.SHARE_FETCH {
+        // The copy is a new private collection of your own; open it.
+        unused Own.OwnRefresh()
+        EditorCollectionOpened()
+        editor_notice = "Added to My levels."
+        share_notice = ""
+        editor_page = EDITOR_PAGE_MINE
+    }
+}
+
+// Who may see the open collection, and publishing it for them.
+DrawEditorShare :: (session: Session, area: Rectangle, now: s64) {
+    EditorSharePump(now)
+    unused Box(session, BoxProps.{.key = 43000, .bounds = area, .fill = Appearance.Canvas()})
+    waiting := Sharing.share_kind != Sharing.SHARE_IDLE
+    if Button(session, ButtonProps.{.key = 43001, .bounds = Rectangle.{area.x + 12.0, area.y + 10.0, 84.0, 40.0},
+            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 {
+        editor_page = EDITOR_PAGE_MINE
+        return
+    }
+    CentreText(session, 43002, "Share collection", Rectangle.{area.x + 104.0, area.y + 14.0, area.width - 208.0, 30.0}, 22)
+    width := area.width - 24.0
+    if width > 520.0 { width = 520.0 }
+    left := area.x + (area.width - width) / 2.0
+    PlainText(session, 43003, TextUntilNul(Own.own_title[:]), Rectangle.{left, area.y + 66.0, width, 28.0}, 20)
+    GameText(session, 43004, VisibilityLine(Own.own_visibility), Rectangle.{left, area.y + 98.0, width, 22.0}, 14, true)
+    // Private, Friends, Everyone.
+    labels: [3]string = .["Only you", "Friends", "Everyone"]
+    values: [3]s32 = .[Collections.COLLECTION_PRIVATE, Collections.COLLECTION_FRIENDS, Collections.COLLECTION_PUBLIC]
+    third := (width - 20.0) / 3.0
+    for index: 0..2 {
+        chosen := share_choice == values[index]
+        if Button(session, ButtonProps.{.key = cast(u64)(43010 + index),
+                .bounds = Rectangle.{left + cast(float32)index * (third + 10.0), area.y + 140.0, third, 48.0},
+                .label = Locale.Text(labels[index]), .pill = true, .disabled = waiting,
+                .tone = ifx chosen then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral,
+                .emphasis = ifx chosen then ButtonEmphasis.ButtonEmphasisFilled else ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
+            share_choice = values[index]
+            share_notice = ""
+        }
+    }
+    published := TextUntilNul(Own.own_publication[:]) != ""
+    action := ""
+    if share_choice == Collections.COLLECTION_PRIVATE {
+        if published { action = "Stop sharing" }
+    } else {
+        action = ifx published then "Update share" else "Share now"
+    }
+    if action != "" && Button(session, ButtonProps.{.key = 43020, .bounds = Rectangle.{left, area.y + 206.0, width, 52.0},
+            .label = Locale.Text(action), .pill = true, .disabled = waiting,
+            .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneSuccess,
+            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 {
+        if share_choice == Collections.COLLECTION_PRIVATE {
+            EditorShareStarted(Sharing.ShareUnpublish(), "Sharing…", now)
+        } else {
+            title: [160]u8
+            title[CopyInto(title[:], 0, TextUntilNul(Own.own_title[:]))] = 0
+            EditorShareStarted(Sharing.SharePublish(TextUntilNul(title[:]), share_choice), "Sharing…", now)
+        }
+    }
+    if share_notice != "" {
+        GameText(session, 43021, share_notice, Rectangle.{left, area.y + 272.0, width, 24.0}, 15, true, true)
+    }
+}
+
+EditorOpenCommunity :: (now: s64) {
+    editor_notice = ""
+    community_scroll = 0
+    editor_page = EDITOR_PAGE_COMMUNITY
+    if !Account.SharingAvailable() { share_notice = ShareProblem(Sharing.SHARE_UNAVAILABLE); return }
+    if Sharing.share_kind == Sharing.SHARE_IDLE {
+        EditorShareStarted(Sharing.ShareFind(TextView(community_query.bytes[0:community_query.length])), "Searching…", now)
+    }
+}
+
+// Collections other players shared: newest first, or one player's by name.
+// Adding one makes a private copy in My levels.
+DrawEditorCommunity :: (session: Session, area: Rectangle, now: s64) {
+    EditorSharePump(now)
+    unused Box(session, BoxProps.{.key = 43100, .bounds = area, .fill = Appearance.Canvas()})
+    waiting := Sharing.share_kind != Sharing.SHARE_IDLE
+    if Button(session, ButtonProps.{.key = 43101, .bounds = Rectangle.{area.x + 12.0, area.y + 10.0, 84.0, 40.0},
+            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 {
+        community_query.focused = false
+        editor_page = EDITOR_PAGE_HOME
+        return
+    }
+    CentreText(session, 43102, "Community", Rectangle.{area.x + 104.0, area.y + 14.0, area.width - 208.0, 30.0}, 22)
+    width := area.width - 24.0
+    if width > 640.0 { width = 640.0 }
+    left := area.x + (area.width - width) / 2.0
+    committed := DrawNameField(session, *community_query, 43103, Rectangle.{left, area.y + 60.0, width - 120.0, 52.0},
+        Locale.Text("Player name"), 40)
+    search := Button(session, ButtonProps.{.key = 43104, .bounds = Rectangle.{left + width - 110.0, area.y + 62.0, 110.0, 48.0},
+            .label = Locale.Text("Search"), .pill = true, .disabled = waiting || !Account.SharingAvailable(),
+            .tone = ButtonTone.ButtonToneSuccess, .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0
+    if (committed || search) && !waiting && Account.SharingAvailable() {
+        community_query.focused = false
+        community_scroll = 0
+        EditorShareStarted(Sharing.ShareFind(TextView(community_query.bytes[0:community_query.length])), "Searching…", now)
+    }
+    top := area.y + 124.0
+    if share_notice != "" {
+        GameText(session, 43105, share_notice, Rectangle.{left, top, width, 24.0}, 15, true, true)
+        top += 32.0
+    }
+    if waiting { return }
+    list := Rectangle.{left, top, width, area.y + area.height - top - 12.0}
+    count := Sharing.share_result_count
+    if count <= 0 { return }
+    scroller := Scroll(session, ScrollProps.{.key = 43106, .bounds = list,
+        .content_height = count * 76, .scroll_offset = community_scroll})
+    community_scroll = scroller.scroll_offset
+    if !scroller.opened { return }
+    chosen: s32 = -1
+    for index: 0..count - 1 {
+        meta := *Sharing.share_results[index]
+        key := cast(u64)(43110 + index * 6)
+        bounds := Rectangle.{list.x, scroller.content.y + cast(float32)index * 76.0, list.width, 68.0}
+        unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
+            .border = Appearance.Border(), .radius = 14.0})
+        PlainText(session, key + 1, TextUntilNul(meta.title[:]), Rectangle.{bounds.x + 16.0, bounds.y + 10.0, bounds.width - 190.0, 24.0}, 17)
+        digits: [21]u8
+        line: [128]u8
+        at := CopyInto(line[:], 0, FormatInteger(cast(s64)meta.levels, digits[:]))
+        at = CopyInto(line[:], at, " · ")
+        at = CopyInto(line[:], at, ifx TextUntilNul(meta.alias[:]) != "" then TextUntilNul(meta.alias[:]) else "?")
+        line[at] = 0
+        PlainText(session, key + 2, TextUntilNul(line[:]), Rectangle.{bounds.x + 16.0, bounds.y + 38.0, bounds.width - 190.0, 20.0}, 13)
+        if Button(session, ButtonProps.{.key = key + 3, .bounds = Rectangle.{bounds.x + bounds.width - 168.0, bounds.y + 14.0, 156.0, 40.0},
+                .label = Locale.Text("Add to My levels"), .pill = true, .tone = ButtonTone.ButtonToneSuccess,
+                .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 { chosen = cast(s32)index }
+    }
+    unused End(session)
+    if chosen >= 0 { EditorShareStarted(Sharing.ShareFetch(chosen), "Adding…", now) }
+}
+
+// The campaign levels you changed before own levels existed. They still
+// play as you made them; Reset brings back the published level.
+DrawEditorChanges :: (session: Session, area: Rectangle) {
+    unused Box(session, BoxProps.{.key = 40700, .bounds = area, .fill = Appearance.Canvas()})
+    if Button(session, ButtonProps.{.key = 40701, .bounds = Rectangle.{area.x + 12.0, area.y + 10.0, 84.0, 40.0},
+            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { editor_page = EDITOR_PAGE_HOME; return }
+    CentreText(session, 40702, "Campaign changes", Rectangle.{area.x + 104.0, area.y + 14.0, area.width - 208.0, 30.0}, 22)
+    content_width := area.width - 24.0
+    if content_width > 640.0 { content_width = 640.0 }
+    left := area.x + (area.width - content_width) / 2.0
+    GameText(session, 40703, "These levels play as you changed them. Reset one to play the original again.",
+        Rectangle.{left, area.y + 58.0, content_width, 40.0}, 14, true)
+    count := EditorChangeCount()
+    list := Rectangle.{left, area.y + 104.0, content_width, area.height - 116.0}
+    scroller := Scroll(session, ScrollProps.{.key = 40704, .bounds = list,
+        .content_height = count * 60, .scroll_offset = changes_scroll})
+    changes_scroll = scroller.scroll_offset
+    if !scroller.opened { return }
+    reset: s32 = -1
+    for index: 0..count - 1 {
+        portrait: bool
+        level := EditorChangeAt(cast(s32)index, *portrait)
+        key := cast(u64)(40710 + index * 4)
+        bounds := Rectangle.{list.x, scroller.content.y + cast(float32)index * 60.0, list.width, 52.0}
+        unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
+            .border = Appearance.Border(), .radius = 12.0})
+        digits: [21]u8
+        at := CopyInto(editor_label[:], 0, Locale.Text(StageName(StageOf(level))))
+        at = CopyInto(editor_label[:], at, " ")
+        at = CopyInto(editor_label[:], at, FormatInteger(cast(s64)(level - StageFirst(StageOf(level)) + 1), digits[:]))
+        at = CopyInto(editor_label[:], at, " · ")
+        at = CopyInto(editor_label[:], at, Locale.Text(ifx portrait then "Portrait" else "Landscape"))
+        editor_label[at] = 0
+        unused Text(session, TextProps.{.key = key + 1, .bounds = Rectangle.{bounds.x + 16.0, bounds.y + 14.0, bounds.width - 140.0, 24.0},
+            .text = TextUntilNul(editor_label[:]), .font = 16, .wrap = TextWrap.TextWrapNone})
+        armed := changes_armed == cast(s32)index
+        if Button(session, ButtonProps.{.key = key + 2, .bounds = Rectangle.{bounds.x + bounds.width - 116.0, bounds.y + 6.0, 108.0, 40.0},
+                .label = Locale.Text(ifx armed then "Sure?" else "Reset"), .tone = ButtonTone.ButtonToneNeutral,
+                .emphasis = ifx armed then ButtonEmphasis.ButtonEmphasisFilled else ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
+            if armed { reset = cast(s32)index } else { changes_armed = cast(s32)index }
+        }
+    }
+    unused End(session)
+    if reset >= 0 {
+        portrait: bool
+        level := EditorChangeAt(reset, *portrait)
+        unused Custom.ClearCustomLevel(level, portrait)
+        changes_armed = -1
+        if EditorChangeCount() == 0 { editor_page = EDITOR_PAGE_HOME }
+    }
+}
+
+// One card for each landscape reached, its painting on top. The page itself
+// shows the furthest landscape's painting, so it changes with the journey.
+DrawEditorStages :: (session: Session, area: Rectangle) {
+    furthest := EditorFurthestStage()
+    unused Box(session, BoxProps.{.key = 40100, .bounds = area, .fill = Color.{34, 66, 39, 255}})
+    unused Image(session, ImageProps.{.key = 40101, .asset_path = ART_STAGE_COVERS, .bounds = area,
+        .source = Rectangle.{0.0, cast(float32)furthest * COVER_HEIGHT, 960.0, COVER_HEIGHT},
+        .fit = ImageFit.ImageFitCover, .smooth = true, .alt_text = StageName(furthest)})
+    unused Box(session, BoxProps.{.key = 40102, .bounds = area, .fill = Appearance.ArtworkShade()})
+    if Button(session, ButtonProps.{.key = 40103, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 84.0, 44.0},
+            .label = Locale.Text("Back"), .class_name = 11}) != 0 { editor_page = EDITOR_PAGE_HOME; return }
+    title := Rectangle.{area.x + 108.0, area.y + 14.0, area.width - 216.0, 40.0}
+    surface := Appearance.Surface()
+    surface.a = 225
+    unused Box(session, BoxProps.{.key = 40104, .bounds = title, .fill = surface, .radius = 14.0})
+    CentreText(session, 40105, ifx editor_pick == EDITOR_PICK_BLANK then "New level" else ifx editor_pick == EDITOR_PICK_TEMPLATE then "From a level" else "Choose landscape",
+        Rectangle.{title.x + 8.0, title.y + 6.0, title.width - 16.0, 28.0}, 20)
+    shown: [5]s32
+    open_count: s32 = 0
+    for stage: 0..STAGE_COUNT - 1 {
+        if EditorStageOpen(cast(s32)stage) { shown[open_count] = cast(s32)stage; open_count += 1 }
+    }
+    grid := Rectangle.{area.x + 12.0, area.y + 68.0, area.width - 24.0, area.height - 80.0}
+    columns: s32 = ifx grid.width >= 900.0 then 2 else 1
+    card_width := (grid.width - cast(float32)(columns - 1) * 12.0) / cast(float32)columns
+    if card_width > 560.0 { card_width = 560.0 }
+    left := grid.x + (grid.width - card_width * cast(float32)columns - cast(float32)(columns - 1) * 12.0) / 2.0
+    picture_height := (card_width - 12.0) / 3.0
+    card_height := picture_height + 52.0
+    rows := (open_count + columns - 1) / columns
+    hint := open_count < STAGE_COUNT
+    content := cast(float32)rows * (card_height + 12.0) + (ifx hint then 36.0 else 0.0)
+    scroller := Scroll(session, ScrollProps.{.key = 40106, .bounds = grid,
+        .content_height = cast(s32)content, .scroll_offset = editor_stage_scroll})
+    editor_stage_scroll = scroller.scroll_offset
+    if !scroller.opened { return }
+    chosen: s32 = -1
+    for index: 0..open_count - 1 {
+        stage := shown[index]
+        key := cast(u64)(40110 + index * 8)
+        bounds := Rectangle.{left + cast(float32)(index % columns) * (card_width + 12.0),
+            scroller.content.y + cast(float32)(index / columns) * (card_height + 12.0), card_width, card_height}
+        unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
+            .border = ifx stage == furthest then ColorFromPacked(Appearance.Palette().selected) else Appearance.Border(), .radius = 16.0})
+        if Button(session, ButtonProps.{.key = key + 1, .bounds = bounds, .label = Locale.Text(StageName(stage)),
+                .invisible = true}) != 0 { chosen = stage }
+        unused Image(session, ImageProps.{.key = key + 2,
+            .bounds = Rectangle.{bounds.x + 6.0, bounds.y + 6.0, card_width - 12.0, picture_height},
+            .asset_path = ART_STAGE_COVERS, .source = Rectangle.{0.0, cast(float32)stage * COVER_HEIGHT, 960.0, COVER_HEIGHT},
+            .fit = ImageFit.ImageFitCover, .smooth = true, .radius = 12.0, .alt_text = StageName(stage)})
+        GameText(session, key + 3, StageName(stage), Rectangle.{bounds.x + 14.0, bounds.y + picture_height + 16.0, card_width - 110.0, 26.0}, 20)
+        digits: [48]u8
+        total: [21]u8
+        at := CopyInto(digits[:], 0, FormatInteger(cast(s64)EditorOpenLevels(stage), total[:]))
+        at = CopyInto(digits[:], at, " / ")
+        at = CopyInto(digits[:], at, FormatInteger(cast(s64)StageLevels(stage), total[:]))
+        digits[at] = 0
+        GameText(session, key + 4, TextUntilNul(digits[:]), Rectangle.{bounds.x + card_width - 96.0, bounds.y + picture_height + 18.0, 82.0, 22.0}, 15, true)
+    }
+    if hint {
+        GameText(session, 40160, "Finish levels to unlock more",
+            Rectangle.{grid.x, scroller.content.y + cast(float32)rows * (card_height + 12.0) + 6.0, grid.width, 24.0}, 15, false, true)
+    }
+    unused End(session)
+    if chosen >= 0 && editor_pick == EDITOR_PICK_BLANK { EditorNewOwn(chosen, -1) }
+    else if chosen >= 0 { EditorOpenStage(chosen) }
 }
 
 DrawEditor :: (session: Session, area: Rectangle, now: s64) {
+    if editor_page == EDITOR_PAGE_HOME { DrawEditorHome(session, area, now); return }
+    if editor_page == EDITOR_PAGE_STAGES { DrawEditorStages(session, area); return }
+    if editor_page == EDITOR_PAGE_MINE { DrawEditorMine(session, area, now); return }
+    if editor_page == EDITOR_PAGE_CHANGES { DrawEditorChanges(session, area); return }
+    if editor_page == EDITOR_PAGE_SHARE { DrawEditorShare(session, area, now); return }
+    if editor_page == EDITOR_PAGE_COMMUNITY { DrawEditorCommunity(session, area, now); return }
     if editor.browsing { DrawLevelBrowser(session, area); return }
     stage_of_level := StageOf(editor.level)
     fancy_garden = true
@@ -1353,7 +2606,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
             .label = Locale.Text("Save"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorSave() }
     reset_label := ifx editor.reset_armed then "Sure?" else "Reset"
     if Button(session, ButtonProps.{.key = 8220, .bounds = Rectangle.{panel.x + 130.0, bottom + 40.0, 110.0, 40.0},
-            .label = reset_label, .tone = ButtonTone.ButtonToneNeutral,
+            .label = reset_label, .tone = ButtonTone.ButtonToneNeutral, .disabled = editor.own && !editor.turned,
             .emphasis = ifx editor.reset_armed then ButtonEmphasis.ButtonEmphasisFilled
                 else ButtonEmphasis.ButtonEmphasisSoft}) != 0 {
         if editor.reset_armed { EditorReset() }
@@ -1376,59 +2629,181 @@ CoinText :: (amount: s32) -> string {
     return TextUntilNul(coin_text[:])
 }
 
-DrawDailyRewards :: (session: Session, area: Rectangle) {
-    PageHeading(session, area, "Daily rewards")
-    GameText(session, 29600, CoinText(Rewards.Coins()), Rectangle.{area.x + 16.0, area.y + 82.0, area.width - 32.0, 28.0}, 20)
+// The chest's card: today's gift and the next days, one icon each, so there
+// is always a reason to come back tomorrow. Later days stay a surprise.
+reward_day_label: [5][32]u8;
+DrawRewardsModal :: (session: Session, area: Rectangle) {
+    unused Box(session, BoxProps.{.key = 29620, .bounds = area, .fill = Color.{8, 18, 12, 150}})
+    width := area.width - 32.0
+    if width > 440.0 { width = 440.0 }
+    guest := !Rewards.SignedIn()
+    #if #defined(WURM_PORTABLE) {
+        // Hosts supply their own sign-in.
+        guest = false
+    }
+    height: float32 = ifx guest then 368.0 else 324.0
+    card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0 + 24.0, width, height}
+    // A tap beside the card closes it.
+    pointer := GamePointer(session)
+    if pointer.pressed && !Input.PointInBounds(pointer.x, pointer.y, card) &&
+        !Input.PointInBounds(pointer.x, pointer.y, Rectangle.{card.x + (width - 120.0) / 2.0, card.y - 56.0, 120.0, 64.0}) {
+        game.mode = MODE_STAGES
+        return
+    }
     ready := Rewards.ClaimReady()
-    if Button(session, ButtonProps.{.key = 29601,
-            .bounds = Rectangle.{area.x + 16.0, area.y + 122.0, area.width - 32.0, 44.0},
-            .label = Locale.Text(ifx ready then "Claim" else "Come back tomorrow"), .disabled = !ready,
-            .class_name = 10}) != 0 { unused Rewards.Claim() }
-    grid := Rectangle.{area.x + 12.0, area.y + 184.0, area.width - 24.0, area.height - 196.0}
-    columns: s32 = ifx area.width >= 650.0 then 6 else 5
-    width := (grid.width - cast(float32)(columns - 1) * 6.0 - 12.0) / cast(float32)columns
-    rows := (Rewards.DAILY_DAYS + columns - 1) / columns
-    scroll := Scroll(session, ScrollProps.{.key = 29602, .bounds = grid,
-        .content_height = rows * 108, .scroll_offset = daily_scroll})
-    daily_scroll = scroll.scroll_offset
-    if !scroll.opened { return }
-    for day: 1..Rewards.DAILY_DAYS {
-        id := cast(s32)day
-        key := cast(u64)(29700 + day * 10)
-        x := scroll.content.x + cast(float32)((day - 1) % columns) * (width + 6.0)
-        y := scroll.content.y + cast(float32)((day - 1) / columns) * 108.0
-        cycle_start := (ifx Rewards.Day() > 0 then (Rewards.Day() - 1) / Rewards.DAILY_DAYS else 0) * Rewards.DAILY_DAYS
-        absolute_day := cycle_start + id
-        claimed := absolute_day <= Rewards.Day()
-        unused Box(session, BoxProps.{.key = key, .bounds = Rectangle.{x, y, width, 100.0},
-            .fill = Appearance.Surface(), .border = ifx claimed then Color.{113,152,106,255} else Appearance.Border(), .radius = 10.0})
-        digits: [21]u8
-        GameText(session, key + 1, FormatInteger(day, digits[:]), Rectangle.{x + 2.0, y + 5.0, width - 4.0, 22.0}, 15, false, true)
-        skin := Rewards.DaySkin(absolute_day)
-        if skin > 0 {
-            Character(session, key + 2, Rectangle.{x + (width - 38.0) / 2.0, y + 29.0, 38.0, 38.0}, skin, true)
-            GameText(session, key + 3, SkinName(skin), Rectangle.{x + 2.0, y + 72.0, width - 4.0, 22.0}, 11, false, true)
-        } else {
-            dew := Rewards.DayDew(absolute_day)
-            amount := ifx dew > 0 then dew else Rewards.DayCoins(absolute_day)
-            GameText(session, key + 2, FormatInteger(cast(s64)amount, digits[:]), Rectangle.{x + 2.0, y + 34.0, width - 4.0, 28.0}, 22, false, true)
-            GameText(session, key + 3, ifx dew > 0 then "Dew" else "Coins", Rectangle.{x + 2.0, y + 70.0, width - 4.0, 22.0}, 12, true, true)
-            if dew > 0 {
-                status := Rewards.DewState(absolute_day)
-                if status == 3 || (claimed && status != 2) { GameText(session, key + 4, ifx status == 3 then "Sign in" else "Collecting…", Rectangle.{x + 2.0, y + 87.0, width - 4.0, 12.0}, 8, true, true) }
+    unused Box(session, BoxProps.{.key = 29621, .bounds = card, .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 24.0})
+    chest := Rectangle.{card.x + (width - 120.0) / 2.0, card.y - 60.0, 120.0, 120.0}
+    if ready { chest.y += RewardBob() }
+    RewardIcon(session, 29622, chest, ifx ready then 1 else 0, "Daily rewards")
+    if Button(session, ButtonProps.{.key = 29623, .bounds = Rectangle.{card.x + width - 48.0, card.y + 10.0, 38.0, 38.0},
+            .label = Locale.Text("Close"), .icon_only = true, .icon_shape = "S2rr:M7 7L17 17M17 7L7 17",
+            .tone = ButtonTone.ButtonToneNeutral}) != 0 { game.mode = MODE_STAGES; return }
+    CentreText(session, 29624, "Daily rewards", Rectangle.{card.x + 16.0, card.y + 66.0, width - 32.0, 32.0}, 24)
+    GameText(session, 29625, ifx ready then "Your gift is ready!" else "Come back tomorrow",
+        Rectangle.{card.x + 16.0, card.y + 100.0, width - 32.0, 22.0}, 15, true, true)
+    // The next five plan days, the one to claim first.
+    gap: float32 = 8.0
+    tile_width := (width - 32.0 - gap * 4.0) / 5.0
+    for index: 0..4 {
+        day := Rewards.Day() + 1 + cast(s32)index
+        key := cast(u64)(29630 + index * 8)
+        tile := Rectangle.{card.x + 16.0 + cast(float32)index * (tile_width + gap), card.y + 136.0, tile_width, 112.0}
+        first := index == 0
+        unused Box(session, BoxProps.{.key = key, .bounds = tile,
+            // A warm wash keeps the theme's text readable on today's gift.
+            .fill = ifx first && ready then Color.{255, 190, 64, 64} else Appearance.Canvas(),
+            .border = ifx first then ColorFromPacked(Appearance.Palette().selected) else Appearance.Border(), .radius = 14.0})
+        // Today or tomorrow by name, later days by number.
+        label := ""
+        if first { label = Locale.Text(ifx ready then "Today" else "Tomorrow") }
+        else if index == 1 && ready { label = Locale.Text("Tomorrow") }
+        else {
+            digits: [21]u8
+            number := FormatInteger(cast(s64)((day - 1) % Rewards.DAILY_DAYS + 1), digits[:])
+            // Each language places the number at its "%".
+            pattern := Locale.Text("Day %")
+            at: s32 = 0
+            for byte: pattern {
+                if byte == #char "%" { at = CopyInto(reward_day_label[index][:], at, number) }
+                else if at < 31 { reward_day_label[index][at] = byte; at += 1 }
             }
+            reward_day_label[index][at] = 0
+            label = TextUntilNul(reward_day_label[index][:])
+        }
+        unused Text(session, TextProps.{.key = key + 1, .bounds = Rectangle.{tile.x + 2.0, tile.y + 6.0, tile.width - 4.0, 18.0},
+            .text = label, .font = 12, .align = TextAlign.TextAlignCenter, .wrap = TextWrap.TextWrapNone})
+        icon_size: float32 = ifx tile_width < 64.0 then tile_width - 12.0 else 52.0
+        icon := Rectangle.{tile.x + (tile.width - icon_size) / 2.0, tile.y + 28.0, icon_size, icon_size}
+        skin := Rewards.DaySkin(day)
+        amount: s32 = 0
+        if skin > 0 {
+            Character(session, key + 2, icon, skin, true)
+        } else {
+            dew := Rewards.DayDew(day)
+            amount = ifx dew > 0 then dew else Rewards.DayCoins(day)
+            RewardIcon(session, key + 2, icon, ifx dew > 0 then 3 else 2, ifx dew > 0 then "Dew" else "Coins")
+        }
+        digits: [21]u8
+        GameText(session, key + 3, ifx skin > 0 then SkinName(skin) else FormatInteger(cast(s64)amount, digits[:]),
+            Rectangle.{tile.x + 2.0, tile.y + 84.0, tile.width - 4.0, 22.0}, ifx skin > 0 then 11 else 17, false, true)
+    }
+    y := card.y + 262.0
+    #if !#defined(WURM_PORTABLE) {
+        if guest {
+            if Button(session, ButtonProps.{.key = 29670, .bounds = Rectangle.{card.x + 16.0, y, width - 32.0, 36.0},
+                    .label = Locale.Text("Sign in to collect Dew"), .icon_shape = DewIcon.Shape,
+                    .tone = ButtonTone.ButtonToneNeutral, .emphasis = ButtonEmphasis.ButtonEmphasisSoft}) != 0 { Account.OpenProfile() }
+            y += 44.0
         }
     }
-    unused End(session)
+    if Button(session, ButtonProps.{.key = 29671, .bounds = Rectangle.{card.x + 16.0, y, width - 32.0, 52.0},
+            .label = Locale.Text(ifx ready then "Claim" else "Come back tomorrow"), .disabled = !ready, .pill = true,
+            .tone = ButtonTone.ButtonToneSuccess, .emphasis = ButtonEmphasis.ButtonEmphasisFilled,
+            .class_name = 10}) != 0 { unused Rewards.Claim() }
 }
 
 LocalPlayerText :: (id: s32, output: []u8) -> string {
-    digits: [21]u8
-    at := CopyInto(output, 0, Locale.Text("Player"))
-    at = CopyInto(output, at, " ")
-    at = CopyInto(output, at, FormatInteger(cast(s64)(id + 1), digits[:]))
+    name := *local_names[id]
+    at: s32 = 0
+    if name.length > 0 {
+        for index: 0..name.length - 1 { output[index] = name.bytes[index] }
+        at = name.length
+    } else {
+        digits: [21]u8
+        at = CopyInto(output, 0, Locale.Text("Player"))
+        at = CopyInto(output, at, " ")
+        at = CopyInto(output, at, FormatInteger(cast(s64)(id + 1), digits[:]))
+    }
     output[at] = 0
     return TextUntilNul(output)
+}
+// Every player may keep the plain worm; an owned skin dresses one player.
+LocalSkinFree :: (id: s32, skin: s32) -> bool {
+    if !Wardrobe.Available(skin) { return false }
+    if skin == 0 { return true }
+    for other: 0..local_players - 1 {
+        if cast(s32)other != id && local_skins[other] == skin { return false }
+    }
+    return true
+}
+LocalCycleSkin :: (id: s32, step: s32) {
+    skin := local_skins[id]
+    for tries: 1..Rewards.SKIN_COUNT {
+        skin = (skin + step + Rewards.SKIN_COUNT) % Rewards.SKIN_COUNT
+        if LocalSkinFree(id, skin) { local_skins[id] = skin; return }
+    }
+}
+// Player 1 starts in the profile's skin, the others in the next free ones.
+// Later visits keep the names and skins chosen before.
+OpenLocalSetup :: () {
+    if !local_skins_chosen {
+        local_skins_chosen = true
+        local_skins[0] = Wardrobe.skin
+        for id: 1..3 { local_skins[id] = 0; LocalCycleSkin(cast(s32)id, 1) }
+    }
+    local_round.phase = Local.SETUP
+    game.mode = MODE_LOCAL
+}
+#if !#defined(WURM_PORTABLE) {
+    // Draws one player's name field and applies its edit.
+    LocalNameField :: (session: Session, id: s32, bounds: Rectangle, key: s32) {
+        name := *local_names[id]
+        // Only the focused field takes this frame's typing.
+        input: TextFieldInput
+        typed: [256]u8
+        if name.focused { input = TextFieldInputFor(key, KeyboardModifiers(session), TypedTextTake(session, typed[:])) }
+        shown: [24]u8
+        for index: 0..name.length - 1 { shown[index] = name.bytes[index] }
+        placeholder: [48]u8
+        digits: [21]u8
+        at := CopyInto(placeholder[:], 0, Locale.Text("Player"))
+        at = CopyInto(placeholder[:], at, " ")
+        at = CopyInto(placeholder[:], at, FormatInteger(cast(s64)(id + 1), digits[:]))
+        placeholder[at] = 0
+        edited := TextField(session, TextFieldProps.{.key = cast(u64)(30000 + id), .bounds = bounds,
+            .value = TextView(shown[0:name.length]), .label = Locale.Text("Name"),
+            .placeholder = TextUntilNul(placeholder[:]), .cursor = name.cursor, .anchor = name.anchor,
+            .scroll_x = name.scroll_x, .focused = name.focused, .focus_id = 30000 + id,
+            .max_bytes = 16, .max_codepoints = 16, .input = input})
+        if edited.edit.changed {
+            start := edited.edit.start; end := edited.edit.end
+            replacement := edited.edit.replacement
+            if start >= 0 && end >= start && end <= name.length &&
+            cast(s64)(name.length - (end - start)) + replacement.count <= 16 {
+                joined: [48]u8
+                length: s32 = 0
+                for index: 0..start - 1 { joined[length] = name.bytes[index]; length += 1 }
+                for byte: replacement { joined[length] = byte; length += 1 }
+                for index: end..name.length - 1 { joined[length] = name.bytes[index]; length += 1 }
+                for index: 0..length - 1 { name.bytes[index] = joined[index] }
+                name.length = length
+            }
+        }
+        name.cursor = edited.cursor
+        name.anchor = edited.anchor
+        name.scroll_x = edited.scroll_x
+        name.focused = edited.focused
+    }
 }
 LocalControls :: (id: s32) -> string {
     if id == 0 { return "Arrow keys" }
@@ -1449,13 +2824,14 @@ LocalKey :: (key: s32, now: s64) {
 }
 DrawLocalPiece :: (session: Session, key: u64, stage: Rectangle, at: Point, id: s32, head: bool, direction: s32) {
     scale := stage.width / 640.0
-    size: float32 = ifx head then (ifx id == 0 && Wardrobe.skin > 0 then 17.0 else 19.0) else 16.5
+    skin := local_skins[id]
+    size: float32 = ifx head then (ifx skin > 0 then 17.0 else 19.0) else 16.5
     bounds := Rectangle.{stage.x + (cast(float32)at.x - size / 2.0) * scale,
         stage.y + (cast(float32)at.y - size / 2.0) * scale, size * scale, size * scale}
     if bounds.y < stage.y || bounds.y + bounds.height > stage.y + stage.height { return }
-    if id == 0 && Wardrobe.skin > 0 {
+    if skin > 0 {
         if !head { bounds.x += 2.25 * scale; bounds.y += 2.25 * scale; bounds.width = 12.0 * scale; bounds.height = bounds.width }
-        Character(session, key, bounds, Wardrobe.skin, head, direction)
+        Character(session, key, bounds, skin, head, direction)
         return
     }
     source := Rectangle.{cast(float32)(ifx head then direction else 4) * 32.0, 96.0, 32.0, 32.0}
@@ -1466,7 +2842,10 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64) {
     BoardSize(COLUMNS, ROWS)
     unused Box(session, BoxProps.{.key = 31000, .bounds = area, .fill = Appearance.Canvas()})
     if local_round.phase == Local.SETUP {
-        if key == Input.KeyEscape { OpenStages(); return }
+        // A focused name takes the typing; Enter or Escape only leave it.
+        editing := false
+        for id: 0..local_players - 1 { if local_names[id].focused { editing = true } }
+        if key == Input.KeyEscape && !editing { OpenStages(); return }
         PageHeading(session, area, "Local multiplayer")
         CentreText(session, 31001, "Players", Rectangle.{area.x + 16.0, area.y + 82.0, area.width - 32.0, 30.0}, 20)
         for count: 2..4 {
@@ -1475,33 +2854,55 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64) {
             if Button(session, ButtonProps.{.key = cast(u64)(31010 + count), .bounds = Rectangle.{x, area.y + 124.0, 60.0, 44.0},
                     .label = FormatInteger(count, digits[:]), .selected = local_players == count}) != 0 { local_players = cast(s32)count }
         }
-        for id: 0..local_players - 1 {
-            name: [48]u8
-            y := area.y + 188.0 + cast(float32)id * 36.0
-            GameText(session, cast(u64)(31020 + id), LocalPlayerText(cast(s32)id, name[:]), Rectangle.{area.x + 24.0, y, area.width / 2.0 - 24.0, 28.0}, 18)
-            GameText(session, cast(u64)(31030 + id), LocalControls(cast(s32)id), Rectangle.{area.x + area.width / 2.0, y, area.width / 2.0 - 24.0, 28.0}, 18)
+        // One row a player: name, skin and keys. Narrow windows drop the
+        // skin's name before anything else.
+        wide := area.width >= 760.0
+        row_width: float32 = ifx wide then 712.0 else 560.0
+        if row_width > area.width - 32.0 { row_width = area.width - 32.0 }
+        left := area.x + (area.width - row_width) / 2.0
+        field_width: float32 = ifx row_width >= 560.0 then 200.0 else 150.0
+        for index: 0..local_players - 1 {
+            id := cast(s32)index
+            if !LocalSkinFree(id, local_skins[id]) { local_skins[id] = 0 }
+            y := area.y + 184.0 + cast(float32)index * 60.0
+            #if !#defined(WURM_PORTABLE) {
+                LocalNameField(session, id, Rectangle.{left, y, field_width, 44.0}, key)
+            } else {
+                name: [48]u8
+                GameText(session, cast(u64)(31020 + id), LocalPlayerText(id, name[:]), Rectangle.{left, y + 8.0, field_width, 28.0}, 18)
+            }
+            x := left + field_width + 12.0
+            if Button(session, ButtonProps.{.key = cast(u64)(30010 + id), .bounds = Rectangle.{x, y, 40.0, 44.0},
+                    .label = Locale.Text("Previous skin"), .icon_only = true, .icon_shape = "S2rr:M15 6L9 12L15 18"}) != 0 { LocalCycleSkin(id, -1) }
+            CharacterPreview(session, cast(u64)(30100 + id * 32), Rectangle.{x + 46.0, y, 96.0, 44.0}, local_skins[id])
+            if Button(session, ButtonProps.{.key = cast(u64)(30020 + id), .bounds = Rectangle.{x + 148.0, y, 40.0, 44.0},
+                    .label = Locale.Text("Next skin"), .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18"}) != 0 { LocalCycleSkin(id, 1) }
+            x += 200.0
+            if wide {
+                GameText(session, cast(u64)(30030 + id), SkinName(local_skins[id]), Rectangle.{x, y + 10.0, 140.0, 26.0}, 16, true)
+                x += 148.0
+            }
+            GameText(session, cast(u64)(31030 + id), LocalControls(id), Rectangle.{x, y + 10.0, left + row_width - x, 26.0}, 16)
         }
         CentreText(session, 31040, "Last worm wins. Everyone enters from the bottom.", Rectangle.{area.x + 16.0, area.y + area.height - 120.0, area.width - 32.0, 26.0}, 15)
         if Button(session, ButtonProps.{.key = 31041,
                 .bounds = Rectangle.{area.x + (area.width - 240.0) / 2.0, area.y + area.height - 72.0, 240.0, 48.0},
-                .label = Locale.Text("Start round"), .class_name = 10}) != 0 || key == Input.KeyEnter {
+                .label = Locale.Text("Start round"), .class_name = 10}) != 0 || (key == Input.KeyEnter && !editing) {
             unused Local.Start(*local_round, local_players, now, cast(u32)(now & 4294967295))
         }
         return
     }
     native_keys := false
     first := key
-    #if !#defined(WURM_PORTABLE) && !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) {
-        next := DesktopInput.DesktopNextKey()
+    if native_keys_ready {
+        next := native_next_key()
         if next != 0 { native_keys = true; first = next }
     }
     LocalKey(first, now)
     #if !#defined(WURM_PORTABLE) {
         for pending: 0..31 {
             next := KeyboardTake(session)
-            #if !#defined(ANDROID_BUILD) && !#defined(PLATFORM_WEB) {
-                if native_keys { next = DesktopInput.DesktopNextKey() }
-            }
+            if native_keys { next = native_next_key() }
             if next == 0 { break }
             LocalKey(next, now)
         }
@@ -1528,7 +2929,11 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64) {
             if y == ROWS - 1 {
                 for id: 0..local_round.count - 1 {
                     column := COLUMNS * (cast(s32)id + 1) / (local_round.count + 1)
-                    if x == column && local_round.players[id].worm[local_round.players[id].length - 1].y >= (ROWS - 1) * 16 { tile = 0 }
+                    // An open entrance has rock posts beside it, as in a level.
+                    if local_round.players[id].worm[local_round.players[id].length - 1].y >= (ROWS - 1) * 16 {
+                        if x == column { tile = 0 }
+                        else if x == column - 1 || x == column + 1 { tile = 21 }
+                    }
                 }
             }
             Tile(session, cast(u64)(31200 + y * COLUMNS + x), stage, cast(s32)x, cast(s32)y, tile, Sheet(0))
@@ -1638,7 +3043,7 @@ PlaySelected :: (level: s32, now: s64) -> bool {
     Progress.Load()
     if !LevelAvailable(level) { return false }
     requested_level = level
-    if Controls.Chosen() { StartChosenRun(now) }
+    if Controls.Chosen() || KeyboardOnly() { StartChosenRun(now) }
     else { AskControls() }
     return true
 }
@@ -1816,8 +3221,7 @@ HandleInput :: (key: s32, now: s64) {
         return
     }
     if game.mode == MODE_STAGES && (key == 69 || key == 101) {
-        editor.browsing = true
-        OpenEditor(game.level)
+        OpenEditorHome()
         return
     }
     if game.mode == MODE_LEVELS {
@@ -1852,12 +3256,28 @@ HandleInput :: (key: s32, now: s64) {
             else { StartRun(now) }
         } else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_EDITOR {
-        if editor.browsing {
-            if key == Input.KeyEscape || key == 76 || key == 108 || key == 69 || key == 101 {
+        // Escape climbs one page: board, levels, landscapes, editor title.
+        if editor_page == EDITOR_PAGE_HOME {
+            if key == Input.KeyEscape || key == 69 || key == 101 { OpenStages() }
+            else if key == Input.KeyEnter || key == 32 {
+                if editor_board_open && (editor.own || EditorLevelOpen(editor.level)) { EditorResume() }
+                else { EditorPick(EDITOR_PICK_BLANK) }
+            }
+        } else if editor_page == EDITOR_PAGE_MINE || editor_page == EDITOR_PAGE_CHANGES || editor_page == EDITOR_PAGE_COMMUNITY {
+            if key == Input.KeyEscape { editor_page = EDITOR_PAGE_HOME }
+        } else if editor_page == EDITOR_PAGE_SHARE {
+            if key == Input.KeyEscape { editor_page = EDITOR_PAGE_MINE }
+        } else if editor_page == EDITOR_PAGE_STAGES {
+            if key == Input.KeyEscape { editor_page = EDITOR_PAGE_HOME }
+            else if key == 69 || key == 101 { OpenStages() }
+        } else if editor.browsing {
+            if key == Input.KeyEscape { EditorOpenStages() }
+            else if (key == 76 || key == 108 || key == 69 || key == 101) && editor_board_open && EditorLevelOpen(editor.level) {
                 editor.browsing = false
             }
-        } else if key == Input.KeyEscape || key == 69 || key == 101 { EditorExit() }
-        else if key == 76 || key == 108 { EditorSave(); editor.browsing = true }
+        } else if key == Input.KeyEscape { EditorBrowse() }
+        else if key == 69 || key == 101 { EditorExit() }
+        else if key == 76 || key == 108 { EditorBrowse() }
         else if key == 84 || key == 116 { EditorTurn() }
         else if key == 265 || key == 87 || key == 119 { EditorSwitch(-1) }
         else if key == 264 || key == 83 || key == 115 { EditorSwitch(1) }
@@ -1927,7 +3347,7 @@ DrawTopBar :: (session: Session, hud: Rectangle) {
                 .icon_shape = "S2rr:M9 6L15 12L9 18"}) != 0 { EditorSwitch(1) }
         if Button(session, ButtonProps.{.key = 8225, .bounds = Rectangle.{hud.x + 102.0, hud.y + 5.0, 88.0, 32.0},
                 .label = Locale.Text("Levels"), .tone = ButtonTone.ButtonToneSuccess}) != 0 {
-            EditorSave(); editor.browsing = true
+            EditorBrowse()
         }
         if Button(session,ButtonProps.{.key = 8226,.bounds = Rectangle.{hud.x + 202.0,hud.y + 5.0,96.0,32.0},
                 .label = Locale.Text("Landscape"),.tone = ifx !editor.turned then ButtonTone.ButtonToneSuccess else ButtonTone.ButtonToneNeutral}) != 0 && editor.turned { EditorTurn() }
@@ -2042,11 +3462,15 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     if !game.started {
         game.started = true
         OpenStages()
+        if rewards_at_start && !EditorApp() { game.mode = MODE_REWARDS }
     } else if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY) {
         previous_mode := game.mode
         ReloadLevel(game.level,now)
         game.mode = previous_mode
     }
+    // The editor app has no game title: every way out of a page lands on
+    // the editor's own title, and Back there leaves the app.
+    if EditorApp() && game.mode == MODE_STAGES { OpenEditorHome() }
     water_frame = cast(s32)((now / 130) % 3)
     enemy_frame = cast(s32)((now / 110) % 4)
     key: s32
@@ -2063,6 +3487,15 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
     if sound_popup && key == Input.KeyEscape { sound_popup = false; key = 0 }
+    editor_field_key = key
+    if game.mode == MODE_EDITOR && editor_page == EDITOR_PAGE_MINE && mine_name.focused {
+        if key == Input.KeyEscape { mine_name.focused = false }
+        key = 0
+    }
+    if game.mode == MODE_EDITOR && editor_page == EDITOR_PAGE_COMMUNITY && community_query.focused {
+        if key == Input.KeyEscape { community_query.focused = false }
+        key = 0
+    }
     if game.mode != MODE_PLAYING { sound_popup = false }
     if key == Input.KeyEscape {
         if !NavigateBack(now) {
@@ -2078,10 +3511,11 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // portrait and landscape both keep their proportions.
     showing_bar := game.mode != MODE_STAGES && game.mode != MODE_LEVELS &&
         game.mode != MODE_SETTINGS && game.mode != MODE_SHOP && game.mode != MODE_REWARDS &&
-        !(game.mode == MODE_CONTROLS && (controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS))
+        !(game.mode == MODE_CONTROLS && (controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS)) &&
+        !(game.mode == MODE_EDITOR && editor_page != EDITOR_PAGE_EDIT)
     bar_height: float32 = 0.0
     if showing_bar { bar_height = ifx viewport.width < 520.0 then 104.0 else 72.0 }
-    if game.mode == MODE_EDITOR { bar_height = 42.0 }
+    if game.mode == MODE_EDITOR && showing_bar { bar_height = 42.0 }
     hud := Rectangle.{viewport.x, viewport.y, viewport.width, bar_height}
     available_height := viewport.height - bar_height
     if available_height < 1.0 { available_height = 1.0 }
@@ -2090,7 +3524,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // already use this frame's direction. SwipeArea supplies captured contact;
     // its release-only swipe result is deliberately unused.
     contact: SwipeAreaResult
-    if game.mode == MODE_PLAYING && !sound_popup && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
+    if game.mode == MODE_PLAYING && !sound_popup && (!Controls.Pad() || KeyboardOnly()) && game.death_ticks == 0 && game.transition_ticks == 0 {
         contact = SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
             .label = Locale.Text("Steer the worm"), .now = cast(float64)now / 1000.0,
             .min_distance = 6.0})
@@ -2114,6 +3548,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         if Progress.Begin(game.level + 1, game.lives, game.score) { recorded_level = game.level }
         Progress.RecordRun(game.level + 2, game.score)
     }
+    if game.mode == MODE_FINISHED && editor.playtest && editor.own { EditorResume() }
     if game.mode == MODE_FINISHED {
         // Load after saving completion, then wait indefinitely for Start.
         // No simulation or stale steering can cross into this new board.
@@ -2140,15 +3575,16 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         area := Rectangle.{viewport.x, viewport.y, viewport.width, viewport.height}
         action := DrawTitle(session, area, stage_key)
         if action == 3 { OpenLevels() }
-        else if action == 4 { editor.browsing = true; OpenEditor(game.level) }
-        else if action == 5 { local_round.phase = Local.SETUP; game.mode = MODE_LOCAL }
+        else if action == 4 { OpenEditorHome() }
+        else if action == 5 { OpenLocalSetup() }
         else if action != 0 { Play(now, action == 2) }
     } else if game.mode == MODE_SHOP {
         DrawShop(session, viewport)
     } else if game.mode == MODE_SETTINGS {
         DrawSettings(session, viewport)
     } else if game.mode == MODE_REWARDS {
-        DrawDailyRewards(session, viewport)
+        unused DrawTitle(session, viewport, 0, false)
+        DrawRewardsModal(session, viewport)
     } else if game.mode == MODE_LEVELS {
         DrawLevels(session, viewport, now)
     } else if game.mode == MODE_CONTROLS {
@@ -2160,10 +3596,10 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         DrawEditor(session, area, now)
     } else {
         DrawBoard(session, stage)
-        if game.mode == MODE_PLAYING && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
+        if game.mode == MODE_PLAYING && (!Controls.Pad() || KeyboardOnly()) && game.death_ticks == 0 && game.transition_ticks == 0 {
             SwipeFeedback(session, SwipeFeedbackProps.{.key = 24010, .gesture = contact})
         }
-        if game.mode == MODE_PLAYING && Controls.Pad() {
+        if game.mode == MODE_PLAYING && Controls.Pad() && !KeyboardOnly() {
             pad := DirectionPad(session, DirectionPadProps.{.key = PLAY_STEERING_KEY,
                 .bounds = DirectionPadBounds(Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height}),
                 .label = Locale.Text("Direction pad"), .now = cast(float64)now / 1000.0, .repeat_seconds = 0.08,

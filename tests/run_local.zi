@@ -224,6 +224,9 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !Test("account_test", "account-test", accounts[:], "", none[:]) { return Fail("account") }
     if !Test("rewards_test", "rewards-test", accounts[:], "", none[:]) { return Fail("rewards") }
     if !Test("skin_art_test", "skin-art-test", none[:], "-lz", none[:]) { return Fail("skin art parity") }
+    if !Test("level_json_test", "level-json-test", none[:], "", none[:]) { return Fail("level JSON") }
+    if !Test("own_levels_test", "own-levels-test", none[:], "", none[:]) { return Fail("own levels") }
+    if !Test("level_sharing_test", "level-sharing-test", none[:], "", none[:]) { return Fail("level sharing") }
     if !AccountNavigation() { return Fail("account navigation") }
     if !Hosted() { return Fail("hosted") }
     if !Test("authored_levels_test", "authored-levels-test", none[:], "", none[:]) { return Fail("published campaign") }
@@ -234,7 +237,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     stages: [2]string = .["WORM_SHOT_LEVEL=20", "WORM_SHOT_STAGES=1"]
     editor: [1]string = .["WORM_SHOT_EDITOR=1"]
     if !Shot("remake-start", none[:]) || !Shot("remake-mountain-finale", finale[:]) || !Shot("remake-stages", stages[:]) ||
-       !Shot("remake-editor", editor[:]) { return Fail("headless pictures") }
+    !Shot("remake-editor", editor[:]) { return Fail("headless pictures") }
     print("Headless local tests: title, mountain finale, title after level 20 and the editor rendered with the new art.\n")
     desktop: [2]string = .["build", "desktop"]
     probe: [2]string = .["build", "modal-test"]

@@ -11,7 +11,7 @@ Perfil
 Configurações
 ---
 [wurm_ui_3]
-Loja de visuais
+Loja
 ---
 [wurm_ui_4]
 Uma pequena mudança de personagem.
@@ -243,3 +243,217 @@ Experimente o direcional
 ---
 [wurm_feature_25]
 Volte amanhã
+---
+[wurm_feature_26]
+Nome
+---
+[wurm_feature_27]
+Visual anterior
+---
+[wurm_feature_28]
+Próximo visual
+---
+[wurm_feature_29]
+Escolher paisagem
+---
+[wurm_feature_30]
+Continuar a editar
+---
+[wurm_feature_31]
+Molda cada nível que já alcançaste.
+---
+[wurm_feature_32]
+Espelhado — edita e guarda
+---
+[wurm_feature_33]
+Melhor estimativa — edita e guarda
+---
+[wurm_feature_34]
+Fechar
+---
+[wurm_feature_35]
+Hoje
+---
+[wurm_feature_36]
+Amanhã
+---
+[wurm_feature_37]
+Dia %
+---
+[wurm_feature_38]
+Ver todos os dias
+---
+[wurm_feature_39]
+O teu presente está pronto!
+---
+[wurm_feature_40]
+Inicia sessão para receber Dew
+---
+[wurm_feature_41]
+Visuais
+---
+[wurm_feature_42]
+Dew insuficiente.
+---
+[wurm_feature_43]
+Recarregar Dew
+---
+[wurm_own_0]
+Crie seus próprios níveis.
+---
+[wurm_own_1]
+Alterações na campanha
+---
+[wurm_own_2]
+Editar campanha
+---
+[wurm_own_3]
+Meus níveis
+---
+[wurm_own_4]
+A partir de um nível
+---
+[wurm_own_5]
+Novo nível
+---
+[wurm_own_6]
+Não foi possível salvar seus níveis.
+---
+[wurm_own_7]
+Esta coleção está cheia.
+---
+[wurm_own_8]
+Nova coleção
+---
+[wurm_own_9]
+Ainda não há níveis. Comece com Novo nível.
+---
+[wurm_own_10]
+Todas as coleções
+---
+[wurm_own_11]
+Nome da coleção
+---
+[wurm_own_12]
+Privada: só você pode vê-la.
+---
+[wurm_own_13]
+Privada
+---
+[wurm_own_14]
+Jogar
+---
+[wurm_own_15]
+Mover para cima
+---
+[wurm_own_16]
+Mover para baixo
+---
+[wurm_own_17]
+Certeza?
+---
+[wurm_own_18]
+Excluir
+---
+[wurm_own_19]
+Excluir coleção
+---
+[wurm_own_20]
+Estes níveis são jogados como você os alterou. Redefina um para jogar o original novamente.
+---
+[wurm_own_21]
+Redefinir
+---
+[wurm_own_22]
+Retrato
+---
+[wurm_own_23]
+Paisagem
+---
+[wurm_share_0]
+Comunidade
+---
+[wurm_share_1]
+Compartilhar
+---
+[wurm_share_2]
+Compartilhar coleção
+---
+[wurm_share_3]
+Todos podem vê-la.
+---
+[wurm_share_4]
+Seus amigos podem vê-la.
+---
+[wurm_share_5]
+Só você
+---
+[wurm_share_6]
+Amigos
+---
+[wurm_share_7]
+Todos
+---
+[wurm_share_8]
+Compartilhar agora
+---
+[wurm_share_9]
+Atualizar compartilhamento
+---
+[wurm_share_10]
+Parar de compartilhar
+---
+[wurm_share_11]
+Compartilhando…
+---
+[wurm_share_12]
+Compartilhada com todos.
+---
+[wurm_share_13]
+Compartilhada com seus amigos.
+---
+[wurm_share_14]
+Agora só você pode vê-la.
+---
+[wurm_share_15]
+Compartilhar não está disponível aqui.
+---
+[wurm_share_16]
+Entre para compartilhar níveis.
+---
+[wurm_share_17]
+Você está offline. Tente mais tarde.
+---
+[wurm_share_18]
+Essa coleção não está mais compartilhada.
+---
+[wurm_share_19]
+Esta coleção é grande demais para compartilhar.
+---
+[wurm_share_20]
+Aguarde um momento e tente novamente.
+---
+[wurm_share_21]
+O compartilhamento foi recusado.
+---
+[wurm_share_22]
+Nome do jogador
+---
+[wurm_share_23]
+Pesquisar
+---
+[wurm_share_24]
+Pesquisando…
+---
+[wurm_share_25]
+Nenhuma coleção compartilhada encontrada.
+---
+[wurm_share_26]
+Adicionar a Meus níveis
+---
+[wurm_share_27]
+Adicionando…
+---
+[wurm_share_28]
+Adicionada a Meus níveis.
+---

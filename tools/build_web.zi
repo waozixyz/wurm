@@ -23,7 +23,10 @@ CopyArt :: (source: string, target: string) -> bool {
     if !CreateDirectories(target) { return false }
     names: Vec(string)
     if !ListDirectory(source, *names) { return false }
-    unused_art: [4]string = .["garden-cover.png", "space-cover.png", "factory-cover.png", "stage-covers.png"]
+    // The editor's full-size paintings stay native; the browser draws the
+    // small copies.
+    unused_art: [5]string = .["garden-cover.png", "space-cover.png", "factory-cover.png",
+        "editor-title.png", "editor-title-portrait.png"]
     for i: 0..names.count - 1 {
         name := names[i]
         from := JoinPath(source, name)
@@ -110,7 +113,8 @@ main :: () -> s32 {
     unused RemoveTree(JoinPath(art, "previews"))
     if !CopyArt("assets/art", art) { return Fail("cannot copy the art") }
     // Studies an earlier build copied stay out of the browser preload too.
-    studies: [4]string = .["garden-cover.png", "space-cover.png", "factory-cover.png", "stage-covers.png"]
+    studies: [5]string = .["garden-cover.png", "space-cover.png", "factory-cover.png",
+        "editor-title.png", "editor-title-portrait.png"]
     for studies { unused RemoveFile(JoinPath(art, it)) }
     emcc := EnvironmentText("EMCC")
     if emcc.count == 0 { emcc = JoinPath(EnvironmentText("HOME"), "emsdk/upstream/emscripten/emcc") }

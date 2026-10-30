@@ -70,6 +70,8 @@ Load :: () {
 #if #defined(WURM_PORTABLE) {
     input_api :: #system_library "host_api";
     AppSupportsHost :: (capability: string) -> bool #foreign input_api;
+    // Whether the host offers an optional service, such as "publications".
+    HostSupports :: (capability: string) -> bool { return AppSupportsHost(capability) }
 }
 InputDesktop :: () -> bool {
     #if #defined(WURM_PORTABLE) {

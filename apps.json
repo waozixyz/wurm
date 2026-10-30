@@ -1,12 +1,30 @@
 {
   "id": "xyz.waozi.wurm-player",
   "title": "Apfelwurm",
-  "apps": [{
-    "manifest": "catalog.json",
-    "cover": {
-      "portrait": "assets/art/title-portrait.png",
-      "landscape": "assets/art/title.png",
-      "action": "play"
+  "apps": [
+    {
+      "manifest": "catalog.json",
+      "cover": {
+        "portrait": "assets/art/title-portrait.png",
+        "landscape": "assets/art/title.png",
+        "action": "play",
+        "caption": "Classic"
+      },
+      "shared_records": [
+        "reach.dat"
+      ]
+    },
+    {
+      "manifest": "editor/catalog.json",
+      "cover": {
+        "portrait": "assets/art/editor-title-portrait.png",
+        "landscape": "assets/art/editor-title.png",
+        "caption": "Editor",
+        "action": "open"
+      },
+      "requires": [
+        "xyz.waozi.wurm"
+      ]
     }
-  }]
+  ]
 }

@@ -1,0 +1,244 @@
+#import, file "level_json.zi";
+Collections :: #import "entity/level_collections";
+#import "std/json_scan"
+#import "std/json_document"
+#import "std/text_buffer"
+#import "std/vec"
+
+OWN_COLLECTIONS :: 32;
+OWN_LEVELS :: 24;
+
+OwnService :: #type (name: string, request: string) -> string;
+
+OwnUnavailable :: (name: string, request: string) -> string {
+    unused name;
+    unused request;
+    return "";
+}
+
+own_service: OwnService = OwnUnavailable;
+own_collections: [OWN_COLLECTIONS]Collections.CollectionDraft;
+own_collection_count: s32;
+own_record: [33]u8;
+own_title: [160]u8;
+own_order: s64;
+own_publication: [96]u8;
+own_visibility: s32 = Collections.COLLECTION_PRIVATE;
+own_levels: [OWN_LEVELS]WurmLevel;
+own_level_count: s32;
+
+OwnTruncateUTF8 :: (text: string, limit: s32) -> s32 {
+    length := ifx cast(s32)text.count < limit then cast(s32)text.count else limit
+    if length == cast(s32)text.count { return length }
+    while length > 0 && (text[length] & 192) == 128 { length -= 1 }
+    if length == 0 { return 0 }
+    lead := text[length - 1]
+    width: s32 = 1
+    if lead >= 240 { width = 4 }
+    else if lead >= 224 { width = 3 }
+    else if lead >= 192 { width = 2 }
+    if length - 1 + width > limit { length -= 1 }
+    return length
+}
+
+OwnCopyTitle :: (title: string) {
+    length := OwnTruncateUTF8(title, cast(s32)own_title.count - 1)
+    for index: 0..length - 1 { own_title[index] = title[index] }
+    own_title[length] = 0
+}
+
+OwnClearOpen :: (title: string, order: s64) {
+    for byte, index: own_record { unused byte; own_record[index] = 0 }
+    OwnCopyTitle(title)
+    own_order = order
+    own_publication[0] = 0
+    own_visibility = Collections.COLLECTION_PRIVATE
+    for index: 0..OWN_LEVELS - 1 { own_levels[index] = .{} }
+    own_level_count = 0
+}
+
+OwnRequest :: (request: string) -> string {
+    return own_service(Collections.COLLECTIONS_DRAFTS_SERVICE, request)
+}
+
+OwnRefresh :: () -> bool {
+    request: Vec(u8)
+    Collections.CollectionDraftListRequest(*request)
+    reply := OwnRequest(TextView(VecSlice(request, 0, request.count)))
+    VecFree(request)
+    drafts: [OWN_COLLECTIONS]Collections.CollectionDraft
+    count := Collections.CollectionDraftListRead(reply, WURM_LEVELS_FORMAT, drafts[:])
+    if count < 0 { return false }
+    for index: 0..count - 1 { own_collections[index] = drafts[index] }
+    own_collection_count = count
+    return true
+}
+
+OwnNew :: (title: string, order: s64) {
+    OwnClearOpen(title, order)
+}
+
+OwnOpen :: (record: string) -> bool {
+    request: Vec(u8)
+    Collections.CollectionDraftRecordRequest(*request, "get", record)
+    reply := OwnRequest(TextView(VecSlice(request, 0, request.count)))
+    VecFree(request)
+
+    status: [16]u8
+    if ReadStringText(reply, FieldAt(reply, 0, "status"), status[:]) != 4 ||
+    TextUntilNul(status[:]) != "done" { return false }
+    document_at := FieldAt(reply, 0, "document")
+    if document_at < 0 { return false }
+
+    document: Collections.CollectionDocument
+    if !Collections.CollectionDocumentRead(reply, document_at, WURM_LEVELS_FORMAT, *document) { return false }
+    order_number := ReadNumber(reply, FieldAt(reply, document_at, "order"))
+    if !order_number.valid { return false }
+
+    read_record: [33]u8
+    for byte, index: record { read_record[index] = byte }
+    read_record[record.count] = 0
+    count := document.level_count
+    if count > OWN_LEVELS { count = OWN_LEVELS }
+    levels: [OWN_LEVELS]WurmLevel
+    for index: 0..count - 1 {
+        level_at := Collections.CollectionDocumentLevelAt(reply, *document, index)
+        if level_at < 0 || !WurmLevelRead(reply, level_at, *levels[index]) { return false }
+    }
+
+    for byte, index: read_record { unused byte; own_record[index] = byte }
+    for byte, index: document.title { unused byte; own_title[index] = byte }
+    own_order = cast(s64)order_number.value
+    own_publication[0] = 0
+    if ReadStringText(reply, FieldAt(reply, document_at, "publication"), own_publication[:]) < 0 {
+        own_publication[0] = 0
+    }
+    visibility: [16]u8
+    visibility[0] = 0
+    unused ReadStringText(reply, FieldAt(reply, document_at, "visibility"), visibility[:])
+    own_visibility = Collections.CollectionVisibilityRead(TextUntilNul(visibility[:]))
+    for index: 0..OWN_LEVELS - 1 {
+        if index < count { own_levels[index] = levels[index] }
+        else { own_levels[index] = .{} }
+    }
+    own_level_count = count
+    return true
+}
+
+// OwnDocument builds the collection document. The private copy also carries
+// the publication id and visibility; the published copy never does.
+OwnDocument :: (out: *Vec(u8), private_fields: bool) {
+    Collections.CollectionDocumentBegin(out, WURM_LEVELS_FORMAT, WURM_LEVELS_EDITION,
+        TextUntilNul(own_title[:]))
+    for index: 0..own_level_count - 1 {
+        level_json: Vec(u8)
+        WurmLevelWrite(*level_json, *own_levels[index])
+        Collections.CollectionDocumentLevel(out,
+            TextView(VecSlice(level_json, 0, level_json.count)), index == 0)
+        VecFree(level_json)
+    }
+    if !private_fields {
+        Collections.CollectionDocumentEnd(out)
+        return
+    }
+    BuilderPrint(out, "], \"publication\": ")
+    JsonQuoteInto(out, TextUntilNul(own_publication[:]), false)
+    BuilderPrint(out, ", \"visibility\": ")
+    JsonQuoteInto(out, Collections.CollectionVisibilityName(own_visibility), false)
+    BuilderPrint(out, "}")
+}
+
+OwnSave :: () -> bool {
+    document: Vec(u8)
+    OwnDocument(*document, true)
+
+    request: Vec(u8)
+    Collections.CollectionDraftPut(*request, TextUntilNul(own_record[:]),
+        TextView(VecSlice(document, 0, document.count)), own_order)
+    reply := OwnRequest(TextView(VecSlice(request, 0, request.count)))
+    VecFree(request)
+    VecFree(document)
+
+    saved_record: [33]u8
+    for byte, index: saved_record { unused byte; saved_record[index] = 0 }
+    if !Collections.CollectionDraftPutRead(reply, saved_record[:]) { return false }
+    for byte, index: saved_record { unused byte; own_record[index] = byte }
+    return true
+}
+
+OwnRename :: (title: string) {
+    OwnCopyTitle(title)
+}
+
+OwnAdd :: (level: *WurmLevel) -> s32 {
+    if own_level_count >= OWN_LEVELS { return -1 }
+    own_levels[own_level_count] = level.*
+    index := own_level_count
+    own_level_count += 1
+    return index
+}
+
+OwnRemove :: (index: s32) {
+    if index < 0 || index >= own_level_count { return }
+    for place: index..own_level_count - 2 { own_levels[place] = own_levels[place + 1] }
+    own_level_count -= 1
+    own_levels[own_level_count] = .{}
+}
+
+OwnMove :: (index: s32, delta: s32) -> bool {
+    target := index + delta
+    if index < 0 || index >= own_level_count || target < 0 || target >= own_level_count { return false }
+    moved := own_levels[index]
+    own_levels[index] = own_levels[target]
+    own_levels[target] = moved
+    return true
+}
+
+OwnDelete :: () -> bool {
+    if TextUntilNul(own_record[:]) == "" {
+        OwnClearOpen("", 0)
+        return false
+    }
+    request: Vec(u8)
+    Collections.CollectionDraftRecordRequest(*request, "delete", TextUntilNul(own_record[:]))
+    reply := OwnRequest(TextView(VecSlice(request, 0, request.count)))
+    VecFree(request)
+    status: [16]u8
+    deleted := ReadStringText(reply, FieldAt(reply, 0, "status"), status[:]) == 4 &&
+    TextUntilNul(status[:]) == "done"
+    if deleted { OwnClearOpen("", 0) }
+    return deleted
+}
+
+// OwnImport stores the levels of a fetched collection document as a new
+// private collection and returns how many levels were readable (-1: none or
+// the save failed). text may be a reused service buffer, so it is read fully
+// before the save.
+OwnImport :: (text: string, document_at: s32, title: string) -> s32 {
+    document: Collections.CollectionDocument
+    if !Collections.CollectionDocumentRead(text, document_at, WURM_LEVELS_FORMAT, *document) { return -1 }
+    count := document.level_count
+    if count > OWN_LEVELS { count = OWN_LEVELS }
+    levels: [OWN_LEVELS]WurmLevel
+    read: s32 = 0
+    for index: 0..count - 1 {
+        level_at := Collections.CollectionDocumentLevelAt(text, *document, index)
+        if level_at >= 0 && WurmLevelRead(text, level_at, *levels[read]) { read += 1 }
+    }
+    if read == 0 { return -1 }
+
+    OwnCopyTitle(title)
+    saved_title: [160]u8
+    for byte, index: own_title { saved_title[index] = byte }
+    order: s64 = 0
+    if OwnRefresh() {
+        for index: 0..own_collection_count - 1 {
+            if own_collections[index].order >= order { order = own_collections[index].order + 1 }
+        }
+    }
+    OwnClearOpen(TextUntilNul(saved_title[:]), order)
+    for index: 0..read - 1 { own_levels[index] = levels[index] }
+    own_level_count = read
+    if !OwnSave() { return -1 }
+    return read
+}

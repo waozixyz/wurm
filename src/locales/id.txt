@@ -11,7 +11,7 @@ Profil
 Pengaturan
 ---
 [wurm_ui_3]
-Toko tampilan
+Toko
 ---
 [wurm_ui_4]
 Sedikit perubahan karakter.
@@ -243,3 +243,217 @@ Coba tombol arah
 ---
 [wurm_feature_25]
 Kembali besok
+---
+[wurm_feature_26]
+Nama
+---
+[wurm_feature_27]
+Skin sebelumnya
+---
+[wurm_feature_28]
+Skin berikutnya
+---
+[wurm_feature_29]
+Pilih lanskap
+---
+[wurm_feature_30]
+Lanjutkan menyunting
+---
+[wurm_feature_31]
+Bentuk setiap level yang sudah kamu capai.
+---
+[wurm_feature_32]
+Dicerminkan — sunting dan simpan
+---
+[wurm_feature_33]
+Tebakan terbaik — sunting dan simpan
+---
+[wurm_feature_34]
+Tutup
+---
+[wurm_feature_35]
+Hari ini
+---
+[wurm_feature_36]
+Besok
+---
+[wurm_feature_37]
+Hari %
+---
+[wurm_feature_38]
+Lihat semua hari
+---
+[wurm_feature_39]
+Hadiahmu sudah siap!
+---
+[wurm_feature_40]
+Masuk untuk mengumpulkan Dew
+---
+[wurm_feature_41]
+Tampilan
+---
+[wurm_feature_42]
+Dew tidak cukup.
+---
+[wurm_feature_43]
+Isi ulang Dew
+---
+[wurm_own_0]
+Buat level milikmu sendiri.
+---
+[wurm_own_1]
+Perubahan kampanye
+---
+[wurm_own_2]
+Edit kampanye
+---
+[wurm_own_3]
+Level saya
+---
+[wurm_own_4]
+Dari sebuah level
+---
+[wurm_own_5]
+Level baru
+---
+[wurm_own_6]
+Level-mu tidak dapat disimpan.
+---
+[wurm_own_7]
+Koleksi ini sudah penuh.
+---
+[wurm_own_8]
+Koleksi baru
+---
+[wurm_own_9]
+Belum ada level. Mulai dengan Level baru.
+---
+[wurm_own_10]
+Semua koleksi
+---
+[wurm_own_11]
+Nama koleksi
+---
+[wurm_own_12]
+Pribadi: hanya kamu yang bisa melihatnya.
+---
+[wurm_own_13]
+Pribadi
+---
+[wurm_own_14]
+Main
+---
+[wurm_own_15]
+Pindah ke atas
+---
+[wurm_own_16]
+Pindah ke bawah
+---
+[wurm_own_17]
+Yakin?
+---
+[wurm_own_18]
+Hapus
+---
+[wurm_own_19]
+Hapus koleksi
+---
+[wurm_own_20]
+Level ini dimainkan sesuai perubahanmu. Atur ulang satu untuk memainkan versi aslinya lagi.
+---
+[wurm_own_21]
+Atur ulang
+---
+[wurm_own_22]
+Potret
+---
+[wurm_own_23]
+Lanskap
+---
+[wurm_share_0]
+Komunitas
+---
+[wurm_share_1]
+Bagikan
+---
+[wurm_share_2]
+Bagikan koleksi
+---
+[wurm_share_3]
+Semua orang bisa melihatnya.
+---
+[wurm_share_4]
+Teman-temanmu bisa melihatnya.
+---
+[wurm_share_5]
+Hanya kamu
+---
+[wurm_share_6]
+Teman
+---
+[wurm_share_7]
+Semua orang
+---
+[wurm_share_8]
+Bagikan sekarang
+---
+[wurm_share_9]
+Perbarui bagikan
+---
+[wurm_share_10]
+Berhenti membagikan
+---
+[wurm_share_11]
+Membagikan…
+---
+[wurm_share_12]
+Dibagikan ke semua orang.
+---
+[wurm_share_13]
+Dibagikan ke teman-temanmu.
+---
+[wurm_share_14]
+Sekarang hanya kamu yang bisa melihatnya.
+---
+[wurm_share_15]
+Berbagi tidak tersedia di sini.
+---
+[wurm_share_16]
+Masuk untuk membagikan level.
+---
+[wurm_share_17]
+Kamu sedang offline. Coba lagi nanti.
+---
+[wurm_share_18]
+Koleksi itu tidak lagi dibagikan.
+---
+[wurm_share_19]
+Koleksi ini terlalu besar untuk dibagikan.
+---
+[wurm_share_20]
+Tunggu sebentar lalu coba lagi.
+---
+[wurm_share_21]
+Berbagi ditolak.
+---
+[wurm_share_22]
+Nama pemain
+---
+[wurm_share_23]
+Cari
+---
+[wurm_share_24]
+Mencari…
+---
+[wurm_share_25]
+Tidak ada koleksi yang dibagikan.
+---
+[wurm_share_26]
+Tambah ke Level saya
+---
+[wurm_share_27]
+Menambahkan…
+---
+[wurm_share_28]
+Ditambahkan ke Level saya.
+---

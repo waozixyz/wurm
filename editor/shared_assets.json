@@ -1,0 +1,8 @@
+{
+  "about": "A bundle may hold only its own assets/<name>/ folder. The editor draws Apfelwurm's boards and plays its sounds, so builders copy these into assets/wurm-editor/<to>; prepared copies identical to the game's are linked to it instead of packed twice.",
+  "copies": [
+    {"from": "assets/art", "to": "art"},
+    {"from": "assets/levels", "to": "levels"},
+    {"from": "assets/sounds", "to": "sounds"}
+  ]
+}

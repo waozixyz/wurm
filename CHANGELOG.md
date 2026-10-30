@@ -1,15 +1,24 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.27] - 2026-10-29
 
 - Earn coins for every level you clear and spend them on new skins.
-- Claim a daily reward: 30 days of coins, Dew and two new skins.
-- Browse thirteen skins with slimmer, clearly spaced bodies and matching leaderboard pictures.
-- Open the level editor directly from the title, and preview both control styles in Settings.
+- Claim a daily reward from the chest on the title: 30 days of coins, two new skins and rare Dew on days 10 and 25.
+- The title has painted Shop, Profile, Leaderboard and Settings icons, with your coins and Dew beside the Shop.
+- The Shop has Skins, Coins and Dew tabs: buy coin packs with Dew and top up Dew without leaving it.
+- Browse thirteen skins with slimmer bodies, closer segments, clean edges and matching leaderboard pictures.
+- Open the level editor directly from the title. Settings previews both touch control styles, or shows the steering keys on a computer.
+- The level editor has its own title screen. Start a **New level** in any landscape you have reached, or copy one **From a level**.
+- Keep your levels in **My levels**, in collections you can name and reorder. They stay private to you.
+- Share a collection with your friends or everyone, and find other players' collections in **Community**. Added collections become your own private copies.
+- Campaign levels you changed before still play as you made them; **Campaign changes** lists them so you can reset each one.
+- Open the editor as its own **Apfelwurm Editor** app in Arcade.
 - Play local desktop rounds with two to four players, separate bottom entrances and four keyboard control sets.
+- Name each local player and pick their skin; start local rounds from Settings. Each open entrance has rock posts beside it.
 - Play every level in the same layout in portrait and landscape, shaped after the portrait, with roomier portrait boards.
 - Your own portrait level now also shapes its landscape until you save a landscape of your own.
-- On a computer, play starts without asking how to steer, also inside Breeze and Arcade.
+- On a computer, play starts without asking how to steer, also inside Breeze and Arcade, and the keyboard steers without an on-screen pad.
+- Level 19 is roomier: every side passage is wide enough to turn and come back out.
 
 ## [0.2.26] - 2026-10-29
 

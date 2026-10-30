@@ -17,11 +17,12 @@ Fail :: (message: string) -> s32 {
 
 // The art the portable game draws; native mirrors stay in the source.
 Kept :: (folder: string, name: string) -> bool {
-    keep: [21]string = .["garden.png", "forest.png", "forest-canopy.png", "forest-canopy-portrait.png",
+    keep: [26]string = .["garden.png", "forest.png", "forest-canopy.png", "forest-canopy-portrait.png",
         "meadow.png", "leafwood.png", "pinewood.png", "lake.png", "mountains.png",
         "title.png", "title-portrait.png", "ground-meadow.png", "water-field.png",
         "campaign-meadow.png", "campaign-leafwood.png", "campaign-pinewood.png", "campaign-lake.png", "campaign-mountains.png",
-        "skins.png", "special-skins.png", "reward-skins.png"]
+        "skins.png", "special-skins.png", "reward-skins.png", "reward-icons.png", "stage-covers.png",
+        "editor-title-small.png", "editor-title-portrait-small.png", "title-icons.png"]
     stages: [5]string = .["meadow-", "leafwood-", "pinewood-", "lake-", "mountains-"]
     for keep { if it == name { return true } }
     if PathName(folder) == "campaign-previews" && TextHasSuffix(name, ".png") {

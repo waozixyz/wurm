@@ -6,8 +6,11 @@
     test_api :: #system_library "host_api";
     WurmAccountService :: (name: string, request: string) -> string #foreign test_api;
     Service :: (name: string, request: string) -> string { return WurmAccountService(name, request) }
+    // Whether level sharing (the "publications" service) is offered here.
+    SharingAvailable :: () -> bool { return true }
 } else #if #defined(WURM_PORTABLE) {
     Runtime :: #import "portable_runtime";
+    Controls :: #import, file "controls.zi";
     #import "std/text_buffer"
     shop_request: [128]u8;
     Service :: (name: string, request: string) -> string {
@@ -20,10 +23,12 @@
         }
         return Runtime.Service(name, request)
     }
+    SharingAvailable :: () -> bool { return Controls.HostSupports("publications") }
     Pump :: () {}
     OpenProfile :: () { unused Service("entity.profile", "open") }
     OpenLeaderboard :: () { unused Service("entity.profile", "leaderboard") }
     OpenDew :: () { unused Service("entity.profile", "dew") }
+    ShowDew :: () {}
     OpenAppearance :: () { unused Service("entity.profile", "appearance") }
     ProfileTitle :: () -> string { return "Profile" }
     SharedTheme :: () -> s32 { return -1 }
@@ -41,6 +46,7 @@
     Dew :: #import "entity/entity_dew";
     Shop :: #import "entity/game_shop_native";
     Leaderboard :: #import "entity/leaderboard_native";
+    Publications :: #import "entity/publications";
     Files :: #import "entity/native_files";
     File :: #import "std/file";
     Locale :: #import, file "localization.zi";
@@ -102,6 +108,7 @@
         if name == "entity.records" { return Records.EntityRecordsAnswer(request) }
         if name == "entity.dew" { return Dew.EntityDewAnswer(request) }
         if name == "entity.game-shop" { return Shop.EntityGameShopAnswer(request) }
+        if name == "publications" { return Publications.PublicationsAnswer(request) }
         // The best run, on the board Arcade names after the game's catalog id.
         if name == "leaderboard" {
             saved := Leaderboard.EntityLeaderboardReport("wurm", "Apfelwurm", "xyz.waozi.wurm", "Apfelwurm", request)
@@ -110,6 +117,7 @@
         if name == "entity.profile" && request == "open" { OpenProfile(); return "available" }
         return ""
     }
+    SharingAvailable :: () -> bool { return ready }
     // The Profile always opens. One that could not start tries again and,
     // if it still cannot, says why instead of doing nothing.
     OpenProfile :: () {
@@ -136,6 +144,8 @@
     }
     OpenLeaderboard :: () { OpenProfile(); profile_title = "Leaderboard"; if ready { unused Entity.EntityHostLeaderboard() } }
     OpenDew :: () { OpenProfile(); profile_title = "Dew"; if ready { unused Entity.EntityHostPage("dew") } }
+    // The Dew page drawn inside the shop, without the Profile overlay.
+    ShowDew :: () { if ready { unused Entity.EntityHostPage("dew") } }
     OpenAppearance :: () { OpenProfile(); profile_title = "Appearance"; if ready { unused Entity.EntityHostPage("appearance") } }
     ProfileTitle :: () -> string { return profile_title }
     SharedTheme :: () -> s32 { return ifx ready then Entity.EntityHostAppearance().theme else -1 }
@@ -170,10 +180,12 @@
 } else {
     #import "kryon/open_uri"
     Service :: (name: string, request: string) -> string { unused name; unused request; return "" }
+    SharingAvailable :: () -> bool { return false }
     Pump :: () {}
     OpenProfile :: () {}
     OpenLeaderboard :: () {}
     OpenDew :: () {}
+    ShowDew :: () {}
     OpenAppearance :: () {}
     ProfileTitle :: () -> string { return "Profile" }
     SharedTheme :: () -> s32 { return -1 }
