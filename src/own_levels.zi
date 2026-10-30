@@ -61,14 +61,14 @@ OwnRequest :: (request: string) -> string {
     return own_service(Collections.COLLECTIONS_DRAFTS_SERVICE, request)
 }
 
-OwnRefresh :: () -> bool {
+OwnRefresh :: (allowed: OwnAllowed = OwnAlways) -> bool {
     request: Vec(u8)
     Collections.CollectionDraftListRequest(*request)
     reply := OwnRequest(TextView(VecSlice(request, 0, request.count)))
     VecFree(request)
     drafts: [OWN_COLLECTIONS]Collections.CollectionDraft
     count := Collections.CollectionDraftListRead(reply, WURM_LEVELS_FORMAT, drafts[:])
-    if count < 0 { return false }
+    if count < 0 || !allowed() { return false }
     for index: 0..count - 1 { own_collections[index] = drafts[index] }
     own_collection_count = count
     return true
@@ -148,7 +148,11 @@ OwnDocument :: (out: *Vec(u8), private_fields: bool) {
     BuilderPrint(out, "}")
 }
 
-OwnSave :: () -> bool {
+OwnAllowed :: #type () -> bool;
+OwnAlways :: () -> bool { return true }
+
+OwnSave :: (allowed: OwnAllowed = OwnAlways) -> bool {
+    if !allowed() { return false }
     document: Vec(u8)
     OwnDocument(*document, true)
 
@@ -162,6 +166,7 @@ OwnSave :: () -> bool {
     saved_record: [33]u8
     for byte, index: saved_record { unused byte; saved_record[index] = 0 }
     if !Collections.CollectionDraftPutRead(reply, saved_record[:]) { return false }
+    if !allowed() { return false }
     for byte, index: saved_record { unused byte; own_record[index] = byte }
     return true
 }
@@ -214,7 +219,8 @@ OwnDelete :: () -> bool {
 // private collection and returns how many levels were readable (-1: none or
 // the save failed). text may be a reused service buffer, so it is read fully
 // before the save.
-OwnImport :: (text: string, document_at: s32, title: string) -> s32 {
+OwnImport :: (text: string, document_at: s32, title: string, allowed: OwnAllowed = OwnAlways) -> s32 {
+    if !allowed() { return -1 }
     document: Collections.CollectionDocument
     if !Collections.CollectionDocumentRead(text, document_at, WURM_LEVELS_FORMAT, *document) { return -1 }
     count := document.level_count
@@ -227,18 +233,20 @@ OwnImport :: (text: string, document_at: s32, title: string) -> s32 {
     }
     if read == 0 { return -1 }
 
-    OwnCopyTitle(title)
+    if !allowed() { return -1 }
     saved_title: [160]u8
-    for byte, index: own_title { saved_title[index] = byte }
+    length := OwnTruncateUTF8(title, cast(s32)saved_title.count - 1)
+    for index: 0..length - 1 { saved_title[index] = title[index] }
     order: s64 = 0
-    if OwnRefresh() {
+    if OwnRefresh(allowed) {
         for index: 0..own_collection_count - 1 {
             if own_collections[index].order >= order { order = own_collections[index].order + 1 }
         }
     }
+    if !allowed() { return -1 }
     OwnClearOpen(TextUntilNul(saved_title[:]), order)
     for index: 0..read - 1 { own_levels[index] = levels[index] }
     own_level_count = read
-    if !OwnSave() { return -1 }
+    if !OwnSave(allowed) { return -1 }
     return read
 }

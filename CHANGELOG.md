@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Collection sharing discards cancelled requests and old account replies before adding or updating your levels.
+
 - Collection names and community searches keep text selection and Unicode edits consistent.
 
 - Meadow level 19 has wide garden paths instead of narrow corridors, tiny pockets and dead ends.

@@ -1,6 +1,7 @@
 #import, file "own_levels.zi";
 #import, file "level_json.zi";
 Collections :: #import "entity/level_collections";
+#import "entity/collection_client";
 #import "std/json_scan"
 #import "std/text_buffer"
 #import "std/vec"
@@ -28,7 +29,8 @@ SHARE_BUSY :: 8;
 SHARE_RESULTS :: 24;
 
 share_kind: s32;
-share_request: s32;
+share_client: CollectionClient;
+share_owner: [129]u8;
 share_visibility: s32;
 share_result: s32;
 share_results: [SHARE_RESULTS]Collections.CollectionMeta;
@@ -51,28 +53,74 @@ ShareFinish :: (result: s32) -> s32 {
     return result
 }
 
-// ShareReplyResult maps a non-done reply; SHARE_OK means the reply was done.
-ShareReplyResult :: (reply: Collections.CollectionReply) -> s32 {
-    if reply.status == Collections.COLLECTION_PENDING { return SHARE_WAITING }
-    if reply.status == Collections.COLLECTION_DONE { return SHARE_OK }
-    if reply.status == Collections.COLLECTION_REJECTED || reply.status == Collections.COLLECTION_FAILED {
-        return ShareErrorResult(TextUntilNul(reply.error[:]))
-    }
-    return SHARE_UNAVAILABLE
+// The records provider supplies a verified public ID (or its stable local
+// profile identity). Read it fresh: the progress cache polls less frequently.
+ShareOwner :: (context: *void) -> string {
+    unused context
+    reply := own_service(Collections.COLLECTIONS_DRAFTS_SERVICE, "{\"operation\":\"status\"}")
+    share_owner[0] = 0
+    status: [16]u8
+    if ReadStringText(reply, FieldAt(reply, 0, "status"), status[:]) < 0 ||
+    TextUntilNul(status[:]) != "done" { return "" }
+    length := ReadStringText(reply, FieldAt(reply, 0, "account"), share_owner[:])
+    if length < 0 { return "" }
+    // Entity keeps guest drafts in this host profile; the publications service
+    // still decides whether a guest may share (normally signed-out).
+    if length == 0 { return "local" }
+    return TextUntilNul(share_owner[:])
+}
+ShareService :: (context: *void, service: string, request: string) -> string {
+    unused context
+    return own_service(service, request)
 }
 
+// Reset on profile navigation too, including a logout/relogin as the same ID.
+ShareReset :: () {
+    CollectionClientReset(*share_client)
+    share_kind = SHARE_IDLE
+    share_result = SHARE_REFUSED
+    share_result_count = 0
+    share_imported = 0
+}
+
+ShareClientResult :: (result: CollectionClientResult) -> s32 {
+    if result.error == .Busy { return SHARE_BUSY }
+    if result.state == .Pending { return SHARE_WAITING }
+    if result.state == .Done { return SHARE_OK }
+    if result.state == .Unavailable { return SHARE_UNAVAILABLE }
+    if result.state == .Cancelled { share_result_count = 0; return SHARE_REFUSED }
+    if result.error == .TooLarge { return SHARE_TOO_LARGE }
+    if result.error == .SignedOut { return SHARE_SIGNED_OUT }
+    if result.error == .Offline { return SHARE_OFFLINE }
+    if result.error == .NotFound { return SHARE_NOT_FOUND }
+    if result.error == .Malformed { return SHARE_UNAVAILABLE }
+    return ShareErrorResult(TextUntilNul(result.detail[:]))
+}
+
+// Recheck before/after draft callbacks as well as the publications callback.
+ShareCancelled :: () -> bool { return share_client.result.state == .Cancelled }
+ShareCompleted :: () -> bool { return CollectionClientPump(*share_client, 0).state == .Done }
+ShareCurrent :: () -> bool { return share_kind != SHARE_IDLE && ShareCompleted() }
+
 ShareStart :: (kind: s32, request: Vec(u8)) -> s32 {
-    reply := own_service(Collections.COLLECTIONS_PUBLISH_SERVICE, TextView(VecSlice(request, 0, request.count)))
-    VecFree(request)
-    read := Collections.CollectionReplyRead(reply)
-    result := ShareReplyResult(read)
-    if result == SHARE_WAITING && read.request >= 0 {
-        share_kind = kind
-        share_request = read.request
-        share_result = SHARE_WAITING
-        return SHARE_WAITING
+    if share_kind != SHARE_IDLE { VecFree(request); return SHARE_BUSY }
+    // A previous terminal result still belongs to its original account.
+    if CollectionClientPump(*share_client, 0).state == .Cancelled {
+        share_result_count = 0
     }
-    if result == SHARE_OK || result == SHARE_WAITING { result = SHARE_UNAVAILABLE }
+    share_client.service = ShareService
+    share_client.owner = ShareOwner
+    // Keep the editor's first 600 ms poll; Entity owns every deadline.
+    share_client.poll_delay = 600
+    operation: CollectionClientOperation = .None
+    if kind == SHARE_PUBLISH { operation = .Publish }
+    else if kind == SHARE_UNPUBLISH { operation = .Unpublish }
+    else if kind == SHARE_FIND { operation = .Find }
+    else if kind == SHARE_FETCH { operation = .Fetch }
+    result := ShareClientResult(CollectionClientStart(*share_client, operation,
+        TextView(VecSlice(request, 0, request.count))))
+    VecFree(request)
+    if result == SHARE_WAITING { share_kind = kind; share_imported = 0 }
     share_result = result
     return result
 }
@@ -107,28 +155,37 @@ ShareFind :: (query: string) -> s32 {
 
 ShareFetch :: (index: s32) -> s32 {
     if share_kind != SHARE_IDLE { return SHARE_BUSY }
+    if CollectionClientPump(*share_client, 0).state == .Cancelled {
+        share_result_count = 0
+    }
     if index < 0 || index >= share_result_count { return SHARE_NOT_FOUND }
     request: Vec(u8)
     Collections.CollectionFetchRequest(*request, TextUntilNul(share_results[index].id[:]))
     return ShareStart(SHARE_FETCH, request)
 }
 
-SharePoll :: () -> s32 {
-    if share_kind == SHARE_IDLE { return share_result }
-    request: Vec(u8)
-    Collections.CollectionStatusRequest(*request, share_request)
-    reply := own_service(Collections.COLLECTIONS_PUBLISH_SERVICE, TextView(VecSlice(request, 0, request.count)))
-    VecFree(request)
-    read := Collections.CollectionReplyRead(reply)
-    result := ShareReplyResult(read)
+SharePoll :: (now: s64) -> s32 {
+    state := CollectionClientPump(*share_client, now)
+    share_client.poll_delay = 1000
+    if share_kind == SHARE_IDLE {
+        if state.state == .Cancelled {
+            share_result_count = 0; share_imported = 0; share_result = SHARE_REFUSED
+        }
+        return share_result
+    }
+    result := ShareClientResult(state)
     if result == SHARE_WAITING { return SHARE_WAITING }
     if result != SHARE_OK { return ShareFinish(result) }
+    retained: Vec(u8)
+    CollectionClientReadReply(*share_client, *retained)
+    if !ShareCurrent() { return ShareFinish(SHARE_REFUSED) }
+    reply := TextView(VecSlice(retained, 0, retained.count))
 
     kind := share_kind
     if kind == SHARE_UNPUBLISH {
         own_publication[0] = 0
         own_visibility = Collections.COLLECTION_PRIVATE
-        return ShareFinish(ifx OwnSave() then SHARE_OK else SHARE_REFUSED)
+        return ShareFinish(ifx OwnSave(ShareCurrent) then SHARE_OK else SHARE_REFUSED)
     }
 
     if kind == SHARE_FIND {
@@ -145,7 +202,7 @@ SharePoll :: () -> s32 {
     if kind == SHARE_PUBLISH {
         for byte, index: meta.id { own_publication[index] = byte }
         own_visibility = share_visibility
-        return ShareFinish(ifx OwnSave() then SHARE_OK else SHARE_REFUSED)
+        return ShareFinish(ifx OwnSave(ShareCurrent) then SHARE_OK else SHARE_REFUSED)
     }
 
     // Fetch: the imported collection is a new private draft of our own.
@@ -157,7 +214,7 @@ SharePoll :: () -> s32 {
     }
     document_at := FieldAt(reply, 0, "document")
     if document_at < 0 { return ShareFinish(SHARE_REFUSED) }
-    imported := OwnImport(reply, document_at, TextUntilNul(title[:]))
+    imported := OwnImport(reply, document_at, TextUntilNul(title[:]), ShareCurrent)
     if imported < 0 { return ShareFinish(SHARE_REFUSED) }
     share_imported = imported
     return ShareFinish(SHARE_OK)

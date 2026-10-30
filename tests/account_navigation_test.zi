@@ -27,6 +27,7 @@ Model :: #import "entity/leaderboard_model";
 #import "std/vec"
 #import "std/bundle_host"
 File :: #import "std/file";
+Timer :: #import "std/timer_linux";
 
 failures: s32;
 Expect :: (ok: bool, reason: string) {
@@ -116,7 +117,7 @@ FakePublications :: (request: string) -> string {
         FakeMeta(*out, id, "Published", "public")
         BuilderPrint(*out, "}")
     } else if pending == "unpublish" {
-        BuilderPrint(*out, "{\"status\":\"done\"}")
+        BuilderPrint(*out, "{\"status\":\"done\",\"deleted\":true}")
     } else if pending == "find" {
         BuilderPrint(*out, "{\"status\":\"done\",\"publications\":[")
         for index: 0..fake_find_count - 1 {
@@ -141,10 +142,10 @@ FakeService :: (name: string, request: string) -> string {
 
 // Polls the request in flight, a second apart, until it leaves the air.
 FinishShare :: (session: Session) {
+    now := Timer.MonotonicMilliseconds()
     count := 0
     while Sharing.share_kind != Sharing.SHARE_IDLE && count < 10 {
-        App.share_poll_at = 0
-        App.EditorSharePump(5000)
+        App.EditorSharePump(now + cast(s64)(count + 1) * 1000)
         count += 1
     }
     Draw(session, 390.0, 780.0)

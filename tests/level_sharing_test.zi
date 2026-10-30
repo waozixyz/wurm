@@ -24,9 +24,18 @@ fake_record_count: s32;
 fake_next_id: s32 = 1;
 fake_answer: [65536]u8;
 failures: s32;
+fake_owner: string = "alice";
+fake_owner_on_list: bool;
+fake_cancel: bool;
+fake_swap: bool;
+fake_status_calls: s32;
+fake_puts: s32;
+fake_now: s64;
+fake_refuse_put: bool;
+fake_oversized: [524289]u8;
 
-Check :: (value: bool) {
-    if !value { failures += 1 }
+Check :: (value: bool, case_number: s32) {
+    if !value { failures += 1; print("FAIL level sharing case %\n", case_number) }
 }
 
 FakeText :: (out: Vec(u8)) -> string {
@@ -85,6 +94,16 @@ FakeRecords :: (name: string, request: string) -> string {
     kind: [24]u8
     unused ReadStringText(request, FieldAt(request, 0, "operation"), operation[:])
     unused ReadStringText(request, FieldAt(request, 0, "kind"), kind[:])
+    if TextUntilNul(operation[:]) == "status" {
+        out: Vec(u8)
+        BuilderPrint(*out, "{\"status\":\"done\",\"account\":\"%\"}", fake_owner)
+        return FakeText(out)
+    }
+    if TextUntilNul(operation[:]) == "put" {
+        fake_puts += 1
+        if fake_refuse_put { return "{\"status\":\"failed\"}" }
+    }
+    if TextUntilNul(operation[:]) == "list" && fake_owner_on_list { fake_owner = "bob" }
     if TextUntilNul(kind[:]) != Collections.COLLECTIONS_KIND { return "" }
 
     out: Vec(u8)
@@ -218,6 +237,7 @@ FakeMeta :: (out: *Vec(u8), id: string, title: string, visibility: string) {
 
 FakePublications :: (name: string, request: string) -> string {
     if name != Collections.COLLECTIONS_PUBLISH_SERVICE || fake_pub_mode == 4 { return "" }
+    if fake_pub_mode == 7 { return TextView(fake_oversized[:]) }
     operation: [16]u8
     unused ReadStringText(request, FieldAt(request, 0, "operation"), operation[:])
     op := TextUntilNul(operation[:])
@@ -229,6 +249,7 @@ FakePublications :: (name: string, request: string) -> string {
         unused CopyCString(op, fake_pub_op[:])
         fake_pub_polls = 0
         fake_pub_requests += 1
+        if fake_pub_mode == 8 { return "{\"status\":\"done\",\"publications\":[]}" }
         if op == "publish" {
             unused CopyCString(request, fake_publish_request[:])
             fake_publish_id[0] = 0
@@ -236,6 +257,12 @@ FakePublications :: (name: string, request: string) -> string {
         }
         return "{\"status\":\"pending\",\"request\":7}"
     }
+    fake_status_calls += 1
+    Check(ReadNumber(request, FieldAt(request, 0, "request")).value == 7.0, 256)
+    if fake_cancel { ShareReset() }
+    if fake_swap { fake_owner = "bob" }
+    if fake_pub_mode == 5 { return "{\"status\":\"done\",\"request\":8,\"publications\":[]}" }
+    if fake_pub_mode == 6 { return "{\"status\":\"done\",\"publications\":[],\"junk\":0} trailing" }
     if fake_pub_polls == 0 {
         fake_pub_polls += 1
         return "{\"status\":\"pending\"}"
@@ -247,7 +274,7 @@ FakePublications :: (name: string, request: string) -> string {
         FakeMeta(*out, id, "Published", "public")
         BuilderPrint(*out, "}")
     } else if pending == "unpublish" {
-        BuilderPrint(*out, "{\"status\":\"done\"}")
+        BuilderPrint(*out, "{\"status\":\"done\",\"deleted\":true}")
     } else if pending == "find" {
         BuilderPrint(*out, "{\"status\":\"done\",\"publications\":[")
         for index: 0..fake_find_count - 1 {
@@ -268,11 +295,14 @@ FakeService :: (name: string, request: string) -> string {
     return FakeRecords(name, request)
 }
 
+// A deterministic monotonic frame clock, shared by native and portable runs.
+Poll :: () -> s32 { fake_now += 1000; return SharePoll(fake_now) }
+
 // Poll until the request leaves SHARE_WAITING.
 Finish :: () -> s32 {
-    result := SharePoll()
+    result := Poll()
     count := 0
-    while result == SHARE_WAITING && count < 10 { result = SharePoll(); count += 1 }
+    while result == SHARE_WAITING && count < 10 { result = Poll(); count += 1 }
     return result
 }
 
@@ -280,97 +310,106 @@ Finish :: () -> s32 {
 main :: () -> s32 {
     own_service = FakeService
     OwnNew("Mine", 10)
-    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE)
+    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE, 308)
     plain := MakeLevel("plain", false)
     portrait := MakeLevel("portrait", true)
-    Check(OwnAdd(*plain) == 0)
-    Check(OwnAdd(*portrait) == 1)
-    Check(OwnSave())
+    Check(OwnAdd(*plain) == 0, 311)
+    Check(OwnAdd(*portrait) == 1, 312)
+    Check(OwnSave(), 313)
     first_id: [33]u8
     unused CopyCString(TextUntilNul(own_record[:]), first_id[:])
 
     // Private defaults survive a save and reopen; old drafts open as private.
-    Check(OwnOpen(TextUntilNul(first_id[:])))
-    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE)
+    Check(OwnOpen(TextUntilNul(first_id[:])), 318)
+    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE, 319)
     Check(FakeStore("00000000000000000000000000000050",
-        "{\"order\":3,\"format\":\"wurm-levels-1\",\"edition\":\"x\",\"title\":\"Old\",\"levels\":[]}"))
-    Check(OwnOpen("00000000000000000000000000000050"))
-    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE)
-    Check(OwnOpen(TextUntilNul(first_id[:])))
+        "{\"order\":3,\"format\":\"wurm-levels-1\",\"edition\":\"x\",\"title\":\"Old\",\"levels\":[]}"), 320)
+    Check(OwnOpen("00000000000000000000000000000050"), 322)
+    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE, 323)
+    Check(OwnOpen(TextUntilNul(first_id[:])), 324)
 
     // Published copy carries no private fields.
-    Check(SharePublish("Mine public", Collections.COLLECTION_PUBLIC) == SHARE_WAITING)
-    Check(share_kind == SHARE_PUBLISH)
+    Check(SharePublish("Mine public", Collections.COLLECTION_PUBLIC) == SHARE_WAITING, 327)
+    Check(share_kind == SHARE_PUBLISH, 328)
+    Check(fake_pub_requests == 0, 329)
+    Check(Poll() == SHARE_WAITING, 330)
     request := TextUntilNul(fake_publish_request[:])
     document_at := FieldAt(request, 0, "document")
-    Check(document_at >= 0)
-    Check(FieldAt(request, document_at, "publication") < 0)
-    Check(FieldAt(request, document_at, "visibility") < 0)
-    Check(FieldAt(request, document_at, "order") < 0)
-    Check(FieldAt(request, document_at, "levels") >= 0)
-    Check(TextUntilNul(own_title[:]) == "Mine public")
+    Check(document_at >= 0, 333)
+    Check(FieldAt(request, document_at, "publication") < 0, 334)
+    Check(FieldAt(request, document_at, "visibility") < 0, 335)
+    Check(FieldAt(request, document_at, "order") < 0, 336)
+    Check(FieldAt(request, document_at, "levels") >= 0, 337)
+    Check(TextUntilNul(own_title[:]) == "Mine public", 338)
 
     // Busy while in flight.
-    Check(SharePublish("x", Collections.COLLECTION_PUBLIC) == SHARE_BUSY)
-    Check(ShareUnpublish() == SHARE_BUSY)
-    Check(ShareFind("") == SHARE_BUSY)
-    Check(ShareFetch(0) == SHARE_BUSY)
-    Check(SharePoll() == SHARE_WAITING)
-    Check(SharePoll() == SHARE_OK)
-    Check(share_kind == SHARE_IDLE && share_result == SHARE_OK)
-    Check(TextUntilNul(own_publication[:]) == "pub-1")
-    Check(own_visibility == Collections.COLLECTION_PUBLIC)
+    Check(SharePublish("x", Collections.COLLECTION_PUBLIC) == SHARE_BUSY, 341)
+    Check(ShareUnpublish() == SHARE_BUSY, 342)
+    Check(ShareFind("") == SHARE_BUSY, 343)
+    Check(ShareFetch(0) == SHARE_BUSY, 344)
+    Check(Poll() == SHARE_WAITING, 345)
+    Check(Poll() == SHARE_OK, 346)
+    Check(share_kind == SHARE_IDLE && share_result == SHARE_OK, 347)
+    Check(TextUntilNul(own_publication[:]) == "pub-1", 348)
+    Check(own_visibility == Collections.COLLECTION_PUBLIC, 349)
 
     // The publication survives save and open.
-    Check(OwnOpen(TextUntilNul(first_id[:])))
-    Check(TextUntilNul(own_publication[:]) == "pub-1" && own_visibility == Collections.COLLECTION_PUBLIC)
+    Check(OwnOpen(TextUntilNul(first_id[:])), 352)
+    Check(TextUntilNul(own_publication[:]) == "pub-1" && own_visibility == Collections.COLLECTION_PUBLIC, 353)
 
     // Publishing again reuses the id, with friends visibility.
-    Check(SharePublish("Mine public", Collections.COLLECTION_FRIENDS) == SHARE_WAITING)
-    Check(TextUntilNul(fake_publish_id[:]) == "pub-1")
-    Check(Finish() == SHARE_OK)
-    Check(own_visibility == Collections.COLLECTION_FRIENDS && TextUntilNul(own_publication[:]) == "pub-1")
-    Check(OwnOpen(TextUntilNul(first_id[:])))
-    Check(own_visibility == Collections.COLLECTION_FRIENDS)
+    Check(SharePublish("Mine public", Collections.COLLECTION_FRIENDS) == SHARE_WAITING, 356)
+    Check(Poll() == SHARE_WAITING, 357)
+    Check(TextUntilNul(fake_publish_id[:]) == "pub-1", 358)
+    Check(Finish() == SHARE_OK, 359)
+    Check(own_visibility == Collections.COLLECTION_FRIENDS && TextUntilNul(own_publication[:]) == "pub-1", 360)
+    Check(OwnOpen(TextUntilNul(first_id[:])), 361)
+    Check(own_visibility == Collections.COLLECTION_FRIENDS, 362)
 
     // Unpublish returns the collection to private.
-    Check(ShareUnpublish() == SHARE_WAITING)
-    Check(Finish() == SHARE_OK)
-    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE)
-    Check(OwnOpen(TextUntilNul(first_id[:])))
-    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE)
-    Check(ShareUnpublish() == SHARE_REFUSED)
+    Check(ShareUnpublish() == SHARE_WAITING, 365)
+    Check(Finish() == SHARE_OK, 366)
+    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE, 367)
+    Check(OwnOpen(TextUntilNul(first_id[:])), 368)
+    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE, 369)
+    Check(ShareUnpublish() == SHARE_REFUSED, 370)
 
     // Publish private (the default visibility).
-    Check(SharePublish("Mine", Collections.COLLECTION_PRIVATE) == SHARE_WAITING)
-    Check(TextUntilNul(fake_publish_id[:]) == "")
-    Check(Finish() == SHARE_OK)
-    Check(own_visibility == Collections.COLLECTION_PRIVATE && TextUntilNul(own_publication[:]) == "pub-1")
+    Check(SharePublish("Mine", Collections.COLLECTION_PRIVATE) == SHARE_WAITING, 373)
+    Check(Poll() == SHARE_WAITING, 374)
+    Check(TextUntilNul(fake_publish_id[:]) == "", 375)
+    Check(Finish() == SHARE_OK, 376)
+    Check(own_visibility == Collections.COLLECTION_PRIVATE && TextUntilNul(own_publication[:]) == "pub-1", 377)
 
     // Error mapping.
     fake_pub_mode = 1
-    Check(SharePublish("Mine", Collections.COLLECTION_PUBLIC) == SHARE_SIGNED_OUT)
-    Check(share_kind == SHARE_IDLE && share_result == SHARE_SIGNED_OUT)
+    Check(SharePublish("Mine", Collections.COLLECTION_PUBLIC) == SHARE_WAITING, 381)
+    Check(Finish() == SHARE_SIGNED_OUT, 382)
+    Check(share_kind == SHARE_IDLE && share_result == SHARE_SIGNED_OUT, 383)
     fake_pub_mode = 2
-    Check(ShareFind("") == SHARE_OFFLINE)
+    Check(ShareFind("") == SHARE_WAITING, 385)
+    Check(Finish() == SHARE_OFFLINE, 386)
     fake_pub_mode = 3
-    Check(SharePublish("Mine", Collections.COLLECTION_PUBLIC) == SHARE_TOO_LARGE)
+    Check(SharePublish("Mine", Collections.COLLECTION_PUBLIC) == SHARE_WAITING, 388)
+    Check(Finish() == SHARE_TOO_LARGE, 389)
     fake_pub_mode = 4
-    Check(SharePublish("Mine", Collections.COLLECTION_PUBLIC) == SHARE_UNAVAILABLE)
-    Check(ShareFind("") == SHARE_UNAVAILABLE)
+    Check(SharePublish("Mine", Collections.COLLECTION_PUBLIC) == SHARE_WAITING, 391)
+    Check(Finish() == SHARE_UNAVAILABLE, 392)
+    Check(ShareFind("") == SHARE_WAITING, 393)
+    Check(Finish() == SHARE_UNAVAILABLE, 394)
     fake_pub_mode = 0
-    Check(share_kind == SHARE_IDLE)
+    Check(share_kind == SHARE_IDLE, 396)
 
     // Find with none and with results.
     fake_find_count = 0
-    Check(ShareFind("") == SHARE_WAITING)
-    Check(Finish() == SHARE_OK && share_result_count == 0)
+    Check(ShareFind("") == SHARE_WAITING, 400)
+    Check(Finish() == SHARE_OK && share_result_count == 0, 401)
     fake_find_count = 2
-    Check(ShareFind("  a ") == SHARE_WAITING)
-    Check(Finish() == SHARE_OK && share_result_count == 2)
-    Check(TextUntilNul(share_results[0].id[:]) == "other-1")
-    Check(TextUntilNul(share_results[1].title[:]) == "Beta")
-    Check(ShareFetch(2) == SHARE_NOT_FOUND)
+    Check(ShareFind("  a ") == SHARE_WAITING, 403)
+    Check(Finish() == SHARE_OK && share_result_count == 2, 404)
+    Check(TextUntilNul(share_results[0].id[:]) == "other-1", 405)
+    Check(TextUntilNul(share_results[1].title[:]) == "Beta", 406)
+    Check(ShareFetch(2) == SHARE_NOT_FOUND, 407)
 
     // Fetch imports a new named private collection without the other publication.
     doc: Vec(u8)
@@ -385,27 +424,122 @@ main :: () -> s32 {
     Collections.CollectionDocumentLevel(*doc, TextView(VecSlice(json2, 0, json2.count)), false)
     VecFree(json2)
     Collections.CollectionDocumentEnd(*doc)
+    saved_doc: Vec(u8)
+    for index: cast(s64)0..doc.count - 1 { VecPush(saved_doc, doc[index]) }
     unused CopyCString(TextView(VecSlice(doc, 0, doc.count)), fake_fetch_document[:])
     VecFree(doc)
 
-    Check(ShareFetch(0) == SHARE_WAITING)
-    Check(Finish() == SHARE_OK)
-    Check(share_imported == 2)
-    Check(TextUntilNul(own_title[:]) == "Alpha")
-    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE)
-    Check(own_level_count == 2 && SameLevel(*plain, *own_levels[0]) && SameLevel(*portrait, *own_levels[1]))
+    Check(ShareFetch(0) == SHARE_WAITING, 427)
+    Check(Finish() == SHARE_OK, 428)
+    Check(share_imported == 2, 429)
+    Check(TextUntilNul(own_title[:]) == "Alpha", 430)
+    Check(TextUntilNul(own_publication[:]) == "" && own_visibility == Collections.COLLECTION_PRIVATE, 431)
+    Check(own_level_count == 2 && SameLevel(*plain, *own_levels[0]) && SameLevel(*portrait, *own_levels[1]), 432)
     imported_id: [33]u8
     unused CopyCString(TextUntilNul(own_record[:]), imported_id[:])
-    Check(TextUntilNul(imported_id[:]) != TextUntilNul(first_id[:]) && TextUntilNul(imported_id[:]) != "")
-    Check(OwnRefresh())
-    Check(own_collection_count == 3)
-    Check(OwnOpen(TextUntilNul(first_id[:])))
-    Check(TextUntilNul(own_publication[:]) == "pub-1")
+    Check(TextUntilNul(imported_id[:]) != TextUntilNul(first_id[:]) && TextUntilNul(imported_id[:]) != "", 435)
+    Check(OwnRefresh(), 436)
+    Check(own_collection_count == 3, 437)
+    Check(OwnOpen(TextUntilNul(first_id[:])), 438)
+    Check(TextUntilNul(own_publication[:]) == "pub-1", 439)
 
     // A document with no readable levels imports nothing.
     unused CopyCString("{\"format\":\"wurm-levels-1\",\"edition\":\"x\",\"title\":\"Bad\",\"levels\":[{\"name\":\"broken\"}]}", fake_fetch_document[:])
-    Check(ShareFetch(0) == SHARE_WAITING)
-    Check(Finish() == SHARE_REFUSED)
+    Check(ShareFetch(0) == SHARE_WAITING, 443)
+    Check(Finish() == SHARE_REFUSED, 444)
+
+    // A complete envelope still needs a Wurm document and valid game levels.
+    unused CopyCString("{\"format\":\"shovey-levels-1\",\"edition\":\"classic\",\"title\":\"Wrong game\",\"levels\":[]}", fake_fetch_document[:])
+    puts_before := fake_puts
+    Check(ShareFetch(0) == SHARE_WAITING && Finish() == SHARE_REFUSED, 540)
+    Check(fake_puts == puts_before && share_imported == 0, 541)
+    unused CopyCString(TextView(VecSlice(saved_doc, 0, saved_doc.count)), fake_fetch_document[:])
+    fake_refuse_put = true
+    Check(ShareFetch(0) == SHARE_WAITING && Finish() == SHARE_REFUSED, 545)
+    Check(share_imported == 0, 546)
+    fake_refuse_put = false
+
+    // A provider may finish on the original send. No duplicate request follows.
+    fake_pub_mode = 8
+    before_inline := fake_pub_requests
+    Check(ShareFind("") == SHARE_WAITING && Poll() == SHARE_OK, 552)
+    Check(Poll() == SHARE_OK && fake_pub_requests == before_inline + 1, 553)
+    fake_pub_mode = 0
+
+    // Guest drafts keep a stable local profile; provider policy still refuses sharing.
+    fake_owner = ""
+    fake_pub_mode = 1
+    Check(SharePublish("Guest", Collections.COLLECTION_PUBLIC) == SHARE_WAITING, 560)
+    Check(Finish() == SHARE_SIGNED_OUT, 561)
+    fake_pub_mode = 0
+    fake_owner = "alice"
+
+    // Deadline throttling and exact provider status IDs: never resend find.
+    Check(ShareFind("") == SHARE_WAITING, 447)
+    before := fake_pub_requests
+    Check(Poll() == SHARE_WAITING && fake_pub_requests == before + 1, 449)
+    statuses := fake_status_calls
+    Check(SharePoll(fake_now + 599) == SHARE_WAITING && fake_status_calls == statuses, 451)
+    fake_now += 600
+    Check(SharePoll(fake_now) == SHARE_WAITING && fake_status_calls == statuses + 1, 570)
+    Check(SharePoll(fake_now + 999) == SHARE_WAITING && fake_status_calls == statuses + 1, 571)
+    Check(Finish() == SHARE_OK && fake_pub_requests == before + 1, 452)
+    Check(Poll() == SHARE_OK && fake_pub_requests == before + 1, 453)
+
+    // Pending and retained search results cannot cross owner boundaries.
+    Check(ShareFind("") == SHARE_WAITING, 456)
+    Check(Poll() == SHARE_WAITING, 457)
+    statuses = fake_status_calls
+    fake_owner = "bob"
+    Check(Poll() == SHARE_REFUSED && fake_status_calls == statuses && share_result_count == 0, 460)
+    fake_owner = "alice"
+    Check(ShareFind("") == SHARE_WAITING && Finish() == SHARE_OK, 462)
+    fake_owner = "bob"
+    Check(ShareFetch(0) == SHARE_NOT_FOUND && share_result_count == 0, 464)
+    fake_owner = "alice"
+
+    // Same-owner logout/relogin explicitly resets local interest.
+    Check(ShareFind("") == SHARE_WAITING, 468)
+    ShareReset()
+    before = fake_pub_requests
+    Check(Poll() == SHARE_REFUSED && fake_pub_requests == before, 471)
+    Check(ShareFind("") == SHARE_WAITING && Poll() == SHARE_WAITING, 472)
+    fake_cancel = true
+    Check(Poll() == SHARE_REFUSED && share_result_count == 0, 474)
+    fake_cancel = false
+    Check(ShareFind("") == SHARE_WAITING && Poll() == SHARE_WAITING, 476)
+    fake_swap = true
+    Check(Poll() == SHARE_REFUSED && share_result_count == 0, 478)
+    fake_swap = false
+    fake_owner = "alice"
+
+    // Mismatched provider IDs, malformed JSON and bounds never import.
+    fake_pub_mode = 5
+    Check(ShareFind("") == SHARE_WAITING && Finish() == SHARE_UNAVAILABLE, 484)
+    fake_pub_mode = 6
+    Check(ShareFind("") == SHARE_WAITING && Finish() == SHARE_UNAVAILABLE, 486)
+    fake_pub_mode = 0
+    fake_pub_mode = 7
+    Check(ShareFind("") == SHARE_WAITING && Finish() == SHARE_TOO_LARGE, 489)
+    fake_pub_mode = 0
+    huge: Vec(u8)
+    for index: 0..262144 { unused index; VecPush(huge, #char "x") }
+    before = fake_pub_requests
+    Check(ShareFind(TextView(VecSlice(huge, 0, huge.count))) == SHARE_TOO_LARGE, 494)
+    Check(fake_pub_requests == before, 495)
+    VecFree(huge)
+
+    // Borrowed publication text is overwritten by every owner/status callback.
+    // The client-owned copy still yields both valid Wurm levels; bad ones are skipped.
+    Check(ShareFind("") == SHARE_WAITING && Finish() == SHARE_OK, 500)
+    unused CopyCString(TextView(VecSlice(saved_doc, 0, saved_doc.count)), fake_fetch_document[:])
+    puts := fake_puts
+    fake_owner_on_list = true
+    Check(ShareFetch(0) == SHARE_WAITING && Finish() == SHARE_REFUSED, 504)
+    Check(fake_puts == puts && share_imported == 0, 505)
+    fake_owner_on_list = false
+    fake_owner = "alice"
+    ShareReset()
 
     print("Level sharing local test failures: %\n", failures)
     return failures

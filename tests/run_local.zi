@@ -74,6 +74,15 @@ Test :: (name: string, output: string, defines: []string, link: string, environm
     return Run(program[0:ifx argument.count > 0 then 2 else 1], environment)
 }
 
+// The same Wurm transport and board-validation cases in native and portable code.
+CollectionSharing :: () -> bool {
+    if !Test("level_sharing_test", "level-sharing-test", none[:], "", none[:]) { return false }
+    bundle: [9]string = .["bundle", "--project", "--root", "tests", "--entry", "level_sharing_test:main", "-o", "build/level-sharing-test/test.zx", "tests/level_sharing_test.zi"]
+    if !Ziran(bundle[:], none[:]) { return false }
+    run: [2]string = .["run", "build/level-sharing-test/test.zx"]
+    return Ziran(run[:], none[:])
+}
+
 // "NAME=PATH".
 Pair :: (name: string, path: string) -> string {
     text: Vec(u8)
@@ -227,6 +236,10 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
     if mode == "name-field" { return ifx Hosted() then 0 else Fail("name field consumer") }
     if mode == "web" { return ifx Interface("web_test", "web-test-runner", "-lm") then 0 else Fail("browser") }
+    if mode == "collection-sharing" {
+        if !CollectionSharing() { return Fail("collection sharing") }
+        return ifx AccountNavigation() then 0 else Fail("collection editor")
+    }
     if mode == "crazygames" { return ifx CrazyGames() then 0 else Fail("CrazyGames copy") }
     archive := ifx mode.count > 0 then mode else "/mnt/storage/Games/The-Worm_Win_EN"
     if !Test("recovery_test", "recovery-test", none[:], "-lz", none[:], archive) { return Fail("recovery") }
@@ -250,7 +263,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !Test("web_art_test", "web-art-test", none[:], "", none[:]) { return Fail("browser art") }
     if !Test("level_json_test", "level-json-test", none[:], "", none[:]) { return Fail("level JSON") }
     if !Test("own_levels_test", "own-levels-test", none[:], "", none[:]) { return Fail("own levels") }
-    if !Test("level_sharing_test", "level-sharing-test", none[:], "", none[:]) { return Fail("level sharing") }
+    if !CollectionSharing() { return Fail("level sharing") }
     if !AccountNavigation() { return Fail("account navigation") }
     if !Hosted() { return Fail("hosted") }
     if !Test("authored_levels_test", "authored-levels-test", none[:], "", none[:]) { return Fail("published campaign") }

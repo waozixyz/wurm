@@ -340,6 +340,7 @@ GameSecondaryPointer :: (session: Session) -> Input.SecondaryPointerFrame {
 }
 
 NavigateBack :: (now: s64) -> bool {
+    EditorShareReset()
     if game.mode == MODE_STAGES { return false }
     if EditorApp() && game.mode == MODE_EDITOR && editor_page == EDITOR_PAGE_HOME { return false }
     HandleInput(Input.KeyEscape, now)
@@ -1406,6 +1407,7 @@ EditorFurthestStage :: () -> s32 {
     return furthest
 }
 OpenEditorHome :: () {
+    EditorShareReset()
     Progress.Load()
     Own.own_service = Account.Service
     editor_everything = false
@@ -1725,7 +1727,6 @@ editor_collection: [33]u8;
 // Sharing: a collection stays private until you choose Friends or Everyone.
 share_choice: s32 = Collections.COLLECTION_PRIVATE;
 share_notice: string;
-share_poll_at: s64;
 community_query: NameField;
 community_scroll: s32;
 // The key a focused field takes instead of the editor's shortcuts.
@@ -2200,16 +2201,23 @@ ShareProblem :: (result: s32) -> string {
     if result == Sharing.SHARE_BUSY { return "Please wait a moment and try again." }
     return "Sharing was refused."
 }
+EditorShareReset :: () {
+    Sharing.ShareReset()
+    share_notice = ""
+}
 EditorShareStarted :: (result: s32, waiting: string, now: s64) {
-    if result == Sharing.SHARE_WAITING { share_notice = waiting; share_poll_at = now + 600 }
+    unused now
+    if result == Sharing.SHARE_WAITING { share_notice = waiting }
     else { share_notice = ShareProblem(result) }
 }
-// Polls the request in flight about once a second.
+// Entity schedules service polling; Wurm adopts only validated completions.
 EditorSharePump :: (now: s64) {
-    if Sharing.share_kind == Sharing.SHARE_IDLE || now < share_poll_at { return }
-    share_poll_at = now + 1000
     kind := Sharing.share_kind
-    result := Sharing.SharePoll()
+    result := Sharing.SharePoll(now)
+    if kind == Sharing.SHARE_IDLE {
+        if Sharing.ShareCancelled() { share_notice = "" }
+        return
+    }
     if result == Sharing.SHARE_WAITING { return }
     if result != Sharing.SHARE_OK { share_notice = ShareProblem(result); return }
     if kind == Sharing.SHARE_PUBLISH {
@@ -2220,7 +2228,8 @@ EditorSharePump :: (now: s64) {
         share_notice = ifx Sharing.share_result_count == 0 then "No shared collections found." else ""
     } else if kind == Sharing.SHARE_FETCH {
         // The copy is a new private collection of your own; open it.
-        unused Own.OwnRefresh()
+        unused Own.OwnRefresh(Sharing.ShareCompleted)
+        if !Sharing.ShareCompleted() { EditorShareReset(); return }
         EditorCollectionOpened()
         editor_notice = "Added to My levels."
         share_notice = ""
@@ -3489,6 +3498,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // Account changes can finish while Profile or Leaderboard is open. Keep
     // the game records and that account's board current before drawing it.
     if Progress.Pump(now) {
+        EditorShareReset()
         Wardrobe.Reset(); preferences_poll = 0; preferences_dirty = false
         Account.RefreshProfile()
         if game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY || game.mode == MODE_FINISHED || game.mode == MODE_DIED || game.mode == MODE_VICTORY {
@@ -3497,6 +3507,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         }
     }
     if Portal.ProfileVisible() {
+        EditorShareReset()
         profile_key: s32
         #if !#defined(WURM_PORTABLE) {
             profile_key = KeyboardTake(session)
@@ -3522,6 +3533,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         return 0
     }
     if Account.ProfileVisible() {
+        EditorShareReset()
         profile_key: s32
         #if !#defined(WURM_PORTABLE) {
             profile_key = KeyboardTake(session)
