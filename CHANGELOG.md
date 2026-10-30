@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Meadow level 19 has wide garden paths instead of narrow corridors, tiny pockets and dead ends.
+
 - The separate CrazyGames edition starts with one Play click, uses your portal profile and cloud saves, and unlocks every chapter through play without Dew purchases.
 - It supports CrazyGames leaderboards and optional platform-approved video ads between levels, while respecting platform language and sound settings.
 
