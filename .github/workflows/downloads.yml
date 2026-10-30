@@ -86,6 +86,7 @@ jobs:
         env:
           LDLIBS: -lz
         run: |
+          export EMCC="$(command -v emcc)"
           ziran run --target=c tools/build_web.zi
           CHROMIUM="$(command -v google-chrome || command -v chromium)" ziran run --target=c tests/run_local.zi -- web
       - name: Package the verified browser edition
