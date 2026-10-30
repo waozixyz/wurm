@@ -1,0 +1,80 @@
+// The browser packs exactly the art src/app.zi draws for PLATFORM_WEB, each
+// picture once, and both art bundles fit the 25 MiB Pages file limit. It
+// measures assets/art as checked out, as a fresh release build copies it.
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+#import "std/text_tools"
+WebArt :: #import, file "../src/web_art.zi";
+
+ART :: "assets/art"
+
+failures: s32;
+
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: web_art: %\n", message); failures += 1 }
+}
+
+// The pictures src/app.zi names below assets/art/, each once.
+Named :: (names: *Vec(string)) -> bool {
+    source, found := ReadEntireFile("src/app.zi")
+    if !found { return false }
+    // The native editions draw the full-size editor paintings instead.
+    native: [3]string = .["editor-title.png", "editor-title-portrait.png", "campaign-previews/"]
+    prefix := "\"assets/art/"
+    at := TextFind(source, prefix)
+    while at >= 0 {
+        start := at + prefix.count
+        end := TextFind(source, "\"", start)
+        if end < 0 { return false }
+        name := source[start:end]
+        at = TextFind(source, prefix, end)
+        known := false
+        for native { if it == name { known = true } }
+        for i: 0..names.count - 1 { if names.*[i] == name { known = true } }
+        if !known { VecPush(names.*, name) }
+    }
+    return names.count > 0
+}
+
+#program_export
+main :: () -> s32 {
+    named: Vec(string)
+    Expect(Named(*named), "src/app.zi names its browser art")
+    for named {
+        if !WebArt.Drawn(ART, it) || !IsFile(JoinPath(ART, it)) { print("FAIL: web_art: % is drawn but not packed\n", it); failures += 1 }
+    }
+
+    names: Vec(string)
+    Expect(ListDirectory(ART, *names), "assets/art is listed")
+    art_bytes: s64 = 0
+    art_files := 0
+    for i: 0..names.count - 1 {
+        path := JoinPath(ART, names[i])
+        if IsDirectory(path) || !WebArt.Drawn(ART, names[i]) { continue }
+        listed := false
+        for named { if it == names[i] { listed = true } }
+        if !listed { print("FAIL: web_art: % is packed but never drawn\n", names[i]); failures += 1 }
+        art_bytes += cast(s64)PathStatus(path).size
+        art_files += 1
+    }
+    Expect(art_files == named.count, "every drawn picture is packed once")
+    Expect(art_bytes <= WebArt.LIMIT, "art.data fits the Pages limit")
+
+    folder := JoinPath(ART, WebArt.PREVIEWS)
+    previews: Vec(string)
+    Expect(ListDirectory(folder, *previews), "campaign previews are listed")
+    preview_bytes: s64 = 0
+    preview_files := 0
+    for i: 0..previews.count - 1 {
+        if !TextHasSuffix(previews[i], ".png") { continue }
+        if !WebArt.Drawn(folder, previews[i]) { print("FAIL: web_art: preview % is left out\n", previews[i]); failures += 1; continue }
+        preview_bytes += cast(s64)PathStatus(JoinPath(folder, previews[i])).size
+        preview_files += 1
+    }
+    Expect(preview_files > 0, "campaign previews are packed")
+    Expect(preview_bytes <= WebArt.LIMIT, "previews.data fits the Pages limit")
+    print("web_art: art.data % bytes in % pictures, previews.data % bytes in % previews, limit %\n",
+        art_bytes, art_files, preview_bytes, preview_files, WebArt.LIMIT)
+    return ifx failures == 0 then 0 else 1
+}

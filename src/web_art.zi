@@ -1,0 +1,26 @@
+// The art the browser edition draws: the pictures src/app.zi names for
+// PLATFORM_WEB and the campaign previews. The browser preloads every copied
+// file and Pages takes at most 25 MiB per file, so mirrors, studies, older
+// stage paintings and image notes stay in the source.
+#import "std/file_tree_linux"
+#import "std/text_tools"
+
+PREVIEWS :: "campaign-previews"
+LIMIT :: 25 * 1024 * 1024
+
+// Whether the browser draws NAME from FOLDER of assets/art or its copy.
+Drawn :: (folder: string, name: string) -> bool {
+    if PathName(folder) == PREVIEWS {
+        stages: [5]string = .["meadow-", "leafwood-", "pinewood-", "lake-", "mountains-"]
+        if !TextHasSuffix(name, ".png") { return false }
+        for stages { if TextHasPrefix(name, it) { return true } }
+        return false
+    }
+    pictures: [19]string = .["campaign-meadow.png", "campaign-leafwood.png", "campaign-pinewood.png",
+        "campaign-lake.png", "campaign-mountains.png", "forest-canopy.png", "forest-canopy-portrait.png",
+        "title.png", "title-portrait.png", "ground-meadow.png", "water-field.png",
+        "skins.png", "special-skins.png", "reward-skins.png", "editor-title-small.png",
+        "editor-title-portrait-small.png", "stage-covers.png", "reward-icons.png", "title-icons.png"]
+    for pictures { if it == name { return true } }
+    return false
+}
