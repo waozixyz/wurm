@@ -41,6 +41,14 @@
     {
       "path": "assets/art/ground-meadow.png",
       "prompt": "Create a production game texture for Apfelwurm, a warm illustrated top-down worm-and-apples puzzle game. Asset: one continuous grass ground field, landscape 4:3 composition, ideally 1280 by 960. Orthographic straight overhead view, absolutely flat evenly lit ground all the way to every edge. Soft hand-painted natural meadow grass, muted sage and moss green with restrained warm olive variation. Tiny sparse brush marks suggest blades, very low contrast and calm detail so a small orange worm and red apples remain easy to see when the entire image is reduced to a 320px-wide phone board. No checkerboard, no tiled grid, no square patches, no borders, no repeated motifs, no beveled squares, no seams, no neon yellow-green, no flowers, no stones, no objects, no worm, no text, no horizon, no perspective, no cast shadows, no vignettes. It must read as one uninterrupted matte painted grass surface, with quiet organic nonrepeating variation and consistent brightness."
+    },
+    {
+      "path": "assets/art/editor-title.png",
+      "prompt": "Use case: precise-object-edit. Edit the Apfelwurm level-editor title illustration (landscape 3:2, 1536x1024), keeping the painted workbench scene. Add the game's APFELWURM logo (glossy golden-yellow rounded bubble letters, thick dark-green outline, small apple leaves at both ends) in the upper-centre sky, about 55 percent of the width, and directly under it a small wooden plaque reading EDITOR in cream letters with the same outline. Lower half stays free of text for real buttons. No other text, UI, watermark or border."
+    },
+    {
+      "path": "assets/art/editor-title-portrait.png",
+      "prompt": "Use case: precise-object-edit. Edit the tall portrait Apfelwurm level-editor title illustration (887x1774), keeping the painted workbench scene. Add the APFELWURM logo, about 78 percent of the width, in the top sky about 7 percent from the top, and directly under it a small wooden plaque reading EDITOR. The title stays above the worm's face and off the maze board; the lower half stays free of text for real buttons. No other text, UI, watermark or border."
     }
   ],
   "packing": "tools/make_art.py packs overhead terrain and orange body cells, rotating head-profile.png to the four movement directions. Connected walls share a surface with outlines only on exposed edges. Forest walls sample one board-wide canopy; the portrait mirror is mechanically rotated, preserving every join.",

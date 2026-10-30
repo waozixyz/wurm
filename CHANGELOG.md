@@ -11,6 +11,10 @@
 - The separate CrazyGames edition starts with one Play click, uses your portal profile and cloud saves, and unlocks every chapter through play without Dew purchases.
 - It supports CrazyGames leaderboards and optional platform-approved video ads between levels, while respecting platform language and sound settings.
 
+## [0.2.28] - 2026-10-30
+
+- The editor title painting includes the Apfelwurm Editor logo in portrait and landscape.
+
 ## [0.2.27] - 2026-10-29
 
 - Earn coins for every level you clear and spend them on new skins.
