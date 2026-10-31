@@ -1,0 +1,144 @@
+Custom :: #import, file "../src/custom_levels.zi";
+Portal :: #import, file "../src/portal.zi";
+#import, file "../src/game.zi";
+File :: #import "std/file_linux";
+#import "std/text_buffer"
+
+active: bool;
+account: s32;
+fail_read: bool;
+fail_write: bool;
+records: [2][2][4803]u8;
+lengths: [2][2]s64;
+failures: s32;
+writes: s32;
+Check :: (value: bool, label: string) {
+    if !value { print("FAIL: %\n", label); failures += 1 }
+}
+Active :: () -> bool { return active }
+Record :: (name: string) -> s32 {
+    if name == "campaign-level-3" { return 0 }
+    if name == "campaign-level-3-portrait" { return 1 }
+    return -1
+}
+Read :: (name: string, output: []u8) -> s64 {
+    if fail_read { return -1 }
+    slot := Record(name)
+    if slot < 0 { return -2 }
+    length := lengths[account][slot]
+    if length < 0 { return length }
+    if length >= output.count { return -1 }
+    for index: 0..length - 1 { output[index] = records[account][slot][index] }
+    return length
+}
+Write :: (name: string, text: string) -> bool {
+    writes += 1
+    slot := Record(name)
+    if fail_write || slot < 0 || text.count > 4802 { return false }
+    for byte, index: text { records[account][slot][index] = byte }
+    lengths[account][slot] = text.count
+    return true
+}
+Matches :: (board: []u8, objects: []u8, apples: s32, portrait: bool) -> bool {
+    actual: [CELLS]u8
+    actual_objects: [CELLS]u8
+    Custom.EffectiveBoard(2, actual[:], portrait)
+    Custom.EffectiveObjects(2, actual_objects[:], portrait)
+    if Custom.EffectiveApples(2, portrait) != apples { return false }
+    for index: 0..CELLS - 1 {
+        if board[index] != actual[index] || objects[index] != actual_objects[index] { return false }
+    }
+    return true
+}
+Base :: () {
+    Check(!Custom.HasCustomLevel(2) && !Custom.HasCustomLevel(2,true), "SDK absence cannot borrow guest files")
+    expected: [CELLS]u8
+    actual: [CELLS]u8
+    Custom.DefaultBoard(2, expected[:])
+    Custom.EffectiveBoard(2, actual[:])
+    for index: 0..CELLS - 1 { Check(actual[index] == expected[index], "published fallback exact") }
+}
+#program_export
+main :: () -> s32 {
+    for a: 0..1 { for slot: 0..1 { lengths[a][slot] = -2 } }
+    unused File.CreateDirectory("build/portal-custom-levels-data")
+    Check(Custom.CustomSetRoot("build/portal-custom-levels-data/"), "private root")
+    unused File.RemoveFile("build/portal-custom-levels-data/level3.dat")
+    unused File.RemoveFile("build/portal-custom-levels-data/level3-portrait.dat")
+    board: [CELLS]u8
+    objects: [CELLS]u8
+    portrait: [CELLS]u8
+    portrait_objects: [CELLS]u8
+    for index: 0..CELLS - 1 {
+        board[index] = cast(u8)(index % 256)
+        objects[index] = cast(u8)((index + 7) % 256)
+        portrait[index] = cast(u8)((index + 31) % 256)
+        portrait_objects[index] = cast(u8)((index + 113) % 256)
+    }
+    // Real local path first: this stale guest record must never leak to SDK.
+    Check(Custom.SaveCustomLevel(2, board[:], objects[:], 19), "normal/noSDK local save")
+    Custom.CustomReload()
+    Check(Matches(board[:],objects[:],19,false), "normal/noSDK reload unchanged")
+    Custom.data_active = Active
+    Portal.byte_read_text = Read
+    Portal.byte_write_text = Write
+    active = true
+    Custom.CustomReload()
+    Base()
+    Check(Custom.SaveCustomLevel(2,board[:],objects[:],7), "SDK landscape save")
+    Check(Custom.SaveCustomLevel(2,portrait[:],portrait_objects[:],9,true), "SDK portrait save")
+    Check(lengths[0][0] == 4802 && lengths[0][1] == 4802, "both full 2401-byte records")
+    Custom.CustomReload()
+    Check(Matches(board[:],objects[:],7,false), "all landscape tiles and objects survive reload")
+    Check(Matches(portrait[:],portrait_objects[:],9,true), "all portrait tiles and objects survive reload")
+    fail_write = true
+    Check(!Custom.SaveCustomLevel(2,portrait[:],portrait_objects[:],99), "quota/write failure returned")
+    Check(!Custom.ClearCustomLevel(2), "delete failure returned")
+    Check(Matches(board[:],objects[:],7,false), "failed mutations preserve cache")
+    fail_write = false
+    Custom.CustomReload()
+    Check(Matches(board[:],objects[:],7,false), "failed mutations preserve durable record")
+    account = 1
+    Custom.CustomReload()
+    Base()
+    Check(Custom.SaveCustomLevel(2,portrait[:],portrait_objects[:],11), "second account save")
+    account = 0
+    Custom.CustomReload()
+    Check(Matches(board[:],objects[:],7,false), "account isolation on reload")
+    Check(Custom.ClearCustomLevel(2) && Custom.ClearCustomLevel(2,true), "SDK tombstone reset")
+    Check(lengths[0][0] == 0 && lengths[0][1] == 0, "reset uses empty record")
+    Custom.CustomReload()
+    Base()
+    fail_read = true
+    Custom.CustomReload()
+    Base()
+    fail_read = false
+    lengths[0][0] = 2
+    records[0][0][0] = #char "g"
+    records[0][0][1] = #char "0"
+    bytes: [2401]u8
+    Check(Portal.ReadByteRecord("campaign-level-3",bytes[:]) == -1, "invalid hex is explicit error")
+    Custom.CustomReload()
+    Base()
+    lengths[0][0] = 1
+    records[0][0][0] = #char "0"
+    Check(Portal.ReadByteRecord("campaign-level-3",bytes[:]) == -1, "odd hex length rejected")
+    lengths[0][0] = 4803
+    Check(Portal.ReadByteRecord("campaign-level-3",bytes[:]) == -1, "oversized read rejected")
+    lengths[0][0] = 4802
+    for index: 0..4801 { records[0][0][index] = #char "0" }
+    small: [256]u8
+    Check(Portal.ReadByteRecord("campaign-level-3",small[:]) == -1, "small caller buffer rejected")
+    lengths[0][0] = -2
+    Check(Portal.ReadByteRecord("campaign-level-3",bytes[:]) == -2, "missing is explicit")
+    oversized: [2402]u8
+    before := writes
+    Check(!Portal.WriteByteRecord("campaign-level-3",oversized[:]) && writes == before, "oversize rejected before write")
+    active = false
+    Custom.CustomReload()
+    Check(Matches(board[:],objects[:],19,false), "noSDK still uses unchanged guest file")
+    Check(Custom.ClearCustomLevel(2), "local cleanup")
+    if failures > 0 { return 1 }
+    print("Portal campaign: account selection, full byte records, reload, reset and failures passed.\n")
+    return 0
+}

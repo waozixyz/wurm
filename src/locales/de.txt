@@ -463,3 +463,60 @@ Gast
 [wurm_portal_1]
 Der Fortschritt bleibt nur, bis diese Seite geschlossen wird.
 ---
+[wurm_ui_40]
+Etappen
+---
+[wurm_ui_41]
+Etappe
+---
+[wurm_ui_42]
+Weiter
+---
+[wurm_ui_43]
+Geschaffte Level
+---
+[wurm_ui_44]
+Pfeiltasten und W A S D steuern immer.
+---
+[wurm_shop_owned]
+Im Besitz
+---
+[wurm_shop_mountains]
+Berge
+---
+[wurm_portal_shop_0]
+Shop wird geladen…
+---
+[wurm_portal_shop_1]
+Kauf ausstehend. Käufe erneut wiederherstellen.
+---
+[wurm_portal_shop_2]
+Speichern fehlgeschlagen. Bitte erneut versuchen.
+---
+[wurm_portal_shop_3]
+Kauf abgebrochen. Du kannst es erneut versuchen.
+---
+[wurm_portal_shop_4]
+Käufe wiederhergestellt.
+---
+[wurm_portal_shop_5]
+Zum Einkaufen anmelden.
+---
+[wurm_portal_shop_6]
+Käufe sind hier nicht verfügbar.
+---
+[wurm_portal_shop_7]
+Shop konnte nicht geladen werden. Bitte erneut versuchen.
+---
+[wurm_portal_shop_8]
+Nicht verfügbar
+---
+[wurm_portal_shop_9]
+Kostenlos
+---
+[wurm_portal_shop_10]
+Käufe wiederherstellen
+---
+[wurm_portal_shop_11]
+Aktualisieren
+---

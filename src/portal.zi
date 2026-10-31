@@ -4,9 +4,7 @@ Locale :: #import, file "localization.zi";
 #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
     #import "std/web"
 }
-#if #defined(WURM_CRAZYGAMES) {
-    #import "std/text_buffer"
-}
+#import "std/text_buffer"
 #if #defined(WURM_CRAZYGAMES) {
     Guest :: () -> bool { return true }
 } else {
@@ -174,6 +172,66 @@ WriteRecord :: (name: string, bytes: []u8) -> bool {
     }
 }
 
+// Text storage for editor snapshots. -2 is an absent SDK record, -1 is
+// failure/oversize. Never translate an SDK error into a local-storage read.
+TEXT_RECORD_MAX :: 921600;
+ReadTextRecord :: (name: string, output: []u8) -> s64 {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        defer WebEnd(scope)
+        bridge := Bridge()
+        if bridge == 0 || !DataActive() { return -1 }
+        result := WebCall1(bridge, WebName("recordRead"), WebText(name))
+        if result.tag == WebNullTag { return -2 }
+        if result.tag != WebStringTag { return -1 }
+        handle := WebAsObject(result)
+        length := WebStringLength(handle)
+        if length < 0 || length > TEXT_RECORD_MAX || length >= output.count { return -1 }
+        if WebCopyString(handle, output) != length { return -1 }
+        return length
+    } else { return -1 }
+}
+
+WriteTextRecord :: (name: string, text: string) -> bool {
+    if text.count > TEXT_RECORD_MAX { return false }
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        defer WebEnd(scope)
+        bridge := Bridge()
+        return bridge != 0 && DataActive() && WebAsBool(WebCall2(bridge,
+            WebName("recordWrite"), WebText(name), WebText(text)))
+    } else { return false }
+}
+
+// Generic bounded byte records for campaign overrides. Empty is a reset
+// tombstone; -2 means absent, -1 means failed, malformed or too large.
+BYTE_RECORD_MAX :: 2401;
+ByteReadText :: #type (name: string, output: []u8) -> s64;
+ByteWriteText :: #type (name: string, text: string) -> bool;
+byte_read_text: ByteReadText = ReadTextRecord;
+byte_write_text: ByteWriteText = WriteTextRecord;
+ReadByteRecord :: (name: string, output: []u8) -> s64 {
+    text: [BYTE_RECORD_MAX * 2 + 1]u8
+    length := byte_read_text(name, text[:])
+    if length < 0 { return ifx length == -2 then -2 else -1 }
+    if length > BYTE_RECORD_MAX * 2 || length % 2 != 0 || length / 2 > output.count { return -1 }
+    // Validate before touching the caller's bytes.
+    for index: 0..length - 1 { if HexDigit(text[index]) < 0 { return -1 } }
+    for index: 0..length / 2 - 1 {
+        output[index] = cast(u8)(HexDigit(text[index * 2]) * 16 + HexDigit(text[index * 2 + 1]))
+    }
+    return length / 2
+}
+WriteByteRecord :: (name: string, bytes: []u8) -> bool {
+    if bytes.count > BYTE_RECORD_MAX { return false }
+    text: [BYTE_RECORD_MAX * 2]u8
+    for index: 0..bytes.count - 1 {
+        text[index * 2] = HexValue(bytes[index], false)
+        text[index * 2 + 1] = HexValue(bytes[index], true)
+    }
+    return byte_write_text(name, TextView(text[:bytes.count * 2]))
+}
+
 PumpAccount :: () {
     #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
         scope := WebScope()
@@ -244,5 +302,30 @@ AdPending :: () -> bool {
         pending := bridge != 0 && (WebAsBool(WebGet(bridge, WebName("adPending"))) || WebAsBool(WebGet(bridge, WebName("adPlaying"))))
         WebEnd(scope)
         return pending
+    } else { return false }
+}
+
+// Bounded raw async transport for PortalShop. Reconciliation stays native.
+StoreRead :: (name: string, output: []u8) -> s64 {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        defer WebEnd(scope)
+        bridge := Bridge()
+        if bridge == 0 { return -1 }
+        value := WebCall1(bridge, WebName("storeRead"), WebText(name))
+        if value.tag != WebStringTag { return -1 }
+        handle := WebAsObject(value)
+        size := WebStringLength(handle)
+        if size < 0 || size >= output.count { return -1 }
+        if WebCopyString(handle, output) != size { return -1 }
+        return size
+    } else { return -1 }
+}
+StoreSend :: (command: string) -> bool {
+    #if #defined(WURM_CRAZYGAMES) && #defined(PLATFORM_WEB) {
+        scope := WebScope()
+        defer WebEnd(scope)
+        bridge := Bridge()
+        return bridge != 0 && WebAsBool(WebCall1(bridge, WebName("storeRequest"), WebText(command)))
     } else { return false }
 }

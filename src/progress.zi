@@ -225,14 +225,12 @@ LoseLife :: () -> bool {
 
 Restart :: () -> bool { return Begin(0, START_LIVES, 0) }
 Continue :: () -> bool { Load(); return Begin(unlocked, START_LIVES, 0) }
+// Testing builds start any level (WURM_UNLOCK_ALL=1 on desktop).
+open_all: bool;
 Select :: (at: s32, mountains: bool = false) -> bool {
     Load()
-    locked := false
-    #if #defined(WURM_CRAZYGAMES) {
-        locked = at > unlocked
-    } else {
-        locked = at < 160 && at > unlocked
-    }
+    locked := at < 160 && at > unlocked
+    if open_all { locked = false; mountains = true }
     if at < 0 || at >= LEVELS || (at >= 160 && !mountains) || locked { return false }
     return Begin(at, START_LIVES, 0)
 }

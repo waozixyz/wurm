@@ -28,6 +28,12 @@
 }
 #import "kryon/joystick";
 #import "kryon/direction_pad";
+#if #defined(WURM_CRAZYGAMES) {
+    #import "kryon/carousel";
+    PortalEditor :: #import, file "portal_editor.zi";
+    PortalShop :: #import, file "portal_shop.zi";
+    PortalStore :: #import, file "portal_store.zi";
+}
 Controls :: #import, file "controls.zi";
 Progress :: #import, file "progress.zi";
 Appearance :: #import, file "appearance.zi";
@@ -53,10 +59,6 @@ AppleIcon :: #import "mingcute/mingcute_filled_apple_fruit";
 StarIcon :: #import "mingcute/mingcute_filled_star";
 DewIcon :: #import "mingcute/mingcute_filled_drop";
 LockIcon :: #import "mingcute/mingcute_filled_lock";
-ArrowUp :: #import "mingcute/mingcute_filled_arrow_up";
-ArrowDown :: #import "mingcute/mingcute_filled_arrow_down";
-ArrowLeft :: #import "mingcute/mingcute_filled_arrow_left";
-ArrowRight :: #import "mingcute/mingcute_filled_arrow_right";
 Input :: #import "kryon/input_protocol";
 #if #defined(WURM_PORTABLE) {
     Timer :: #import "portable_runtime";
@@ -462,7 +464,7 @@ TitleActions :: (session: Session, area: Rectangle) {
     // Painted icons float on the title like the chest, a little smaller on phones.
     size: float32 = ifx area.width < 600.0 then 56.0 else 76.0
     icon: float32 = ifx area.width < 600.0 then 48.0 else 60.0
-    // Portal copies are guest-only: no account, Dew, shop or daily chest.
+    // CrazyGames keeps its own profile and store; no normal account routes.
     #if #defined(WURM_CRAZYGAMES) {
         if Portal.AccountAvailable() && TitleIcon(session, 28002,
                 Rectangle.{right - icon * 2.0 - 8.0, top, icon, icon}, 2, "Profile") { Portal.OpenProfile() }
@@ -486,7 +488,7 @@ TitleActions :: (session: Session, area: Rectangle) {
                 Rectangle.{area.x + 16.0, area.y + 12.0, area.width - 180.0, 24.0}, 15, false, true)
         }
     }
-    #if !#defined(WURM_CRAZYGAMES) {
+    {
         TitleShop(session, Rectangle.{area.x + 12.0, top, size, size})
         RewardChest(session, Rectangle.{area.x + 12.0, top + size + 10.0, size, size})
     }
@@ -499,7 +501,14 @@ TitleIcon :: (session: Session, key: u64, bounds: Rectangle, cell: s32, label: s
 }
 dew_refresh_at: s64;
 dew_title_seen: s64;
-OpenShop :: () { game.mode = MODE_SHOP; Wardrobe.poll_at = 0; unused Account.Service("entity.game-shop", "refresh") }
+OpenShop :: () {
+    game.mode = MODE_SHOP; shop_mountains_confirm = false; buy_skin = 0
+    #if #defined(WURM_CRAZYGAMES) {
+        portal_confirm = -1; portal_coin_error = false; PortalShop.Open()
+    } else {
+        Wardrobe.poll_at = 0; unused Account.Service("entity.game-shop", "refresh")
+    }
+}
 // The shop's stall with the wallet beside it: coins, then Dew below.
 TitleShop :: (session: Session, bounds: Rectangle) {
     // The button below names the stall.
@@ -583,35 +592,6 @@ PageHeading :: (session: Session, area: Rectangle, title: string) {
     if Button(session, ButtonProps.{.key = 28102, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 84.0, 44.0},
             .label = Locale.Text("Back"), .class_name = 11}) != 0 { game.mode = MODE_STAGES; buy_skin = 0 }
 }
-// One keyboard key: a raised cap showing its letter or arrow.
-KeyCap :: (session: Session, key: u64, bounds: Rectangle, label: string, shape: string) {
-    unused Box(session, BoxProps.{.key = key, .bounds = Rectangle.{bounds.x, bounds.y + 3.0, bounds.width, bounds.height},
-        .fill = Appearance.Border(), .radius = 7.0})
-    unused Box(session, BoxProps.{.key = key + 1, .bounds = bounds, .fill = Appearance.Canvas(),
-        .border = Appearance.Border(), .radius = 7.0})
-    if shape != "" {
-        SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{bounds.x + 7.0, bounds.y + 7.0, bounds.width - 14.0, bounds.height - 14.0},
-            .shape = shape, .color = Appearance.TextColor()})
-    } else {
-        unused Text(session, TextProps.{.key = key + 2, .bounds = Rectangle.{bounds.x, bounds.y + (bounds.height - 22.0) / 2.0 + 3.0, bounds.width, 22.0},
-            .text = label, .font = 16, .align = TextAlign.TextAlignCenter})
-    }
-}
-// Four steering keys in the keyboard's inverted T, 98 by 64 points.
-KeyCluster :: (session: Session, key: u64, origin: Point, arrows: bool) {
-    size: float32 = 30.0
-    gap: float32 = 4.0
-    left := cast(float32)origin.x
-    top := cast(float32)origin.y
-    labels: [4]string = .["W", "A", "S", "D"]
-    shapes: [4]string = .[ArrowUp.Shape, ArrowLeft.Shape, ArrowDown.Shape, ArrowRight.Shape]
-    for cap: 0..3 {
-        column: float32 = ifx cap == 0 then 1.0 else cast(float32)(cap - 1)
-        row: float32 = ifx cap == 0 then 0.0 else 1.0
-        bounds := Rectangle.{left + column * (size + gap), top + row * (size + gap), size, size}
-        KeyCap(session, key + cast(u64)cap * 3, bounds, labels[cap], ifx arrows then shapes[cap] else "")
-    }
-}
 settings_scroll: s32;
 DrawSettings :: (session: Session, area: Rectangle) {
     PageHeading(session, area, "Settings")
@@ -619,7 +599,7 @@ DrawSettings :: (session: Session, area: Rectangle) {
     if width > 540.0 { width = 540.0 }
     scroller := Scroll(session, ScrollProps.{.key = 28200,
         .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + 76.0, width, area.height - 88.0},
-        .content_height = (ifx KeyboardOnly() then 448 else 508) - (ifx Portal.Guest() then 150 else 0), .scroll_offset = settings_scroll})
+        .content_height = (ifx KeyboardOnly() then 534 else 508) - (ifx Portal.Guest() then 150 else 0), .scroll_offset = settings_scroll})
     settings_scroll = scroller.scroll_offset
     if !scroller.opened { return }
     x := scroller.content.x; y := scroller.content.y; width = scroller.content.width
@@ -635,39 +615,32 @@ DrawSettings :: (session: Session, area: Rectangle) {
     GameText(session, 28220, "Controls", Rectangle.{x, y + 150.0, width, 28.0}, 20)
     half := (width - 8.0) / 2.0
     lower: float32 = 0.0
+    // Every edition offers the two touch controls; computers also steer
+    // with the keys, which a short line mentions.
     if KeyboardOnly() {
-        // The keys that steer, drawn as the keyboard's own caps.
-        lower = -60.0
-        for choice: 0..1 {
-            preview := Rectangle.{x + cast(float32)choice * (half + 8.0), y + 186.0, half, 116.0}
-            unused Box(session, BoxProps.{.key = 28250 + cast(u64)choice, .bounds = preview,
-                .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 12.0})
-            KeyCluster(session, 28270 + cast(u64)choice * 12, Point.{cast(s32)(preview.x + (preview.width - 98.0) / 2.0), cast(s32)preview.y + 12}, choice == 0)
-            GameText(session, 28252 + cast(u64)choice, ifx choice == 0 then "Arrow keys" else "W A S D",
-                Rectangle.{preview.x + 8.0, preview.y + 84.0, preview.width - 16.0, 24.0}, 15, true, true)
-        }
-    } else {
-        for choice: 0..1 {
-            preview := Rectangle.{x + cast(float32)choice * (half + 8.0), y + 186.0, half, 116.0}
-            unused Box(session, BoxProps.{.key = 28250 + cast(u64)choice, .bounds = preview,
-                .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 12.0})
-            side: float32 = 88.0
-            square := Rectangle.{preview.x + (preview.width - side) / 2.0, preview.y + 10.0, side, side}
-            if choice == 0 {
-                Character(session, 28260, Rectangle.{square.x + 4.0, square.y + 18.0, 46.0, 46.0}, Wardrobe.skin, true)
-                SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{square.x + 34.0, square.y + 32.0, 54.0, 54.0},
-                    .shape = FingerSwipe.Shape, .color = Appearance.TextColor()})
-            } else {
-                pad := DirectionPad(session, DirectionPadProps.{.key = 28261, .bounds = square,
-                    .label = Locale.Text("Try the direction pad"), .now = cast(float64)Timer.MonotonicMilliseconds() / 1000.0})
-                if pad.step { unused Controls.SetPad(true); PreferencesChanged() }
-            }
-        }
-        if Button(session, ButtonProps.{.key = 28221, .bounds = Rectangle.{x, y + 310.0, half, 52.0},
-                .label = Locale.Text("Swipe"), .selected = !Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(false); PreferencesChanged() }
-        if Button(session, ButtonProps.{.key = 28222, .bounds = Rectangle.{x + half + 8.0, y + 310.0, half, 52.0},
-                .label = Locale.Text("Direction pad"), .selected = Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(true); PreferencesChanged() }
+        lower = 26.0
+        GameText(session, 28223, "Arrow keys and W A S D always steer.", Rectangle.{x, y + 368.0, width, 20.0}, 13, true)
     }
+    for choice: 0..1 {
+        preview := Rectangle.{x + cast(float32)choice * (half + 8.0), y + 186.0, half, 116.0}
+        unused Box(session, BoxProps.{.key = 28250 + cast(u64)choice, .bounds = preview,
+            .fill = Appearance.Surface(), .border = Appearance.Border(), .radius = 12.0})
+        side: float32 = 88.0
+        square := Rectangle.{preview.x + (preview.width - side) / 2.0, preview.y + 10.0, side, side}
+        if choice == 0 {
+            Character(session, 28260, Rectangle.{square.x + 4.0, square.y + 18.0, 46.0, 46.0}, Wardrobe.Wearing(), true)
+            SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{square.x + 34.0, square.y + 32.0, 54.0, 54.0},
+                .shape = FingerSwipe.Shape, .color = Appearance.TextColor()})
+        } else {
+            pad := DirectionPad(session, DirectionPadProps.{.key = 28261, .bounds = square,
+                .label = Locale.Text("Try the direction pad"), .now = cast(float64)Timer.MonotonicMilliseconds() / 1000.0})
+            if pad.step { unused Controls.SetPad(true); PreferencesChanged() }
+        }
+    }
+    if Button(session, ButtonProps.{.key = 28221, .bounds = Rectangle.{x, y + 310.0, half, 52.0},
+            .label = Locale.Text("Swipe"), .selected = !Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(false); PreferencesChanged() }
+    if Button(session, ButtonProps.{.key = 28222, .bounds = Rectangle.{x + half + 8.0, y + 310.0, half, 52.0},
+            .label = Locale.Text("Direction pad"), .selected = Controls.Pad(), .class_name = 11}) != 0 { unused Controls.SetPad(true); PreferencesChanged() }
     y += lower
     GameText(session, 28230, "Sound", Rectangle.{x, y + 402.0, width - 104.0, 32.0}, 20)
     if Button(session, ButtonProps.{.key = 28231, .bounds = Rectangle.{x + width - 100.0, y + 392.0, 100.0, 52.0},
@@ -779,16 +752,21 @@ Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool
 }
 shop_scroll: s32;
 buy_skin: s32;
-// The shop's tabs: skins, coin packs bought with Dew, and Dew top-ups.
+// The host keeps its wallet and top-ups; both routes sell skins and stages.
 SHOP_SKINS :: 0;
-SHOP_COINS :: 1;
-SHOP_DEW :: 2;
+SHOP_STAGES :: 1;
+SHOP_COINS :: 2;
+SHOP_DEW :: 3;
 shop_tab: s32;
+shop_mountains_confirm: bool;
 buy_pack: s32;
 // The bought coins when a pack was asked for; -1 while none is waiting.
 pack_from: s32 = -1;
 pack_grace: s32;
 DrawShop :: (session: Session, area: Rectangle) {
+    #if #defined(WURM_CRAZYGAMES) {
+        DrawPortalShop(session, area); return
+    }
     PageHeading(session, area, "Shop")
     if buy_pack > 0 { DrawPackConfirm(session, area); return }
     if buy_skin > 0 {
@@ -839,26 +817,33 @@ DrawShop :: (session: Session, area: Rectangle) {
         }
     }
     top := area.y + 136.0
-    #if !#defined(WURM_PORTABLE) {
-        // Inside Arcade or Breeze the host sells Dew; the game keeps skins.
-        tabs: [3]string = .["Skins", "Coins", "Dew"]
-        tab_width := (area.width - 32.0 - 16.0) / 3.0
+    {
+        tabs: [4]string = .["Skins", "Stages", "Coins", "Dew"]
+        tab_count: s32 = 2
+        #if !#defined(WURM_PORTABLE) {
+            tab_count = 4
+        }
+        tab_width := (area.width - 32.0 - cast(float32)(tab_count - 1) * 8.0) / cast(float32)tab_count
         if tab_width > 160.0 { tab_width = 160.0 }
-        left := area.x + (area.width - tab_width * 3.0 - 16.0) / 2.0
-        for tab: cast(s32)0..2 {
+        left := area.x + (area.width - tab_width * cast(float32)tab_count - cast(float32)(tab_count - 1) * 8.0) / 2.0
+        for tab: cast(s32)0..tab_count - 1 {
             if Button(session, ButtonProps.{.key = cast(u64)(28340 + tab),
                     .bounds = Rectangle.{left + cast(float32)tab * (tab_width + 8.0), top, tab_width, 40.0},
                     .label = Locale.Text(tabs[tab]), .selected = shop_tab == tab, .pill = true, .class_name = 11}) != 0 {
                 shop_tab = tab
+                shop_mountains_confirm = false
                 if tab == SHOP_DEW { Account.ShowDew() }
             }
         }
         top += 52.0
         content := Rectangle.{area.x + 16.0, top, area.width - 32.0, area.y + area.height - top - 12.0}
+        if shop_tab == SHOP_STAGES { DrawMountainsShopOffer(session, content); return }
+        #if !#defined(WURM_PORTABLE) {
         if shop_tab == SHOP_COINS { DrawCoinPacks(session, content); return }
         if shop_tab == SHOP_DEW {
             Account.DrawProfile(session, content, 0, Appearance.mode != 2)
             return
+        }
         }
     }
     grid := Rectangle.{area.x + 16.0, top, area.width - 32.0, area.y + area.height - top - 12.0}
@@ -903,6 +888,238 @@ DrawShop :: (session: Session, area: Rectangle) {
         }
     }
     unused End(session)
+}
+
+#if #defined(WURM_CRAZYGAMES) {
+    portal_confirm: s32 = -1;
+    portal_coin_error: bool;
+    PortalShopMessage :: () -> string {
+        message := PortalShop.Status()
+        if message == "loading" { return "Loading shop…" }
+        if message == "checking-out" || message == "sdk-busy" { return "Please wait…" }
+        if message == "pending" { return "Purchase pending. Restore to check again." }
+        if message == "storage-error" { return "Could not save. Please retry." }
+        if message == "cancelled" { return "Purchase cancelled. You can retry." }
+        if message == "restored" { return "Purchases restored." }
+        if message == "sign-in" { return "Sign in to shop." }
+        if message == "ready" { return ifx PortalShop.PurchasesAvailable() then "A little change of character." else "Purchases unavailable here." }
+        if message == "config-invalid" || message == "unavailable" { return "Purchases unavailable here." }
+        return "Could not load the shop. Please retry."
+    }
+    PortalProduct :: (kind: s32, skin: s32 = 0) -> s32 {
+        state := PortalShop.StoreState()
+        for i: 0..state.count - 1 {
+            if state.products[i].kind == kind && (kind != PortalStore.DURABLE_SKIN || state.products[i].skin_id == skin) { return i }
+        }
+        return -1
+    }
+    portal_price: [100]u8;
+    PortalPrice :: (index: s32) -> string {
+        state := PortalShop.StoreState()
+        if index < 0 || index >= state.count || !state.catalog_ready { return Locale.Text("Unavailable") }
+        p := *state.products[index]
+        if !p.catalog_match { return Locale.Text("Unavailable") }
+        if p.is_free { return Locale.Text("Free") }
+        if !p.has_price { return Locale.Text("Unavailable") }
+        portal_price = p.price_label
+        return TextUntilNul(portal_price[:])
+    }
+    PortalBuyable :: (index: s32) -> bool {
+        state := PortalShop.StoreState()
+        return index >= 0 && index < state.count && PortalShop.CanPurchase() &&
+            state.products[index].catalog_match && state.products[index].can_be_bought &&
+            (state.products[index].is_free || state.products[index].has_price) &&
+            (state.products[index].kind == PortalStore.COIN_CREDIT_PACK || !state.products[index].owned)
+    }
+    PortalOffer :: (session: Session, key: u64, bounds: Rectangle, index: s32, mountains: bool) {
+        width := bounds.width
+        if width > 760.0 { width = 760.0 }
+        wide := width >= 560.0
+        art_height := ifx wide then bounds.height else bounds.height - 184.0
+        if art_height > 240.0 { art_height = 240.0 }
+        if art_height < 64.0 { art_height = 64.0 }
+        card := Rectangle.{bounds.x + (bounds.width - width) / 2.0, bounds.y, width,
+            ifx wide then art_height else art_height + 184.0}
+        unused Box(session, BoxProps.{.key = key, .bounds = card, .fill = Appearance.Surface(), .radius = 16.0})
+        cover := Rectangle.{card.x + 8.0, card.y + 8.0, ifx wide then width * 0.48 - 16.0 else width - 16.0, art_height - 16.0}
+        title := Locale.Text("Mountains")
+        if mountains {
+            unused Image(session, ImageProps.{.key = key + 1, .asset_path = ART_STAGE_COVERS, .bounds = cover,
+                .source = Rectangle.{0.0, 4.0 * COVER_HEIGHT, 960.0, COVER_HEIGHT},
+                .fit = ImageFit.ImageFitCover, .smooth = true, .radius = 12.0, .alt_text = title})
+        } else {
+            RewardIcon(session, key + 1, cover, 2, "Coins")
+            digits: [21]u8
+            title = CoinText(cast(s32)PortalShop.StoreState().products[index].pack_coins)
+        }
+        x := ifx wide then card.x + width * 0.48 else card.x + 12.0
+        y := ifx wide then card.y + 8.0 else card.y + art_height + 4.0
+        dw := card.x + width - x - 12.0
+        GameText(session, key + 2, title, Rectangle.{x, y, dw, 28.0}, 22, false, true)
+        PlainText(session, key + 3, PortalPrice(index), Rectangle.{x, y + 36.0, dw, 28.0}, 18)
+        owned := mountains && Wardrobe.MountainsAvailable()
+        if Button(session, ButtonProps.{.key = key + 4, .bounds = Rectangle.{x, y + 76.0, dw, 44.0},
+                .label = Locale.Text(ifx owned then "Owned" else "Buy"), .disabled = owned || !PortalBuyable(index), .class_name = 10}) != 0 {
+            portal_confirm = index
+        }
+        if owned && Button(session, ButtonProps.{.key = key + 5, .bounds = Rectangle.{x, y + 128.0, dw, 40.0},
+                .label = Locale.Text("Play"), .class_name = 11}) != 0 { unused PlaySelected(160, Timer.MonotonicMilliseconds()) }
+    }
+    DrawPortalShop :: (session: Session, area: Rectangle) {
+        PageHeading(session, area, "Shop")
+        if game.mode != MODE_SHOP { portal_confirm = -1; return }
+        if Button(session, ButtonProps.{.key = 45001, .bounds = Rectangle.{area.x + area.width - 144.0, area.y + 12.0, 132.0, 44.0},
+                .label = Locale.Text("Restore purchases"), .disabled = PortalShop.Busy(), .class_name = 11}) != 0 { unused PortalShop.Restore() }
+        digits: [21]u8
+        Amount(session, 45002, Rectangle.{area.x + 20.0, area.y + 72.0, 150.0, 32.0}, false,
+            FormatInteger(cast(s64)Rewards.Coins(), digits[:]), 18, false)
+        if Button(session, ButtonProps.{.key = 45004, .bounds = Rectangle.{area.x + area.width - 120.0, area.y + 68.0, 108.0, 40.0},
+                .label = Locale.Text(ifx !PortalShop.Authenticated() && Portal.AccountAvailable() then "Sign in" else "Refresh"),
+                .disabled = PortalShop.Busy(), .class_name = 11}) != 0 {
+            if !PortalShop.Authenticated() && Portal.AccountAvailable() { Portal.OpenProfile() }
+            else { unused PortalShop.Refresh() }
+        }
+        unused Text(session, TextProps.{.key = 45005, .bounds = Rectangle.{area.x + 16.0, area.y + 116.0, area.width - 32.0, 40.0},
+            .text = Locale.Text(ifx portal_coin_error then "Could not save. Please retry." else PortalShopMessage()), .font = 14,
+            .align = TextAlign.TextAlignCenter})
+        state := PortalShop.StoreState()
+        // Explicit confirmation is the only path to SDK Buy. Navigation never
+        // cancels a Pay Station, clears its marker, or retries a charge.
+        if portal_confirm >= 0 || buy_skin >= 9 {
+            index := portal_confirm
+            coin := buy_skin >= 9
+            width := area.width - 32.0
+            if width > 420.0 { width = 420.0 }
+            x := area.x + (area.width - width) / 2.0; y := area.y + 164.0
+            name := "Coins"
+            owned := false
+            if coin { name = SkinName(buy_skin); owned = Rewards.Owns(buy_skin) }
+            else if index < state.count {
+                p := *state.products[index]
+                name = ifx p.kind == PortalStore.MOUNTAINS_CHAPTER then "Mountains" else ifx p.kind == PortalStore.DURABLE_SKIN then SkinName(p.skin_id) else "Coins"
+                owned = state.inventory_ready && p.owned && p.kind != PortalStore.COIN_CREDIT_PACK
+            } else { portal_confirm = -1; return }
+            if coin || state.products[index].kind == PortalStore.DURABLE_SKIN {
+                CharacterPreview(session, 45010, Rectangle.{x + width / 2.0 - 48.0, y, 96.0, 50.0}, ifx coin then buy_skin else state.products[index].skin_id)
+            } else { RewardIcon(session, 45010, Rectangle.{x + width / 2.0 - 28.0, y, 56.0, 50.0}, ifx state.products[index].kind == PortalStore.MOUNTAINS_CHAPTER then 4 else 2, "") }
+            GameText(session, 45011, name, Rectangle.{x, y + 54.0, width, 26.0}, 22, false, true)
+            if coin { Amount(session, 45012, Rectangle.{x, y + 86.0, width, 28.0}, false, FormatInteger(cast(s64)Rewards.CoinPrice(buy_skin), digits[:]), 18, true) }
+            else { PlainText(session, 45012, PortalPrice(index), Rectangle.{x, y + 86.0, width, 28.0}, 18) }
+            enabled := ifx coin then !owned && Rewards.Coins() >= Rewards.CoinPrice(buy_skin) else PortalBuyable(index)
+            if Button(session, ButtonProps.{.key = 45014, .bounds = Rectangle.{x, y + 124.0, width, 44.0},
+                    .label = Locale.Text(ifx owned then "Owned" else ifx PortalShop.Pending() then "Please wait…" else "Confirm purchase"),
+                    .disabled = !enabled, .class_name = 10}) != 0 {
+                if coin {
+                    if Rewards.Buy(buy_skin) { Wardrobe.Select(buy_skin); PreferencesChanged(); buy_skin = 0; portal_coin_error = false }
+                    else { portal_coin_error = true }
+                } else { unused PortalShop.Buy(index) }
+            }
+            if Button(session, ButtonProps.{.key = 45015, .bounds = Rectangle.{x, y + 180.0, width, 40.0},
+                    .label = Locale.Text("Back"), .class_name = 11}) != 0 { portal_confirm = -1; buy_skin = 0; portal_coin_error = false }
+            return
+        }
+        tabs: [3]string = .["Skins", "Stages", "Coins"]
+        tw := (area.width - 48.0) / 3.0
+        if tw > 160.0 { tw = 160.0 }
+        left := area.x + (area.width - tw * 3.0 - 16.0) / 2.0
+        for tab: cast(s32)0..2 {
+            if Button(session, ButtonProps.{.key = cast(u64)(45020 + tab), .bounds = Rectangle.{left + cast(float32)tab * (tw + 8.0), area.y + 160.0, tw, 40.0},
+                    .label = Locale.Text(tabs[tab]), .selected = shop_tab == tab, .pill = true, .class_name = 11}) != 0 { shop_tab = tab; shop_scroll = 0 }
+        }
+        bounds := Rectangle.{area.x + 16.0, area.y + 212.0, area.width - 32.0, area.height - 224.0}
+        if shop_tab == SHOP_STAGES { PortalOffer(session, 45100, bounds, PortalProduct(PortalStore.MOUNTAINS_CHAPTER), true); return }
+        if shop_tab == SHOP_COINS {
+            count: s32
+            for i: 0..state.count - 1 { if state.products[i].kind == PortalStore.COIN_CREDIT_PACK { count += 1 } }
+            if count == 0 { GameText(session, 45110, "Purchases unavailable here.", bounds, 18, true, true); return }
+            scroller := Scroll(session, ScrollProps.{.key = 45111, .bounds = bounds, .content_height = count * 236, .scroll_offset = shop_scroll})
+            shop_scroll = scroller.scroll_offset
+            if !scroller.opened { return }
+            slot: s32
+            for i: 0..state.count - 1 {
+                if state.products[i].kind != PortalStore.COIN_CREDIT_PACK { continue }
+                PortalOffer(session, cast(u64)(45200 + i * 10), Rectangle.{bounds.x, scroller.content.y + cast(float32)slot * 236.0, bounds.width, 224.0}, i, false)
+                slot += 1
+            }
+            unused End(session); return
+        }
+        columns: s32 = ifx bounds.width >= 650.0 then 3 else 2
+        width := (bounds.width - 16.0 - cast(float32)(columns - 1) * 12.0) / cast(float32)columns
+        scroller := Scroll(session, ScrollProps.{.key = 45300, .bounds = bounds, .content_height = ((Rewards.SKIN_COUNT + columns - 1) / columns) * 196, .scroll_offset = shop_scroll})
+        shop_scroll = scroller.scroll_offset
+        if !scroller.opened { return }
+        for id: cast(s32)0..Rewards.SKIN_COUNT - 1 {
+            key := cast(u64)(45400 + id * 30)
+            x := bounds.x + cast(float32)(id % columns) * (width + 12.0); y := scroller.content.y + cast(float32)(id / columns) * 196.0
+            unused Box(session, BoxProps.{.key = key, .bounds = Rectangle.{x, y, width, 184.0}, .fill = Appearance.Surface(), .radius = 16.0})
+            CharacterPreview(session, key + 1, Rectangle.{x + width / 2.0 - 48.0, y + 10.0, 96.0, 50.0}, id)
+            GameText(session, key + 8, SkinName(id), Rectangle.{x + 4.0, y + 68.0, width - 8.0, 24.0}, 17, false, true)
+            available := Wardrobe.Available(id)
+            product := PortalProduct(PortalStore.DURABLE_SKIN, id)
+            coin := Rewards.CoinPrice(id) > 0
+            if coin { Amount(session, key + 9, Rectangle.{x + 4.0, y + 96.0, width - 8.0, 28.0}, false, FormatInteger(cast(s64)Rewards.CoinPrice(id), digits[:]), 16, true) }
+            else {
+                detail := ifx available then Locale.Text("Owned") else ifx product >= 0 then PortalPrice(product) else Locale.Text(ifx id == 4 then "Play for 5 hours" else ifx id == 5 then "Reach level 40" else ifx id == 12 then "Day 30 reward" else "Unavailable")
+                PlainText(session, key + 9, detail, Rectangle.{x + 4.0, y + 96.0, width - 8.0, 28.0}, 14)
+            }
+            wearing := available && Wardrobe.skin == id
+            if Button(session, ButtonProps.{.key = key + 11, .bounds = Rectangle.{x + 10.0, y + 132.0, width - 20.0, 42.0},
+                    .label = Locale.Text(ifx wearing then "Wearing" else ifx available then "Wear" else "Buy"),
+                    .disabled = wearing || (!available && !coin && !PortalBuyable(product)), .selected = wearing, .class_name = 11}) != 0 {
+                if available { Wardrobe.Select(id); PreferencesChanged() }
+                else if coin { buy_skin = id; portal_coin_error = false }
+                else { portal_confirm = product }
+            }
+        }
+        unused End(session)
+    }
+}
+
+// The existing Mountains entitlement is discoverable before campaign progress.
+DrawMountainsShopOffer :: (session: Session, bounds: Rectangle) {
+    width := bounds.width
+    if width > 760.0 { width = 760.0 }
+    wide := width >= 560.0
+    art_height := ifx wide then bounds.height else bounds.height - 204.0
+    if art_height > 240.0 { art_height = 240.0 }
+    if art_height < 64.0 { art_height = 64.0 }
+    card := Rectangle.{bounds.x + (bounds.width - width) / 2.0, bounds.y, width,
+        ifx wide then art_height else art_height + 204.0}
+    unused Box(session, BoxProps.{.key = 28700, .bounds = card, .fill = Appearance.Surface(), .radius = 16.0})
+    cover := Rectangle.{card.x + 8.0, card.y + 8.0, ifx wide then width * 0.48 - 16.0 else width - 16.0, art_height - 16.0}
+    unused Image(session, ImageProps.{.key = 28701, .asset_path = ART_STAGE_COVERS, .bounds = cover,
+        .source = Rectangle.{0.0, 4.0 * COVER_HEIGHT, 960.0, COVER_HEIGHT},
+        .fit = ImageFit.ImageFitCover, .smooth = true, .radius = 12.0, .alt_text = Locale.Text("Mountains")})
+    x := ifx wide then card.x + width * 0.48 else card.x + 12.0
+    y := ifx wide then card.y + 4.0 else card.y + art_height + 4.0
+    detail_width := card.x + width - x - 12.0
+    GameText(session, 28702, "Mountains", Rectangle.{x, y, detail_width, 28.0}, 22, false, true)
+    price: [32]u8
+    unused DewFormat(ShopModel.GameShopPrice(9), DewUnits, price[:])
+    Amount(session, 28703, Rectangle.{x, y + (ifx wide then 28.0 else 32.0), detail_width, 28.0}, true, TextUntilNul(price[:]), 18, true)
+    owned := Wardrobe.MountainsAvailable()
+    if owned { shop_mountains_confirm = false }
+    pending := TextUntilNul(Wardrobe.status[:]) == "pending"
+    signin := Progress.owner[0] == 0 || TextUntilNul(Wardrobe.status[:]) == "signin"
+    label := ifx owned then "Owned" else ifx !shop_mountains_confirm then "Buy" else ifx signin then "Sign in" else ifx pending then "Please wait…" else "Confirm purchase"
+    button_y := y + (ifx wide then 58.0 else 68.0)
+    button_width := ifx wide && shop_mountains_confirm then (detail_width - 8.0) / 2.0 else detail_width
+    if Button(session, ButtonProps.{.key = 28705, .bounds = Rectangle.{x, button_y, button_width, 44.0},
+            .label = Locale.Text(label), .disabled = owned || (pending && !signin), .class_name = 10}) != 0 {
+        if !shop_mountains_confirm { shop_mountains_confirm = true }
+        else if signin { Account.OpenProfile() }
+        else { unused Account.Service("entity.game-shop", ShopModel.GameShopProduct(9)); Wardrobe.poll_at = 0 }
+    }
+    if shop_mountains_confirm {
+        cancel := ifx wide then Rectangle.{x + (detail_width + 8.0) / 2.0, button_y, (detail_width - 8.0) / 2.0, 44.0}
+            else Rectangle.{x, y + 118.0, detail_width, 40.0}
+        if Button(session, ButtonProps.{.key = 28706, .bounds = cancel,
+                .label = Locale.Text("Cancel"), .disabled = pending && !signin, .class_name = 11}) != 0 { shop_mountains_confirm = false }
+        if TextUntilNul(Wardrobe.status[:]) == "failed" || TextUntilNul(Wardrobe.status[:]) == "insufficient" {
+            GameText(session, 28707, "Purchase not confirmed. Check your Dew and retry.", Rectangle.{x, y + (ifx wide then 104.0 else 164.0), detail_width, 24.0}, 12, true, true)
+        }
+    }
+    Wardrobe.poll_at = 0
 }
 
 // Coin packs, bought with Dew. The node's receipts are the coins.
@@ -990,7 +1207,7 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     if width > 360.0 { width = 360.0 }
     height: float32 = ifx compact then 252.0 else 292.0
     if score >= 0 { height = ifx compact then 288.0 else 340.0 }
-    if game.mode == MODE_PAUSED && !KeyboardOnly() { height += 56.0 }
+    if game.mode == MODE_PAUSED { height += 56.0 }
     card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0, width, height}
     unused Box(session, BoxProps.{.key = 51,
         .bounds = Rectangle.{card.x, card.y + 6.0, card.width, card.height},
@@ -1020,7 +1237,7 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     }
     primary := ifx game.mode == MODE_PAUSED then "Resume" else "Try again"
     if game.mode == MODE_VICTORY { primary = "Play again" }
-    primary_offset: float32 = ifx game.mode == MODE_PAUSED && !KeyboardOnly() then 176.0 else 120.0
+    primary_offset: float32 = ifx game.mode == MODE_PAUSED then 176.0 else 120.0
     if Button(session, ButtonProps.{.key = 57,
             .bounds = Rectangle.{card.x + 20.0, card.y + card.height - primary_offset, card.width - 40.0, 48.0},
             .label = primary, .class_name = 10, .tone = ButtonTone.ButtonToneSuccess,
@@ -1028,7 +1245,7 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
         key: s32 = cast(s32)(ifx game.mode == MODE_PAUSED then Input.KeyEscape else Input.KeyEnter)
         HandleInput(key, Timer.MonotonicMilliseconds())
     }
-    if game.mode == MODE_PAUSED && !KeyboardOnly() {
+    if game.mode == MODE_PAUSED {
         if Button(session, ButtonProps.{.key = 61,
                 .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 120.0, card.width - 40.0, 48.0},
                 .label = Locale.Text("Controls"), .class_name = 11, .tone = ButtonTone.ButtonToneNeutral}) != 0 { AskControls() }
@@ -1094,8 +1311,8 @@ Sprite :: (session: Session, key: u64, stage: Rectangle, position: Point, source
         (clipped_right - clipped_left) / width * source.width,
         (clipped_bottom - clipped_top) / height * source.height}
     bounds := Rectangle.{clipped_left, clipped_top, clipped_right - clipped_left, clipped_bottom - clipped_top}
-    if Wardrobe.skin > 0 && source.y == 48.0 && key >= 2000 && key < 3000 {
-        Character(session, key * 8 + 300000, Rectangle.{left, top, width, height}, Wardrobe.skin, key == 2000, game.direction, alpha, bounds)
+    if Wardrobe.Wearing() > 0 && source.y == 48.0 && key >= 2000 && key < 3000 {
+        Character(session, key * 8 + 300000, Rectangle.{left, top, width, height}, Wardrobe.Wearing(), key == 2000, game.direction, alpha, bounds)
     } else { Picture(session, key, sheet, bounds, fragment, alpha) }
 }
 
@@ -1371,8 +1588,8 @@ DrawBoard :: (session: Session, stage: Rectangle) {
     fade: float32 = ifx game.death_ticks > 0 then cast(float32)game.death_ticks / 20.0 else 1.0
     alpha := cast(u8)(255.0 * fade * fade * (3.0 - 2.0 * fade))
     draw_step: s32 = WORM_DRAW_STEP * 2
-    head_size: float32 = ifx Wardrobe.skin != 0 then 22.0 else 21.0
-    DrawWormTube(session, 18000, stage, game.worm[:], game.length, SkinBodyColour(Wardrobe.skin), alpha,
+    head_size: float32 = ifx Wardrobe.Wearing() != 0 then 22.0 else 21.0
+    DrawWormTube(session, 18000, stage, game.worm[:], game.length, SkinBodyColour(Wardrobe.Wearing()), alpha,
         stage.width / (cast(float32)board_columns * 16.0))
     index := game.length - 1
     while index > 0 {
@@ -1381,7 +1598,7 @@ DrawBoard :: (session: Session, stage: Rectangle) {
         if from_tail < 2 { column = 6 }
         else if from_tail < 8 { column = 5 }
         progress := ifx game.length > 1 then cast(float32)from_tail / cast(float32)(game.length - 1) else 1.0
-        body_size := ifx Wardrobe.skin != 0 then 11.0 + 3.0 * progress else 13.0 + 2.0 * progress
+        body_size := ifx Wardrobe.Wearing() != 0 then 11.0 + 3.0 * progress else 13.0 + 2.0 * progress
         if alpha > 0 {
             Sprite(session, 2000 + cast(u64)index, stage, game.worm[index],
                 Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, sprites, body_size,
@@ -1400,7 +1617,6 @@ DrawBoard :: (session: Session, stage: Rectangle) {
         if creature.kind == 1 { column = 6 + enemy_frame }
         // The animals met after the meadow share row four of every sheet.
         if creature.animal != ANIMAL_CLASSIC { row = 64.0 }
-        if creature.animal == ANIMAL_SQUIRREL { column = (creature.timer / 4) % 2 }
         if creature.animal == ANIMAL_HEDGEHOG { column = ifx creature.timer < 0 then 3 else 2 }
         if creature.animal == ANIMAL_FROG { column = ifx creature.timer >= 14 && creature.timer % 14 < 4 then 5 else 4 }
         if creature.animal == ANIMAL_STONE { column = 6 + (creature.timer / 3) % 2 }
@@ -1491,7 +1707,11 @@ EditorFurthestStage :: () -> s32 {
 OpenEditorHome :: () {
     EditorShareReset()
     Progress.Load()
-    Own.own_service = Account.Service
+    #if #defined(WURM_CRAZYGAMES) {
+        Own.own_service = PortalEditor.Service
+    } else {
+        Own.own_service = Account.Service
+    }
     editor_everything = false
     editor.browsing = false
     editor.playtest = false
@@ -2012,27 +2232,23 @@ PlainText :: (session: Session, key: u64, text: string, bounds: Rectangle, size:
 // way on to the landscapes or back to the last board.
 editor_continue: [64]u8;
 DrawEditorHome :: (session: Session, area: Rectangle, now: s64) {
-    // Cover fit without a pixel crop, so the half-size copies fit too.
     portrait := area.height > area.width
     unused Box(session, BoxProps.{.key = 40000, .bounds = area, .fill = Color.{34, 66, 39, 255}})
+    // Wide windows crop the lower grass, keeping the Apfelwurm Editor title.
+    source: Rectangle
+    if !portrait && area.width > area.height * 1.5 {
+        art_width: float32 = ifx ART_EDITOR_TITLE[ART_EDITOR_TITLE.count - 10:] == "-small.png" then 768.0 else 1536.0
+        source = Rectangle.{0.0, 0.0, art_width, art_width * area.height / area.width}
+    }
     unused Image(session, ImageProps.{.key = 40001, .asset_path = ifx portrait then ART_EDITOR_TITLE_PORTRAIT else ART_EDITOR_TITLE,
-        .bounds = area, .fit = ImageFit.ImageFitCover, .smooth = true,
-        .alt_text = "The little worm laying out a hedge maze on a meadow workbench"})
+        .bounds = area, .source = source, .fit = ImageFit.ImageFitCover, .smooth = true,
+        .alt_text = "Apfelwurm Editor: the little worm laying out a hedge maze on a meadow workbench"})
     unused Box(session, BoxProps.{.key = 40002, .bounds = area, .fill = Appearance.ArtworkShade()})
     unused Box(session, BoxProps.{.key = 40003,
         .bounds = Rectangle.{area.x, area.y + area.height - 380.0, area.width, 380.0},
         .fill = Color.{20, 47, 22, 0}, .fill_bottom = Color.{20, 47, 22, 200}, .has_fill_bottom = true})
     if !EditorApp() && Button(session, ButtonProps.{.key = 40004, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 84.0, 44.0},
             .label = Locale.Text("Back"), .class_name = 11}) != 0 { OpenStages(); return }
-    heading_width := area.width - 120.0
-    if heading_width > 420.0 { heading_width = 420.0 }
-    heading := Rectangle.{area.x + (area.width - heading_width) / 2.0, area.y + 64.0, heading_width, 84.0}
-    surface := Appearance.Surface()
-    surface.a = 225
-    unused Box(session, BoxProps.{.key = 40005, .bounds = heading, .fill = surface, .border = Appearance.Border(), .radius = 18.0})
-    CentreText(session, 40006, "Level editor", Rectangle.{heading.x + 8.0, heading.y + 10.0, heading.width - 16.0, 34.0}, 26)
-    CentreText(session, 40007, "Make levels of your own.",
-        Rectangle.{heading.x + 8.0, heading.y + 48.0, heading.width - 16.0, 24.0}, 15)
     width := area.width - 48.0
     if width > 300.0 { width = 300.0 }
     left := area.x + (area.width - width) / 2.0
@@ -2054,11 +2270,15 @@ DrawEditorHome :: (session: Session, area: Rectangle, now: s64) {
                 .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorPick(EDITOR_PICK_CAMPAIGN); return }
         y -= 64.0
     }
-    half := (width - 10.0) / 2.0
+    community_available := true
+    #if #defined(WURM_CRAZYGAMES) {
+        community_available = Account.SharingAvailable()
+    }
+    half := ifx community_available then (width - 10.0) / 2.0 else width
     if Button(session, ButtonProps.{.key = 40013, .bounds = Rectangle.{left, y, half, 52.0},
             .label = Locale.Text("My levels"), .class_name = 13, .pill = true,
             .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorOpenMine(); return }
-    if Button(session, ButtonProps.{.key = 40017, .bounds = Rectangle.{left + half + 10.0, y, half, 52.0},
+    if community_available && Button(session, ButtonProps.{.key = 40017, .bounds = Rectangle.{left + half + 10.0, y, half, 52.0},
             .label = Locale.Text("Community"), .class_name = 13, .pill = true,
             .tone = ButtonTone.ButtonToneNeutral}) != 0 { EditorOpenCommunity(now); return }
     y -= 64.0
@@ -2088,7 +2308,7 @@ DrawEditorHome :: (session: Session, area: Rectangle, now: s64) {
                 .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { EditorResume(); return }
     }
     if editor_notice != "" {
-        GameText(session, 40016, editor_notice, Rectangle.{area.x + 16.0, heading.y + heading.height + 12.0, area.width - 32.0, 24.0}, 15, false, true)
+        GameText(session, 40016, editor_notice, Rectangle.{area.x + 16.0, y - 36.0, area.width - 32.0, 24.0}, 15, false, true)
     }
 }
 
@@ -2659,12 +2879,12 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     TextLine(session, 8202, "LEVEL", Rectangle.{panel.x + 8.0, panel.y + 8.0, 50.0, 20.0}, 14)
     TextLine(session, 8203, level_text, Rectangle.{panel.x + 60.0, panel.y + 8.0, 30.0, 20.0}, 14)
     TextLine(session, 8204, StageName(stage_of_level), Rectangle.{panel.x + 110.0, panel.y + 8.0, 90.0, 20.0}, 14)
-    if editor.dirty {
-        TextLine(session, 8205, "unsaved", Rectangle.{panel.x + 140.0, panel.y + 8.0, 60.0, 20.0}, 13)
-    } else if editor.save_failed {
+    if editor.save_failed {
         unused Box(session, BoxProps.{.key = 8206, .bounds = Rectangle.{panel.x + 168.0, panel.y + 6.0, 74.0, 22.0},
             .fill = Color.{170, 40, 40, 235}, .radius = 6.0})
         TextLine(session, 8207, "SAVE FAILED", Rectangle.{panel.x + 170.0, panel.y + 8.0, 72.0, 18.0}, 12)
+    } else if editor.dirty {
+        TextLine(session, 8205, "unsaved", Rectangle.{panel.x + 140.0, panel.y + 8.0, 60.0, 20.0}, 13)
     }
     unused Box(session, BoxProps.{.key = 8208, .bounds = Rectangle.{panel.x + 8.0, panel.y + 34.0, 40.0, 40.0},
         .fill = Color.{255, 255, 255, 30}, .radius = 8.0})
@@ -2757,6 +2977,9 @@ DrawRewardsModal :: (session: Session, area: Rectangle) {
         // Hosts supply their own sign-in.
         guest = false
     }
+    #if #defined(WURM_CRAZYGAMES) {
+        guest = false
+    }
     height: float32 = ifx guest then 368.0 else 324.0
     card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0 + 24.0, width, height}
     // A tap beside the card closes it.
@@ -2816,6 +3039,9 @@ DrawRewardsModal :: (session: Session, area: Rectangle) {
             // A claimed Dew day shows the coins a guest received instead.
             dew := Rewards.DayDew(day)
             if done && Rewards.DayCoins(day) > 0 { dew = 0 }
+            #if #defined(WURM_CRAZYGAMES) {
+        dew = 0
+    }
             amount = ifx dew > 0 then dew else Rewards.DayCoins(day)
             RewardIcon(session, key + 2, icon, ifx dew > 0 then 3 else 2, ifx dew > 0 then "Dew" else "Coins")
         }
@@ -3090,10 +3316,55 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64, input: Inpu
     }
 }
 
-// Play starts a full run; Continue replays the furthest unlocked level.
-// Return 1 for Play, 2 for Continue, 3 for levels, 4 for the editor.
+// Play starts the first run; Continue replays the furthest unlocked level.
+// Return 1 for Play, 2 for Continue, 3 for stages, 4 for the editor.
 continue_label: [48]u8;
+#if #defined(WURM_CRAZYGAMES) {
+    portal_title: CarouselState;
+    // Keep the painted title at the top when a wide portal crops the grass.
+    PortalTitleSource :: (area: Rectangle, art_width: float32) -> Rectangle {
+        if area.width > area.height * 1.5 { return Rectangle.{0.0, 0.0, art_width, art_width * area.height / area.width} }
+        return Rectangle.{}
+    }
+    // Only the title owns cover gestures. Editor boards and lists keep theirs.
+    DrawPortalTitle :: (session: Session, area: Rectangle, key: s32, active: bool) -> s32 {
+        Progress.Load()
+        label := Locale.Text("Play")
+        if Progress.unlocked > 0 {
+            at := CopyInto(continue_label[:], 0, Locale.Text("Continue"))
+            at = CopyInto(continue_label[:], at, " · ")
+            at = CopyInto(continue_label[:], at, LevelLabel(ContinueLevel()))
+            continue_label[at] = 0
+            label = TextUntilNul(continue_label[:])
+        }
+        items: [2]CarouselItem = .[
+            .{.label = "Apfelwurm", .portrait = ART_TITLE_PORTRAIT, .landscape = ART_TITLE, .source = PortalTitleSource(area, 1536.0), .action = label},
+            .{.label = Locale.Text("Level editor"), .portrait = ART_EDITOR_TITLE_PORTRAIT,
+                .landscape = ART_EDITOR_TITLE, .source = PortalTitleSource(area, 768.0), .action = Locale.Text("Level editor") }]
+        if !active {
+            item := items[portal_title.selected]
+            unused Image(session, ImageProps.{.key = 800, .bounds = area,
+                .asset_path = ifx area.height > area.width then item.portrait else item.landscape,
+                .source = item.source, .alt_text = item.label, .fit = ImageFit.ImageFitCover, .smooth = true})
+            return 0
+        }
+        action := Carousel(session, CarouselProps.{.key = 800, .bounds = area,
+            .now = cast(float64)Timer.MonotonicMilliseconds() / 1000.0, .key_pressed = key,
+            .label = "Apfelwurm", .previous_label = label, .next_label = Locale.Text("Level editor")}, items[:], *portal_title)
+        TitleActions(session, area)
+        if Button(session, ButtonProps.{.key = 810,
+            .bounds = Rectangle.{area.x + (area.width - 164.0) / 2.0, area.y + area.height - 56.0, 164.0, 40.0},
+            .label = Locale.Text("Stages"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
+            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 76 || key == 108 { return 3 }
+        if action == 1 { return 4 }
+        if action == 0 || key == 67 || key == 99 { return ifx Progress.unlocked > 0 then 2 else 1 }
+        return 0
+    }
+}
 DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = true) -> s32 {
+    #if #defined(WURM_CRAZYGAMES) {
+        return DrawPortalTitle(session, area, key, play_button)
+    }
     portrait := area.height > area.width
     artwork := ifx portrait then ART_TITLE_PORTRAIT else ART_TITLE
     art_bounds := area
@@ -3119,7 +3390,7 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
     footer_x := area.x + (area.width - footer_width * 2.0 - 12.0) / 2.0
     if Button(session, ButtonProps.{.key = 810,
             .bounds = Rectangle.{footer_x, area.y + area.height - 56.0, footer_width, 40.0},
-            .label = Locale.Text("Choose level"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
+            .label = Locale.Text("Stages"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 76 || key == 108 { return 3 }
     #if !#defined(WURM_CRAZYGAMES) {
         if Button(session, ButtonProps.{.key = 811,
@@ -3129,24 +3400,23 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
     }
     width := area.width - 48.0
     if width > 280.0 { width = 280.0 }
+    // One main button: Continue at the furthest level reached, or Play.
+    label := "Play"
     if Progress.unlocked > 0 {
         digits: [21]u8
-        at := CopyInto(continue_label[:], 0, "Continue · Level ")
-        at = CopyInto(continue_label[:], at, FormatInteger(cast(s64)(Progress.unlocked + 1), digits[:]))
+        at := CopyInto(continue_label[:], 0, Locale.Text("Continue"))
+        at = CopyInto(continue_label[:], at, " · ")
+        at = CopyInto(continue_label[:], at, LevelLabel(ContinueLevel()))
         continue_label[at] = 0
-        if Button(session, ButtonProps.{.key = 809,
-                .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + area.height - 202.0, width, 60.0},
-                .label = TextUntilNul(continue_label[:]), .class_name = 13, .pill = true,
-                .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneSuccess,
-                .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 67 || key == 99 { return 2 }
+        label = TextUntilNul(continue_label[:])
     }
-    clicked := Button(session, ButtonProps.{.key = 808,
+    clicked := Button(session, ButtonProps.{.key = 809,
         .bounds = Rectangle.{area.x + (area.width - width) / 2.0, area.y + area.height - 128.0, width, 60.0},
-        .label = ifx Progress.unlocked > 0 then "Play from start" else "Play", .class_name = 13,
-        .icon_shape = "F:M8 5L19 12L8 19Z", .pill = true,
+        .label = label, .class_name = 13, .icon_shape = "F:M8 5L19 12L8 19Z", .pill = true,
         .size = ControlSize.ControlSizeLarge, .tone = ButtonTone.ButtonToneSuccess,
         .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0
-    return ifx clicked || key == Input.KeyEnter || key == 32 then 1 else 0
+    if clicked || key == Input.KeyEnter || key == 32 || key == 67 || key == 99 { return ifx Progress.unlocked > 0 then 2 else 1 }
+    return 0
 }
 
 recorded_level: s32 = -1;
@@ -3176,17 +3446,26 @@ PlaySelected :: (level: s32, now: s64) -> bool {
     else { AskControls() }
     return true
 }
+ContinueLevel :: () -> s32 {
+    if Progress.unlocked >= 160 && !Wardrobe.MountainsAvailable() { return 159 }
+    return Progress.unlocked
+}
 Play :: (now: s64, from_unlocked: bool = false) {
     Progress.Load()
-    unused PlaySelected(ifx from_unlocked then Progress.unlocked else 0, now)
+    unused PlaySelected(ifx from_unlocked then ContinueLevel() else 0, now)
 }
 
-level_chapter: s32;
+// -1 shows the stages; otherwise the open stage's levels.
+level_chapter: s32 = -1;
 mountains_confirm: bool;
+// Testing builds open every stage and level (WURM_UNLOCK_ALL=1 on desktop).
+unlock_everything: bool;
+UnlockAllAtStartup :: () { unlock_everything = true; Progress.open_all = true }
 LevelAvailable :: (level: s32) -> bool {
     if level < 0 || level >= LEVEL_COUNT { return false }
-    // A bought Mountains chapter opens whole; portal copies unlock it level by level.
-    if level >= 160 && !Portal.Guest() { return Wardrobe.MountainsAvailable() }
+    if unlock_everything { return true }
+    // A verified bought Mountains chapter opens whole in both editions.
+    if level >= 160 { return Wardrobe.MountainsAvailable() }
     return level <= Progress.unlocked
 }
 level_scroll: s32;
@@ -3198,17 +3477,122 @@ LevelLabel :: (level: s32) -> string {
     level_label[at] = 0
     return TextUntilNul(level_label[:])
 }
+// The stage selector opens on the five stages; a stage opens its levels.
 OpenLevels :: () {
     Progress.Load()
-    level_chapter = StageOf(Progress.unlocked)
+    level_chapter = -1
     level_scroll = 0
+    stage_list_scroll = 0
     game.mode = MODE_LEVELS
     touch_steering = GameControls.GameSwipe.{}
 }
-DrawLevels :: (session: Session, area: Rectangle, now: s64) {
-    if Button(session, ButtonProps.{.key = 26001,
+// How many of a stage's levels are finished.
+StageCompleted :: (stage: s32) -> s32 {
+    done: s32 = 0
+    for index: 0..StageLevels(stage) - 1 {
+        if Progress.Completed(StageFirst(stage) + cast(s32)index) { done += 1 }
+    }
+    return done
+}
+// A stage opens with its first level. Mountains also shows before it is
+// bought, so its card can offer the purchase.
+StageOpen :: (stage: s32) -> bool {
+    if stage == 4 && !unlock_everything && !Wardrobe.MountainsAvailable() { return LevelAvailable(StageFirst(3) + StageLevels(3) - 1) }
+    return LevelAvailable(StageFirst(stage))
+}
+stage_list_scroll: s32;
+stage_count_text: [48]u8;
+stage_number_text: [32]u8;
+// Each stage is a painted card: its number and name over the painting, how
+// many levels are finished and a bar that fills as they are. Stages not
+// reached yet stay dark with a lock; the furthest one reached is outlined.
+DrawStageList :: (session: Session, area: Rectangle) {
+    unused Box(session, BoxProps.{.key = 26100, .bounds = area, .fill = Appearance.Canvas()})
+    if Button(session, ButtonProps.{.key = 26101,
             .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 88.0, 48.0},
             .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenStages(); return }
+    GameText(session, 26102, "Stages", Rectangle.{area.x + 112.0, area.y + 20.0, area.width - 124.0, 32.0}, 24)
+    grid := Rectangle.{area.x + 12.0, area.y + 72.0, area.width - 24.0, area.height - 84.0}
+    columns: s32 = ifx grid.width >= 980.0 then 2 else 1
+    card_width := (grid.width - cast(float32)(columns - 1) * 14.0) / cast(float32)columns
+    if card_width > 620.0 { card_width = 620.0 }
+    left := grid.x + (grid.width - card_width * cast(float32)columns - cast(float32)(columns - 1) * 14.0) / 2.0
+    card_height := (card_width - 12.0) / 3.0 + 104.0
+    rows := (STAGE_COUNT + columns - 1) / columns
+    scroller := Scroll(session, ScrollProps.{.key = 26103, .bounds = grid,
+        .content_height = cast(s32)(cast(float32)rows * (card_height + 14.0)), .scroll_offset = stage_list_scroll})
+    stage_list_scroll = scroller.scroll_offset
+    if !scroller.opened { return }
+    furthest := StageOf(Progress.unlocked)
+    chosen: s32 = -1
+    for index: 0..STAGE_COUNT - 1 {
+        stage := cast(s32)index
+        key := cast(u64)26110 + cast(u64)index * 16
+        bounds := Rectangle.{left + cast(float32)(index % columns) * (card_width + 14.0),
+            scroller.content.y + cast(float32)(index / columns) * (card_height + 14.0), card_width, card_height}
+        open := StageOpen(stage)
+        current := open && stage == furthest
+        picture := Rectangle.{bounds.x + 6.0, bounds.y + 6.0, card_width - 12.0, (card_width - 12.0) / 3.0}
+        unused Box(session, BoxProps.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
+            .border = ifx current then ColorFromPacked(Appearance.Palette().selected) else Appearance.Border(), .radius = 18.0})
+        if Button(session, ButtonProps.{.key = key + 1, .bounds = bounds,
+                .label = Locale.Text(ifx open then StageName(stage) else "Locked"), .disabled = !open,
+                .invisible = true}) != 0 { chosen = stage }
+        unused Image(session, ImageProps.{.key = key + 2, .bounds = picture,
+            .asset_path = ART_STAGE_COVERS, .source = Rectangle.{0.0, cast(float32)stage * COVER_HEIGHT, 960.0, COVER_HEIGHT},
+            .fit = ImageFit.ImageFitCover, .smooth = true, .radius = 13.0,
+            .tint = ifx open then cast(u32)0xffffffff else cast(u32)0x6a6a6aff, .alt_text = StageName(stage)})
+        digits: [21]u8
+        at := CopyInto(stage_number_text[:], 0, Locale.Text("Stage"))
+        at = CopyInto(stage_number_text[:], at, " ")
+        at = CopyInto(stage_number_text[:], at, FormatInteger(cast(s64)(stage + 1), digits[:]))
+        stage_number_text[at] = 0
+        GameText(session, key + 4, TextUntilNul(stage_number_text[:]),
+            Rectangle.{bounds.x + 16.0, picture.y + picture.height + 8.0, 90.0, 20.0}, 13, true)
+        GameText(session, key + 5, StageName(stage),
+            Rectangle.{bounds.x + 16.0, picture.y + picture.height + 26.0, card_width - 132.0, 28.0}, 21)
+        if !open {
+            SvgIcon(session, SvgIconProps.{.bounds = Rectangle.{picture.x + (picture.width - 40.0) / 2.0,
+                    picture.y + (picture.height - 40.0) / 2.0 - 12.0, 40.0, 40.0},
+                .shape = LockIcon.Shape, .color = Color.{255, 255, 255, 235}})
+        } else if stage == 4 && !unlock_everything && !Wardrobe.MountainsAvailable() {
+            price := Rectangle.{picture.x + picture.width - 112.0, picture.y + 10.0, 100.0, 34.0}
+            unused Box(session, BoxProps.{.key = key + 6, .bounds = price, .fill = Appearance.Surface(), .radius = 17.0})
+            #if #defined(WURM_CRAZYGAMES) {
+                GameText(session, key + 7, "Shop", price, 16, false, true)
+            } else {
+                Amount(session, key + 7, Rectangle.{price.x + 6.0, price.y + 3.0, price.width - 12.0, 28.0}, true, "20", 16, true)
+            }
+        }
+        // Finished levels: a count beside the name and a bar below it.
+        total := StageLevels(stage)
+        done := StageCompleted(stage)
+        count: [21]u8
+        at = CopyInto(stage_count_text[:], 0, FormatInteger(cast(s64)done, digits[:]))
+        at = CopyInto(stage_count_text[:], at, " / ")
+        at = CopyInto(stage_count_text[:], at, FormatInteger(cast(s64)total, count[:]))
+        stage_count_text[at] = 0
+        GameText(session, key + 10, ifx !open then "Locked" else ifx done == total then "Completed" else "Finished levels",
+            Rectangle.{bounds.x + card_width - 116.0, picture.y + picture.height + 8.0, 100.0, 20.0}, 13, true)
+        GameText(session, key + 11, TextUntilNul(stage_count_text[:]),
+            Rectangle.{bounds.x + card_width - 116.0, picture.y + picture.height + 28.0, 100.0, 24.0}, 18)
+        bar := Rectangle.{bounds.x + 16.0, bounds.y + card_height - 22.0, card_width - 32.0, 10.0}
+        unused Box(session, BoxProps.{.key = key + 8, .bounds = bar, .fill = Appearance.Canvas(), .border = Appearance.Border(), .radius = 5.0})
+        if done > 0 {
+            unused Box(session, BoxProps.{.key = key + 9,
+                .bounds = Rectangle.{bar.x, bar.y, bar.width * cast(float32)done / cast(float32)total, bar.height},
+                .fill = ColorFromPacked(Appearance.Palette().selected), .radius = 5.0})
+        }
+    }
+    unused End(session)
+    if chosen >= 0 { level_chapter = chosen; level_scroll = 0; mountains_confirm = false }
+}
+DrawLevels :: (session: Session, area: Rectangle, now: s64) {
+    if level_chapter < 0 { DrawStageList(session, area); return }
+    unused Box(session, BoxProps.{.key = 26000, .bounds = area, .fill = Appearance.Canvas()})
+    if Button(session, ButtonProps.{.key = 26001,
+            .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 88.0, 48.0},
+            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { level_chapter = -1; return }
     GameText(session, 26002, "Choose level", Rectangle.{area.x + 112.0, area.y + 20.0, area.width - 124.0, 32.0}, 24)
     if Button(session, ButtonProps.{.key = 26003,
             .bounds = Rectangle.{area.x + 12.0, area.y + 72.0, 48.0, 48.0},
@@ -3219,13 +3603,17 @@ DrawLevels :: (session: Session, area: Rectangle, now: s64) {
             .label = Locale.Text("Next landscape"), .icon_only = true, .icon_shape = "S2rr:M9 6L15 12L9 18",
             .disabled = level_chapter == STAGE_COUNT - 1}) != 0 { level_chapter += 1; level_scroll = 0 }
     GameText(session, 26005, StageName(level_chapter), Rectangle.{area.x + 68.0, area.y + 72.0, area.width - 136.0, 26.0}, 20, false, true)
-    if level_chapter != 4 {
+    if level_chapter != 4 && !unlock_everything {
         GameText(session, 26006, "Finish levels to unlock more", Rectangle.{area.x + 64.0, area.y + 100.0, area.width - 128.0, 20.0}, 12, true, true)
     }
     grid := Rectangle.{area.x + 12.0, area.y + 132.0, area.width - 24.0, area.height - 144.0}
-    if level_chapter == 4 && !Wardrobe.MountainsAvailable() {
+    if level_chapter == 4 && !unlock_everything && !Wardrobe.MountainsAvailable() {
+        #if #defined(WURM_CRAZYGAMES) {
+            shop_tab = SHOP_STAGES; OpenShop(); return
+        }
         cover := Rectangle.{grid.x, grid.y, grid.width, grid.height - 64.0}
-        unused Image(session, ImageProps.{.key = 26008, .asset_path = ART_MOUNTAINS, .bounds = cover,
+        unused Image(session, ImageProps.{.key = 26008, .asset_path = ART_STAGE_COVERS, .bounds = cover,
+            .source = Rectangle.{0.0, 4.0 * COVER_HEIGHT, 960.0, COVER_HEIGHT},
             .fit = ImageFit.ImageFitCover, .smooth = true, .radius = 16.0, .alt_text = Locale.Text("Mountains")})
         pending := TextUntilNul(Wardrobe.status[:]) == "pending"
         signin := Progress.owner[0] == 0 || TextUntilNul(Wardrobe.status[:]) == "signin"
@@ -3353,15 +3741,21 @@ HandleInput :: (key: s32, now: s64) {
         else if key == Input.KeyEscape { game.mode = controls_navigation.previous }
         return
     }
-    #if #defined(WURM_CRAZYGAMES) {
-        if game.mode == MODE_STAGES && (key == 69 || key == 101) { return }
-    }
     if game.mode == MODE_STAGES && (key == 69 || key == 101) {
         OpenEditorHome()
         return
     }
     if game.mode == MODE_LEVELS {
-        if key == Input.KeyEscape { OpenStages() }
+        if key == Input.KeyEscape {
+            if level_chapter >= 0 { level_chapter = -1 }
+            else { OpenStages() }
+        }
+        // Enter on the stages opens the furthest stage reached.
+        else if level_chapter < 0 && (key == Input.KeyEnter || key == 32) {
+            level_chapter = StageOf(Progress.unlocked)
+            level_scroll = 0
+            mountains_confirm = false
+        }
         return
     }
     if game.mode == MODE_PLAYING {
@@ -3568,6 +3962,9 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     #if #defined(PLATFORM_WEB) {
         Audio.EnforceMute()
     }
+    #if #defined(WURM_CRAZYGAMES) {
+        PortalShop.Pump(now)
+    }
     ad_pending := Portal.AdPending()
     if ad_pending || portal_ad_was_pending {
         portal_ad_was_pending = ad_pending
@@ -3585,8 +3982,15 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         // Every scrollable page shares the same input path, including the
         // skin shop, calendar and settings on small windows and phones.
         pointer := frame_input.pointer
+        scroll_wheel: float32
+        #if #defined(WURM_CRAZYGAMES) {
+            // The title carousel consumes its own wheel; lists keep theirs.
+            if game.mode != MODE_STAGES { scroll_wheel = TreeInput.PointerWheelTake(session, viewport) }
+        } else {
+            scroll_wheel = TreeInput.PointerWheelTake(session, viewport)
+        }
         ScrollDevice.BeginScrollFrame(session, Vector2.{pointer.x, pointer.y}, pointer.pressed,
-            pointer.down, pointer.released, TreeInput.PointerWheelTake(session, viewport), cast(float64)now / 1000.0)
+            pointer.down, pointer.released, scroll_wheel, cast(float64)now / 1000.0)
     }
     Account.Pump()
     Portal.PumpAccount()
@@ -3598,11 +4002,17 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     if Progress.Pump(now) {
         EditorShareReset()
         Wardrobe.Reset(); preferences_poll = 0; preferences_dirty = false
+        #if #defined(WURM_CRAZYGAMES) {
+            PortalShop.Reset()
+        }
         Account.RefreshProfile()
         if game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY || game.mode == MODE_FINISHED || game.mode == MODE_DIED || game.mode == MODE_VICTORY {
             game.mode = MODE_STAGES
             touch_steering = GameControls.GameSwipe.{}
         }
+    }
+    #if #defined(WURM_CRAZYGAMES) {
+        PortalShop.Pump(now)
     }
     if Portal.ProfileVisible() {
         touch_steering = GameControls.GameSwipe.{}
@@ -3726,7 +4136,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // already use this frame's direction. SwipeArea supplies captured contact;
     // its release-only swipe result is deliberately unused.
     contact: SwipeAreaResult
-    if frame_input.available && frame_input.focused && game.mode == MODE_PLAYING && !sound_popup && (!Controls.Pad() || KeyboardOnly()) && game.death_ticks == 0 && game.transition_ticks == 0 {
+    if frame_input.available && frame_input.focused && game.mode == MODE_PLAYING && !sound_popup && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
         contact = SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
             .label = Locale.Text("Steer the worm"), .now = cast(float64)now / 1000.0,
             .min_distance = 6.0})
@@ -3806,10 +4216,10 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         DrawEditor(session, area, now)
     } else {
         DrawBoard(session, stage)
-        if game.mode == MODE_PLAYING && (!Controls.Pad() || KeyboardOnly()) && game.death_ticks == 0 && game.transition_ticks == 0 {
+        if game.mode == MODE_PLAYING && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
             SwipeFeedback(session, SwipeFeedbackProps.{.key = 24010, .gesture = contact})
         }
-        if game.mode == MODE_PLAYING && Controls.Pad() && !KeyboardOnly() {
+        if game.mode == MODE_PLAYING && Controls.Pad() {
             pad := DirectionPad(session, DirectionPadProps.{.key = PLAY_STEERING_KEY,
                 .bounds = DirectionPadBounds(Rectangle.{viewport.x, viewport.y + bar_height, viewport.width, available_height}),
                 .label = Locale.Text("Direction pad"), .now = cast(float64)now / 1000.0, .repeat_seconds = 0.08,

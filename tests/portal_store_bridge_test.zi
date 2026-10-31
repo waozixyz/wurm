@@ -1,0 +1,57 @@
+// Actual portal page + actual transport, private headless Chromium, fake SDK.
+// No app build, external network, payment, account login or screenshots.
+#import "kryon/devtools_linux"
+#import "std/file"
+#import "std/file_tree_linux"
+#import "std/format"
+
+ROOT :: "work/crazygames/store-bridge";
+STUB :: "window.__calls=[];window.__mode='ok';window.__available=true;window.__dataFail=false;window.__sandbox=[];window.__profile={__dangerousUserId:'alice-id',username:'Alice'};const call=(op,arg)=>{__calls.push({op,arg});if(__mode==='throw')throw {code:'purchaseCancelled'};if(__mode==='cancel')return Promise.reject({code:'purchaseCancelled'});if(__mode==='error')return Promise.reject({code:'unexpectedError',message:'PRIVATE-NOT-TRANSPORTED'});if(__mode==='hold')return new Promise((resolve,reject)=>window.__complete={resolve,reject});return Promise.resolve(op==='buy'?{itemId:arg}:op==='catalog'?{items:[{sku:'fixture-'+arg.offset,price:{amount:'1,49',amountWithoutDiscount:'2,49',currency:'EUR'},isFree:false,canBeBought:true}],hasMore:arg.offset===0}:{items:[]})};window.CrazyGames={SDK:{environment:'local',init:()=>Promise.resolve(),user:{isUserAccountAvailable:true,systemInfo:{locale:'en'},getUser:()=>Promise.resolve(__profile),addAuthListener:f=>window.__auth=f},game:{settings:{muteAudio:false},addSettingsChangeListener(){},loadingStart(){}},data:{getItem(k){if(__dataFail)throw Error('fixture');return sessionStorage.getItem('fixture:'+k)},setItem(k,v){if(__dataFail)throw Error('fixture');sessionStorage.setItem('fixture:'+k,v)}},store:{get isAvailable(){return __available},setSandbox:v=>__sandbox.push(v),getCatalogItems:p=>call('catalog',p),getPlayerInventory:p=>call('inventory',p),buyItem:id=>call('buy',id),consumeItem(){throw Error('NEVER consume')}}}};window.cmd=(op,extra={})=>JSON.stringify(Object.assign({id:1,epoch:7,generation:WurmPortal.storeGeneration,op,offset:0,sandbox:false,account:WurmPortal.storeAuthenticated?WurmPortal.userId:'',purchaseId:'explicit-fixture-id'},extra));window.settle=()=>new Promise(r=>setTimeout(r,0));";
+failures: s32;
+Expect :: (browser: *Browser, expression: string, message: string) {
+    if !BrowserTrue(browser, expression) { print("FAIL: portal_store_bridge: %\n", message); failures += 1 }
+}
+Run :: (browser: *Browser) -> bool {
+    unused RemoveTree(ROOT)
+    unused RemoveTree("work/cg-tmp")
+    if !CreateDirectories(ROOT) || !CreateDirectories("work/cg-tmp") { return false }
+    browser.temporary = ResolvePath("work/cg-tmp")
+    if !CopyFile("src/web/crazygames/index.html", JoinPath(ROOT, "index.html")) ||
+        !CopyFile("src/web/crazygames/store.js", JoinPath(ROOT, "store.js")) ||
+        !WriteEntireFile(JoinPath(ROOT, "portal-config.js"), "window.WurmPortalConfig={leaderboardKey:'',adsEnabled:false};") ||
+        !WriteEntireFile(JoinPath(ROOT, "asset-preloads.js"), "// private fixture; no game payload") ||
+        !WriteEntireFile(JoinPath(ROOT, "game.js"), "window.fixtureLoaded=true;") { return false }
+    if !BrowserServe(browser, ROOT) || !BrowserOpen(browser, JoinPath(ResolvePath(ROOT), "profile")) { return false }
+    if !BrowserCall(browser, "Page.enable", "{}") || !BrowserCall(browser, "Runtime.enable", "{}") ||
+        !BrowserScriptOnLoad(browser, STUB) || !BrowserCall(browser, "Network.enable", "{}") ||
+        !BrowserCall(browser, "Network.setBlockedURLs", "{\"urls\":[\"https://*\",\"http://sdk.crazygames.com/*\"]}") ||
+        !BrowserCall(browser, "Page.navigate", BrowserParams1("url", BrowserUrl(browser, "/index.html"))) ||
+        !BrowserWait(browser, "window.fixtureLoaded===true&&WurmPortal.storeProfileReady", 10000) { return false }
+    Expect(browser, "(()=>{const s=JSON.parse(WurmPortal.storeRead('session')),c=JSON.parse(WurmPortal.storeRead('config'));return s.active&&s.available&&s.authenticated&&s.userId==='alice-id'&&WurmPortal.username==='Alice'&&c.sandbox===false&&c.products.length===0&&__calls.length===0})()", "official getUser public ID and default config; no automatic checkout")
+    Expect(browser, "(async()=>{if(!WurmPortal.storeRequest(cmd('catalog')))return false;if(WurmPortal.storeRequest(cmd('catalog',{id:2})))return false;await settle();const r=JSON.parse(WurmPortal.storeRead('result'));return r.ok&&r.id===1&&r.epoch===7&&r.data.hasMore&&r.data.items[0].price.amount==='1,49'&&__calls[0].arg.limit===50&&__calls[0].arg.offset===0&&__sandbox[0]===false})()", "one async SDK call and opaque personalized prices")
+    Expect(browser, "(async()=>{if(!WurmPortal.storeRequest(cmd('catalog',{id:2,offset:50})))return false;await settle();const r=JSON.parse(WurmPortal.storeRead('result'));return r.id===2&&!r.data.hasMore&&__calls[1].arg.offset===50})()", "native-selected catalog paging offset")
+    Expect(browser, "(async()=>{if(!WurmPortal.storeRequest(cmd('inventory',{id:3,offset:100})))return false;await settle();const r=JSON.parse(WurmPortal.storeRead('result'));return r.ok&&r.data.items.length===0&&__calls[2].arg.limit===50&&__calls[2].arg.offset===100})()", "official inventory short page shape")
+    Expect(browser, "(async()=>{if(!WurmPortal.storeRequest(cmd('buy',{id:4})))return false;await settle();const r=JSON.parse(WurmPortal.storeRead('result'));return r.ok&&r.data.itemId==='explicit-fixture-id'&&__calls[3].arg==='explicit-fixture-id'&&!('orderId' in r.data)&&!('credits' in r.data)})()", "only explicit purchase ID, result transported without grant")
+    Expect(browser, "(async()=>{__mode='cancel';if(!WurmPortal.storeRequest(cmd('buy',{id:5})))return false;await settle();const r=JSON.parse(WurmPortal.storeRead('result'));return !r.ok&&r.code==='purchaseCancelled'})()", "known cancellation forwarded")
+    Expect(browser, "(async()=>{__mode='error';if(!WurmPortal.storeRequest(cmd('buy',{id:6})))return false;await settle();const text=WurmPortal.storeRead('result'),r=JSON.parse(text);return !r.ok&&r.code==='sdkError'&&!text.includes('PRIVATE')})()", "ambiguous SDK errors remain errors without private messages")
+    Expect(browser, "(async()=>{__mode='hold';if(!WurmPortal.storeRequest(cmd('buy',{id:7})))return false;await settle();const old=__complete;WurmPortal.storeReset({__dangerousUserId:'bob-id',username:'Alice'});if(WurmPortal.storeRead('result')!==''||WurmPortal.storeRequest(cmd('buy',{id:8})))return false;old.resolve({itemId:'explicit-fixture-id'});await settle();return WurmPortal.storeRead('result')===''&&!JSON.parse(WurmPortal.storeRead('session')).busy&&WurmPortal.userId==='bob-id'})()", "account switch discards late result and retains SDK busy guard")
+    Expect(browser, "(async()=>{__mode='ok';__profile=null;WurmPortal.storeReset(null);const before=__calls.length;if(WurmPortal.storeRequest(cmd('buy'))||WurmPortal.storeRequest(cmd('inventory')))return false;if(!WurmPortal.storeRequest(cmd('catalog')))return false;await settle();return __calls.length===before+1&&!JSON.parse(WurmPortal.storeRead('session')).authenticated})()", "guest browses catalog and cannot buy or read inventory")
+    Expect(browser, "(()=>{WurmPortal.storeReset({username:'DisplayNameOnly'});return !JSON.parse(WurmPortal.storeRead('session')).authenticated&&!WurmPortal.storeRequest(cmd('buy'))})()", "display username never authorizes checkout")
+    Expect(browser, "(async()=>{__profile={__dangerousUserId:'alice-id',username:'Alice'};WurmPortal.storeReset(__profile);__available=false;const no=WurmPortal.storeRequest(cmd('buy')),s=JSON.parse(WurmPortal.storeRead('session'));if(no||s.available||!s.readable||!WurmPortal.storeRequest(cmd('inventory')))return false;await settle();__available=true;const stale=WurmPortal.storeRequest(cmd('buy',{generation:0}));return !stale&&!WurmPortal.storeRequest('invalid')&&!WurmPortal.storeRequest(cmd('catalog',{offset:257}))})()", "unsupported payments preserve reads; stale and malformed commands fail closed")
+    Expect(browser, "(async()=>{CrazyGames.SDK.environment='crazygames';if(WurmPortal.storeRequest(cmd('catalog',{sandbox:true})))return false;CrazyGames.SDK.environment='local';if(!WurmPortal.storeRequest(cmd('catalog',{sandbox:true})))return false;await settle();return __sandbox.at(-1)===true})()", "sandbox true limited to local SDK fixtures")
+    Expect(browser, "(()=>{if(WurmPortal.recordRead('pending')!==null||!WurmPortal.recordWrite('pending','marker')||WurmPortal.recordRead('pending')!=='marker')return false;__dataFail=true;const failed=WurmPortal.recordRead('pending')===false&&!WurmPortal.recordWrite('pending','other');__dataFail=false;return failed&&WurmPortal.recordRead('pending')==='marker'})()", "raw Data missing/error/write failures preserved")
+    Expect(browser, "(async()=>{const before=__calls.length;__profile={__dangerousUserId:'bob-id',username:'Alice'};if(!WurmPortal.storeRequest(cmd('catalog')))return false;await settle();return __calls.length===before&&WurmPortal.userId==='bob-id'&&WurmPortal.storeRead('result')===''})()", "fresh SDK auth invalidates stale preflight before catalog or checkout")
+    Expect(browser, "(()=>{WurmPortal.sdk=null;WurmPortal.sdkActive=false;return !JSON.parse(WurmPortal.storeRead('session')).active&&!WurmPortal.storeRequest(cmd('buy'))})()", "missing SDK graceful")
+    print("portal_store_bridge: % failures\n", failures)
+    return failures == 0
+}
+#program_export
+main :: () -> s32 {
+    browser: Browser
+    passed := Run(*browser)
+    if !passed { print("portal_store_bridge: fixture failed (%)\n", browser.error) }
+    BrowserClose(*browser)
+    unused RemoveTree(JoinPath(ROOT, "profile"))
+    unused RemoveTree("work/cg-tmp")
+    return ifx passed then 0 else 1
+}

@@ -2,6 +2,66 @@
 // logged.
 #import "std/format"
 #import "std/text_tools"
+Model :: #import, file "portal_store.zi";
+#import "std/json_scan"
+#import "std/text_buffer"
+
+STORE_MAX :: 32768;
+EMPTY_STORE :: "{\"version\":1,\"sandbox\":false,\"products\":[]}";
+
+// Strict decimal integers: no fractions, signs, exponents or coercion.
+Integer :: (json: string, at: s32, maximum: s64) -> s64 {
+    end := ValueEnd(json, at, 0)
+    if at < 0 || end <= at || end - at > 10 { return -1 }
+    value: s64
+    for i: at..end - 1 {
+        if !Digit(json[i]) { return -1 }
+        value = value * 10 + cast(s64)(json[i] - 48)
+        if value > maximum { return -1 }
+    }
+    return value
+}
+
+// Public operator mapping only. No catalog, prices, credentials or ownership.
+// Invalid input clears the output to disabled, including a previous config.
+Store :: (input: string, state: *Model.StoreState, sandbox: *bool) -> bool {
+    state.* = .{}; sandbox.* = false
+    json := ifx input == "" then EMPTY_STORE else input
+    if json.count > STORE_MAX || !Model.Document(json) || Integer(json, FieldAt(json, 0, "version"), 1) != 1 || !Model.BoolField(json, 0, "sandbox") { return false }
+    positions: [32]s32
+    count := ArrayPositions(json, FieldAt(json, 0, "products"), positions[:])
+    if count < 0 || count > 32 { return false }
+    configs: [32]Model.ProductConfig
+    skus: [32][129]u8
+    ids: [32][129]u8
+    for i: 0..count - 1 {
+        at := positions[i]
+        kind: [16]u8
+        if !Model.Object(json, at) || !Model.TextField(json, at, "sku", skus[i][:]) || !Model.TextField(json, at, "purchaseId", ids[i][:]) || !Model.TextField(json, at, "kind", kind[:]) { return false }
+        c := *configs[i]
+        c.sku = TextUntilNul(skus[i][:]); c.purchase_id = TextUntilNul(ids[i][:])
+        name := TextUntilNul(kind[:])
+        c.kind = ifx name == "skin" then Model.DURABLE_SKIN else ifx name == "mountains" then Model.MOUNTAINS_CHAPTER else ifx name == "coins" then Model.COIN_CREDIT_PACK else 0
+        skin := FieldAt(json, at, "skinId")
+        pack := FieldAt(json, at, "packCoins")
+        cumulative := FieldAt(json, at, "cumulativeInventory")
+        if skin >= 0 { c.skin_id = cast(s32)Integer(json, skin, 8) }
+        if pack >= 0 { c.pack_coins = Integer(json, pack, Model.MAX_CREDITS) }
+        if cumulative >= 0 {
+            if !Model.BoolField(json, at, "cumulativeInventory") { return false }
+            c.cumulative_inventory = MatchLiteral(json, cumulative, "true")
+        }
+    }
+    if !Model.Configure(state, configs[0:count]) { state.* = .{}; return false }
+    sandbox.* = MatchLiteral(json, FieldAt(json, 0, "sandbox"), "true")
+    return true
+}
+
+StoreText :: (json: string) -> string {
+    result: Vec(u8)
+    BuilderPrint(*result, "window.WurmPortalStoreConfig=%;\n", ifx json == "" then EMPTY_STORE else json)
+    return BuilderFinish(result)
+}
 
 Valid :: (key: string, ads: string) -> bool {
     if ads != "" && ads != "true" && ads != "false" { return false }

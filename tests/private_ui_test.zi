@@ -303,7 +303,7 @@ Editor :: () -> bool {
     if !SameTitlePage(*stages, *returned) { return Fail("title unexpectedly changed pages") }
     if !Key(KEY_E) { return false }
     Sleep(300)
-    home: [5]string = .["Level editor", "New level", "From a level", "My levels", "Community"]
+    home: [4]string = .["New level", "From a level", "My levels", "Community"]
     if !Shows(home[:], 5000) { return Fail("the editor does not open on its own home") }
     if !Capture("editor-home", *image) { return false }
     if !Click(480, 478) { return false }  // From a level.
@@ -542,7 +542,7 @@ Dialogs :: () -> bool {
     return true
 }
 
-// Continue, Play and the scrollable unlocked-level selector at three sizes.
+// Continue, the stages and the scrollable unlocked-level selector at three sizes.
 ResponsiveTitles :: () -> bool {
     sizes: [6]s64 = .[320, 568, 360, 800, 800, 360]
     for size: 0..2 {
@@ -560,16 +560,13 @@ ResponsiveTitles :: () -> bool {
         image: DisplayImage
         if !Capture(Dash("title", dimensions), *image) { return false }
         continued: [6]u8 = .[57, 3, 0, 0, 0, 0]
-        fresh: [6]u8 = .[0, 3, 0, 0, 0, 0]
         reached: [1]u8 = .[57]
-        if !Click(width / 2, height - 144) { return false }
+        if !Click(width / 2, height - 98) { return false }
         if !Record("run.dat", continued[:]) { return Fail("Continue did not start the highest unlocked level with fresh stats") }
         if !Key(DRIVER_KEY_SPACE) || !Key(KEY_Q) { return false }
         if !Capture(Dash("continue-title", dimensions), *image) { return false }
-        if !Click(width / 2, height - 70) { return false }
-        if !Record("run.dat", fresh[:]) { return Fail("Play did not start from level one") }
-        if !Record("unlocked.dat", reached[:]) { return Fail("Play erased unlocked progress") }
-        if !Key(DRIVER_KEY_SPACE) || !Key(KEY_Q) || !Key(KEY_L) { return false }
+        if !Record("unlocked.dat", reached[:]) { return Fail("leaving the run erased unlocked progress") }
+        if !Key(KEY_L) || !Key(DRIVER_KEY_ENTER) { return false }
         if !Capture(Dash("levels", dimensions), *image) { return false }
         // Future Pinewood cards show only a lock and cannot start.
         if !Click(width - 36, 96) { return false }
@@ -577,9 +574,12 @@ ResponsiveTitles :: () -> bool {
         card_width := cast(float64)(width - 40 - (columns - 1) * 12) / cast(float64)columns
         card_height := (card_width - 16.0) * (ifx height > width then 4.0 / 3.0 else 0.75) + 44.0
         card_x := Round(12.0 + card_width / 2.0); card_y := Round(132.0 + card_height / 2.0)
+        // The run left by Continue stays unchanged when a locked card is clicked.
+        run_before := Bytes("run.dat")
+        if run_before.count < 1 || run_before[0] != 57 { return Fail("the Continue run was not kept on the title") }
         if !Click(card_x, card_y) { return false }
         Sleep(150)
-        if Bytes("run.dat").count < 1 || Bytes("run.dat")[0] != 0 { return Fail("a locked level started") }
+        if Bytes("run.dat") != run_before { return Fail("a locked level started") }
         if !Capture(Dash("levels-locked", dimensions), *image) { return false }
         if !Click(36, 96) { return false }  // Back to Leafwood.
         // Scrolling moves the grid while keeping chapter controls fixed.
@@ -603,11 +603,11 @@ ResponsiveTitles :: () -> bool {
         Sleep(150)
         if !Key(DRIVER_KEY_SPACE) || !Capture(Dash("play", dimensions), *image) { return false }
     }
-    print("Private UI local test: Try again, Continue, Play and the scrollable unlocked-level selector worked in portrait and landscape.\n")
+    print("Private UI local test: Try again, Continue, the stages and the scrollable unlocked-level selector worked in portrait and landscape.\n")
     return true
 }
 
-// Both saved preferences use the desktop free-field steering surface.
+// Swipe uses the desktop free-field steering surface; a saved pad choice shows the pad.
 HeldSteering :: (pad: bool) -> bool {
     sizes: [4]s64 = .[640, 480, 320, 568]
     for size: 0..1 {
@@ -629,8 +629,19 @@ HeldSteering :: (pad: bool) -> bool {
             }
             if node.label == "Direction pad" && node.visible { direction_pad = true }
         }
+        if pad {
+            // Computers offer the same choice as phones: the saved pad shows
+            // instead of the free field, and the arrow keys still steer.
+            if !direction_pad { return Fail(Words(title, "hides the chosen direction pad on desktop")) }
+            if free_field { return Fail(Words(title, "keeps free-field steering beside the chosen direction pad")) }
+            if !Key(DRIVER_KEY_RIGHT) { return false }
+            if !WaitLog(log, "steering=2 touch=0", 1000) { print("%\n", Log(log)); return Fail(Words(title, "arrow keys stopped steering with the direction pad")) }
+            image: DisplayImage
+            if !Capture(Dash("pad-steering", title), *image) { return false }
+            continue
+        }
         if !free_field { return Fail(Words(title, "has no desktop free-field steering surface")) }
-        if direction_pad { return Fail(Words(title, "shows an on-screen direction pad on desktop")) }
+        if direction_pad { return Fail(Words(title, "shows an on-screen direction pad with swipe chosen")) }
         // Each turn: direction, x, y.
         points: [9]s64
         x := width / 2; y := height / 2
@@ -655,7 +666,7 @@ HeldSteering :: (pad: bool) -> bool {
     }
     Unset("WURM_PROBE_STEERING")
     if pad {
-        print("Private UI local test: saved direction-pad preference still uses desktop free-field held steering in both orientations.\n")
+        print("Private UI local test: a saved direction-pad choice shows the pad on desktop and the arrow keys still steer, in both orientations.\n")
     } else {
         print("Private UI local test: right, down and left turns took effect before release in both orientations.\n")
     }
@@ -1027,8 +1038,9 @@ SettingsLocal :: () -> bool {
     image: DisplayImage
     if !ClickAction("title settings", "Settings", 28003, 960, 600) ||
        !Capture("settings-controls", *image) { return false }
-    settings: [4]string = .["Controls", "Arrow keys", "W A S D", "Local multiplayer"]
-    if !Shows(settings[:], 3000) { return Fail("desktop settings keyboard controls are missing") }
+    // Computers offer the same Swipe and Direction pad choice as phones.
+    settings: [5]string = .["Controls", "Arrow keys and W A S D always steer.", "Swipe", "Direction pad", "Local multiplayer"]
+    if !Shows(settings[:], 3000) { return Fail("desktop settings controls are missing") }
     if !Click(36, 34) || !ClickAction("daily rewards", "Daily rewards", 28006, 960, 600) ||
        !Capture("daily-rewards", *image) { return false }
     if !Click(480, 144) || !Capture("daily-reward-claimed", *image) { return false }
@@ -1053,7 +1065,7 @@ SettingsLocal :: () -> bool {
 Run :: () -> bool {
     if !Editor() || !PortraitWindow() || !ProgressProbe() || !Dialogs() || !ResponsiveTitles() { return false }
     if !HeldSteering(false) { return false }
-    // The saved pad choice drives the same actual pointer path.
+    // The saved pad choice shows the on-screen pad on desktop too.
     pad: [1]u8 = .[1]
     unused WriteRecord("controls.dat", pad[:])
     if !HeldSteering(true) { return false }

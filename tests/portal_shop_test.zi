@@ -1,0 +1,269 @@
+// Native lifecycle with bounded SDK/Data fakes. No network or payment flow.
+Shop :: #import, file "../src/portal_shop.zi";
+Config :: #import, file "../src/portal_config.zi";
+Rewards :: #import, file "../src/rewards.zi";
+Portal :: #import, file "../src/portal.zi";
+Progress :: #import, file "../src/progress.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+File :: #import "std/file";
+#import "std/json_scan"
+#import "std/text_buffer"
+#import "std/c_string"
+#import "std/format"
+#import "std/text_tools"
+
+CONFIG :: "{\"version\":1,\"sandbox\":false,\"products\":[{\"kind\":\"skin\",\"skinId\":1,\"sku\":\"test-skin\",\"purchaseId\":\"explicit-skin-id\"},{\"kind\":\"mountains\",\"sku\":\"test-mountains\",\"purchaseId\":\"explicit-chapter-id\"},{\"kind\":\"coins\",\"packCoins\":100,\"cumulativeInventory\":true,\"sku\":\"test-pack\",\"purchaseId\":\"explicit-pack-id\"}]}";
+EMPTY :: "{\"items\":[]}";
+PACK1 :: "{\"items\":[{\"sku\":\"test-pack\",\"quantity\":1}]}";
+PACK2 :: "{\"items\":[{\"sku\":\"test-pack\",\"quantity\":2}]}";
+failures: s32;
+clock_ms: s64;
+active: bool = true;
+available: bool = true;
+readable: bool = true;
+profile_ready: bool = true;
+auth: bool = true;
+user: string = "alice-id";
+gen: s64 = 1;
+account: s32;
+records: [2][1025]u8;
+sizes: [2]s64 = .[-2, -2];
+read_fails: bool;
+write_fails: bool;
+write_lies: bool;
+send_fails: bool;
+busy: bool;
+response: string;
+request_id: s64;
+request_epoch: s64;
+request_gen: s64;
+op: [16]u8;
+offset: s64;
+purchase_id: [129]u8;
+buys: s32;
+calls: s32;
+Expect :: (ok: bool, text: string) { if !ok { failures += 1; print("FAIL: portal_shop: % (status %, phase %)\n", text, Shop.Status(), Shop.phase) } }
+Copy :: (text: string, out: []u8) -> s64 {
+    if text.count >= out.count { return -1 }
+    for byte, i: text { out[i] = byte }
+    out[text.count] = 0
+    return text.count
+}
+ReadBridge :: (name: string, out: []u8) -> s64 {
+    if name == "config" { return Copy(CONFIG, out) }
+    if name == "result" { return Copy(response, out) }
+    text: Vec(u8)
+    BuilderPrint(*text, "{\"active\":%,\"readable\":%,\"available\":%,\"ready\":%,\"authenticated\":%,\"userId\":\"%\",\"generation\":%,\"busy\":%}", active, readable, available, profile_ready, auth, user, gen, busy)
+    return Copy(BuilderFinish(text), out)
+}
+Send :: (text: string) -> bool {
+    if send_fails || busy { return false }
+    calls += 1; response = ""
+    request_id = Config.Integer(text, FieldAt(text, 0, "id"), 2000000000)
+    request_epoch = Config.Integer(text, FieldAt(text, 0, "epoch"), 2000000000)
+    request_gen = Config.Integer(text, FieldAt(text, 0, "generation"), 2000000000)
+    offset = Config.Integer(text, FieldAt(text, 0, "offset"), 256)
+    unused ReadStringText(text, FieldAt(text, 0, "op"), op[:])
+    if TextUntilNul(op[:]) == "buy" {
+        buys += 1
+        unused ReadStringText(text, FieldAt(text, 0, "purchaseId"), purchase_id[:])
+        Expect(sizes[account] > 0 && !read_fails && !write_fails, "marker persisted before SDK checkout")
+    }
+    return true
+}
+ReadRecord :: (name: string, out: []u8) -> s64 {
+    if name != Shop.PENDING_KEY || read_fails { return -1 }
+    n := sizes[account]
+    if n < 0 { return n }
+    if n >= out.count { return -1 }
+    for i: 0..n - 1 { out[i] = records[account][i] }
+    return n
+}
+WriteRecord :: (name: string, text: string) -> bool {
+    if name != Shop.PENDING_KEY || write_fails || text.count > 1024 { return false }
+    if write_lies { return true }
+    sizes[account] = Copy(text, records[account][:])
+    return true
+}
+Active :: () -> bool { return active }
+RewardsRead :: (name: string, out: []u8) -> s64 { return -2 }
+RewardsWrite :: (name: string, text: string) -> bool { return true }
+Tick :: () { clock_ms += 10; Shop.Pump(clock_ms) }
+Answer :: (data: string, ok: bool = true, code: string = "sdkError") {
+    text: Vec(u8)
+    BuilderPrint(*text, "{\"id\":%,\"epoch\":%,\"generation\":%,\"ok\":%,\"code\":\"%\",\"data\":%}", request_id, request_epoch, request_gen, ok, code, data)
+    response = BuilderFinish(text)
+}
+// Pages include known and unknown SKUs, matching the official SDK shape.
+Page :: (count: s32 = 3, start: s32 = 0, more: bool = false) -> string {
+    text: Vec(u8)
+    Append(*text, "{\"items\":[")
+    for i: start..start + count - 1 {
+        if i > start { Append(*text, ",") }
+        sku: Vec(u8)
+        if i == 0 { Append(*sku, "test-pack") } else if i == 1 { Append(*sku, "test-mountains") } else if i == 2 { Append(*sku, "test-skin") } else { BuilderPrint(*sku, "unknown-%", i) }
+        BuilderPrint(*text, "{\"sku\":\"%\",\"name\":\"Item\",\"description\":\"\",\"imageUrl\":\"\",\"quantity\":1,\"isFree\":false,\"canBeBought\":true,\"price\":{\"amount\":\"1,29\",\"amountWithoutDiscount\":\"2,29\",\"currency\":\"EUR\"}}", BuilderFinish(sku))
+    }
+    BuilderPrint(*text, "],\"hasMore\":%}", more)
+    return BuilderFinish(text)
+}
+Cycle :: (inventory: string = EMPTY, catalog: string = "") {
+    if Shop.phase == 0 { Tick() }
+    Expect(Shop.phase == 1, "fresh personalized catalog first")
+    Answer(ifx catalog == "" then Page() else catalog); Tick()
+    if auth && user != "" {
+        Expect(Shop.phase == 2, "complete inventory follows catalog")
+        Answer(inventory); Tick()
+    }
+}
+New :: () {
+    active = true; readable = true; available = true; profile_ready = true; auth = true; user = "alice-id"; account = 0; gen += 1
+    read_fails = false; write_fails = false; write_lies = false; send_fails = false; busy = false
+    response = ""; sizes[0] = -2; sizes[1] = -2; buys = 0; calls = 0
+    Expect(Shop.Configure(CONFIG), "configure explicit local fixture")
+    Tick()
+}
+Buy :: (index: s32, inventory: string = EMPTY) {
+    Expect(Shop.Buy(index), "explicit buy arms current preflight")
+    Cycle(inventory)
+}
+#program_export
+main :: () -> s32 {
+    unused File.CreateDirectory("work/crazygames/store-native")
+    Expect(Custom.CustomSetRoot("work/crazygames/store-native/"), "private noSDK native fixture root")
+    Progress.loaded = true; Progress.replays = 0; Progress.completed = .{}; Progress.owner = .{}
+    Rewards.data_active = Active; Portal.byte_read_text = RewardsRead; Portal.byte_write_text = RewardsWrite
+    Shop.bridge_read = ReadBridge; Shop.bridge_send = Send
+    Shop.record_read = ReadRecord; Shop.record_write = WriteRecord
+    New(); Cycle()
+    Expect(Shop.Status() == "ready" && Shop.Authenticated() && !Rewards.SignedIn(), "ready uses SDK ID without Dew sign-in")
+    snapshot := Shop.StoreState()
+    Expect(TextUntilNul(snapshot.products[2].price_label[:]) == "1,29 EUR", "fresh platform price")
+    Expect(buys == 0 && !Shop.Pending(), "opening never checks out")
+    Buy(2)
+    Expect(buys == 1 && TextUntilNul(purchase_id[:]) == "explicit-pack-id" && Shop.Pending(), "explicit configured purchase ID")
+    Expect(!Shop.Buy(2) && Rewards.Coins() == 0, "one checkout, no grant before verification")
+    Answer("{\"itemId\":\"explicit-pack-id\"}"); Tick()
+    Expect(Rewards.Coins() == 0 && Shop.Pending(), "buy result alone never grants credits")
+    Cycle(PACK1)
+    Expect(Rewards.Coins() == 100 && !Shop.Pending() && sizes[0] == 0, "inventory counter fulfills marker")
+    unused Shop.Refresh(); Cycle(PACK1)
+    Expect(Rewards.Coins() == 100 && buys == 1, "repeated inventory cannot duplicate credits")
+    Buy(2, PACK1); Answer("{\"itemId\":\"explicit-pack-id\"}"); Tick(); Cycle(PACK1)
+    Expect(Shop.Pending() && !Shop.Buy(2) && Rewards.Coins() == 100, "unchanged counter remains pending and cannot rebuy")
+    // A reload reads the marker; Restore cannot invoke checkout.
+    Expect(Shop.Configure(CONFIG), "native reload"); Tick(); Cycle(PACK1)
+    Expect(Shop.Pending() && buys == 2, "reload retains unresolved marker")
+    unused Shop.Restore(); Cycle(PACK2)
+    Expect(!Shop.Pending() && Rewards.Coins() == 200 && buys == 2, "restore verifies cumulative increase")
+    unused Shop.Refresh(); Cycle(EMPTY)
+    Expect(Rewards.Coins() == 0, "refund reduces cumulative credits")
+    Buy(1); Answer("null", false, "purchaseCancelled"); Tick(); Cycle()
+    Expect(!Shop.Pending() && sizes[0] == 0 && !Shop.OwnsMountains(), "known cancellation clears marker without grant")
+    Buy(1); Answer("null", false, "purchaseInitFailed"); Tick(); Cycle()
+    Expect(Shop.Pending() && !Shop.Buy(1), "ambiguous error only restores")
+    unused Shop.Restore(); Cycle("{\"items\":[{\"sku\":\"test-mountains\",\"quantity\":null},{\"sku\":\"test-skin\",\"quantity\":1}]}")
+    Expect(!Shop.Pending() && Shop.OwnsMountains() && Shop.OwnedSkinMask() == 2, "known durable entitlements separate Mountains bit")
+
+    New(); Cycle(); write_fails = true; Buy(2)
+    Expect(buys == 0 && Shop.Pending() && Shop.Status() == "storage-error", "write failure before checkout fails closed")
+    New(); Cycle(); write_lies = true; Buy(2)
+    Expect(buys == 0 && Shop.Pending(), "readback mismatch blocks charge")
+    New(); read_fails = true; gen += 1; Tick(); Cycle()
+    Expect(!Shop.Buy(2) && buys == 0 && Shop.Pending(), "unknown read marker blocks charge")
+    New(); Cycle(); read_fails = true; Buy(2)
+    Expect(buys == 0 && Shop.Pending(), "marker reread fails before checkout")
+    read_fails = false; unused Shop.Restore(); Cycle()
+    Expect(!Shop.Pending() && buys == 0, "restore recovers a known missing marker without checkout")
+    New(); sizes[0] = Copy("{\"unknown\":true}", records[0][:]); gen += 1; Tick(); Cycle()
+    Expect(Shop.Pending() && !Shop.Buy(2), "unrecognized stored marker blocks another charge")
+    unused Shop.Restore(); Cycle(PACK1)
+    Expect(Shop.Pending() && buys == 0, "unknown marker cannot be inferred fulfilled from ownership")
+
+    New(); Cycle(); Expect(Shop.Buy(2), "paid null preflight armed")
+    null_price := TextReplace(Page(), "{\"amount\":\"1,29\",\"amountWithoutDiscount\":\"2,29\",\"currency\":\"EUR\"}", "null")
+    Cycle(EMPTY, null_price)
+    Expect(buys == 0 && !Shop.Pending(), "paid item without price cannot check out")
+    Expect(Shop.Buy(2), "explicit free preflight armed")
+    Cycle(EMPTY, TextReplace(null_price, "\"isFree\":false", "\"isFree\":true"))
+    Expect(buys == 1 && Shop.Pending(), "only explicit free flag permits null price")
+    Answer("null", false, "purchaseCancelled"); Tick(); Cycle()
+    Expect(Shop.Buy(2), "stock preflight armed")
+    Cycle(EMPTY, TextReplace(Page(), "\"canBeBought\":true", "\"canBeBought\":false"))
+    Expect(buys == 1 && !Shop.Pending(), "fresh stock prevents checkout")
+    Expect(Shop.Buy(0), "durable preflight armed")
+    Cycle("{\"items\":[{\"sku\":\"test-skin\",\"quantity\":null}]}")
+    Expect(buys == 1 && Shop.OwnedSkinMask() == 2, "fresh owned durable prevents another checkout")
+
+    New(); Cycle(PACK1); Buy(2, PACK1)
+    clock_ms += Shop.TIMEOUT; Tick()
+    Expect(Shop.Status() == "pending" && Shop.Pending() && Rewards.Coins() == 0 && !Shop.Buy(2), "checkout timeout never cancels or retries a charge")
+    Answer("{\"itemId\":\"explicit-pack-id\"}"); Tick(); Cycle(PACK2)
+    Expect(!Shop.Pending() && Rewards.Coins() == 200 && buys == 1, "late same-account completion reconciles")
+
+    New(); Cycle(PACK1); Buy(2, PACK1)
+    Answer("{\"itemId\":\"explicit-pack-id\"}")
+    user = "bob-id"; account = 1; gen += 1; Tick()
+    Expect(Rewards.Coins() == 0 && !Shop.Pending() && !Shop.OwnsMountains(), "auth change resets rewards before inventory")
+    Cycle(); Expect(buys == 1 && Rewards.Coins() == 0, "late old-account result cannot grant")
+    user = "alice-id"; account = 0; gen += 1; Tick(); Cycle(PACK2)
+    Expect(Rewards.Coins() == 200 && !Shop.Pending(), "returning account restores its own marker")
+    Shop.Reset(); Tick(); Cycle(PACK1)
+    Expect(Rewards.Coins() == 100, "same-account reset requires fresh verification")
+
+    New(); auth = false; user = ""; gen += 1; Tick(); Cycle()
+    Expect(Shop.Status() == "sign-in" && !Shop.Authenticated() && !Shop.Buy(2) && Shop.StoreState().catalog_ready && !Shop.StoreState().inventory_ready, "guest catalog browses without buying")
+    auth = true; user = ""; gen += 1; Tick(); Cycle()
+    Expect(!Shop.Buy(2), "profile without stable SDK ID cannot buy")
+    New(); profile_ready = false; gen += 1; Tick()
+    Expect(!Shop.Buy(2) && !Shop.StoreState().available, "wait for SDK getUser resolution")
+    New(); Cycle(Page()); available = false; Tick()
+    Expect(!Shop.PurchasesAvailable() && !Shop.CanPurchase() && !Shop.Buy(2) && Shop.OwnsMountains() && Rewards.Coins() == 100, "unsupported payment preserves verified inventory")
+    unused Shop.Restore(); Cycle(Page())
+    Expect(Shop.OwnsMountains() && Rewards.Coins() == 100 && buys == 0, "unsupported payment still restores without checkout")
+    New(); readable = false; Tick()
+    Expect(Shop.Status() == "unavailable" && !Shop.Buy(2), "missing Store module is graceful")
+    New(); active = false; Tick(); Expect(!Shop.Authenticated() && !Shop.Buy(2), "missing SDK")
+    Expect(Shop.Configure(""), "default empty config valid"); Tick(); Expect(!Shop.StoreState().available, "empty config disabled")
+    Expect(!Shop.Configure("{}"), "malformed config disabled"); Tick(); Expect(Shop.Status() == "config-invalid", "invalid config status")
+
+    New(); Answer(Page(50, 0, true)); Tick()
+    Expect(offset == 50 && !Shop.StoreState().catalog_ready, "catalog paging waits for hasMore false")
+    Answer(Page(1, 50)); Tick()
+    Expect(Shop.phase == 2, "catalog complete then inventory")
+    Answer(Page(50)); Tick(); Expect(offset == 50 && !Shop.StoreState().inventory_ready && Rewards.Coins() == 0, "inventory full page requires next short page")
+    Answer(EMPTY); Tick()
+    Expect(Rewards.Coins() == 100 && Shop.OwnsMountains(), "complete paged inventory verified once")
+    New(); Answer(Page(50, 0, true)); Tick()
+    Answer(Page(50, 50, true)); Tick(); Answer(Page(50, 100, true)); Tick()
+    Answer(Page(50, 150, true)); Tick(); Answer(Page(50, 200, true)); Tick()
+    Answer(Page(7, 250)); Tick()
+    Expect(!Shop.StoreState().catalog_ready && Shop.phase == 2 && Rewards.Coins() == 0, "catalog over 256 rejected; inventory restore still attempted")
+    New(); Answer("{\"items\":[],\"hasMore\":true}"); Tick()
+    Expect(Shop.Status() == "catalog-error" && !Shop.Buy(-1), "invalid empty continuation")
+    New(); Answer("null", false); Tick(); Expect(Shop.Status() == "catalog-error", "catalog error")
+    Answer(Page()); Tick()
+    Expect(Shop.OwnsMountains() && Rewards.Coins() == 100 && !Shop.StoreState().catalog_ready && Shop.StoreState().inventory_ready && !Shop.CanPurchase(), "catalog error cannot block known inventory restore")
+    available = false; unused Shop.Restore(); Tick(); Answer("null", false); Tick(); Answer(Page()); Tick()
+    Expect(Shop.OwnsMountains() && Rewards.Coins() == 100 && !Shop.Buy(2) && buys == 0, "unsupported payments plus catalog failure still restore inventory")
+    New(); Cycle(PACK1); Expect(Shop.Buy(2), "checkout catalog failure preflight")
+    Tick(); Answer("null", false); Tick(); Answer(PACK1); Tick()
+    Expect(buys == 0 && !Shop.Pending() && Rewards.Coins() == 100 && !Shop.CanPurchase(), "catalog error cancels buy intent but restores credits")
+    New(); Cycle(PACK1); Expect(Shop.Buy(2), "payment capability preflight")
+    Tick(); available = false; Answer(Page()); Tick(); Answer(PACK1); Tick()
+    Expect(buys == 0 && !Shop.Pending() && Rewards.Coins() == 100, "payment capability rechecked before marker and checkout")
+    New(); Answer(Page()); Tick(); Answer("null", false); Tick()
+    Expect(Shop.Status() == "inventory-error" && Rewards.Coins() == 0, "inventory error revokes credits")
+    New(); Answer(Page()); Tick(); Answer("{\"items\":[{\"sku\":\"test-pack\",\"quantity\":null}]}"); Tick()
+    Expect(Shop.Status() == "inventory-error" && Rewards.Coins() == 0, "uncounted pack cannot grant credits")
+    New(); Answer(Page()); Tick(); Answer(Page(50)); Tick(); Answer(Page(50, 50)); Tick(); Answer(Page(50, 100)); Tick()
+    Answer(Page(50, 150)); Tick(); Answer(Page(50, 200)); Tick(); Answer(Page(7, 250)); Tick()
+    Expect(Shop.Status() == "inventory-error" && !Shop.StoreState().inventory_ready && Rewards.Coins() == 0, "inventory over 256 never partially grants")
+    New(); Cycle(PACK1); unused Shop.Refresh(); Tick(); Answer(Page()); Tick()
+    clock_ms += Shop.TIMEOUT; Tick(); Answer(PACK2); Tick()
+    Expect(Shop.Status() == "inventory-error" && Rewards.Coins() == 0, "timed-out inventory cannot grant late credits")
+    New(); clock_ms += Shop.TIMEOUT; Tick(); Answer(Page()); Tick()
+    Expect(!Shop.StoreState().catalog_ready && Shop.Status() == "catalog-error", "timed-out pages cannot later grant")
+    print("portal_shop: % failures\n", failures)
+    return ifx failures == 0 then 0 else 1
+}

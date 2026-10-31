@@ -48,10 +48,11 @@ while you look around. You start
 with three lives and earn more as your score grows. Score and lives carry
 between levels throughout your run. **Continue** starts the furthest level
 reached in your journey with three lives and a fresh score, even after a game
-over or closing the game. **Play from start** begins a new run at level 1
-without erasing your progress.
+over or closing the game.
 
-**Choose level** lets you browse all five landscapes, see a large board preview for unlocked levels and a lock for later levels.
+**Stages** shows the five landscapes as painted cards with how many of their
+levels you have finished; stages not reached yet stay locked. Open a stage to
+see a large board preview for each unlocked level and a lock for later levels.
 Complete a level to unlock the next one.
 After a game over, **Try again** starts the furthest unlocked level with
 three lives and a fresh score.

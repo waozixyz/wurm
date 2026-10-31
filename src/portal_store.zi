@@ -1,0 +1,251 @@
+// Pure SDK.store reconciliation. No network, wallet, persistence or buy-result
+// grants. Caller supplies complete, freshly paged, verified SDK snapshots.
+#import "std/json_scan"
+#import "std/c_string"
+#import "std/text_buffer"
+#import "std/vec"
+#import "std/format"
+
+MAX_PRODUCTS :: 32;
+MAX_ITEMS :: 256;
+MAX_QUANTITY :: 1000000;
+MAX_CREDITS :: 1000000000;
+DURABLE_SKIN :: 1;
+MOUNTAINS_CHAPTER :: 2;
+COIN_CREDIT_PACK :: 3;
+
+ProductConfig :: struct {
+    sku: string
+    purchase_id: string
+    kind: s32
+    skin_id: s32
+    pack_coins: s64
+    // Operator attests: counted, stackable, cumulative purchase counters,
+    // never consumed. One inventory unit means one purchased pack.
+    cumulative_inventory: bool
+}
+Product :: struct {
+    sku: [129]u8
+    purchase_id: [129]u8
+    kind: s32
+    skin_id: s32
+    pack_coins: s64
+    name: [257]u8
+    description: [2049]u8
+    image_url: [2049]u8
+    amount: [65]u8
+    amount_without_discount: [65]u8
+    currency: [33]u8
+    price_label: [100]u8
+    catalog_match: bool
+    has_price: bool
+    is_free: bool
+    can_be_bought: bool
+    owned: bool
+    quantity: s64
+}
+StoreState :: struct {
+    products: [MAX_PRODUCTS]Product
+    count: s32
+    account: [129]u8
+    epoch: s64
+    available: bool
+    catalog_ready: bool
+    inventory_ready: bool
+    durable_owned_mask: s32 // skin bit = skin_id; Mountains = bit 9 (512)
+    purchased_credits: s64
+}
+
+SafeText :: (text: string, maximum: s64) -> bool {
+    if text.count == 0 || text.count > maximum { return false }
+    for text { if it < 32 || it == 127 { return false } }
+    return true
+}
+
+// Config changes replace all account state; invalid config preserves it.
+Configure :: (state: *StoreState, config: []ProductConfig) -> bool {
+    if config.count > MAX_PRODUCTS { return false }
+    next: StoreState
+    next.epoch = state.epoch + 1
+    next.count = cast(s32)config.count
+    for i: 0..next.count - 1 {
+        c := config[i]
+        if !SafeText(c.sku, 128) || !SafeText(c.purchase_id, 128) { return false }
+        if c.kind != DURABLE_SKIN && c.kind != MOUNTAINS_CHAPTER && c.kind != COIN_CREDIT_PACK { return false }
+        if c.kind == DURABLE_SKIN && (c.skin_id < 1 || c.skin_id > 8) { return false }
+        if c.kind != DURABLE_SKIN && c.skin_id != 0 { return false }
+        if c.kind == COIN_CREDIT_PACK {
+            if !c.cumulative_inventory || c.pack_coins < 1 || c.pack_coins > MAX_CREDITS { return false }
+        } else if c.pack_coins != 0 || c.cumulative_inventory { return false }
+        for j: 0..i - 1 {
+            prior := config[j]
+            if prior.sku == c.sku || prior.purchase_id == c.purchase_id { return false }
+            if prior.kind == c.kind && (c.kind == MOUNTAINS_CHAPTER || (c.kind == DURABLE_SKIN && prior.skin_id == c.skin_id)) { return false }
+        }
+        p := *next.products[i]
+        unused CopyCString(c.sku, p.sku[:]); unused CopyCString(c.purchase_id, p.purchase_id[:])
+        p.kind = c.kind; p.skin_id = c.skin_id; p.pack_coins = c.pack_coins
+    }
+    state.* = next
+    return true
+}
+
+// Call on every identity/availability change, including logout and same-user
+// reload. Discard pending callbacks with their old epoch. No external masks.
+ResetAccount :: (state: *StoreState, account: string, available: bool) -> s64 {
+    state.epoch += 1
+    state.account = .{}
+    if SafeText(account, 128) { unused CopyCString(account, state.account[:]) }
+    state.available = available && state.account[0] != 0
+    state.catalog_ready = false; state.inventory_ready = false
+    state.durable_owned_mask = 0; state.purchased_credits = 0
+    for i: 0..state.count - 1 { ClearCatalog(*state.products[i]); state.products[i].owned = false; state.products[i].quantity = 0 }
+    return state.epoch
+}
+ClearCatalog :: (p: *Product) {
+    p.name = .{}; p.description = .{}; p.image_url = .{}
+    p.amount = .{}; p.amount_without_discount = .{}; p.currency = .{}; p.price_label = .{}
+    p.catalog_match = false; p.has_price = false; p.is_free = false; p.can_be_bought = false
+}
+Current :: (state: *StoreState, epoch: s64) -> bool { return state.epoch == epoch && state.available && state.account[0] != 0 }
+
+// Reject ambiguous object members (including escaped names) before lookups.
+Object :: (json: string, at: s32) -> bool {
+    if at < 0 || at >= json.count || json[at] != 123 { return false }
+    keys: [32]JsonSpan
+    count: s32
+    cursor := Space(json, at + 1)
+    while cursor < json.count && json[cursor] != 125 {
+        key := ReadString(json, cursor)
+        if !key.valid || count == 32 { return false }
+        name := json[key.start:key.end]
+        for name { if it == 92 { return false } }
+        for i: 0..count - 1 { if json[keys[i].start:keys[i].end] == name { return false } }
+        keys[count] = key; count += 1
+        cursor = Space(json, key.after)
+        if cursor >= json.count || json[cursor] != 58 { return false }
+        cursor = ValueEnd(json, cursor + 1, 0)
+        if cursor < 0 { return false }
+        cursor = Space(json, cursor)
+        if cursor < json.count && json[cursor] == 125 { return true }
+        if cursor >= json.count || json[cursor] != 44 { return false }
+        cursor = Space(json, cursor + 1)
+        if cursor >= json.count || json[cursor] == 125 { return false }
+    }
+    return cursor < json.count && json[cursor] == 125
+}
+Document :: (json: string) -> bool {
+    if json.count == 0 || json.count > 1048576 { return false }
+    end := ValueEnd(json, 0, 0)
+    return end > 0 && Space(json, end) == json.count && Object(json, Space(json, 0))
+}
+TextField :: (json: string, at: s32, key: string, out: []u8) -> bool {
+    n := ReadStringText(json, FieldAt(json, at, key), out)
+    if n < 0 { return false }
+    for i: 0..n - 1 { if out[i] < 32 || out[i] == 127 { return false } }
+    return true
+}
+BoolField :: (json: string, at: s32, key: string) -> bool {
+    field := FieldAt(json, at, key)
+    return MatchLiteral(json, field, "true") || MatchLiteral(json, field, "false")
+}
+Find :: (state: *StoreState, sku: string) -> s32 {
+    for i: 0..state.count - 1 { if TextUntilNul(state.products[i].sku[:]) == sku { return i } }
+    return -1
+}
+
+// Invalid same-account snapshots preserve last good values but clear readiness;
+// stale-account callbacks change nothing. Ready flags must gate UI use.
+ApplyCatalog :: (state: *StoreState, epoch: s64, json: string) -> bool {
+    if !Current(state, epoch) { return false }
+    state.catalog_ready = false
+    if !Document(json) || !MatchLiteral(json, FieldAt(json, 0, "hasMore"), "false") { return false }
+    positions: [MAX_ITEMS]s32
+    count := ArrayPositions(json, FieldAt(json, 0, "items"), positions[:])
+    if count < 0 || count > MAX_ITEMS { return false }
+    next := state.*
+    for i: 0..next.count - 1 { ClearCatalog(*next.products[i]) }
+    seen: [MAX_ITEMS][129]u8
+    for i: 0..count - 1 {
+        at := positions[i]
+        if !Object(json, at) || !TextField(json, at, "sku", seen[i][:]) || seen[i][0] == 0 { return false }
+        sku := TextUntilNul(seen[i][:])
+        for j: 0..i - 1 { if TextUntilNul(seen[j][:]) == sku { return false } }
+        index := Find(*next, sku)
+        if index < 0 { continue }
+        p := *next.products[index]
+        if !TextField(json, at, "name", p.name[:]) || !TextField(json, at, "description", p.description[:]) || !TextField(json, at, "imageUrl", p.image_url[:]) { return false }
+        if !BoolField(json, at, "isFree") || !BoolField(json, at, "canBeBought") { return false }
+        p.is_free = MatchLiteral(json, FieldAt(json, at, "isFree"), "true")
+        p.can_be_bought = MatchLiteral(json, FieldAt(json, at, "canBeBought"), "true")
+        price := FieldAt(json, at, "price")
+        if !MatchLiteral(json, price, "null") {
+            if !Object(json, price) || !TextField(json, price, "amount", p.amount[:]) || !TextField(json, price, "amountWithoutDiscount", p.amount_without_discount[:]) || !TextField(json, price, "currency", p.currency[:]) { return false }
+            if p.amount[0] == 0 || p.amount_without_discount[0] == 0 || p.currency[0] == 0 { return false }
+            // Display opaque platform strings, never parse money or compare it.
+            label: Vec(u8)
+            BuilderPrint(*label, "% %", TextUntilNul(p.amount[:]), TextUntilNul(p.currency[:]))
+            unused CopyCString(BuilderFinish(label), p.price_label[:])
+            p.has_price = true
+        }
+        p.catalog_match = true
+    }
+    next.catalog_ready = true; state.* = next
+    return true
+}
+
+ApplyInventory :: (state: *StoreState, epoch: s64, json: string) -> bool {
+    if !Current(state, epoch) { return false }
+    state.inventory_ready = false
+    if !Document(json) { return false }
+    positions: [MAX_ITEMS]s32
+    count := ArrayPositions(json, FieldAt(json, 0, "items"), positions[:])
+    if count < 0 || count > MAX_ITEMS { return false }
+    next := state.*
+    next.durable_owned_mask = 0; next.purchased_credits = 0
+    for i: 0..next.count - 1 { next.products[i].owned = false; next.products[i].quantity = 0 }
+    seen: [MAX_ITEMS][129]u8
+    for i: 0..count - 1 {
+        at := positions[i]
+        if !Object(json, at) || !TextField(json, at, "sku", seen[i][:]) || seen[i][0] == 0 { return false }
+        sku := TextUntilNul(seen[i][:])
+        for j: 0..i - 1 { if TextUntilNul(seen[j][:]) == sku { return false } }
+        index := Find(*next, sku)
+        if index < 0 { continue }
+        p := *next.products[index]
+        quantity := FieldAt(json, at, "quantity")
+        uncounted := MatchLiteral(json, quantity, "null")
+        value: s64
+        if !uncounted {
+            end := ValueEnd(json, quantity, 0)
+            if quantity < 0 || end <= quantity || end - quantity > 7 { return false }
+            for j: quantity..end - 1 {
+                if !Digit(json[j]) { return false }
+                value = value * 10 + cast(s64)(json[j] - 48)
+            }
+            if value > MAX_QUANTITY { return false }
+        }
+        if p.kind == COIN_CREDIT_PACK {
+            if uncounted || value > (MAX_CREDITS - next.purchased_credits) / p.pack_coins { return false }
+            next.purchased_credits += value * p.pack_coins
+        } else if uncounted || value > 0 {
+            p.owned = true
+            next.durable_owned_mask |= ifx p.kind == MOUNTAINS_CHAPTER then 512 else 1 << p.skin_id
+        }
+        p.quantity = ifx uncounted then -1 else value
+    }
+    next.inventory_ready = true; state.* = next
+    return true
+}
+
+// Owned ID string (empty means blocked). Refresh the
+// personalized catalog before each checkout; never treat buyItem's result as
+// inventory. A null paid price and unavailable/already-owned items are blocked.
+CheckoutId :: (state: *StoreState, index: s32) -> string {
+    if !state.available || !state.catalog_ready || !state.inventory_ready || index < 0 || index >= state.count { return "" }
+    p := *state.products[index]
+    if !p.catalog_match || !p.can_be_bought || p.owned || (!p.has_price && !p.is_free) { return "" }
+    result: Vec(u8)
+    BuilderPrint(*result, "%", TextUntilNul(state.products[index].purchase_id[:]))
+    return BuilderFinish(result)
+}

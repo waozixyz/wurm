@@ -463,3 +463,60 @@ Tamu
 [wurm_portal_1]
 Kemajuan hanya tersimpan sampai halaman ini ditutup.
 ---
+[wurm_ui_40]
+Tahap
+---
+[wurm_ui_41]
+Tahap
+---
+[wurm_ui_42]
+Lanjutkan
+---
+[wurm_ui_43]
+Level selesai
+---
+[wurm_ui_44]
+Tombol panah dan W A S D selalu bisa mengarahkan.
+---
+[wurm_shop_owned]
+Dimiliki
+---
+[wurm_shop_mountains]
+Pegunungan
+---
+[wurm_portal_shop_0]
+Memuat toko…
+---
+[wurm_portal_shop_1]
+Pembelian tertunda. Pulihkan untuk memeriksa lagi.
+---
+[wurm_portal_shop_2]
+Gagal menyimpan. Coba lagi.
+---
+[wurm_portal_shop_3]
+Pembelian dibatalkan. Anda dapat mencoba lagi.
+---
+[wurm_portal_shop_4]
+Pembelian dipulihkan.
+---
+[wurm_portal_shop_5]
+Masuk untuk berbelanja.
+---
+[wurm_portal_shop_6]
+Pembelian tidak tersedia di sini.
+---
+[wurm_portal_shop_7]
+Gagal memuat toko. Coba lagi.
+---
+[wurm_portal_shop_8]
+Tidak tersedia
+---
+[wurm_portal_shop_9]
+Gratis
+---
+[wurm_portal_shop_10]
+Pulihkan pembelian
+---
+[wurm_portal_shop_11]
+Muat ulang
+---

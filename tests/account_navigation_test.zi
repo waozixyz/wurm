@@ -271,7 +271,8 @@ main :: () -> s32 {
     Expect(HasLabel(session, 28000, "Shop") && HasLabel(session, 28003, "Settings"), "the title's painted shop and settings icons")
     App.OpenShop()
     Draw(session, 390.0, 780.0)
-    Expect(HasLabel(session, 28340, "Skins") && HasLabel(session, 28341, "Coins") && HasLabel(session, 28342, "Dew"), "the shop has skin, coin and Dew tabs")
+    Expect(HasLabel(session, 28340, "Skins") && HasLabel(session, 28341, "Stages") &&
+        HasLabel(session, 28342, "Coins") && HasLabel(session, 28343, "Dew"), "the shop has skin, stage, coin and Dew tabs")
     App.shop_tab = App.SHOP_COINS
     Draw(session, 390.0, 780.0)
     Expect(HasLabel(session, 28626, "2"), "coin packs are offered for Dew")

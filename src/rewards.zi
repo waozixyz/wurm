@@ -6,6 +6,7 @@
 Account :: #import, file "account.zi";
 Progress :: #import, file "progress.zi";
 Records :: #import, file "controls.zi";
+Portal :: #import, file "portal.zi";
 #if #defined(WURM_PORTABLE) {
     // Seconds since 1970, from the collection's host.
     host_api :: #system_library "host_api";
@@ -54,6 +55,29 @@ test_day: s64 = -1;
 other_replays: s64;
 // Coins the signed-in account bought with Dew, from the node's receipts.
 bought_coins: s32;
+// Verified cumulative, never-consumed SDK inventory credits, not a balance.
+portal_credits: s64;
+portal_verified: bool;
+portal_loaded: bool;
+portal_read_ready: bool;
+DataAvailable :: #type () -> bool;
+data_active: DataAvailable = Portal.DataActive;
+PortalActive :: () -> bool {
+    #if #defined(WURM_CRAZYGAMES) {
+        return data_active()
+    } else {
+        return false
+    }
+}
+// Call after account reset and each inventory refresh. Invalid/unverified data
+// revokes spendable credits; a refresh replaces the total, never increments it.
+SetPortalCredits :: (credits: s64, verified: bool) -> bool {
+    Load()
+    portal_credits = 0; portal_verified = false
+    if !PortalActive() || !verified || credits < 0 || credits > 1000000000 { return false }
+    portal_credits = credits; portal_verified = true
+    return true
+}
 // Each award a player should see: coins and whole Dew.
 toast_coins: s32;
 toast_dew: s32;
@@ -106,13 +130,27 @@ SignedIn :: () -> bool { return Progress.owner[0] != 0 }
 
 // Each signed-in account and the guest keep their own plan and coins.
 Load :: () {
-    if loaded && TextUntilNul(owner[:]) == TextUntilNul(Progress.owner[:]) { return }
+    active := PortalActive()
+    same := loaded && portal_loaded == active && TextUntilNul(owner[:]) == TextUntilNul(Progress.owner[:])
+    if same && (!active || portal_read_ready) { return }
+    if !same { portal_credits = 0; portal_verified = false }
+    portal_loaded = active; portal_read_ready = false
     loaded = true
     owner = Progress.owner
     days = 0; last_day = -1; week = 0; coin_skins = 0; dew_done = 0; checkin = false; dirty = false
     other_replays = 0; poll_at = 0; claim_active = -1; claim_at = 0
     bytes: [13]u8
-    if Records.ReadRecord(Progress.RecordName("rewards.dat"), bytes[:]) != 12 || bytes[0] != 1 { return }
+    count: s64
+    if active {
+        count = Portal.ReadByteRecord(Progress.RecordName("rewards.dat"), bytes[:])
+        if count == -2 { portal_read_ready = true; return }
+        // Unknown/corrupt snapshots must never be replaced by empty state.
+        if count != 12 || bytes[0] != 1 { return }
+        portal_read_ready = true
+    } else {
+        count = Records.ReadRecord(Progress.RecordName("rewards.dat"), bytes[:])
+        if count != 12 || bytes[0] != 1 { return }
+    }
     days = cast(s32)bytes[1] | (cast(s32)bytes[2] << 8)
     stored: s64 = 0
     for index: 0..3 { stored |= cast(s64)bytes[index + 3] << (index * 8) }
@@ -126,6 +164,9 @@ Load :: () {
     if week > 7 || (week == 0 && days > 0) { week = 1 }
 }
 Save :: () -> bool {
+    // Do not retry a read here: callers may already have mutated the snapshot.
+    if PortalActive() && (!loaded || !portal_loaded || !portal_read_ready ||
+        TextUntilNul(owner[:]) != TextUntilNul(Progress.owner[:])) { return false }
     bytes: [12]u8
     bytes[0] = 1
     bytes[1] = cast(u8)(days & 255); bytes[2] = cast(u8)((days >> 8) & 255)
@@ -135,6 +176,7 @@ Save :: () -> bool {
     bytes[9] = cast(u8)dew_done
     bytes[10] = cast(u8)((ifx dirty then 1 else 0) | (ifx checkin then 2 else 0))
     bytes[11] = cast(u8)week
+    if PortalActive() { return Portal.WriteByteRecord(Progress.RecordName("rewards.dat"), bytes[:]) }
     return Records.WriteRecord(Progress.RecordName("rewards.dat"), bytes[:])
 }
 Reset :: () {
@@ -209,6 +251,7 @@ WeekClaimed :: () -> s32 {
 }
 ClaimReady :: () -> bool {
     Load()
+    if PortalActive() && !portal_read_ready { return false }
     current := CurrentDay()
     return current >= 0 && current > last_day && days < 65535
 }
@@ -248,10 +291,16 @@ Coins :: () -> s32 {
     Progress.Load()
     earned: s64 = 0
     for index: 0..Progress.LEVELS - 1 { if Progress.completed[index] == 1 { earned += CLEAR_COINS } }
-    earned += REPLAY_COINS * (Progress.replays + other_replays)
+    // Bound before adding/multiplying untrusted persisted replay counts.
+    replay_counts: [2]s64 = .[Progress.replays, other_replays]
+    for count: replay_counts {
+        if count > 0 { earned += REPLAY_COINS * (ifx count > 2000000000 then cast(s64)2000000000 else count) }
+    }
     day: s32 = 1
     while day <= days { earned += cast(s64)DayCoins(day); day += 1 }
-    if SignedIn() { earned += cast(s64)bought_coins }
+    if PortalActive() {
+        if portal_verified { earned += portal_credits }
+    } else if SignedIn() { earned += cast(s64)bought_coins }
     for id: 9..11 { if (coin_skins & (1 << id)) != 0 { earned -= cast(s64)CoinPrice(cast(s32)id) } }
     if earned < 0 { return 0 }
     if earned > 2000000000 { return 2000000000 }
@@ -260,6 +309,7 @@ Coins :: () -> s32 {
 // Spends coins at once, even offline. An owned skin is never bought twice.
 Buy :: (id: s32) -> bool {
     Load()
+    if PortalActive() && !portal_read_ready { return false }
     price := CoinPrice(id)
     if price <= 0 || Owns(id) || Coins() < price { return false }
     previous_dirty := dirty

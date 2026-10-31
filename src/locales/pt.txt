@@ -463,3 +463,60 @@ Convidado
 [wurm_portal_1]
 O progresso só fica guardado até fechar esta página.
 ---
+[wurm_ui_40]
+Etapas
+---
+[wurm_ui_41]
+Etapa
+---
+[wurm_ui_42]
+Continuar
+---
+[wurm_ui_43]
+Níveis concluídos
+---
+[wurm_ui_44]
+As setas e W A S D sempre controlam.
+---
+[wurm_shop_owned]
+Adquirido
+---
+[wurm_shop_mountains]
+Montanhas
+---
+[wurm_portal_shop_0]
+Carregando loja…
+---
+[wurm_portal_shop_1]
+Compra pendente. Restaure para verificar novamente.
+---
+[wurm_portal_shop_2]
+Não foi possível salvar. Tente novamente.
+---
+[wurm_portal_shop_3]
+Compra cancelada. Você pode tentar novamente.
+---
+[wurm_portal_shop_4]
+Compras restauradas.
+---
+[wurm_portal_shop_5]
+Entre para comprar.
+---
+[wurm_portal_shop_6]
+As compras não estão disponíveis aqui.
+---
+[wurm_portal_shop_7]
+Não foi possível carregar a loja. Tente novamente.
+---
+[wurm_portal_shop_8]
+Indisponível
+---
+[wurm_portal_shop_9]
+Grátis
+---
+[wurm_portal_shop_10]
+Restaurar compras
+---
+[wurm_portal_shop_11]
+Atualizar
+---

@@ -3,7 +3,7 @@
 // feedback, the direction pad, controls, play, portrait, music blending,
 // durable progress and the unlocked-level selector. With WURM_TEST_PORTAL,
 // the unpacked CrazyGames copy instead, below a nested path at the portal's
-// frame sizes, without pictures.
+// frame sizes, with private editor screenshots under work/crazygames/.
 #import "kryon/devtools_linux"
 #import "std/file"
 #import "std/file_tree_linux"
@@ -190,14 +190,14 @@ Play :: () -> bool {
     if !Reload() { return false }
     Pause(1500)
     if !Until("(()=>{try{return Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57}catch{return false}})()") { return false }
-    if !Shot("continue-title") || !Click(195, 700) || !Until(RunIs("[57,3,0,0,0,0]")) || !Shot("continued-level-58") { return false }
-    if !Key(" ", 32) || !Key("q", 81) || !Click(195, 774) || !Until(RunIs("[0,3,0,0,0,0]")) { return false }
-    if !True("Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57") { return Fail("Play erased unlocked progress") }
+    if !Shot("continue-title") || !Click(195, 746) || !Until(RunIs("[57,3,0,0,0,0]")) || !Shot("continued-level-58") { return false }
+    if !Key(" ", 32) || !Key("q", 81) { return false }
+    if !True("Module.FS.readFile('/kryon-apps/wurm/unlocked.dat')[0]===57") { return Fail("leaving the run erased unlocked progress") }
     Pause(500)
     if !Reload() { return false }
     Pause(1500)
     if !Key("c", 67) || !Until(RunIs("[57,3,0,0,0,0]")) { return false }
-    if !Key(" ", 32) || !Key("q", 81) || !Key("l", 76) || !Shot("level-selector") { return false }
+    if !Key(" ", 32) || !Key("q", 81) || !Key("l", 76) || !Shot("stage-selector") || !Key("Enter", 13) || !Shot("level-selector") { return false }
     grid := "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,132,c.width,c.height-132).data;let h=0;for(let i=0;i<p.length;i+=20)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()"
     before_scroll := BrowserNumber(browser, grid, -1.0)
     if !Touch("touchStart", 195, 700) { return false }
@@ -252,7 +252,7 @@ Play :: () -> bool {
     }
     result: Vec(u8)
     BuilderPrint(*result, "{\n  \"passed\": true,\n  \"url\": %,\n  \"colorful\": %,\n", JsonQuote(url), cast(s64)colorful)
-    Append(*result, "  \"behaviors\": [\"shared touch feedback and release\", \"mobile pad placement and held highlight in both orientations\", \"rendered title artwork\", \"control choice\", \"straight into level 1\", \"keyboard steering\", \"pause\", \"portrait resize\", \"durable saves after reload\", \"old run migration\", \"Continue highest level with fresh stats\", \"Play from start preserves unlocks\", \"Continue after browser reload\", \"landscape level selector\", \"touch scrolling without starting a level\", \"locked levels show only locks\", \"unlocked level selection starts fresh\", \"selector keyboard back\"]\n}\n")
+    Append(*result, "  \"behaviors\": [\"shared touch feedback and release\", \"mobile pad placement and held highlight in both orientations\", \"rendered title artwork\", \"control choice\", \"straight into level 1\", \"keyboard steering\", \"pause\", \"portrait resize\", \"durable saves after reload\", \"old run migration\", \"Continue highest level with fresh stats\", \"leaving a run preserves unlocks\", \"Continue after browser reload\", \"stage selector and landscape level selector\", \"touch scrolling without starting a level\", \"locked levels show only locks\", \"unlocked level selection starts fresh\", \"selector keyboard back\"]\n}\n")
     unused WriteEntireFile(JoinPath(OUT, "result.json"), BuilderFinish(result))
     print("Browser local test: touch feedback and release, mobile pad placement and highlight, controls, play, portrait, durable progress and unlocked-level selection passed.\n")
     return true
@@ -289,7 +289,7 @@ SetCloudRecord :: (name: string, value: string) -> bool {
 // chest and Leaderboard. A press there must leave the title in place.
 PressHiddenCorners :: (width: s64) -> bool {
     right := width - 12
-    return Click(50, 50) && Click(50, 136) && Click(right - 166, 42)
+    return Click(50, 50) && Key("Escape",27) && Click(50, 136) && Key("Escape",27) && Click(right - 166, 42)
 }
 
 // CrazyGames' SDK as the portal serves it, reporting German and keeping a
@@ -297,7 +297,10 @@ PressHiddenCorners :: (width: s64) -> bool {
 // takes this one. With wurm-no-sdk in sessionStorage the page has no SDK.
 // The log notes when the game reads the portal's language.
 PORTAL_SDK :: "https://sdk.crazygames.com/crazygames-sdk-v3.js"
-SDK_STUB :: "window.__scores=[];window.__portal=[];if(!sessionStorage.getItem('wurm-no-sdk')){const log=window.__portal,listeners=[],auth=[];let account=sessionStorage.getItem('wurm-account')||'guest';window.__portalConfigBuilt=false;const scoreFixtureKey='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';let fixtureKey='';const data=()=>({getItem(name){if(sessionStorage.getItem('wurm-data-fail')==='1')throw new Error('data');const value=sessionStorage.getItem('wurm-data:'+account+':'+name);return value===null?null:value},setItem(name,value){if(sessionStorage.getItem('wurm-data-fail')==='1')throw new Error('data');sessionStorage.setItem('wurm-data:'+account+':'+name,String(value))}});window.CrazyGames={SDK:{environment:'local',init(){log.push('init');return Promise.resolve()},user:{isUserAccountAvailable:sessionStorage.getItem('wurm-account-available')!=='false',systemInfo:{locale:'de-DE'},submitScore(payload){window.__scores.push(payload);if(window.__scoreFail)return Promise.reject(new Error('send'));return Promise.resolve()},getUser(){log.push('getUser');return sessionStorage.getItem('wurm-profile-fail')==='1'?Promise.reject(new Error('profile')):Promise.resolve(account==='guest'?null:{username:account})},showAuthPrompt(){log.push('showAuthPrompt');return sessionStorage.getItem('wurm-prompt-fail')==='1'?Promise.reject(new Error('cancelled')):Promise.resolve()},addAuthListener(f){auth.push(f)}},ad:{requestAd(kind,callbacks){window.__adKind=kind;window.__adCalls=(window.__adCalls||0)+1;window.__adCallbacks=callbacks;if(window.__adMode==='throw')throw new Error('ad');if(window.__adMode==='reject')return Promise.reject(new Error('ad'));if(window.__adMode==='nofill')callbacks.adError();}},data:data(),game:{settings:{muteAudio:false},addSettingsChangeListener(f){listeners.push(f)},loadingStart(){log.push('loadingStart')},loadingStop(){log.push('loadingStop')},gameplayStart(){log.push('gameplayStart')},gameplayStop(){log.push('gameplayStop')}}}};window.__portalSettings=s=>listeners.forEach(f=>f(s));window.__portalAccount=(name,changed)=>{account=name;sessionStorage.setItem('wurm-account',name);window.CrazyGames.SDK.data=data();if(changed)auth.forEach(f=>f())};window.__portalSignIn=name=>window.__portalAccount(name,true);window.__portalSignOut=()=>window.__portalAccount('guest',true);let bridge;Object.defineProperty(window,'WurmPortal',{configurable:true,get(){return bridge},set(v){bridge=v;if(!window.__portalConfigChecked){fixtureKey=window.WurmPortalConfig.leaderboardKey;window.__portalConfigBuilt=typeof fixtureKey==='string'&&/^(?:$|[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=)$/.test(fixtureKey)&&typeof window.WurmPortalConfig.adsEnabled==='boolean';WurmPortalConfig.leaderboardKey='';WurmPortalConfig.adsEnabled=false;window.__portalConfigChecked=true}if(sessionStorage.getItem('wurm-score-test'))window.WurmPortalConfig.leaderboardKey=scoreFixtureKey;let locale=v.locale;Object.defineProperty(v,'locale',{get(){log.push('locale');return locale},set(x){locale=x}})}})}"
+SDK_STUB :: "window.__scores=[];window.__portal=[];if(!sessionStorage.getItem('wurm-no-sdk')){const log=window.__portal,listeners=[],auth=[];let account=sessionStorage.getItem('wurm-account')||'guest';window.__portalConfigBuilt=false;const scoreFixtureKey='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';let fixtureKey='';const data=()=>({getItem(name){if(sessionStorage.getItem('wurm-data-fail')==='1')throw new Error('data');const value=sessionStorage.getItem('wurm-data:'+account+':'+name);return value===null?null:value},setItem(name,value){if(sessionStorage.getItem('wurm-data-fail')==='1')throw new Error('data');sessionStorage.setItem('wurm-data:'+account+':'+name,String(value))}});window.CrazyGames={SDK:{environment:'local',init(){log.push('init');return Promise.resolve()},user:{isUserAccountAvailable:sessionStorage.getItem('wurm-account-available')!=='false',systemInfo:{locale:'de-DE'},submitScore(payload){window.__scores.push(payload);if(window.__scoreFail)return Promise.reject(new Error('send'));return Promise.resolve()},getUser(){log.push('getUser');return sessionStorage.getItem('wurm-profile-fail')==='1'?Promise.reject(new Error('profile')):Promise.resolve(account==='guest'?null:{username:account,__dangerousUserId:'fixture-'+account})},showAuthPrompt(){log.push('showAuthPrompt');return sessionStorage.getItem('wurm-prompt-fail')==='1'?Promise.reject(new Error('cancelled')):Promise.resolve()},addAuthListener(f){auth.push(f)}},ad:{requestAd(kind,callbacks){window.__adKind=kind;window.__adCalls=(window.__adCalls||0)+1;window.__adCallbacks=callbacks;if(window.__adMode==='throw')throw new Error('ad');if(window.__adMode==='reject')return Promise.reject(new Error('ad'));if(window.__adMode==='nofill')callbacks.adError();}},data:data(),game:{settings:{muteAudio:false},addSettingsChangeListener(f){listeners.push(f)},loadingStart(){log.push('loadingStart')},loadingStop(){log.push('loadingStop')},gameplayStart(){log.push('gameplayStart')},gameplayStop(){log.push('gameplayStop')}}}};window.__portalSettings=s=>listeners.forEach(f=>f(s));window.__portalAccount=(name,changed)=>{account=name;sessionStorage.setItem('wurm-account',name);window.CrazyGames.SDK.data=data();if(changed)auth.forEach(f=>f())};window.__portalSignIn=name=>window.__portalAccount(name,true);window.__portalSignOut=()=>window.__portalAccount('guest',true);let bridge;Object.defineProperty(window,'WurmPortal',{configurable:true,get(){return bridge},set(v){bridge=v;if(!window.__portalConfigChecked){fixtureKey=window.WurmPortalConfig.leaderboardKey;window.__portalConfigBuilt=typeof fixtureKey==='string'&&/^(?:$|[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=)$/.test(fixtureKey)&&typeof window.WurmPortalConfig.adsEnabled==='boolean';WurmPortalConfig.leaderboardKey='';WurmPortalConfig.adsEnabled=false;window.__portalConfigChecked=true}if(sessionStorage.getItem('wurm-score-test'))window.WurmPortalConfig.leaderboardKey=scoreFixtureKey;let locale=v.locale;Object.defineProperty(v,'locale',{get(){log.push('locale');return locale},set(x){locale=x}})}})}"
+
+// SDK fixture only; no hidden app state.
+STORE_STUB :: "// Private browser SDK/data seams only. No game variables or exports.\nwindow.__storeCalls=[];window.__storeBuys=[];\nlet publicStore;\nconst mappings=[{kind:'skin',skinId:1,sku:'sample-skin',purchaseId:'sample-explicit-skin'},{kind:'skin',skinId:2,sku:'sample-free',purchaseId:'sample-explicit-free'},{kind:'skin',skinId:3,sku:'sample-missing',purchaseId:'sample-explicit-missing'},{kind:'mountains',sku:'sample-mountains',purchaseId:'sample-explicit-mountains'},{kind:'coins',sku:'sample-pack',purchaseId:'sample-explicit-pack',packCoins:1000,cumulativeInventory:true}];\nObject.defineProperty(window,'WurmPortalStoreConfig',{configurable:true,get(){return sessionStorage.getItem('shop-fixture')==='1'?{version:1,sandbox:false,products:mappings}:publicStore},set(v){publicStore=v}});\nif(window.CrazyGames){\n if(sessionStorage.getItem('shop-fixture')==='1')CrazyGames.SDK.user.systemInfo.locale='en-US';\n const account=()=>sessionStorage.getItem('wurm-account')||'guest';\n const invkey=()=> 'shop-inventory:'+account();\n const inventory=()=>JSON.parse(sessionStorage.getItem(invkey())||'[]');\n CrazyGames.SDK.store={get isAvailable(){return sessionStorage.getItem('shop-unsupported')!=='1'},setSandbox(value){if(value)throw Error('production sandbox must be false')},\n getCatalogItems({offset}){__storeCalls.push(['catalog',account(),offset]);if(sessionStorage.getItem('shop-catalog-error'))return Promise.reject({code:'catalogFetchFailed'});const currency=sessionStorage.getItem('shop-currency')||'USD';return Promise.resolve({hasMore:false,items:mappings.map((p,i)=>({sku:p.sku,name:'Sample '+p.kind,description:'Local fixture only',imageUrl:'',isFree:i===1,canBeBought:true,price:i===2?null:{amount:currency==='EUR'?'3.49':'4.99',amountWithoutDiscount:'4.99',currency}}))})},\n getPlayerInventory({offset}){__storeCalls.push(['inventory',account(),offset]);return Promise.resolve({items:inventory().slice(offset,offset+50)})},\n buyItem(id){__storeBuys.push(id);let buys=JSON.parse(sessionStorage.getItem('shop-buys')||'[]');buys.push(id);sessionStorage.setItem('shop-buys',JSON.stringify(buys));const mode=sessionStorage.getItem('shop-buy-mode');if(mode==='cancel')return Promise.reject({code:'purchaseCancelled'});if(mode!=='pending'){const p=mappings.find(p=>p.purchaseId===id);if(!p)return Promise.reject({code:'invalidArgument'});const all=inventory(),old=all.find(x=>x.sku===p.sku);if(old)old.quantity+=1;else all.push({sku:p.sku,quantity:p.kind==='coins'?1:null});sessionStorage.setItem(invkey(),JSON.stringify(all))}return Promise.resolve({itemId:id})},consumeItem(){throw Error('must never consume')}\n };\n}\n"
 
 // Public fixture only. Decrypt the actual Progress.Report submission after
 // loading the SDK best record; subsequent calls exercise queue/error glue.
@@ -338,6 +341,178 @@ GameplayEnds :: (last: string) -> string {
     return BuilderFinish(text)
 }
 
+// Inspect the rendered board panel, whose clear right edge is uniform.
+EditorBoardVisible :: () -> bool {
+    Pause(250)
+    return True("(()=>{const c=document.getElementById('canvas'),g=c.getContext('2d'),a=g.getImageData(795,100,1,1).data,b=g.getImageData(795,220,1,1).data;return a[3]===255&&a[0]===b[0]&&a[1]===b[1]&&a[2]===b[2]})()")
+}
+CoverHash :: () -> float64 {
+    Pause(1100)
+    return BrowserNumber(browser,"(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(100,90,c.width-200,80).data;let h=0;for(let i=0;i<p.length;i+=16)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()",-1.0)
+}
+PortalShot :: (name: string) -> bool {
+    path: Vec(u8)
+    BuilderPrint(*path, "work/crazygames/editor-swipe/%.png", name)
+    return BrowserScreenshot(browser, BuilderFinish(path))
+}
+SwipeCover :: (start: s64, finish: s64, y: s64) -> bool {
+    if !Touch("touchStart", start, y) { return false }
+    Pause(80)
+    if !Touch("touchMove", (start + finish) / 2, y) { return false }
+    Pause(80)
+    if !Touch("touchMove", finish, y) || !Touch("touchEnd", 0, 0) { return false }
+    Pause(900)
+    return true
+}
+PortalEditorUI :: () -> bool {
+    if !CreateDirectories("work/crazygames/editor-swipe") { return false }
+    // A fresh fixture account; all navigation and edits use real input.
+    if !BrowserEvaluate(browser, "sessionStorage.removeItem('wurm-no-sdk');sessionStorage.setItem('wurm-account','EditorQA');true") || !Viewport(800,450,false) || !Reload() { return false }
+    Pause(1200)
+    play_cover := CoverHash()
+    if !PortalShot("play-landscape") || !Click(766,225) { return false }
+    editor_cover := CoverHash()
+    if editor_cover == play_cover || !PortalShot("editor-landscape") { return Fail("landscape arrow did not select editor") }
+    if !Key("ArrowLeft",37) { return false }
+    if CoverHash() != play_cover || !SwipeCover(620,180,180) || CoverHash() != editor_cover { return Fail("landscape swipe did not select editor") }
+    if !Click(35,225) || CoverHash() != play_cover { return Fail("previous arrow did not select cover") }
+    if !BrowserMouse(browser,"mouseMoved",400.0,180.0,0.0) { return false }
+    Pause(200)
+    if !BrowserMouse(browser,"mouseWheel",400.0,180.0,160.0) || CoverHash() != editor_cover { return Fail("wheel did not select cover") }
+    if !Key("l",76) || !PortalShot("stages") || !Key("Escape",27) || !Key("e",69) { return Fail("Stages or E shortcut was unreachable") }
+    if !Reload() { return false }
+    Pause(1000)
+    if !Key("ArrowRight",39) || !Key("Enter",13) { return Fail("keyboard did not activate editor") }
+    if !PortalShot("editor-home") { return false }
+    if !Click(400,244) || !Click(400,160) || !EditorBoardVisible() { return Fail("New level did not open a board") }
+    if !True("JSON.parse(CrazyGames.SDK.data.getItem('editor-drafts-v1.json')).records[0].document.levels.length===1") { return Fail("New level was not stored") }
+    if !BrowserEvaluate(browser, "window.__beforeDraft=CrazyGames.SDK.data.getItem('editor-drafts-v1.json');true") { return false }
+    // Select the second floor swatch, then drag a horizontal paint stroke.
+    if !Click(615,195) || !BrowserMouse(browser,"mousePressed",200.0,200.0,0.0) { return false }
+    Pause(100)
+    if !BrowserMouse(browser,"mouseMoved",310.0,200.0,0.0) { return false }
+    Pause(100)
+    if !BrowserMouse(browser,"mouseReleased",310.0,200.0,0.0) || !Click(610,350) { return false }
+    if !Until("CrazyGames.SDK.data.getItem('editor-drafts-v1.json')!==__beforeDraft") { return Fail("pointer painting did not save") }
+    if !BrowserEvaluate(browser, "window.__savedDraft=CrazyGames.SDK.data.getItem('editor-drafts-v1.json');sessionStorage.setItem('wurm-data-fail','1');true") || !Click(280,230) || !Click(610,350) { return false }
+    if !True("sessionStorage.getItem('wurm-data:EditorQA:editor-drafts-v1.json')===__savedDraft") || !PortalShot("save-failure") { return Fail("failed write replaced durable draft") }
+    // Title attempts to save too; a failure must leave the board and retry.
+    if !Click(735,400) || !EditorBoardVisible() { return Fail("failed save discarded the editor") }
+    if !BrowserEvaluate(browser, "sessionStorage.removeItem('wurm-data-fail');true") || !Click(610,350) || !Until("CrazyGames.SDK.data.getItem('editor-drafts-v1.json')!==__savedDraft") { return Fail("dirty save could not retry") }
+    if !Key("t",84) || !Click(615,195) || !Click(240,230) || !Click(610,350) { return false }
+    if !Until("typeof JSON.parse(CrazyGames.SDK.data.getItem('editor-drafts-v1.json')).records[0].document.levels[0].portrait==='string'") { return Fail("orientation did not save") }
+    if !PortalShot("painting") || !Click(610,400) || !Key("Enter",13) { return false }
+    if !Until(GameplayEnds("gameplayStart")) { return Fail("editor playtest did not run") }
+    if !Key("Escape",27) || !Key("Escape",27) || !EditorBoardVisible() { return Fail("playtest did not return to painting") }
+    if !BrowserEvaluate(browser, "window.sessionStorage.setItem('editor-expected',CrazyGames.SDK.data.getItem('editor-drafts-v1.json'));true") || !Reload() || !Key("e",69) || !Click(400,390) || !Click(260,150) || !Click(250,175) || !EditorBoardVisible() { return Fail("My levels did not reopen after full reload") }
+    if !True("CrazyGames.SDK.data.getItem('editor-drafts-v1.json')===sessionStorage.getItem('editor-expected')") || !PortalShot("reloaded") { return Fail("full reload changed saved painting") }
+    // From a level copies the reached campaign board into this collection.
+    if !Reload() || !Key("e",69) || !Click(400,328) || !Click(400,160) || !Click(55,100) || !EditorBoardVisible() { return Fail("From a level did not open a copy") }
+    if !True("JSON.parse(CrazyGames.SDK.data.getItem('editor-drafts-v1.json')).records[0].document.levels.length===2") { return Fail("template was not stored") }
+    // Account change uses the SDK fixture only. The guest cannot see QA drafts.
+    if !BrowserEvaluate(browser,"__portalAccount('guest',false);true") || !Reload() || !Key("e",69) || !Click(400,390) { return false }
+    if !True("CrazyGames.SDK.data.getItem('editor-drafts-v1.json')===null") { return Fail("editor crossed account namespaces") }
+    if !Viewport(450,800,true) || !Reload() { return false }
+    Pause(1000)
+    portrait_play := CoverHash()
+    if !SwipeCover(360,90,350) || CoverHash() == portrait_play || !PortalShot("editor-portrait") { return Fail("portrait swipe did not select editor") }
+    if !Key("ArrowLeft",37) || !Key("ArrowRight",39) || !Key("Enter",13) { return Fail("portrait keyboard editor unreachable") }
+    if !PortalShot("editor-home-portrait") { return false }
+    // No SDK: local drafts persist across a real page reload as well.
+    if !BrowserEvaluate(browser,"sessionStorage.setItem('wurm-no-sdk','1');true") || !Viewport(800,450,false) || !Reload() { return false }
+    Pause(1000)
+    if !Key("e",69) || !Click(400,244) || !Click(400,160) || !EditorBoardVisible() || !Click(615,195) || !Click(250,220) || !Click(610,350) { return Fail("noSDK editor could not paint/save") }
+    if !BrowserEvaluate(browser,"sessionStorage.setItem('local-editor-expected',new TextDecoder().decode(Module.FS.readFile('/kryon-apps/wurm/editor-drafts-v1.json')));true") || !Reload() { return false }
+    Pause(1000)
+    if !True("new TextDecoder().decode(Module.FS.readFile('/kryon-apps/wurm/editor-drafts-v1.json'))===sessionStorage.getItem('local-editor-expected')") { return Fail("local draft changed after reload") }
+    if !Key("e",69) || !Click(400,390) || !Click(260,150) || !Click(250,175) || !EditorBoardVisible() || !PortalShot("nosdk-reloaded") { return Fail("noSDK My levels did not survive reload") }
+    print("Browser local test: title arrows/swipe/wheel/keys and Stages shortcut in landscape and portrait; New level, From a level, My levels, pointer painting, save failure/retry, orientation, playtest/return, SDK account isolation and noSDK reload passed.\n")
+    return true
+}
+
+ShopShot :: (name: string) -> bool {
+    path: Vec(u8)
+    BuilderPrint(*path, "work/crazygames/store-ui/%.png", name)
+    return BrowserScreenshot(browser, BuilderFinish(path))
+}
+ShopHash :: (x: s32, y: s32, width: s32, height: s32) -> float64 {
+    expression: Vec(u8)
+    BuilderPrint(*expression,"(()=>{const p=document.getElementById('canvas').getContext('2d').getImageData(%,%,%,%).data;let h=0;for(let i=0;i<p.length;i+=4)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()",x,y,width,height)
+    return BrowserNumber(browser,BuilderFinish(expression),-1.0)
+}
+ShopReady :: () -> bool {
+    if !Until("__storeCalls.filter(x=>x[0]==='inventory').length>0") { return Fail("Wasm runtime did not read inventory") }
+    Pause(700)
+    return true
+}
+PortalShopUI :: () -> bool {
+    if !CreateDirectories("work/crazygames/store-ui") { return false }
+    if !BrowserEvaluate(browser,"sessionStorage.removeItem('wurm-no-sdk');sessionStorage.setItem('shop-fixture','1');sessionStorage.setItem('wurm-account','ShopQA');true") || !Viewport(800,450,false) || !Reload() || !ShopReady() { return false }
+    if !Click(50,50) || !ShopShot("landscape-usd") { return false }
+    usd := ShopHash(275,306,230,28)
+    // Same native card redraws the personalized currency after explicit refresh.
+    if !BrowserEvaluate(browser,"sessionStorage.setItem('shop-currency','EUR');true") || !Click(740,88) { return false }
+    Pause(1000)
+    if ShopHash(275,306,230,28) == usd || !ShopShot("landscape-eur") { return Fail("personalized price did not redraw") }
+    // Missing price never opens checkout; the free product needs confirmation.
+    if !BrowserMouse(browser,"mouseMoved",400.0,330.0,0.0) || !BrowserMouse(browser,"mouseWheel",400.0,330.0,588.0) { return false }
+    Pause(600)
+    if !Click(135,365) || !True("__storeBuys.length===0") || !ShopShot("missing-price") { return Fail("missing paid price checked out") }
+    if !Click(400,180) || !ShopShot("mountains-landscape") || !Click(570,180) || !ShopShot("coins-landscape") || !Click(230,180) { return false }
+    // Cancel through SDK, then retry once through the actual confirm button.
+    if !BrowserEvaluate(browser,"sessionStorage.setItem('shop-buy-mode','cancel');true") || !Click(400,365) || !Click(400,310) { return false }
+    if !Until("__storeBuys.length===1&&__storeBuys[0]==='sample-explicit-skin'&&CrazyGames.SDK.data.getItem('wurm-store-pending-v1')===''") { return Fail("cancel did not use explicit skin ID or clear marker") }
+    if !ShopShot("cancelled") || !BrowserEvaluate(browser,"sessionStorage.setItem('shop-buy-mode','pending');true") || !Click(400,310) { return false }
+    if !Until("__storeBuys.length===2&&!!CrazyGames.SDK.data.getItem('wurm-store-pending-v1')") { return Fail("explicit retry not pending") }
+    Pause(1000)
+    if !Click(400,310) || !True("__storeBuys.length===2&&JSON.parse(sessionStorage.getItem('shop-inventory:ShopQA')||'[]').length===0") || !ShopShot("pending") { return Fail("buy result granted or duplicate checkout happened") }
+    if !Reload() || !ShopReady() || !Click(50,50) || !Click(400,365) || !True("__storeBuys.length===0") { return Fail("pending reload recharged") }
+    // Restore proves ownership without a second charge, even outside the shop.
+    if !BrowserEvaluate(browser,"sessionStorage.setItem('shop-inventory:ShopQA',JSON.stringify([{sku:'sample-skin',quantity:null}]));true") || !Click(720,34) { return false }
+    Pause(1200)
+    if !Until("CrazyGames.SDK.data.getItem('wurm-store-pending-v1')===''") || !Click(400,365) { return Fail("restore did not reconcile skin") }
+    if !Until("(CrazyGames.SDK.data.getItem('wardrobe.dat')||'').startsWith('01')") || !ShopShot("owned-skin") { return Fail("verified skin could not be worn") }
+    if !Reload() || !ShopReady() || !True("CrazyGames.SDK.data.getItem('wardrobe.dat').startsWith('01')") || !Click(50,50) { return Fail("selected durable skin lost on reload") }
+    // Real native free item, then paid chapter; only inventory opens gameplay.
+    if !BrowserEvaluate(browser,"sessionStorage.setItem('shop-buy-mode','success');true") || !Click(650,365) || !Click(400,310) || !Until("__storeBuys.includes('sample-explicit-free')") { return Fail("free product confirmation failed") }
+    Pause(800)
+    if !Click(400,365) || !Click(400,180) || !BrowserEvaluate(browser,"sessionStorage.setItem('shop-buy-mode','success');true") || !Click(580,316) || !Click(400,310) { return false }
+    if !Until("__storeBuys.includes('sample-explicit-mountains')") { return Fail("chapter did not use explicit ID") }
+    Pause(1000)
+    if !Click(400,365) || !ShopShot("owned-mountains") || !Click(580,362) || !Until(CloudRunIs("[160,3,0,0,0,0]")) { return Fail("verified Mountains did not open its chapter") }
+    // Counted pack inventory derives a stable total; no consume or client grant.
+    if !Reload() || !ShopReady() || !Click(50,50) || !Click(570,180) || !Click(580,316) || !Click(400,310) { return false }
+    if !Until("__storeBuys.includes('sample-explicit-pack')") { return Fail("coin pack did not use explicit ID") }
+    Pause(1000)
+    if !Click(400,365) || !ShopShot("coin-pack-owned") { return false }
+    balance := ShopHash(20,72,140,32)
+    if !Click(740,88) { return false }
+    Pause(1000)
+    if ShopHash(20,72,140,32) != balance || !Reload() || !ShopReady() || !Click(50,50) || ShopHash(20,72,140,32) != balance { return Fail("pack refresh/reload changed derived balance") }
+    // Portrait keeps all tabs and Restore available. Scroll real coin skin 9
+    // into view in landscape; strict SDK Data failure must roll back spending.
+    if !Viewport(450,800,true) { return false }
+    Pause(500)
+    if !ShopShot("portrait") || !Click(225,180) || !ShopShot("mountains-portrait") || !Click(355,180) || !ShopShot("coins-portrait") || !Viewport(800,450,false) || !Click(230,180) { return false }
+    if !BrowserMouse(browser,"mouseMoved",400.0,330.0,0.0) { return false }
+    for step: 0..2 {
+        if !BrowserMouse(browser,"mouseWheel",400.0,330.0,588.0) { return false }
+        Pause(450)
+    }
+    if !ShopShot("coin-skin-offer") || !Click(135,340) || !BrowserEvaluate(browser,"sessionStorage.setItem('wurm-data-fail','1');true") || !Click(400,310) || !ShopShot("coin-save-error") { return false }
+    if !BrowserEvaluate(browser,"sessionStorage.removeItem('wurm-data-fail');true") { return false }
+    if !True("!(CrazyGames.SDK.data.getItem('wardrobe.dat')||'').startsWith('09')") || !Click(400,310) { return Fail("coin skin was worn after failed save") }
+    if !Until("CrazyGames.SDK.data.getItem('wardrobe.dat').startsWith('09')") || !ShopShot("coin-skin-owned") { return Fail("coin skin retry did not persist") }
+    if !Reload() || !ShopReady() || !Click(50,50) || !ShopShot("coin-reload") || !True("CrazyGames.SDK.data.getItem('wardrobe.dat').startsWith('09')") { return Fail("coin skin choice lost on reload") }
+    // Unsupported payments/catalog failure must still restore owned inventory.
+    if !BrowserEvaluate(browser,"sessionStorage.setItem('shop-unsupported','1');sessionStorage.setItem('shop-catalog-error','1');true") || !Reload() || !ShopReady() || !Click(50,50) || !Click(400,180) || !ShopShot("unsupported-restored") || !Click(580,362) || !Until(CloudRunIs("[160,3,0,0,0,0]")) { return Fail("unsupported payment/catalog error lost owned Mountains") }
+    // New account gets none of the first player's entitlements/pack balance.
+    if !BrowserEvaluate(browser,"sessionStorage.setItem('wurm-account','ShopOther');sessionStorage.removeItem('shop-unsupported');sessionStorage.removeItem('shop-catalog-error');true") || !Reload() || !ShopReady() || !Click(50,50) || !Click(400,180) || !ShopShot("account-isolated") || !Click(580,362) || !True("CrazyGames.SDK.data.getItem('run.dat')===null&&__storeBuys.length===0") { return Fail("account inherited paid chapter") }
+    if !BrowserEvaluate(browser,"sessionStorage.removeItem('shop-fixture');sessionStorage.setItem('wurm-account','guest');true") || !Reload() { return false }
+    print("Browser local test: real Wasm shop tabs/orientations, personalized currency, free/missing price, explicit IDs, cancel/retry, pending/reload/restore, skin wear/chapter play, cumulative packs, strict coin spend failure/retry, unsupported catalog/payment restore and account isolation passed.\n")
+    return true
+}
+
 // The packaged guest copy from WURM_TEST_PORTAL, served below
 // /games/apfelwurm/ as a portal frame would load it.
 Portal :: (root: string) -> bool {
@@ -349,10 +524,18 @@ Portal :: (root: string) -> bool {
     if !BrowserOpen(browser, profile) { return Fail("the private Chromium did not start") }
     audio := AUDIO_OBSERVER
     if !BrowserCall(browser, "Page.enable", "{}") || !BrowserCall(browser, "Runtime.enable", "{}") { return false }
-    if !BrowserScriptOnLoad(browser, audio) || !BrowserScriptOnLoad(browser, SDK_STUB) || !Viewport(907, 510, false) { return false }
+    if !BrowserScriptOnLoad(browser, audio) || !BrowserScriptOnLoad(browser, SDK_STUB) || !BrowserScriptOnLoad(browser, STORE_STUB) || !Viewport(907, 510, false) { return false }
     if !BrowserCall(browser, "Network.enable", "{}") || !BrowserCall(browser, "Network.setBlockedURLs", "{\"urls\":[\"*sdk.crazygames.com*\",\"https://*\"]}") { return false }
     if !BrowserCall(browser, "Page.navigate", BrowserParams1("url", url)) { return false }
     if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") { return Fail("the portal copy did not open") }
+    if EnvironmentText("WURM_TEST_STORE_ONLY") == "1" {
+        passed := PortalShopUI()
+        if !passed {
+            unused ShopShot("failure")
+            if BrowserEvaluate(browser, "JSON.stringify({session:WurmPortal.storeRead('session'),calls:__storeCalls,buys:__storeBuys,pending:CrazyGames.SDK.data.getItem('wurm-store-pending-v1')})") { print("Store fixture failure: %\n", browser.result) }
+        }
+        return passed
+    }
     if !True("__wurmAssets()") { return Fail("packed audio assets are missing from the virtual file system") }
     if !Until("!!window.__wurmContext") || !Click(2,2) || !PortalResults() { return false }
     // The SDK starts before the game loads, hears when loading ends, gives the
@@ -380,7 +563,7 @@ Portal :: (root: string) -> bool {
     if !Click(50, 30) { return false }
     Pause(200)
     // One actual Play click starts a fresh guest without a controls prompt.
-    if !Click(453, 412) { return false }
+    if !Click(453, 346) { return false }
     if !Until(CloudRunIs("[0,3,0,0,0,0]")) {
         if BrowserEvaluate(browser, "JSON.stringify({run:window.CrazyGames.SDK.data.getItem('run.dat'),unlocked:window.CrazyGames.SDK.data.getItem('unlocked.dat'),user:WurmPortal.username,saveLimited:WurmPortal.saveLimited,dataError:WurmPortal.dataError})") {
             print("profile-flow records: %\n", browser.result)
@@ -409,17 +592,16 @@ Portal :: (root: string) -> bool {
     Pause(450)
     if BrowserNumber(browser, CANVAS_HASH, -1.0) == paused { return Fail("Space did not resume") }
     if !True(GameplayEnds("gameplayStart")) { return Fail("resuming was not reported to the SDK") }
-    // Guest SDK Data survives a reload. Progress past the forest continues
-    // straight into the Mountains, with no Dew asked.
+    // Old SDK progress survives; unowned paid chapters continue at level 160.
     if !SetCloudRecord("unlocked.dat", "a4") || !SetCloudRecord("run.dat", "a40300000000") { return false }
     if !Reload() { return false }
     Pause(1500)
     if CloudRecord("unlocked.dat") != "a4" { return Fail("guest progress did not survive a reload in SDK Data") }
-    if !Key("c", 67) || !Until(CloudRunIs("[164,3,0,0,0,0]")) { return Fail("Continue did not open Mountains level 165 for free") }
+    if !Key("c", 67) || !Until(CloudRunIs("[159,3,0,0,0,0]")) { return Fail("Continue did not fall back to last free level") }
     Pause(1500)
     if !Reload() { return false }
     Pause(1500)
-    if !Until(CloudRunIs("[164,3,0,0,0,0]")) { return Fail("the guest's run did not survive a reload") }
+    if !Until(CloudRunIs("[159,3,0,0,0,0]")) { return Fail("the guest's run did not survive a reload") }
     // A failing Data Module keeps this page's play alive in session memory and
     // says so, instead of silently borrowing another account's browser save.
     if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-data-fail','1'),true") || !Reload() { return false }
@@ -449,16 +631,15 @@ Portal :: (root: string) -> bool {
     Pause(200)
     if !Key("Enter", 13) || !Key("1", 49) || !Until(CloudRunIs("[0,3,0,0,0,0]")) { return Fail("Continue used another account's IDB save") }
     if !Click(797, 42) || !True("WurmPortal.username==='Alice'") || !Click(50, 30) { return Fail("the signed profile did not show Alice") }
-    // The smaller portal frame: the title fits, the corners still open
-    // nothing and Play from start keeps the unlocked levels.
+    // The smaller portal frame keeps shop/chest navigation and free-level fallback.
     if !Viewport(800, 450, false) || !Reload() { return false }
     Pause(1500)
     if BrowserNumber(browser, "document.getElementById('canvas').getBoundingClientRect().width", 0.0) != 800.0 { return Fail("the canvas did not fill 800x450") }
     if !BrowserEvaluate(browser, "window.__portalAccount('guest',false),true") || !Reload() { return false }
     if !Until(LOADED) || CloudRecord("unlocked.dat") != "a4" { return Fail("guest progress did not return at 800x450") }
     if !PressHiddenCorners(800) || !Key("Enter", 13) { return false }
-    if !Until(CloudRunIs("[0,3,0,0,0,0]")) { return Fail("Play from start did not begin at 800x450") }
-    if CloudRecord("unlocked.dat") != "a4" { return Fail("Play from start erased guest progress") }
+    if !Until(CloudRunIs("[159,3,0,0,0,0]")) { return Fail("Continue did not preserve the free-level fallback at 800x450") }
+    if CloudRecord("unlocked.dat") != "a4" { return Fail("Continue erased guest progress") }
     // Every request stayed beside the page: no sign-in, shop or other site.
     check: Vec(u8)
     BuilderPrint(*check, "(()=>{const b='%';const urls=performance.getEntriesByType('resource').map(e=>e.name).concat(Array.from(document.querySelectorAll('[src]'),e=>e.src)).filter(u=>u!=='%');return urls.length>0&&urls.every(u=>u.startsWith(b))&&location.href.startsWith(b)})()", base, PORTAL_SDK)
@@ -472,19 +653,21 @@ Portal :: (root: string) -> bool {
     if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-no-sdk','1'),true") || !Reload() { return false }
     if !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") || !True("WurmPortal.sdk===null&&WurmPortal.locale===''&&!WurmPortal.muted") { return Fail("the copy did not open without the SDK") }
     Pause(1500)
-    if !Click(400, 352) || !Until(RunIs("[0,3,0,0,0,0]")) { return Fail("one Play click did not start a level without the SDK") }
+    if !Click(400, 286) || !Until(RunIs("[0,3,0,0,0,0]")) { return Fail("one Play click did not start a level without the SDK") }
     still := BrowserNumber(browser, CANVAS_HASH, -1.0)
     Pause(450)
     if BrowserNumber(browser, CANVAS_HASH, -1.0) == still || !True("window.__portal.length===0") { return Fail("the copy did not play without the SDK") }
+    if !PortalEditorUI() { unused PortalShot("failure"); return false }
+    if !PortalShopUI() { unused ShopShot("failure"); return false }
     if browser.exceptions.count > 0 {
         for i: 0..browser.exceptions.count - 1 { print("page exception: %\n", browser.exceptions[i]) }
         return Fail("the page threw")
     }
     result: Vec(u8)
-    BuilderPrint(*result, "{\n  \"passed\": true,\n  \"url\": %,\n  \"frames\": [\"907x510\", \"800x450\"],\n", JsonQuote(url))
-    Append(*result, "  \"behaviors\": [\"nested relative loading\", \"title artwork\", \"settings\", \"no shop, daily chest or leaderboard\", \"guest profile and explicit sign-in\", \"sign-in cancel recovery\", \"control choice\", \"level 1\", \"arrow steering\", \"Space pause and resume\", \"guest SDK Data reload\", \"Mountains without Dew\", \"session-only play after Data errors\", \"account isolation from IDB\", \"signed Alice profile\", \"Play from start keeps guest progress\", \"no requests outside the game folder\", \"SDK start, loading, language, gameplay and mute\", \"plays without the SDK\"]\n}\n")
+    BuilderPrint(*result, "{\n  \"passed\": true,\n  \"url\": %,\n  \"frames\": [\"907x510\", \"800x450\", \"450x800\"],\n", JsonQuote(url))
+    Append(*result, "  \"behaviors\": [\"nested relative loading\", \"title artwork\", \"settings\", \"native shop and daily chest; no leaderboard button\", \"guest profile and explicit sign-in\", \"sign-in cancel recovery\", \"control choice\", \"level 1\", \"arrow steering\", \"Space pause and resume\", \"guest SDK Data reload\", \"paid Mountains gating and free-level fallback\", \"session-only play after Data errors\", \"account isolation from IDB\", \"signed Alice profile\", \"Continue keeps guest progress\", \"no requests outside the game folder\", \"SDK start, loading, language, gameplay and mute\", \"plays without the SDK\", \"title cover carousel\", \"editor paint/save/retry/orientation/playtest/reload\", \"editor account isolation\", \"local editor reload\"]\n}\n")
     unused WriteEntireFile(JoinPath(OUT, "portal-result.json"), BuilderFinish(result))
-    print("Browser local test: the packaged CrazyGames copy loaded below a nested path at 907x510 and 800x450, showed guest and Alice profiles with explicit sign-in, kept account-scoped SDK Data, recovered from profile/Data errors without IDB mixing, played, paused, opened Mountains free, reported to a stand-in SDK, followed its language and mute, and played without it.\n")
+    print("Browser local test: the packaged CrazyGames copy loaded below a nested path at 907x510 and 800x450, showed guest and Alice profiles with explicit sign-in, kept account-scoped SDK Data, recovered from profile/Data errors without IDB mixing, played, paused, preserved paid chapter gating, reported to a stand-in SDK, followed its language and mute, and played without it.\n")
     return true
 }
 

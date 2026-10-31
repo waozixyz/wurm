@@ -5,10 +5,12 @@
 //
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- [ARCHIVE]
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- input | engine | hosted | audio
-//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web | crazygames
+//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web | crazygames | editor-campaign
 //
 // ui, account-ui and web run the private Xvfb, account and browser tests;
 // build the desktop, modal-test, account and web editions first.
+// store-rewards runs focused native SDK wallet tests and normal rewards regression.
+// store-runtime runs native store/config/rewards and private async SDK fixtures.
 // crazygames checks the portal policy and plays work/crazygames.zip, unpacked
 // below a nested path; pack it first with tools/build_web.zi -- crazygames.
 #import "std/file"
@@ -262,13 +264,55 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if mode == "hosted" { return ifx Hosted() then 0 else Fail("hosted input") }
     if mode == "engine" { return ifx Engine() then 0 else Fail("game engine") }
     if mode == "input" { return ifx InputIntegration() then 0 else Fail("input integration") }
+    if mode == "store-runtime" {
+        portal: [1]string = .["WURM_CRAZYGAMES"]
+        accounts: [1]string = .["WURM_ACCOUNT_TEST"]
+        web: [9]string = .["check", "--project", "--root", "src", "--define", "WURM_CRAZYGAMES", "--define", "PLATFORM_WEB", "src/portal_shop.zi"]
+        if !Ziran(web[:], none[:]) { return Fail("portal shop web surface") }
+        if !Test("portal_shop_test", "portal-shop-test", portal[:], "", none[:]) { return Fail("portal shop runtime") }
+        if !Test("portal_config_test", "portal-config-test", none[:], "-lz", none[:]) { return Fail("portal configuration") }
+        if !Test("portal_test", "portal-test", none[:], "", none[:]) || !Test("portal_test", "portal-guest-test", portal[:], "", none[:]) { return Fail("portal policy") }
+        if !Test("portal_store_test", "portal-store-test", none[:], "", none[:]) { return Fail("portal store model") }
+        if !Test("portal_rewards_test", "portal-rewards-test", portal[:], "", none[:]) { return Fail("portal rewards") }
+        if !Test("rewards_test", "rewards-test", accounts[:], "", none[:]) { return Fail("normal rewards") }
+        return ifx Test("portal_store_bridge_test", "portal-store-bridge-test", none[:], "-lm", none[:]) then 0 else Fail("portal SDK async bridge")
+    }
+    if mode == "store-rewards" {
+        portal: [1]string = .["WURM_CRAZYGAMES"]
+        accounts: [1]string = .["WURM_ACCOUNT_TEST"]
+        if !Test("portal_rewards_test", "portal-rewards-test", portal[:], "", none[:]) { return Fail("portal rewards") }
+        return ifx Test("rewards_test", "rewards-test", accounts[:], "", none[:]) then 0 else Fail("rewards regression")
+    }
+    if mode == "store-model" { return ifx Test("portal_store_test", "portal-store-test", none[:], "", none[:]) then 0 else Fail("portal store model") }
     if mode == "ui" { return ifx Interface("private_ui_test", "private-ui-test", "-lX11 -lcairo -lm") then 0 else Fail("private UI") }
     if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
     if mode == "name-field" { return ifx Hosted() then 0 else Fail("name field consumer") }
+    if mode == "shop" {
+        accounts: [1]string = .["WURM_ACCOUNT_TEST"]
+        if !Test("account_test", "account-test", accounts[:], "", none[:]) { return Fail("account") }
+        if !Test("rewards_test", "rewards-test", accounts[:], "", none[:]) { return Fail("rewards") }
+        if !Hosted() { return Fail("hosted shop") }
+        return ifx AccountNavigation() then 0 else Fail("account navigation")
+    }
     if mode == "web" { return ifx Interface("web_test", "web-test-runner", "-lm") then 0 else Fail("browser") }
+    if mode == "editor-campaign" {
+        web: [9]string = .["check", "--project", "--root", "tests", "--define", "WURM_CRAZYGAMES", "--define", "PLATFORM_WEB", "tests/portal_custom_levels_test.zi"]
+        if !Ziran(web[:], none[:]) { return Fail("portal campaign web branch") }
+        if !Test("portal_custom_levels_test", "portal-custom-levels-test", none[:], "", none[:]) { return Fail("portal campaign") }
+        guest: [1]string = .["WURM_CRAZYGAMES"]
+        if !Test("portal_custom_levels_test", "portal-custom-levels-test", guest[:], "", none[:]) { return Fail("portal guest campaign") }
+        if !Test("editor_test", "editor-test", none[:], "", none[:]) { return Fail("editor") }
+        return ifx Test("orientation_test", "orientation-test", none[:], "", none[:]) then 0 else Fail("orientation")
+    }
     if mode == "collection-sharing" {
         if !CollectionSharing() { return Fail("collection sharing") }
         return ifx AccountNavigation() then 0 else Fail("collection editor")
+    }
+    if mode == "editor-storage" {
+        if !Test("portal_editor_test", "portal-editor-test", none[:], "", none[:]) { return Fail("portal editor") }
+        guest: [1]string = .["WURM_CRAZYGAMES"]
+        if !Test("portal_editor_test", "portal-editor-guest-test", guest[:], "", none[:]) { return Fail("portal guest editor") }
+        return ifx Test("own_levels_test", "own-levels-test", none[:], "", none[:]) then 0 else Fail("own levels")
     }
     if mode == "crazygames" { return ifx CrazyGames() then 0 else Fail("CrazyGames copy") }
     archive := ifx mode.count > 0 then mode else "/mnt/storage/Games/The-Worm_Win_EN"

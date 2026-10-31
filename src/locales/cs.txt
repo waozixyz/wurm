@@ -463,3 +463,60 @@ Host
 [wurm_portal_1]
 Postup zůstane uložen jen do zavření této stránky.
 ---
+[wurm_ui_40]
+Etapy
+---
+[wurm_ui_41]
+Etapa
+---
+[wurm_ui_42]
+Pokračovat
+---
+[wurm_ui_43]
+Dokončené úrovně
+---
+[wurm_ui_44]
+Šipky a W A S D řídí vždy.
+---
+[wurm_shop_owned]
+Vlastněno
+---
+[wurm_shop_mountains]
+Hory
+---
+[wurm_portal_shop_0]
+Načítání obchodu…
+---
+[wurm_portal_shop_1]
+Nákup čeká. Zkuste obnovit nákupy.
+---
+[wurm_portal_shop_2]
+Uložení se nezdařilo. Zkuste to znovu.
+---
+[wurm_portal_shop_3]
+Nákup zrušen. Můžete to zkusit znovu.
+---
+[wurm_portal_shop_4]
+Nákupy obnoveny.
+---
+[wurm_portal_shop_5]
+Pro nákup se přihlaste.
+---
+[wurm_portal_shop_6]
+Nákupy zde nejsou dostupné.
+---
+[wurm_portal_shop_7]
+Obchod se nepodařilo načíst. Zkuste to znovu.
+---
+[wurm_portal_shop_8]
+Nedostupné
+---
+[wurm_portal_shop_9]
+Zdarma
+---
+[wurm_portal_shop_10]
+Obnovit nákupy
+---
+[wurm_portal_shop_11]
+Obnovit
+---

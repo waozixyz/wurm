@@ -1,6 +1,8 @@
 // CrazyGames builds accept only a canonical 32-byte leaderboard key and a
 // strict ads boolean; this test keeps that boundary in the maintained suite.
 PortalConfig :: #import, file "../src/portal_config.zi";
+StoreModel :: #import, file "../src/portal_store.zi";
+#import "std/text_tools"
 
 failures: s32;
 
@@ -26,5 +28,19 @@ main :: () -> s32 {
     Expect(!PortalConfig.Valid(short, "false") && !PortalConfig.Valid(long, "false"), "key with invalid length")
     Expect(!PortalConfig.Valid(noncanonical, "false"), "noncanonical base64 padding")
     Expect(!PortalConfig.Valid(public_key, "TRUE") && !PortalConfig.Valid(public_key, "'"), "strict ads boolean")
+    state: StoreModel.StoreState
+    sandbox: bool
+    Expect(PortalConfig.Store("", *state, *sandbox) && state.count == 0 && !sandbox, "default public store empty and production sandbox false")
+    fixture := "{\"version\":1,\"sandbox\":false,\"products\":[{\"kind\":\"skin\",\"skinId\":7,\"sku\":\"example-skin\",\"purchaseId\":\"example-purchase\"},{\"kind\":\"mountains\",\"sku\":\"example-chapter\",\"purchaseId\":\"example-chapter-purchase\"},{\"kind\":\"coins\",\"packCoins\":100,\"cumulativeInventory\":true,\"sku\":\"example-pack\",\"purchaseId\":\"example-pack-purchase\"}]}"
+    Expect(PortalConfig.Store(fixture, *state, *sandbox) && state.count == 3 && state.products[0].skin_id == 7 && state.products[2].pack_coins == 100 && !sandbox, "explicit public mappings")
+    Expect(PortalConfig.Store(TextReplace(fixture, "\"sandbox\":false", "\"sandbox\":true"), *state, *sandbox) && sandbox, "local fixture parser permits sandbox; production builder rejects it")
+    Expect(!PortalConfig.Store(TextReplace(fixture, "\"cumulativeInventory\":true", "\"cumulativeInventory\":false"), *state, *sandbox) && state.count == 0, "noncumulative pack rejected and disabled")
+    Expect(!PortalConfig.Store(TextReplace(fixture, "\"skinId\":7", "\"skinId\":9"), *state, *sandbox), "coin skin bit nine cannot become durable or Mountains")
+    Expect(!PortalConfig.Store(TextReplace(fixture, "\"skinId\":7", "\"skinId\":1.5"), *state, *sandbox), "integer validation")
+    Expect(!PortalConfig.Store(TextReplace(fixture, "\"purchaseId\":\"example-purchase\"", "\"purchaseId\":\"\""), *state, *sandbox), "no inferred purchase ID")
+    Expect(!PortalConfig.Store(TextReplace(fixture, "\"example-pack\"", "\"example-skin\""), *state, *sandbox), "duplicate SKU")
+    Expect(!PortalConfig.Store(TextReplace(fixture, "\"example-pack-purchase\"", "\"example-purchase\""), *state, *sandbox), "duplicate purchase ID")
+    Expect(!PortalConfig.Store("{\"version\":1,\"sandbox\":false,\"products\":[],\"products\":[]}", *state, *sandbox), "ambiguous duplicate keys")
+    Expect(!PortalConfig.Store("{}", *state, *sandbox) && !PortalConfig.Store("[]", *state, *sandbox) && !PortalConfig.Store("null", *state, *sandbox), "malformed public config")
     return ifx failures == 0 then 0 else 1
 }

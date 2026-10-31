@@ -8,13 +8,19 @@
 
 - Collection names and community searches keep text selection and Unicode edits consistent.
 
+- CrazyGames has a native Skins, Stages and Coins shop with personalized platform prices, verified purchases, restore, and safe earned-coin spending.
+
+- Shop has a Stages tab offering Mountains for 20 Dew from the start, with confirmed purchases shown as owned.
+- The title has one main button: Play, then Continue at the furthest level reached.
+- Stages shows the five landscapes as painted cards with your finished levels; each opens its levels.
+- Settings on computers offer the same swipe and direction pad choices as phones; the keys still always steer.
 - The worm moves only slightly faster in each later landscape instead of much faster after the Meadow.
 - The jittery squirrels are gone; Leafwood keeps its regular creatures.
 - Meadow level 19 has wide garden paths instead of narrow corridors, tiny pockets and dead ends.
 - All thirteen skins have connected, shaded bodies, tapered tails and clearer heads that stay upright when turning left.
 - Daily rewards show the seven-day streak with claimed gifts marked. Missing a day starts a new streak without taking away earned coins or skins.
 
-- The separate CrazyGames edition starts with one Play click, uses your portal profile and cloud saves, and unlocks every chapter through play without Dew purchases.
+- The separate CrazyGames edition swipes between Play/Continue and the editor, starts with one Play click, saves private editor levels and campaign progress through your portal profile, and restores paid Mountains ownership through CrazyGames inventory.
 - It supports CrazyGames leaderboards and optional platform-approved video ads between levels, while respecting platform language and sound settings.
 
 ## [0.2.28] - 2026-10-30

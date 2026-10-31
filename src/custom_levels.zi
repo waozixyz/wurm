@@ -4,6 +4,7 @@
 // record of its own mirrors the other orientation; see LayoutSource.
 #import, file "game.zi";
 #import, file "authored_levels.zi";
+Portal :: #import, file "portal.zi";
 Mirror :: #import, file "board_orientation.zi";
 #if #defined(PLATFORM_WEB) {
     BrowserStorage :: #import "kryon/bundle_storage_web";
@@ -41,6 +42,32 @@ custom_present: [LEVEL_COUNT * 2]bool;
 custom_apples: [LEVEL_COUNT * 2]s32;
 custom_boards: [LEVEL_COUNT * 2][CELLS]u8;
 custom_objects: [LEVEL_COUNT * 2][CELLS]u8;
+
+// Native fixtures may inject SDK availability. Production authentication
+// changes reload the app, including all campaign and mirror caches.
+DataAvailable :: #type () -> bool;
+data_active: DataAvailable = Portal.DataActive;
+CustomReload :: () {
+    custom_loaded = false
+    for slot: 0..LEVEL_COUNT * 2 - 1 {
+        custom_present[slot] = false
+        custom_apples[slot] = 0
+        for at: 0..CELLS - 1 {
+            custom_boards[slot][at] = 0
+            custom_objects[slot][at] = 0
+        }
+    }
+    ForgetMirrors(-1)
+}
+
+// SDK keys never depend on the guest filesystem root.
+RecordName :: (level: s32, portrait: bool) -> string {
+    at := CopyText(custom_temp[:], 0, "campaign-level-")
+    digits: [16]u8
+    at = CopyText(custom_temp[:], at, FormatInteger(cast(s64)(level + 1), digits[:]))
+    if portrait { at = CopyText(custom_temp[:], at, "-portrait") }
+    return BufferText(custom_temp[:], at)
+}
 
 CopyText :: (buffer: []u8, at: s32, text: string) -> s32 {
     for index: 0..text.count - 1 { buffer[at + index] = text[index] }
@@ -116,6 +143,12 @@ EnsureLoaded :: () {
         rows := ifx portrait then COLUMNS else ROWS
         size: s64
         read: s64
+        if data_active() {
+            size = Portal.ReadByteRecord(RecordName(level, portrait), bytes[:])
+            // Missing, empty and failed active reads all use the published
+            // campaign. Never borrow a previous guest's local override.
+            read = size
+        } else {
         #if #defined(WURM_PORTABLE) {
             size = Storage.ReadLevel(LevelPath(level, ".dat", portrait), bytes[:])
             if size < 0 && !portrait { size = BundledLevel(level, bytes[:]) }
@@ -133,6 +166,7 @@ EnsureLoaded :: () {
         } else {
             size = ifx portrait then -1 else ReadBundledLevel(level, bytes[:])
             read = size
+        }
         }
         }
         if size != LEVEL_FILE_BYTES && size != LEVEL_FILE_V2_BYTES { continue }
@@ -363,6 +397,9 @@ SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32, portrai
             bytes[1 + CELLS + column * rows + row] = objects[At(column, row, portrait)]
         }
     }
+    if data_active() {
+        if !Portal.WriteByteRecord(RecordName(level, portrait), bytes[:]) { return false }
+    } else {
     #if #defined(WURM_PORTABLE) {
         if !Storage.WriteLevel(LevelPath(level, ".dat", portrait), bytes[:]) { return false }
     } else {
@@ -388,6 +425,7 @@ SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32, portrai
         if !BrowserStorage.BundleStorageFlush() { return false }
     }
     }
+    }
     custom_present[slot] = true
     ForgetMirrors(level)
     custom_apples[slot] = apples
@@ -403,16 +441,21 @@ ClearCustomLevel :: (level: s32, portrait: bool = false) -> bool {
     EnsureLoaded()
     if level < 0 || level >= LEVEL_COUNT { return false }
     slot := Slot(level,portrait)
+    if data_active() {
+        empty: [0]u8
+        if !Portal.WriteByteRecord(RecordName(level, portrait), empty[:]) { return false }
+    } else {
     if !custom_present[slot] { return true }
     #if #defined(WURM_PORTABLE) {
         if !Storage.RemoveLevel(LevelPath(level, ".dat", portrait)) { return false }
     } else {
         if !File.RemoveFile(LevelPath(level, ".dat", portrait)) { return false }
     }
+    #if #defined(PLATFORM_WEB) {
+        if !BrowserStorage.BundleStorageFlush() { return false }
+    }
+    }
     custom_present[slot] = false
     ForgetMirrors(level)
-    #if #defined(PLATFORM_WEB) {
-        return BrowserStorage.BundleStorageFlush()
-    }
     return true
 }

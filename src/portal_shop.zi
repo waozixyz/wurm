@@ -1,0 +1,338 @@
+// Native SDK.store lifecycle. The page transports one async SDK call at a
+// time; configuration, paging, persistence and all grants live here.
+Portal :: #import, file "portal.zi";
+Model :: #import, file "portal_store.zi";
+Rewards :: #import, file "rewards.zi";
+Config :: #import, file "portal_config.zi";
+#import "std/json_scan"
+#import "std/json_document"
+#import "std/text_buffer"
+#import "std/c_string"
+#import "std/format"
+
+Read :: #type (name: string, output: []u8) -> s64;
+Send :: #type (command: string) -> bool;
+Write :: #type (name: string, text: string) -> bool;
+// Bounded injection seams; production never falls back to local/SDK-owned
+// cache ownership. Record read: -2 absent, -1 unknown/error.
+bridge_read: Read = Portal.StoreRead;
+bridge_send: Send = Portal.StoreSend;
+record_read: Read = Portal.ReadTextRecord;
+record_write: Write = Portal.WriteTextRecord;
+
+PENDING_KEY :: "wurm-store-pending-v1";
+MAX_JSON :: 1047552; // leave bounded space for the transport envelope
+TIMEOUT :: 10000; // monotonic milliseconds supplied by the frame loop
+state: Model.StoreState;
+configured: bool;
+initialized: bool;
+sandbox: bool;
+authenticated: bool;
+payment_available: bool;
+session_seen: bool;
+generation: s64 = -1;
+sdk_busy: bool;
+status: string = "unavailable";
+now_ms: s64;
+phase: s32; // 0 idle; 1 catalog page; 2 inventory page; 3 SDK checkout
+serial: s64;
+request_epoch: s64;
+request_at: s64;
+timed_out: bool;
+catalog_failed: bool;
+offset: s32;
+item_count: s32;
+merged: [1048576]u8;
+merged_size: s64;
+reply: [1048576]u8;
+session_bytes: [2049]u8;
+want_refresh: bool;
+buy_index: s32 = -1; // only Buy may arm this intent
+pending: bool;
+pending_unknown: bool;
+pending_index: s32 = -1;
+baseline: s64;
+retry_left: s32;
+retry_at: s64;
+
+StoreState :: () -> *Model.StoreState { return *state }
+Status :: () -> string { return status }
+Pending :: () -> bool { return pending }
+Authenticated :: () -> bool { return authenticated }
+PurchasesAvailable :: () -> bool { return state.available && payment_available }
+CanPurchase :: () -> bool { return PurchasesAvailable() && authenticated && !Busy() && !pending && state.catalog_ready && state.inventory_ready }
+Busy :: () -> bool { return phase != 0 || sdk_busy || buy_index >= 0 }
+OwnedSkinMask :: () -> s32 { return ifx authenticated && state.inventory_ready then state.durable_owned_mask & 510 else 0 }
+OwnsMountains :: () -> bool { return authenticated && state.inventory_ready && (state.durable_owned_mask & 512) != 0 }
+
+Revoke :: () { state.inventory_ready = false; unused Rewards.SetPortalCredits(0, false) }
+ClearWork :: () {
+    phase = 0; buy_index = -1; want_refresh = false; retry_left = 0
+    timed_out = false; catalog_failed = false; offset = 0; item_count = 0
+    merged_size = 0
+}
+// Configure replaces the session even for invalid/empty input. No checkout.
+Configure :: (json: string) -> bool {
+    ClearWork(); Revoke(); Rewards.Reset()
+    epoch := state.epoch + 1
+    configured = Config.Store(json, *state, *sandbox)
+    state.epoch = epoch
+    initialized = true; session_seen = false; authenticated = false; payment_available = false
+    pending = false; pending_unknown = false; pending_index = -1
+    status = ifx !configured then "config-invalid" else "unavailable"
+    return configured
+}
+Init :: () -> bool {
+    bytes: [32769]u8
+    size := bridge_read("config", bytes[:])
+    if size < 0 { return Configure("") }
+    if size >= bytes.count { return Configure("invalid") }
+    return Configure(TextView(bytes[0:size]))
+}
+Reset :: () {
+    ClearWork(); Revoke(); Rewards.Reset()
+    unused Model.ResetAccount(*state, "", false)
+    authenticated = false; session_seen = false; payment_available = false
+    pending = false; pending_unknown = false; pending_index = -1
+    status = "unavailable"
+}
+
+ReadPending :: () {
+    pending = false; pending_unknown = false; pending_index = -1; baseline = 0
+    if !authenticated { return }
+    bytes: [1025]u8
+    size := record_read(PENDING_KEY, bytes[:])
+    if size == -2 || size == 0 { return }
+    pending = true; pending_unknown = true
+    if size < 0 || size > 1024 { return }
+    json := TextView(bytes[0:size])
+    account: [129]u8
+    sku: [129]u8
+    id: [129]u8
+    if !Model.Document(json) || Config.Integer(json, FieldAt(json, 0, "version"), 1) != 1 ||
+        !Model.TextField(json, 0, "account", account[:]) || TextUntilNul(account[:]) != TextUntilNul(state.account[:]) ||
+        !Model.TextField(json, 0, "sku", sku[:]) || !Model.TextField(json, 0, "purchaseId", id[:]) { return }
+    index := Model.Find(*state, TextUntilNul(sku[:]))
+    qty := Config.Integer(json, FieldAt(json, 0, "baseline"), Model.MAX_QUANTITY)
+    if index < 0 || qty < 0 || TextUntilNul(id[:]) != TextUntilNul(state.products[index].purchase_id[:]) { return }
+    if state.products[index].kind != Model.COIN_CREDIT_PACK && qty != 0 { return }
+    pending_index = index; baseline = qty; pending_unknown = false
+}
+WriteVerified :: (text: string) -> bool {
+    if text.count > 1024 || !record_write(PENDING_KEY, text) { return false }
+    bytes: [1025]u8
+    size := record_read(PENDING_KEY, bytes[:])
+    return size >= 0 && size <= 1024 && TextView(bytes[0:size]) == text
+}
+ClearPending :: () -> bool {
+    if !WriteVerified("") { status = "storage-error"; return false }
+    pending = false; pending_unknown = false; pending_index = -1; retry_left = 0
+    return true
+}
+// Marker never grants. It only blocks another charge until inventory proves
+// durable ownership or a cumulative pack counter grows beyond its baseline.
+Reconcile :: () {
+    if !pending || pending_unknown || !state.inventory_ready || pending_index < 0 { return }
+    p := *state.products[pending_index]
+    fulfilled := ifx p.kind == Model.COIN_CREDIT_PACK then p.quantity > baseline else p.owned
+    if fulfilled && ClearPending() { status = "restored" }
+}
+
+SyncSession :: () {
+    bytes_used := bridge_read("session", session_bytes[:])
+    json := ifx bytes_used > 0 && bytes_used < session_bytes.count then TextView(session_bytes[0:bytes_used]) else ""
+    user: [129]u8
+    valid := Model.Document(json) && Model.BoolField(json, 0, "active") && Model.BoolField(json, 0, "available") && Model.BoolField(json, 0, "readable") &&
+        Model.BoolField(json, 0, "ready") && Model.BoolField(json, 0, "authenticated") && Model.BoolField(json, 0, "busy") &&
+        Model.TextField(json, 0, "userId", user[:])
+    gen := ifx valid then Config.Integer(json, FieldAt(json, 0, "generation"), 2000000000) else -1
+    active := valid && gen >= 0 && MatchLiteral(json, FieldAt(json, 0, "active"), "true") && MatchLiteral(json, FieldAt(json, 0, "ready"), "true")
+    auth := active && MatchLiteral(json, FieldAt(json, 0, "authenticated"), "true") && Model.SafeText(TextUntilNul(user[:]), 128)
+    available := active && configured && state.count > 0 && MatchLiteral(json, FieldAt(json, 0, "readable"), "true")
+    payment_available = active && MatchLiteral(json, FieldAt(json, 0, "available"), "true")
+    account := ifx auth then TextUntilNul(user[:]) else ifx active then "guest:catalog" else ""
+    sdk_busy = valid && MatchLiteral(json, FieldAt(json, 0, "busy"), "true")
+    if !session_seen || gen != generation || authenticated != auth || state.available != available || TextUntilNul(state.account[:]) != account {
+        ClearWork(); Revoke(); Rewards.Reset()
+        generation = gen; authenticated = auth; session_seen = true
+        unused Model.ResetAccount(*state, account, available)
+        ReadPending()
+        want_refresh = available
+        status = ifx !configured then "config-invalid" else ifx !available then "unavailable" else ifx pending_unknown then "storage-error" else ifx pending then "pending" else "loading"
+    }
+}
+
+Request :: (next_phase: s32) -> bool {
+    if sdk_busy || !state.available || (next_phase != 1 && !authenticated) || (next_phase == 3 && !PurchasesAvailable()) { return false }
+    command: Vec(u8)
+    defer VecFree(command)
+    serial += 1
+    BuilderPrint(*command, "{\"id\":%,\"generation\":%,\"epoch\":%,\"op\":\"%\",\"offset\":%,\"sandbox\":%,\"account\":", serial, generation, state.epoch,
+        ifx next_phase == 1 then "catalog" else ifx next_phase == 2 then "inventory" else "buy", offset, sandbox)
+    JsonQuoteInto(*command, ifx authenticated then TextUntilNul(state.account[:]) else "", true)
+    if next_phase == 3 {
+        Append(*command, ",\"purchaseId\":")
+        JsonQuoteInto(*command, TextUntilNul(state.products[pending_index].purchase_id[:]), true)
+    }
+    Append(*command, "}")
+    if !bridge_send(TextView(VecSlice(command, 0, command.count))) { return false }
+    phase = next_phase; request_epoch = state.epoch; request_at = now_ms; timed_out = false
+    return true
+}
+BeginPages :: (which: s32) -> bool {
+    merged_size = 0; unused Merge("{\"items\":[")
+    offset = 0; item_count = 0
+    return Request(which)
+}
+Merge :: (text: string) -> bool {
+    if merged_size + text.count > MAX_JSON { return false }
+    for byte, index: text { merged[merged_size + index] = byte }
+    merged_size += text.count
+    return true
+}
+Failure :: (message: string) {
+    Revoke(); state.catalog_ready = false; buy_index = -1; retry_left = 0
+    phase = 0; merged_size = 0; status = message
+}
+CatalogFailure :: () {
+    state.catalog_ready = false; buy_index = -1; catalog_failed = true
+    phase = 0; merged_size = 0; status = "catalog-error"
+    // Restoring known inventory does not depend on catalog/price services or
+    // on whether this device/country can open a payment flow.
+    if authenticated && !BeginPages(2) { Failure("inventory-error") }
+}
+Open :: () { if !initialized { unused Init() }; unused Refresh() }
+Refresh :: () -> bool {
+    if !initialized { unused Init() }
+    SyncSession()
+    if !state.available { return false }
+    want_refresh = true
+    return true
+}
+Restore :: () -> bool { return Refresh() }
+Buy :: (index: s32) -> bool {
+    if !initialized { unused Init() }
+    SyncSession()
+    if !authenticated || !PurchasesAvailable() || Busy() || pending || index < 0 || index >= state.count { return false }
+    buy_index = index; want_refresh = true; retry_left = 0
+    return true
+}
+Checkout :: () {
+    index := buy_index; buy_index = -1
+    if !authenticated || !PurchasesAvailable() || index < 0 || Model.CheckoutId(*state, index) == "" { status = "unavailable"; return }
+    ReadPending()
+    if pending { status = ifx pending_unknown then "storage-error" else "pending"; return }
+    pending_index = index; baseline = state.products[index].quantity
+    marker: Vec(u8)
+    defer VecFree(marker)
+    Append(*marker, "{\"version\":1,\"account\":"); JsonQuoteInto(*marker, TextUntilNul(state.account[:]), true)
+    Append(*marker, ",\"sku\":"); JsonQuoteInto(*marker, TextUntilNul(state.products[index].sku[:]), true)
+    Append(*marker, ",\"purchaseId\":"); JsonQuoteInto(*marker, TextUntilNul(state.products[index].purchase_id[:]), true)
+    BuilderPrint(*marker, ",\"baseline\":%}", baseline)
+    pending = true
+    if !WriteVerified(TextView(VecSlice(marker, 0, marker.count))) { pending_unknown = true; status = "storage-error"; return }
+    // Request checks identity again in JS immediately before invoking SDK.
+    if !Request(3) { status = "pending"; return }
+    Revoke(); status = "checking-out"
+}
+
+Page :: (json: string) -> bool {
+    if !Model.Document(json) { return false }
+    positions: [50]s32
+    count := ArrayPositions(json, FieldAt(json, 0, "items"), positions[:])
+    if count < 0 || count > 50 || item_count + count > Model.MAX_ITEMS { return false }
+    more := false
+    if phase == 1 {
+        if !Model.BoolField(json, 0, "hasMore") { return false }
+        more = MatchLiteral(json, FieldAt(json, 0, "hasMore"), "true")
+        if more && count == 0 { return false }
+    } else { more = count == 50 }
+    for i: 0..count - 1 {
+        end := ValueEnd(json, positions[i], 0)
+        if end <= positions[i] || merged_size + end - positions[i] + 32 > MAX_JSON { return false }
+        if item_count > 0 { unused Merge(",") }
+        unused Merge(json[positions[i]:end]); item_count += 1
+    }
+    if more {
+        offset += count
+        if !Request(phase) { return false }
+        return true
+    }
+    was := phase; phase = 0
+    unused Merge(ifx was == 1 then "],\"hasMore\":false}" else "]}")
+    ok: bool
+    {
+        text := TextView(merged[0:merged_size])
+        ok = ifx was == 1 then Model.ApplyCatalog(*state, request_epoch, text) else Model.ApplyInventory(*state, request_epoch, text)
+    }
+    merged_size = 0
+    if !ok { return false }
+    if was == 1 && authenticated { return BeginPages(2) }
+    if !authenticated { status = "sign-in"; return true }
+    unused Rewards.SetPortalCredits(state.purchased_credits, true)
+    status = ifx pending then "pending" else ifx catalog_failed then "catalog-error" else "ready"
+    Reconcile()
+    if buy_index >= 0 { Checkout() }
+    if pending && retry_left > 0 { retry_at = now_ms + 1500 }
+    return true
+}
+
+// Pump never starts a charge unless a current explicit Buy armed the fresh
+// catalog + complete inventory preflight. Timeouts retain the request guard;
+// the SDK owns Pay Station closing and its promise can settle later.
+Pump :: (now: s64) {
+    now_ms = now
+    if !initialized { unused Init() }
+    SyncSession()
+    if !state.available { return }
+    if phase != 0 {
+        size := bridge_read("result", reply[:])
+        if size > 0 && size < reply.count {
+            json := TextView(reply[0:size])
+            if Model.Document(json) && Config.Integer(json, FieldAt(json, 0, "id"), 2000000000) == serial &&
+                Config.Integer(json, FieldAt(json, 0, "epoch"), 2000000000) == request_epoch && request_epoch == state.epoch &&
+                Config.Integer(json, FieldAt(json, 0, "generation"), 2000000000) == generation {
+                was := phase
+                if !Model.BoolField(json, 0, "ok") {
+                    if was == 1 { CatalogFailure() } else { Failure("sdk-error") }
+                    return
+                }
+                ok := MatchLiteral(json, FieldAt(json, 0, "ok"), "true")
+                if was == 3 {
+                    phase = 0
+                    code: [65]u8
+                    if !ok && Model.TextField(json, 0, "code", code[:]) && TextUntilNul(code[:]) == "purchaseCancelled" {
+                        status = ifx ClearPending() then "cancelled" else "storage-error"
+                        want_refresh = true
+                    } else {
+                        // {itemId} is deliberately ignored, as are arbitrary
+                        // error messages. Only verified inventory can grant.
+                        status = "pending"; retry_left = 5; retry_at = now_ms; want_refresh = true
+                    }
+                } else if timed_out || !ok {
+                    if was == 1 { CatalogFailure() } else { Failure("inventory-error") }
+                    return
+                }
+                else {
+                    at := FieldAt(json, 0, "data"); end := ValueEnd(json, at, 0)
+                    if at < 0 || end <= at || !Page(json[at:end]) {
+                        if was == 1 { CatalogFailure() } else { Failure("inventory-error") }
+                        return
+                    }
+                }
+            }
+        } else if size < 0 { Revoke() }
+        if phase != 0 && now_ms - request_at >= TIMEOUT && !timed_out {
+            timed_out = true; Revoke(); buy_index = -1
+            status = ifx phase == 3 then "pending" else "sdk-timeout"
+        }
+    }
+    if phase == 0 && pending && retry_left > 0 && now_ms >= retry_at { want_refresh = true; retry_left -= 1 }
+    if phase == 0 && want_refresh {
+        want_refresh = false; Revoke(); state.catalog_ready = false; catalog_failed = false; status = "loading"
+        // Restore also retries an unknown raw Data read. Missing markers
+        // never grant; a recovered known marker only permits reconciliation.
+        ReadPending()
+        if !BeginPages(1) { Failure("sdk-busy") }
+    }
+}

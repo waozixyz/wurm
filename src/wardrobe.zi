@@ -2,6 +2,9 @@ Account :: #import, file "account.zi";
 Progress :: #import, file "progress.zi";
 Rewards :: #import, file "rewards.zi";
 Portal :: #import, file "portal.zi";
+#if #defined(WURM_CRAZYGAMES) {
+    PortalShop :: #import, file "portal_shop.zi";
+}
 Records :: #import, file "controls.zi";
 #import "std/json_scan"
 #import "std/text_buffer"
@@ -37,6 +40,9 @@ Load :: () {
         if count >= 11 { owned = cast(s32)bytes[10] }
         if count == 12 { owned |= cast(s32)bytes[11] << 8 }
         owned &= 910
+        #if #defined(WURM_CRAZYGAMES) {
+            owned = 0
+        }
     }
 }
 Save :: () {
@@ -57,14 +63,39 @@ Reset :: () {
 }
 Available :: (id: s32) -> bool {
     if id == 0 { return true }
+    #if #defined(WURM_CRAZYGAMES) {
+        if id >= 9 { return Rewards.Owns(id) }
+        state := PortalShop.StoreState()
+        for i: 0..state.count - 1 {
+            if state.products[i].kind == 1 && state.products[i].skin_id == id {
+                return (PortalShop.OwnedSkinMask() & (1 << id)) != 0
+            }
+        }
+        if id == 4 { return played + other_played >= 18000000 }
+        if id == 5 { return Progress.unlocked >= 39 }
+        if id == 6 { return visited }
+        return false
+    }
     if (id > 0 && id <= 3) || id == 7 || id == 8 { return (owned & (1 << id)) != 0 }
     if id == 4 { return played + other_played >= 18000000 }
     if id == 5 { return Progress.unlocked >= 39 }
     if id == 6 { return visited }
     return Rewards.Owns(id)
 }
-// Portal copies sell nothing, so the Mountains come with the game.
-MountainsAvailable :: () -> bool { return Portal.Guest() || (owned & 512) != 0 }
+// Saved wardrobe masks never prove SDK ownership.
+MountainsAvailable :: () -> bool {
+    #if #defined(WURM_CRAZYGAMES) {
+        return PortalShop.OwnsMountains()
+    }
+    return (owned & 512) != 0
+}
+// Keep the chosen setting while inventory loads, but render only verified skins.
+Wearing :: () -> s32 {
+    #if #defined(WURM_CRAZYGAMES) {
+        return ifx Available(skin) then skin else 0
+    }
+    return skin
+}
 Select :: (id: s32) {
     if Available(id) {
         skin = id
@@ -75,6 +106,9 @@ Select :: (id: s32) {
 }
 Visit :: () { visited = true; dirty = true; Save(); poll_at = 0 }
 Report :: () {
+    #if #defined(WURM_CRAZYGAMES) {
+        return
+    }
     if skin < 0 || skin >= Rewards.SKIN_COUNT || skin == reported_skin { return }
     out: Vec(u8)
     BuilderPrint(*out, "skin %", skin)
@@ -93,6 +127,9 @@ Pump :: (now: s64, playing: bool) {
     }
     last_frame = now
     if now >= save_at { Save(); save_at = now + 10000 }
+    #if #defined(WURM_CRAZYGAMES) {
+        return
+    }
     if now < poll_at { return }
     poll_at = now + 10000
     shop := Account.Service("entity.game-shop", "status")

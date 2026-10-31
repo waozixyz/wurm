@@ -19,6 +19,8 @@ Game :: #import, file "../src/game.zi";
 Local :: #import, file "../src/multiplayer.zi";
 Account :: #import, file "../src/account.zi";
 Progress :: #import, file "../src/progress.zi";
+Wardrobe :: #import, file "../src/wardrobe.zi";
+ShopModel :: #import "entity/game_shop";
 Own :: #import, file "../src/own_levels.zi";
 #import "std/json_scan"
 using WidgetKind;
@@ -36,6 +38,10 @@ record_names: [32][65]u8;
 record_values: [32][4803]u8;
 record_count: s32;
 invalid_record_names: s32;
+shop_owned: s32;
+shop_status: string = "done";
+mountains_requests: s32;
+shop_refreshes: s32;
 
 #program_export
 ReadAppHost :: () -> AppMessage { return message }
@@ -92,7 +98,13 @@ AppServiceHost :: (name: string, request: string) -> string {
     }
     if name == "entity.dew" {
         if request == "balance" { balance_reads += 1; return "{\"units\":123000000}" }
-        return "{\"status\":\"done\",\"owned\":0}"
+        if request == "shop:refresh" { shop_refreshes += 1 }
+        if request == "shop:wurm.mountains" { mountains_requests += 1; shop_status = "pending" }
+        out: Vec(u8)
+        BuilderPrint(*out, "{\"status\":\"%\",\"owned\":%}", shop_status, shop_owned)
+        text := BuilderFinish(out)
+        unused CopyCString(text, answer[:])
+        return TextUntilNul(answer[:])
     }
     return ""
 }
@@ -122,6 +134,57 @@ Find :: (label: string) -> s32 {
         if node.kind == WidgetKindButton && node.semantic_label == label { return index }
     }
     return -1
+}
+HasLabel :: (label: string) -> bool {
+    for index: cast(s32)0..TreeCount(frame.session) - 1 {
+        if TreeNodeAt(frame.session, index).semantic_label == label { return true }
+    }
+    return false
+}
+MountainsShop :: () {
+    Expect(Progress.unlocked == 0 && !App.StageOpen(4), "fixture has not reached the Mountains stage")
+    Expect(Find("Skins") >= 0 && Find("Stages") >= 0 && Find("Coins") < 0 && Find("Dew") < 0,
+        "hosted shop exposes skins and stages while host retains wallet and top-ups")
+    Click("Stages")
+    Expect(HasLabel("Mountains") && HasLabel("20") && HasLabel("Dew") && Find("Buy") >= 0,
+        "Mountains offer is discoverable before progress for the existing 20 Dew price")
+    before := mountains_requests
+    Click("Buy")
+    Expect(Find("Confirm purchase") >= 0 && mountains_requests == before, "Buy opens confirmation without a purchase")
+    Click("Cancel")
+    Expect(Find("Buy") >= 0 && mountains_requests == before, "Cancel never submits a purchase")
+    Click("Buy")
+    Click("Confirm purchase")
+    Expect(mountains_requests == before + 1 && Find("Please wait…") >= 0 && !Wardrobe.MountainsAvailable(),
+        "confirmation requests wurm.mountains through the host and waits for ownership")
+    waiting := Find("Please wait…")
+    Expect(waiting >= 0 && TreeNodeAt(frame.session, waiting).disabled, "pending purchase cannot be submitted twice")
+    Click("Please wait…")
+    Expect(mountains_requests == before + 1, "pressing the disabled pending action sends no second request")
+    errors: [2]string = .["failed", "insufficient"]
+    for status: errors {
+        shop_status = status
+        Draw()
+        Expect(HasLabel("Purchase not confirmed. Check your Dew and retry.") && !Wardrobe.MountainsAvailable(),
+            "a failed or insufficient purchase grants no entitlement")
+    }
+    // Only the existing receipt parser can supply the fixture entitlement.
+    receipt := "{\"account_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"app_id\":\"entity\",\"asset_id\":\"waozi:token\",\"event_type\":\"debit\",\"source_type\":\"spend\",\"amount_delta\":-20000000,\"source_ref\":\"wurm.mountains:stage-wurm-mountains-v1\"}"
+    product := ShopModel.GameShopReceipt(receipt, host_account)
+    Expect(product == 9, "existing receipt identifies Mountains")
+    shop_owned = 1 << product; shop_status = "done"
+    Draw()
+    owned := Find("Owned")
+    Expect(Wardrobe.MountainsAvailable() && owned >= 0 && TreeNodeAt(frame.session, owned).disabled && Find("Buy") < 0,
+        "confirmed Mountains remain visible as owned and cannot be repurchased")
+    Expect(App.LevelAvailable(160) && !App.LevelAvailable(40), "ownership opens Mountains without changing other stage progression")
+    Click("Owned")
+    Expect(mountains_requests == before + 1, "pressing the disabled owned action cannot repurchase")
+    Click("Skins"); Click("Stages")
+    Expect(Find("Owned") >= 0 && mountains_requests == before + 1, "reopening an owned offer never submits a purchase")
+    shop_owned = 0; Wardrobe.owned = 0
+    Draw()
+    Click("Skins")
 }
 Click :: (label: string) {
     index := Find(label)
@@ -337,6 +400,7 @@ main :: () -> s32 {
         Draw()
         Click("Shop")
         Expect(Find("Buy") >= 0, "shop remains available inside a host")
+        MountainsShop()
         message.action = APP_BACK
         unused Portable.Main()
         Expect(message.succeeded, "shop Back returns inside the game")
@@ -404,10 +468,17 @@ main :: () -> s32 {
     Progress.poll_at = 0
     Draw()
     Click("Shop")
+    Click("Stages")
+    Click("Buy")
+    Expect(Find("Sign in") >= 0, "signed-out Mountains confirmation offers host sign-in")
+    Click("Sign in")
+    Expect(profile_opens == 1 && !Account.ProfileVisible(), "Mountains sign-in opens the enclosing host profile")
+    Click("Cancel")
+    Click("Skins")
     Click("Buy")
     Expect(Find("Sign in") >= 0, "signed-out shop offers the host sign-in")
     Click("Sign in")
-    Expect(profile_opens == 1 && !Account.ProfileVisible(), "profile requests open the enclosing host profile")
+    Expect(profile_opens == 2 && !Account.ProfileVisible(), "profile requests open the enclosing host profile")
     Expect(SessionClose(frame.session), "close hosted test session")
     print("Hosted UI local test failures: %\n", failures)
     return failures

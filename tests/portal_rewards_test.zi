@@ -1,0 +1,119 @@
+Rewards :: #import, file "../src/rewards.zi";
+Progress :: #import, file "../src/progress.zi";
+Portal :: #import, file "../src/portal.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+File :: #import "std/file";
+#import "std/text_buffer"
+
+active: bool;
+account: s32;
+fail_read: bool;
+fail_write: bool;
+records: [2][27]u8;
+lengths: [2]s64 = .[-2, -2];
+writes: s32;
+reads: s32;
+failures: s32;
+Expect :: (ok: bool, message: string) {
+    if !ok { print("FAIL: portal_rewards: %\n", message); failures += 1 }
+}
+Active :: () -> bool { return active }
+Read :: (name: string, output: []u8) -> s64 {
+    reads += 1
+    if name != "rewards.dat" || fail_read { return -1 }
+    length := lengths[account]
+    if length < 0 { return length }
+    if length >= output.count { return -1 }
+    for index: 0..length - 1 { output[index] = records[account][index] }
+    return length
+}
+Write :: (name: string, text: string) -> bool {
+    writes += 1
+    if name != "rewards.dat" || fail_write || text.count > 26 { return false }
+    for byte, index: text { records[account][index] = byte }
+    lengths[account] = text.count
+    return true
+}
+Reload :: () { Rewards.Reset() }
+#program_export
+main :: () -> s32 {
+    unused File.CreateDirectory("build/portal-rewards-data")
+    Expect(Custom.CustomSetRoot("build/portal-rewards-data/"), "private local preview root")
+    unused File.RemoveFile("build/portal-rewards-data/rewards.dat")
+    Progress.loaded = true
+    Progress.completed = .{}; Progress.replays = 0; Progress.owner = .{}
+    Rewards.data_active = Active
+    Portal.byte_read_text = Read; Portal.byte_write_text = Write
+    Reload()
+    Rewards.coin_skins = 1 << 10
+    Expect(Rewards.Save(), "noSDK local preview saves unchanged")
+    active = true
+    Reload()
+    Expect(!Rewards.Owns(10) && Rewards.Coins() == 0, "missing SDK account never borrows local preview")
+    Expect(!Rewards.SignedIn(), "CG never activates Dew account")
+    Progress.replays = 100
+    fail_write = true
+    Expect(Rewards.Coins() == 200 && !Rewards.Buy(9) && !Rewards.Owns(9) && Rewards.Coins() == 200, "earned coins also require durable SDK save")
+    fail_write = false; Progress.replays = 0
+    Rewards.bought_coins = 900
+    Expect(Rewards.Coins() == 0, "normal bought coins do not become portal credits")
+    Expect(!Rewards.SetPortalCredits(500, false) && Rewards.Coins() == 0, "unverified/checkout result grants nothing")
+    Expect(Rewards.SetPortalCredits(500, true) && Rewards.Coins() == 500, "verified cumulative credits")
+    Expect(Rewards.SetPortalCredits(500, true) && Rewards.Coins() == 500, "equal refresh cannot double credits")
+    Expect(Rewards.SetPortalCredits(800, true) && Rewards.Coins() == 800, "increased inventory replaces credits")
+    Expect(Rewards.SetPortalCredits(500, true) && Rewards.Coins() == 500, "reduced inventory replaces credits")
+    Expect(!Rewards.SetPortalCredits(-1, true) && Rewards.Coins() == 0, "negative rejected and revoked")
+    Expect(!Rewards.SetPortalCredits(1000000001, true), "limit rejected")
+    Expect(!Rewards.SetPortalCredits(9223372036854775807, true) && Rewards.Coins() == 0, "overflow rejected")
+    Expect(Rewards.SetPortalCredits(500, true), "restore verified credits")
+    Expect(Rewards.CoinPrice(9) == 120 && Rewards.CoinPrice(10) == 240 && Rewards.CoinPrice(11) == 360, "existing prices")
+    Expect(!Rewards.Buy(1) && !Rewards.Buy(12) && !Rewards.Buy(-1), "only priced coin skins")
+    fail_write = true
+    before := writes
+    Expect(!Rewards.Buy(9) && !Rewards.Owns(9) && Rewards.Coins() == 500, "failed SDK write rolls back ownership and spend")
+    Expect(writes == before + 1 && lengths[0] == -2, "no pretend session grant")
+    Rewards.test_day = 20000
+    Expect(!Rewards.Claim() && Rewards.Day() == 0 && Rewards.ClaimReady(), "failed daily save rolls back")
+    fail_write = false
+    Expect(Rewards.Buy(9) && Rewards.Owns(9) && Rewards.Coins() == 380, "write recovery persists purchase")
+    Expect(!Rewards.Buy(9) && Rewards.Coins() == 380, "repeat buy never spends twice")
+    Expect(lengths[0] == 24, "unchanged twelve byte format")
+    Reload()
+    Expect(Rewards.Owns(9) && Rewards.Coins() == 0, "reload keeps ownership but revokes unrefreshed inventory")
+    Expect(Rewards.SetPortalCredits(500, true) && Rewards.Coins() == 380, "inventory refresh after reload derives spend")
+    Expect(Rewards.SetPortalCredits(0, true) && Rewards.Coins() == 0 && Rewards.Owns(9), "refund clamps deficit without revoking saved skin")
+    account = 1; Reload()
+    Expect(!Rewards.Owns(9) && Rewards.Coins() == 0, "SDK account switch does not borrow prior account")
+    Expect(Rewards.SetPortalCredits(1000, true) && Rewards.Buy(11), "second account purchases gift skin early")
+    for day: 20000..20006 { Rewards.test_day = day; Expect(Rewards.Claim(), "daily claims persist") }
+    Expect(Rewards.Owns(11) && Rewards.DayCoins(7) == 100 && !Rewards.Buy(11), "already purchased gift becomes coins")
+    Rewards.test_day = 20007
+    before = writes
+    Expect(Rewards.Claim(), "eighth day")
+    Expect(!Rewards.Claim() && writes == before + 1, "same day never claims twice")
+    // Unknown account-0 snapshot is protected even when writes already work.
+    account = 0; fail_read = true; Reload()
+    before = writes
+    Expect(!Rewards.Buy(10) && !Rewards.Claim() && !Rewards.Save(), "read error fails closed despite working writes")
+    Expect(writes == before && lengths[0] == 24, "read error never overwrites old persistent cosmetics")
+    Expect(Rewards.SetPortalCredits(1000, true), "verified inventory is separate from storage readiness")
+    Expect(!Rewards.Buy(10) && writes == before, "credits cannot bypass unread snapshot")
+    fail_read = false
+    Expect(Rewards.Buy(10) && Rewards.Owns(9) && Rewards.Owns(10) && Rewards.Coins() == 640, "retry reads old skin before adding new purchase")
+    account = 1; Reload()
+    Expect(Rewards.Owns(11) && !Rewards.Owns(9) && !Rewards.Owns(10) && Rewards.Day() == 8, "other account persistent record unchanged")
+    account = 0; Reload()
+    Expect(Rewards.SetPortalCredits(1000000000, true), "maximum verified credit accepted")
+    Progress.replays = 9223372036854775807
+    Rewards.other_replays = 9223372036854775807
+    Expect(Rewards.Coins() == 2000000000, "64 bit inputs cannot overflow total clamp")
+    Progress.replays = 0; Rewards.other_replays = 0
+    lengths[0] = 3; Reload()
+    before = writes
+    Expect(!Rewards.Buy(11) && !Rewards.Save() && writes == before, "malformed SDK record also protected")
+    active = false; Reload()
+    Expect(Rewards.Owns(10) && !Rewards.Owns(9), "noSDK preview still uses original local record")
+    Expect(!Rewards.SetPortalCredits(1000, true) && Rewards.Coins() == 0, "portal credits unavailable outside active SDK")
+    print("portal_rewards: % failures\n", failures)
+    return failures
+}

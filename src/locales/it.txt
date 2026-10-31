@@ -463,3 +463,60 @@ Ospite
 [wurm_portal_1]
 I progressi restano solo finché questa pagina è aperta.
 ---
+[wurm_ui_40]
+Tappe
+---
+[wurm_ui_41]
+Tappa
+---
+[wurm_ui_42]
+Continua
+---
+[wurm_ui_43]
+Livelli completati
+---
+[wurm_ui_44]
+Frecce e W A S D guidano sempre.
+---
+[wurm_shop_owned]
+Posseduto
+---
+[wurm_shop_mountains]
+Montagne
+---
+[wurm_portal_shop_0]
+Caricamento negozio…
+---
+[wurm_portal_shop_1]
+Acquisto in sospeso. Ripristina per ricontrollare.
+---
+[wurm_portal_shop_2]
+Salvataggio non riuscito. Riprova.
+---
+[wurm_portal_shop_3]
+Acquisto annullato. Puoi riprovare.
+---
+[wurm_portal_shop_4]
+Acquisti ripristinati.
+---
+[wurm_portal_shop_5]
+Accedi per acquistare.
+---
+[wurm_portal_shop_6]
+Gli acquisti non sono disponibili qui.
+---
+[wurm_portal_shop_7]
+Impossibile caricare il negozio. Riprova.
+---
+[wurm_portal_shop_8]
+Non disponibile
+---
+[wurm_portal_shop_9]
+Gratis
+---
+[wurm_portal_shop_10]
+Ripristina acquisti
+---
+[wurm_portal_shop_11]
+Aggiorna
+---

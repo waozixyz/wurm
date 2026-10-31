@@ -1,0 +1,204 @@
+// Application-owned Entity draft adapter. One snapshot is one SDK setItem:
+// quota/write rejection leaves the previous complete snapshot intact.
+Collections :: #import "entity/level_collections";
+Levels :: #import, file "level_json.zi";
+Portal :: #import, file "portal.zi";
+Custom :: #import, file "custom_levels.zi";
+File :: #import "std/file_linux";
+#import "std/json_scan"
+#import "std/json_document"
+#import "std/text_buffer"
+#import "std/vec"
+#if #defined(PLATFORM_WEB) {
+    BrowserStorage :: #import "kryon/bundle_storage_web";
+}
+
+KEY :: "editor-drafts-v1.json";
+MAX_BYTES :: 655360; // Encoded SDK JSON budget; leaves 384 KiB for settings/campaign.
+MAX_COLLECTIONS :: 32;
+MAX_LEVELS :: 24;
+Read :: #type (name: string, output: []u8) -> s64;
+Write :: #type (name: string, text: string) -> bool;
+// Injectable callbacks: read returns -2 for missing, -1 for failure. Write
+// must atomically replace or return false without changing durable content.
+read_record: Read = ReadStorage;
+write_record: Write = WriteStorage;
+snapshot: [MAX_BYTES + 1]u8;
+response: [MAX_BYTES + 128]u8;
+
+FinishAnswer :: (out: Vec(u8)) -> string {
+    count := out.count
+    if count > response.count { VecFree(out); return "{\"status\":\"failed\"}" }
+    {
+        bytes := VecSlice(out, 0, count)
+        for byte, index: bytes { response[index] = byte }
+    }
+    VecFree(out)
+    return TextView(response[0:count])
+}
+
+LocalPath :: (name: string, buffer: []u8) -> string {
+    Custom.EnsureLoaded()
+    root := Custom.RootText()
+    if root.count + name.count >= buffer.count { return "" }
+    for byte, index: root { buffer[index] = byte }
+    for byte, index: name { buffer[root.count + index] = byte }
+    buffer[root.count + name.count] = 0
+    return TextUntilNul(buffer)
+}
+
+ReadStorage :: (name: string, output: []u8) -> s64 {
+    if Portal.DataActive() { return Portal.ReadTextRecord(name, output) }
+    path_buffer: [192]u8
+    path := LocalPath(name, path_buffer[:])
+    if path == "" { return -1 }
+    file := File.OpenRead(path)
+    if !file.valid { return ifx File.PathExists(path) then -1 else -2 }
+    defer File.CloseFile(file)
+    size := File.FileSize(file)
+    if size < 0 || size >= output.count { return -1 }
+    count := File.ReadAt(file, output[0:size], 0)
+    return ifx count == size then count else -1
+}
+
+WriteStorage :: (name: string, text: string) -> bool {
+    if Portal.DataActive() { return Portal.WriteTextRecord(name, text) }
+    Custom.EnsureLoaded()
+    unused File.CreateDirectory(Custom.RootText())
+    path_buffer: [192]u8
+    temporary_buffer: [192]u8
+    path := LocalPath(name, path_buffer[:])
+    temporary := LocalPath("editor-drafts.tmp", temporary_buffer[:])
+    if path == "" || temporary == "" { return false }
+    file := File.OpenReplace(temporary)
+    if !file.valid { return false }
+    written := File.WriteTextAt(file, text, 0)
+    synced := written == text.count && File.SyncFile(file)
+    File.CloseFile(file)
+    if !synced || !File.RenamePath(temporary, path) { return false }
+    #if #defined(PLATFORM_WEB) {
+        return BrowserStorage.BundleStorageFlush()
+    }
+    return true
+}
+
+DocumentValid :: (text: string, at: s32) -> bool {
+    document: Collections.CollectionDocument
+    if !Collections.CollectionDocumentRead(text, at, Levels.WURM_LEVELS_FORMAT, *document) ||
+        document.level_count > MAX_LEVELS { return false }
+    order := ReadNumber(text, FieldAt(text, at, "order"))
+    if !order.valid || order.value < -9007199254740991.0 || order.value > 9007199254740991.0 { return false }
+    for index: 0..document.level_count - 1 {
+        level: Levels.WurmLevel
+        if !Levels.WurmLevelRead(text, Collections.CollectionDocumentLevelAt(text, *document, index), *level) { return false }
+    }
+    return true
+}
+
+RecordID :: (text: string, at: s32, output: []u8) -> bool {
+    return ReadStringText(text, FieldAt(text, at, "id"), output) == 32 &&
+        Collections.CollectionDraftRecordValid(TextUntilNul(output))
+}
+
+// Returned text lasts until the next Service call. No cached account data:
+// every call reads the current SDK namespace (auth changes reload the app).
+Service :: (name: string, request: string) -> string {
+    answer: Vec(u8)
+    if name != Collections.COLLECTIONS_DRAFTS_SERVICE { return "" }
+    if request.count > MAX_BYTES || ValueEnd(request, 0, 0) != request.count { return "{\"status\":\"failed\"}" }
+    operation: [16]u8
+    kind: [24]u8
+    unused ReadStringText(request, FieldAt(request, 0, "operation"), operation[:])
+    unused ReadStringText(request, FieldAt(request, 0, "kind"), kind[:])
+    if TextUntilNul(kind[:]) != Collections.COLLECTIONS_KIND { return "{\"status\":\"failed\"}" }
+    count := read_record(KEY, snapshot[:])
+    stored := "{\"next\":1,\"records\":[]}"
+    if count != -2 {
+        if count < 0 || count > MAX_BYTES { return "{\"status\":\"failed\"}" }
+        stored = TextView(snapshot[0:count])
+    }
+    if ValueEnd(stored, 0, 0) != stored.count { return "{\"status\":\"failed\"}" }
+    list := FieldAt(stored, 0, "records")
+    positions: [MAX_COLLECTIONS]s32
+    records := ArrayPositions(stored, list, positions[:])
+    next := ReadNumber(stored, FieldAt(stored, 0, "next"))
+    if records < 0 || records > MAX_COLLECTIONS || !next.valid || next.value < 1.0 || next.value > 2147483646.0 || next.value != cast(float64)cast(s64)next.value { return "{\"status\":\"failed\"}" }
+    id: [33]u8
+    id_length := ReadStringText(request, FieldAt(request, 0, "id"), id[:])
+    found: s32 = -1
+    for index: 0..records - 1 {
+        existing: [33]u8
+        if !RecordID(stored, positions[index], existing[:]) ||
+            !DocumentValid(stored, FieldAt(stored, positions[index], "document")) { return "{\"status\":\"failed\"}" }
+        if TextUntilNul(existing[:]) == TextUntilNul(id[:]) { found = index }
+        for earlier: 0..index - 1 {
+            duplicate: [33]u8
+            unused RecordID(stored, positions[earlier], duplicate[:])
+            if TextUntilNul(existing[:]) == TextUntilNul(duplicate[:]) { return "{\"status\":\"failed\"}" }
+        }
+    }
+    op := TextUntilNul(operation[:])
+    if op == "list" {
+        BuilderPrint(*answer, "{\"status\":\"done\",\"records\":[")
+        for index: 0..records - 1 {
+            if index > 0 { BuilderPrint(*answer, ",") }
+            existing: [33]u8
+            unused RecordID(stored, positions[index], existing[:])
+            doc := FieldAt(stored, positions[index], "document")
+            end := ValueEnd(stored, doc, 0)
+            BuilderPrint(*answer, "{\"id\":\"%\",%", TextUntilNul(existing[:]), stored[doc + 1:end])
+        }
+        BuilderPrint(*answer, "]}")
+        return FinishAnswer(answer)
+    }
+    if op == "get" {
+        if found < 0 { return "{\"status\":\"missing\"}" }
+        at := positions[found]
+        end := ValueEnd(stored, at, 0)
+        BuilderPrint(*answer, "{\"status\":\"done\",%", stored[at + 1:end])
+        return FinishAnswer(answer)
+    }
+    if op != "put" && op != "delete" { return "{\"status\":\"failed\"}" }
+    fresh := op == "put" && FieldAt(request, 0, "id") < 0
+    if !fresh && (id_length != 32 || !Collections.CollectionDraftRecordValid(TextUntilNul(id[:]))) { return "{\"status\":\"failed\"}" }
+    if !fresh && found < 0 { return "{\"status\":\"missing\"}" }
+    serial := cast(s64)next.value
+    if fresh {
+        if records >= MAX_COLLECTIONS { return "{\"status\":\"failed\"}" }
+        for index: 0..31 { id[index] = #char "0" }
+        value := serial
+        for index: 0..7 {
+            id[31 - index] = Levels.HEX_LOWER[value & 15]
+            value >>= 4
+        }
+        id[32] = 0
+        serial += 1
+    }
+    document := FieldAt(request, 0, "document")
+    if op == "put" && !DocumentValid(request, document) { return "{\"status\":\"failed\"}" }
+    candidate: Vec(u8)
+    defer VecFree(candidate)
+    BuilderPrint(*candidate, "{\"next\":%,\"records\":[", serial)
+    first := true
+    for index: 0..records - 1 {
+        if index == found { continue }
+        if !first { BuilderPrint(*candidate, ",") }
+        first = false
+        at := positions[index]
+        BuilderPrint(*candidate, "%", stored[at:ValueEnd(stored, at, 0)])
+    }
+    if op == "put" {
+        if !first { BuilderPrint(*candidate, ",") }
+        BuilderPrint(*candidate, "{\"id\":\"%\",\"document\":%}", TextUntilNul(id[:]), request[document:ValueEnd(request, document, 0)])
+    }
+    BuilderPrint(*candidate, "]}")
+    text := TextView(VecSlice(candidate, 0, candidate.count))
+    // SDK quota measures JSON containing the stored string, not raw bytes.
+    // Include escaping and the key/object overhead before attempting a write.
+    encoded: Vec(u8)
+    defer VecFree(encoded)
+    JsonQuoteInto(*encoded, text, false)
+    if text.count > MAX_BYTES || encoded.count + KEY.count + 8 > MAX_BYTES || !write_record(KEY, text) { return "{\"status\":\"failed\"}" }
+    BuilderPrint(*answer, "{\"status\":\"done\",\"id\":\"%\"}", TextUntilNul(id[:]))
+    return FinishAnswer(answer)
+}

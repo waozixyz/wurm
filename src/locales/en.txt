@@ -463,3 +463,60 @@ Guest
 [wurm_portal_1]
 Progress is kept only until this page closes.
 ---
+[wurm_ui_40]
+Stages
+---
+[wurm_ui_41]
+Stage
+---
+[wurm_ui_42]
+Continue
+---
+[wurm_ui_43]
+Finished levels
+---
+[wurm_ui_44]
+Arrow keys and W A S D always steer.
+---
+[wurm_shop_owned]
+Owned
+---
+[wurm_shop_mountains]
+Mountains
+---
+[wurm_portal_shop_0]
+Loading shop…
+---
+[wurm_portal_shop_1]
+Purchase pending. Restore to check again.
+---
+[wurm_portal_shop_2]
+Could not save. Please retry.
+---
+[wurm_portal_shop_3]
+Purchase cancelled. You can retry.
+---
+[wurm_portal_shop_4]
+Purchases restored.
+---
+[wurm_portal_shop_5]
+Sign in to shop.
+---
+[wurm_portal_shop_6]
+Purchases unavailable here.
+---
+[wurm_portal_shop_7]
+Could not load the shop. Please retry.
+---
+[wurm_portal_shop_8]
+Unavailable
+---
+[wurm_portal_shop_9]
+Free
+---
+[wurm_portal_shop_10]
+Restore purchases
+---
+[wurm_portal_shop_11]
+Refresh
+---

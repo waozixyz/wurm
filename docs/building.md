@@ -4,7 +4,7 @@ Application id `xyz.waozi.wurm`.
 
 
 A native Ziran and Kryon game. The illustrated Apfelwurm title offers
-**Choose level**, **Play from start** and, after unlocking another level, **Continue**.
+**Stages** and one main button: **Play**, then **Continue** once another level is unlocked.
 Choose swipe steering or a direction pad on first play. Follow the little orange worm
 through **200 unique original-inspired levels**, with 40 each in Meadow,
 deciduous Leafwood, coniferous Pinewood, Lake and Mountains.
@@ -20,12 +20,12 @@ moving enemies. The ready dialog explains the rings. Later chapters retain
 their existing puzzle progression. Personal editor layouts remain unchanged.
 Levels follow in order through every landscape. After each goal, the next
 board opens dimmed and waits for **Start level** (or Enter/Space). Movement
-and enemies stay paused until then; lives and score carry over. Choose level offers a
-scrollable grid for each landscape; unlocked levels have large board previews and future levels show a lock. The run (level, lives and score carried into that level) and the
+and enemies stay paused until then; lives and score carry over. Stages shows the
+five landscapes as cards with their finished levels; each opens a scrollable grid; unlocked levels have large board previews and future levels show a lock. The run (level, lives and score carried into that level) and the
 control choice persist. Unlocked progress is saved after every completed
 level and survives game over, closing the game and starting a new run.
 Continue starts the highest unlocked level with three lives and a fresh
-score; Play from start begins at level 1. Earlier save records are imported.
+score. Earlier save records are imported.
 Try again after game over also starts the highest unlocked level with fresh
 lives and score, including after replaying an earlier level.
 `tools/design_levels.zi` regenerates the boards and static route certificates.
@@ -48,10 +48,11 @@ losing the last one ends the game at zero.
 ## Controls
 
 - Click Play, Enter or Space: choose controls on first play, then start at level 1; Enter or Space also retries
-- Click Continue or press C on the title: start the highest unlocked level with three lives and a fresh score
-- Click Choose level or press L on the title: browse landscapes and replay an unlocked level; Escape returns to the title
+- Click Continue or press C, Enter or Space on the title: start the highest unlocked level with three lives and a fresh score
+- Click Stages or press L on the title: pick a landscape (Enter opens the furthest one), then replay an unlocked level; Escape goes back
+- `WURM_UNLOCK_ALL=1` (desktop testing): every stage and level opens in Stages
 - Arrows, WASD, a held finger moving over the board, or the direction pad: steer immediately
-- Pause > Controls: change between swipe steering and the direction pad
+- Pause > Controls or Settings: change between swipe steering and the direction pad, on computers too
 - Escape, Space or P: pause and resume
 - Q while paused: back to the title
 - R: restart the current level with the lives and score the run brought into it

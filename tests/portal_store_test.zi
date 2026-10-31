@@ -1,0 +1,108 @@
+Store :: #import, file "../src/portal_store.zi";
+#import "std/format"
+#import "std/text_buffer"
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: portal_store: %\n", message); failures += 1 }
+}
+Catalog :: (price: string, is_free: bool = false, buyable: bool = true, sku: string = "test-skin") -> string {
+    out: Vec(u8)
+    BuilderPrint(*out, "{\"items\":[{\"sku\":\"%\",\"name\":\"Skin\",\"description\":\"Platform description\",\"imageUrl\":\"https://example.com/image.png\",\"price\":%,\"isFree\":%,\"canBeBought\":%}],\"hasMore\":false}", sku, price, is_free, buyable)
+    return BuilderFinish(out)
+}
+Inventory :: (quantity: string, sku: string = "test-pack") -> string {
+    out: Vec(u8)
+    BuilderPrint(*out, "{\"items\":[{\"sku\":\"%\",\"name\":\"Item\",\"description\":\"Description\",\"imageUrl\":\"\",\"quantity\":%}]}", sku, quantity)
+    return BuilderFinish(out)
+}
+ManyItems :: (count: s32) -> string {
+    out: Vec(u8)
+    BuilderPrint(*out, "{\"items\":[")
+    for i: 0..count - 1 {
+        if i > 0 { BuilderPrint(*out, ",") }
+        BuilderPrint(*out, "{\"sku\":\"unknown-%\",\"quantity\":1}", i)
+    }
+    BuilderPrint(*out, "],\"hasMore\":false}")
+    return BuilderFinish(out)
+}
+#program_export
+main :: () -> s32 {
+    state: Store.StoreState
+    config: [3]Store.ProductConfig = .[
+        .{sku = "test-skin", purchase_id = "configured-skin-id", kind = Store.DURABLE_SKIN, skin_id = 1},
+        .{sku = "test-mountains", purchase_id = "configured-chapter-id", kind = Store.MOUNTAINS_CHAPTER},
+        .{sku = "test-pack", purchase_id = "configured-pack-id", kind = Store.COIN_CREDIT_PACK, pack_coins = 100, cumulative_inventory = true}]
+    Expect(Store.Configure(*state, config[:]), "explicit test-only mapping")
+    epoch := Store.ResetAccount(*state, "alice", true)
+    usd := "{\"amount\":\"1.99\",\"amountWithoutDiscount\":\"2.99\",\"currency\":\"USD\"}"
+    eur := "{\"amount\":\"1,49\",\"amountWithoutDiscount\":\"2,49\",\"currency\":\"EUR\"}"
+    Expect(Store.ApplyCatalog(*state, epoch, Catalog(usd)), "SDK catalog fixture")
+    Expect(Store.ApplyInventory(*state, epoch, "{\"items\":[]}"), "complete empty inventory")
+    Expect(Store.CheckoutId(*state, 0) == "configured-skin-id", "checkout uses explicit purchase ID")
+    Expect(TextUntilNul(state.products[0].price_label[:]) == "1.99 USD" && TextUntilNul(state.products[0].amount_without_discount[:]) == "2.99", "opaque discount strings retained")
+    Expect(Store.ApplyCatalog(*state, epoch, Catalog(eur)), "personalized EUR string")
+    Expect(TextUntilNul(state.products[0].price_label[:]) == "1,49 EUR", "no money parsing")
+    Expect(Store.ApplyCatalog(*state, epoch, Catalog("null")) && Store.CheckoutId(*state, 0) == "", "null paid price blocked")
+    Expect(Store.ApplyCatalog(*state, epoch, Catalog("null", true)) && Store.CheckoutId(*state, 0) != "", "explicit free with null price")
+    Expect(Store.ApplyCatalog(*state, epoch, Catalog(usd, false, false)) && Store.CheckoutId(*state, 0) == "", "cannot buy respected")
+    Expect(Store.ApplyCatalog(*state, epoch, Catalog(usd, false, true, "unknown")) && !state.products[0].catalog_match, "unknown SKU not mapped")
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("null", "test-skin")) && state.durable_owned_mask == 2, "uncounted durable verified")
+    Expect(Store.ApplyCatalog(*state, epoch, Catalog(usd)) && Store.CheckoutId(*state, 0) == "", "owned durable cannot be checked out again")
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("1", "test-mountains")) && state.durable_owned_mask == 512, "Mountains verified; previous skin revoked")
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("0", "test-mountains")) && state.durable_owned_mask == 0, "zero durable revokes")
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("2")) && state.purchased_credits == 200, "two cumulative pack units")
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("2")) && state.purchased_credits == 200, "repeat snapshot never doubles credits")
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("1")) && state.purchased_credits == 100, "refund reduces credits")
+    Expect(!Store.ApplyInventory(*state, epoch, Inventory("null")) && state.purchased_credits == 100 && !state.inventory_ready, "uncounted pack rejected and last good retained")
+    bad: [8]string = .["-1", "0.5", "1000001", "9999999999999999999999999", "\"2\"", "true", "1e3", "{}"]
+    for bad { Expect(!Store.ApplyInventory(*state, epoch, Inventory(it)) && state.purchased_credits == 100, "invalid quantity fail closed") }
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("1000000")) && state.purchased_credits == 100000000, "maximum count")
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("0")) && state.purchased_credits == 0, "refund to zero no underflow")
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("1")), "restore good inventory")
+    duplicate := "{\"items\":[{\"sku\":\"test-pack\",\"quantity\":1},{\"sku\":\"test-pack\",\"quantity\":1}]}"
+    Expect(!Store.ApplyInventory(*state, epoch, duplicate) && state.purchased_credits == 100, "duplicate SKU rejects snapshot")
+    Expect(!Store.ApplyInventory(*state, epoch, "{\"items\":[{\"sku\":\"test-pack\",\"quantity\":1,\"quantity\":2}]}"), "ambiguous member rejected")
+    Expect(!Store.ApplyInventory(*state, epoch, "{\"itemId\":\"configured-pack-id\"}") && state.purchased_credits == 100, "buy result alone grants nothing")
+    Expect(!Store.ApplyCatalog(*state, epoch, Catalog("{}")), "missing price strings rejected")
+    Expect(Store.ApplyCatalog(*state, epoch, Catalog(usd)), "good catalog restored")
+    Expect(!Store.ApplyCatalog(*state, epoch, Catalog("{\"amount\":2,\"amountWithoutDiscount\":\"2\",\"currency\":\"USD\"}")) && TextUntilNul(state.products[0].amount[:]) == "1.99" && !state.catalog_ready, "malformed price preserves last good but blocks checkout")
+    Expect(!Store.ApplyCatalog(*state, epoch, "{\"items\":[],\"hasMore\":true}"), "partial catalog rejected")
+    Expect(!Store.ApplyCatalog(*state, epoch, "{\"items\":[{\"sku\":\"test-skin\",\"name\":\"Skin\",\"description\":\"\",\"imageUrl\":\"\",\"isFree\":false,\"canBeBought\":true}],\"hasMore\":false}"), "absent paid price is invalid, never free")
+    Expect(!Store.ApplyCatalog(*state, epoch, "{\"items\":[{\"sku\":\"unknown\"},{\"sku\":\"unknown\"}],\"hasMore\":false}"), "duplicate catalog SKU rejected even if unknown")
+    Expect(!Store.ApplyInventory(*state, epoch, "{\"items\":[]} trailing"), "trailing JSON rejected")
+    Expect(Store.ApplyInventory(*state, epoch, ManyItems(Store.MAX_ITEMS)) && state.purchased_credits == 0, "bounded unknown inventory ignored")
+    Expect(!Store.ApplyInventory(*state, epoch, ManyItems(Store.MAX_ITEMS + 1)), "inventory item bound")
+    Expect(!Store.ApplyCatalog(*state, epoch, ManyItems(Store.MAX_ITEMS + 1)), "catalog item bound")
+    Expect(!Store.ApplyInventory(*state, epoch, "{\"items\":[{\"sku\":\"test-pack\",\"quantity\":1,}]}"), "trailing object comma rejected")
+    old := epoch
+    epoch = Store.ResetAccount(*state, "bob", true)
+    Expect(state.purchased_credits == 0 && state.durable_owned_mask == 0 && !state.inventory_ready && !state.catalog_ready, "account reset wholesale")
+    Expect(!Store.ApplyInventory(*state, old, Inventory("10")) && !Store.ApplyCatalog(*state, old, Catalog(usd)) && state.purchased_credits == 0, "stale callbacks ignored")
+    Expect(Store.ApplyInventory(*state, epoch, "{\"items\":[]}"), "new account empty inventory")
+    epoch = Store.ResetAccount(*state, "", true)
+    Expect(!Store.ApplyInventory(*state, epoch, Inventory("10")) && !state.available, "guest unavailable")
+    config[2].cumulative_inventory = false
+    Expect(!Store.Configure(*state, config[:]), "operator cumulative contract mandatory")
+    config[2].cumulative_inventory = true
+    config[2].pack_coins = Store.MAX_CREDITS
+    Expect(Store.Configure(*state, config[:]), "bounded large pack")
+    epoch = Store.ResetAccount(*state, "alice", true)
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("1")) && state.purchased_credits == Store.MAX_CREDITS, "maximum credits")
+    Expect(!Store.ApplyInventory(*state, epoch, Inventory("2")) && state.purchased_credits == Store.MAX_CREDITS, "multiplication/total overflow rejected before arithmetic")
+    config[1].sku = "test-skin"
+    Expect(!Store.Configure(*state, config[:]) && state.purchased_credits == Store.MAX_CREDITS, "duplicate mapping preserves state")
+    config[1].sku = "test-mountains"
+    config[1].purchase_id = config[0].purchase_id
+    Expect(!Store.Configure(*state, config[:]), "duplicate purchase ID rejected")
+    configs: [33]Store.ProductConfig
+    Expect(!Store.Configure(*state, configs[:]), "product count bound")
+    packs: [2]Store.ProductConfig = .[
+        .{sku = "test-pack", purchase_id = "pack-a", kind = Store.COIN_CREDIT_PACK, pack_coins = 600000000, cumulative_inventory = true},
+        .{sku = "pack-b", purchase_id = "pack-b", kind = Store.COIN_CREDIT_PACK, pack_coins = 500000000, cumulative_inventory = true}]
+    Expect(Store.Configure(*state, packs[:]), "multiple counted packs")
+    epoch = Store.ResetAccount(*state, "alice", true)
+    Expect(Store.ApplyInventory(*state, epoch, Inventory("1")) && state.purchased_credits == 600000000, "first pack credits")
+    Expect(!Store.ApplyInventory(*state, epoch, "{\"items\":[{\"sku\":\"test-pack\",\"quantity\":1},{\"sku\":\"pack-b\",\"quantity\":1}]}") && state.purchased_credits == 600000000, "sum overflow preserves last good total")
+    print("portal_store: % failures\n", failures)
+    return ifx failures == 0 then 0 else 1
+}

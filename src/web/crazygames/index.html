@@ -15,6 +15,7 @@
 <body>
   <main id="canvas-frame"><canvas id="canvas" tabindex="0" aria-label="Apfelwurm game: choose swipe or direction pad, collect apples, then leave through the top gate."></canvas><div id="loading" role="status"><strong>A little worm.<br>A long journey.</strong><span>Opening Apfelwurm…</span></div></main>
   <script src="portal-config.js"></script>
+  <script src="store.js"></script>
   <script>
     // The CrazyGames edition: every game file sits beside this page and only
     // CrazyGames' own SDK comes from elsewhere. It chooses language, sound,
@@ -25,6 +26,7 @@
       recordRead(name){try{WurmPortal.dataError=false;return WurmPortal.sdk.data.getItem(name)}catch(e){WurmPortal.dataError=WurmPortal.saveLimited=true;return false}},
       recordWrite(name,value){try{WurmPortal.dataError=false;WurmPortal.sdk.data.setItem(name,value);return true}catch(e){WurmPortal.dataError=WurmPortal.saveLimited=true;return false}},
       authPrompt(){try{var result=WurmPortal.sdk.user.showAuthPrompt();Promise.resolve(result).catch(function(){WurmPortal.accountError=true}).then(function(){document.getElementById('canvas').focus()});return true}catch(e){WurmPortal.accountError=true;return false}}};
+    WurmAttachStore(WurmPortal);
     // Only WebCrypto and asynchronous SDK glue live here; the game chooses
     // the campaign score and the completed-level boundary in Ziran.
     WurmPortal.submitBest=function(score){
@@ -86,12 +88,13 @@
           if(!WurmPortal.accountAvailable)return Promise.resolve(null);
           return within(5000,SDK.user.getUser()).then(function(profile){return profile||null}).catch(function(){WurmPortal.accountError=true;return null})
         }
-        function showUser(profile){WurmPortal.username=profile&&profile.username?String(profile.username):''}
-        try{SDK.user.addAuthListener(function(){location.reload()})}catch(e){}
+        function showUser(profile){WurmPortal.username=profile&&profile.username?String(profile.username):'';WurmPortal.storeReset(profile)}
+        try{SDK.user.addAuthListener(function(){WurmPortal.storeReset(null);WurmPortal.storeProfileReady=false;location.reload()})}catch(e){}
         try{WurmPortal.locale=SDK.user.systemInfo.locale||''}catch(e){}
         try{WurmPortal.muted=!!SDK.game.settings.muteAudio;SDK.game.addSettingsChangeListener(function(settings){WurmPortal.muted=!!settings.muteAudio})}catch(e){}
         portal('loadingStart');
-        return user().then(showUser);
+        var profileGeneration=WurmPortal.storeGeneration;
+        return user().then(function(profile){if(WurmPortal.storeGeneration===profileGeneration)showUser(profile)});
       });
     }
     function start(){

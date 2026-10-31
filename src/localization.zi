@@ -182,6 +182,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "Přidáno do Mých úrovní." }
         if source == "Guest" { return "Host" }
         if source == "Progress is kept only until this page closes." { return "Postup zůstane uložen jen do zavření této stránky." }
+        if source == "Stages" { return "Etapy" }
+        if source == "Stage" { return "Etapa" }
+        if source == "Continue" { return "Pokračovat" }
+        if source == "Finished levels" { return "Dokončené úrovně" }
+        if source == "Arrow keys and W A S D always steer." { return "Šipky a W A S D řídí vždy." }
+        if source == "Owned" { return "Vlastněno" }
+        if source == "Mountains" { return "Hory" }
+        if source == "Loading shop…" { return "Načítání obchodu…" }
+        if source == "Purchase pending. Restore to check again." { return "Nákup čeká. Zkuste obnovit nákupy." }
+        if source == "Could not save. Please retry." { return "Uložení se nezdařilo. Zkuste to znovu." }
+        if source == "Purchase cancelled. You can retry." { return "Nákup zrušen. Můžete to zkusit znovu." }
+        if source == "Purchases restored." { return "Nákupy obnoveny." }
+        if source == "Sign in to shop." { return "Pro nákup se přihlaste." }
+        if source == "Purchases unavailable here." { return "Nákupy zde nejsou dostupné." }
+        if source == "Could not load the shop. Please retry." { return "Obchod se nepodařilo načíst. Zkuste to znovu." }
+        if source == "Unavailable" { return "Nedostupné" }
+        if source == "Free" { return "Zdarma" }
+        if source == "Restore purchases" { return "Obnovit nákupy" }
+        if source == "Refresh" { return "Obnovit" }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
@@ -329,6 +348,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "Zu Meine Level hinzugefügt." }
         if source == "Guest" { return "Gast" }
         if source == "Progress is kept only until this page closes." { return "Der Fortschritt bleibt nur, bis diese Seite geschlossen wird." }
+        if source == "Stages" { return "Etappen" }
+        if source == "Stage" { return "Etappe" }
+        if source == "Continue" { return "Weiter" }
+        if source == "Finished levels" { return "Geschaffte Level" }
+        if source == "Arrow keys and W A S D always steer." { return "Pfeiltasten und W A S D steuern immer." }
+        if source == "Owned" { return "Im Besitz" }
+        if source == "Mountains" { return "Berge" }
+        if source == "Loading shop…" { return "Shop wird geladen…" }
+        if source == "Purchase pending. Restore to check again." { return "Kauf ausstehend. Käufe erneut wiederherstellen." }
+        if source == "Could not save. Please retry." { return "Speichern fehlgeschlagen. Bitte erneut versuchen." }
+        if source == "Purchase cancelled. You can retry." { return "Kauf abgebrochen. Du kannst es erneut versuchen." }
+        if source == "Purchases restored." { return "Käufe wiederhergestellt." }
+        if source == "Sign in to shop." { return "Zum Einkaufen anmelden." }
+        if source == "Purchases unavailable here." { return "Käufe sind hier nicht verfügbar." }
+        if source == "Could not load the shop. Please retry." { return "Shop konnte nicht geladen werden. Bitte erneut versuchen." }
+        if source == "Unavailable" { return "Nicht verfügbar" }
+        if source == "Free" { return "Kostenlos" }
+        if source == "Restore purchases" { return "Käufe wiederherstellen" }
+        if source == "Refresh" { return "Aktualisieren" }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
@@ -482,6 +520,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "Añadida a Mis niveles." }
         if source == "Guest" { return "Invitado" }
         if source == "Progress is kept only until this page closes." { return "El progreso solo se conserva hasta que cierres esta página." }
+        if source == "Stages" { return "Etapas" }
+        if source == "Stage" { return "Etapa" }
+        if source == "Continue" { return "Continuar" }
+        if source == "Finished levels" { return "Niveles superados" }
+        if source == "Arrow keys and W A S D always steer." { return "Las flechas y W A S D siempre dirigen." }
+        if source == "Owned" { return "En propiedad" }
+        if source == "Mountains" { return "Montañas" }
+        if source == "Loading shop…" { return "Cargando tienda…" }
+        if source == "Purchase pending. Restore to check again." { return "Compra pendiente. Restaura para comprobar de nuevo." }
+        if source == "Could not save. Please retry." { return "No se pudo guardar. Inténtalo de nuevo." }
+        if source == "Purchase cancelled. You can retry." { return "Compra cancelada. Puedes volver a intentarlo." }
+        if source == "Purchases restored." { return "Compras restauradas." }
+        if source == "Sign in to shop." { return "Inicia sesión para comprar." }
+        if source == "Purchases unavailable here." { return "Las compras no están disponibles aquí." }
+        if source == "Could not load the shop. Please retry." { return "No se pudo cargar la tienda. Inténtalo de nuevo." }
+        if source == "Unavailable" { return "No disponible" }
+        if source == "Free" { return "Gratis" }
+        if source == "Restore purchases" { return "Restaurar compras" }
+        if source == "Refresh" { return "Actualizar" }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
@@ -631,6 +688,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "Ajoutée à Mes niveaux." }
         if source == "Guest" { return "Invité" }
         if source == "Progress is kept only until this page closes." { return "La progression n’est conservée que jusqu’à la fermeture de cette page." }
+        if source == "Stages" { return "Étapes" }
+        if source == "Stage" { return "Étape" }
+        if source == "Continue" { return "Continuer" }
+        if source == "Finished levels" { return "Niveaux terminés" }
+        if source == "Arrow keys and W A S D always steer." { return "Les flèches et W A S D dirigent toujours." }
+        if source == "Owned" { return "Possédé" }
+        if source == "Mountains" { return "Montagnes" }
+        if source == "Loading shop…" { return "Chargement de la boutique…" }
+        if source == "Purchase pending. Restore to check again." { return "Achat en attente. Restaurez pour vérifier à nouveau." }
+        if source == "Could not save. Please retry." { return "Enregistrement impossible. Réessayez." }
+        if source == "Purchase cancelled. You can retry." { return "Achat annulé. Vous pouvez réessayer." }
+        if source == "Purchases restored." { return "Achats restaurés." }
+        if source == "Sign in to shop." { return "Connectez-vous pour acheter." }
+        if source == "Purchases unavailable here." { return "Les achats sont indisponibles ici." }
+        if source == "Could not load the shop. Please retry." { return "Impossible de charger la boutique. Réessayez." }
+        if source == "Unavailable" { return "Indisponible" }
+        if source == "Free" { return "Gratuit" }
+        if source == "Restore purchases" { return "Restaurer les achats" }
+        if source == "Refresh" { return "Actualiser" }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
@@ -781,6 +857,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "Ditambahkan ke Level saya." }
         if source == "Guest" { return "Tamu" }
         if source == "Progress is kept only until this page closes." { return "Kemajuan hanya tersimpan sampai halaman ini ditutup." }
+        if source == "Stages" { return "Tahap" }
+        if source == "Stage" { return "Tahap" }
+        if source == "Continue" { return "Lanjutkan" }
+        if source == "Finished levels" { return "Level selesai" }
+        if source == "Arrow keys and W A S D always steer." { return "Tombol panah dan W A S D selalu bisa mengarahkan." }
+        if source == "Owned" { return "Dimiliki" }
+        if source == "Mountains" { return "Pegunungan" }
+        if source == "Loading shop…" { return "Memuat toko…" }
+        if source == "Purchase pending. Restore to check again." { return "Pembelian tertunda. Pulihkan untuk memeriksa lagi." }
+        if source == "Could not save. Please retry." { return "Gagal menyimpan. Coba lagi." }
+        if source == "Purchase cancelled. You can retry." { return "Pembelian dibatalkan. Anda dapat mencoba lagi." }
+        if source == "Purchases restored." { return "Pembelian dipulihkan." }
+        if source == "Sign in to shop." { return "Masuk untuk berbelanja." }
+        if source == "Purchases unavailable here." { return "Pembelian tidak tersedia di sini." }
+        if source == "Could not load the shop. Please retry." { return "Gagal memuat toko. Coba lagi." }
+        if source == "Unavailable" { return "Tidak tersedia" }
+        if source == "Free" { return "Gratis" }
+        if source == "Restore purchases" { return "Pulihkan pembelian" }
+        if source == "Refresh" { return "Muat ulang" }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
@@ -933,6 +1028,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "Aggiunta ai miei livelli." }
         if source == "Guest" { return "Ospite" }
         if source == "Progress is kept only until this page closes." { return "I progressi restano solo finché questa pagina è aperta." }
+        if source == "Stages" { return "Tappe" }
+        if source == "Stage" { return "Tappa" }
+        if source == "Continue" { return "Continua" }
+        if source == "Finished levels" { return "Livelli completati" }
+        if source == "Arrow keys and W A S D always steer." { return "Frecce e W A S D guidano sempre." }
+        if source == "Owned" { return "Posseduto" }
+        if source == "Mountains" { return "Montagne" }
+        if source == "Loading shop…" { return "Caricamento negozio…" }
+        if source == "Purchase pending. Restore to check again." { return "Acquisto in sospeso. Ripristina per ricontrollare." }
+        if source == "Could not save. Please retry." { return "Salvataggio non riuscito. Riprova." }
+        if source == "Purchase cancelled. You can retry." { return "Acquisto annullato. Puoi riprovare." }
+        if source == "Purchases restored." { return "Acquisti ripristinati." }
+        if source == "Sign in to shop." { return "Accedi per acquistare." }
+        if source == "Purchases unavailable here." { return "Gli acquisti non sono disponibili qui." }
+        if source == "Could not load the shop. Please retry." { return "Impossibile caricare il negozio. Riprova." }
+        if source == "Unavailable" { return "Non disponibile" }
+        if source == "Free" { return "Gratis" }
+        if source == "Restore purchases" { return "Ripristina acquisti" }
+        if source == "Refresh" { return "Aggiorna" }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
@@ -1087,6 +1201,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "マイレベルに追加しました。" }
         if source == "Guest" { return "ゲスト" }
         if source == "Progress is kept only until this page closes." { return "進行状況はこのページを閉じるまでしか保存されません。" }
+        if source == "Stages" { return "ステージ" }
+        if source == "Stage" { return "ステージ" }
+        if source == "Continue" { return "つづける" }
+        if source == "Finished levels" { return "クリアしたレベル" }
+        if source == "Arrow keys and W A S D always steer." { return "矢印キーと W A S D でいつでも操作できます。" }
+        if source == "Owned" { return "所有済み" }
+        if source == "Mountains" { return "山岳" }
+        if source == "Loading shop…" { return "ショップを読み込み中…" }
+        if source == "Purchase pending. Restore to check again." { return "購入を確認中です。購入を復元して再確認してください。" }
+        if source == "Could not save. Please retry." { return "保存できませんでした。もう一度お試しください。" }
+        if source == "Purchase cancelled. You can retry." { return "購入をキャンセルしました。再試行できます。" }
+        if source == "Purchases restored." { return "購入を復元しました。" }
+        if source == "Sign in to shop." { return "購入するにはサインインしてください。" }
+        if source == "Purchases unavailable here." { return "ここでは購入できません。" }
+        if source == "Could not load the shop. Please retry." { return "ショップを読み込めませんでした。再試行してください。" }
+        if source == "Unavailable" { return "利用不可" }
+        if source == "Free" { return "無料" }
+        if source == "Restore purchases" { return "購入を復元" }
+        if source == "Refresh" { return "更新" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
@@ -1241,6 +1374,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "내 레벨에 추가했습니다." }
         if source == "Guest" { return "게스트" }
         if source == "Progress is kept only until this page closes." { return "진행 상황은 이 페이지를 닫을 때까지만 유지됩니다." }
+        if source == "Stages" { return "스테이지" }
+        if source == "Stage" { return "스테이지" }
+        if source == "Continue" { return "계속하기" }
+        if source == "Finished levels" { return "완료한 레벨" }
+        if source == "Arrow keys and W A S D always steer." { return "방향키와 W A S D로 언제나 조종할 수 있어요." }
+        if source == "Owned" { return "보유 중" }
+        if source == "Mountains" { return "산악" }
+        if source == "Loading shop…" { return "상점 불러오는 중…" }
+        if source == "Purchase pending. Restore to check again." { return "구매 확인 중입니다. 복원하여 다시 확인하세요." }
+        if source == "Could not save. Please retry." { return "저장하지 못했습니다. 다시 시도하세요." }
+        if source == "Purchase cancelled. You can retry." { return "구매가 취소되었습니다. 다시 시도할 수 있습니다." }
+        if source == "Purchases restored." { return "구매를 복원했습니다." }
+        if source == "Sign in to shop." { return "구매하려면 로그인하세요." }
+        if source == "Purchases unavailable here." { return "여기서는 구매할 수 없습니다." }
+        if source == "Could not load the shop. Please retry." { return "상점을 불러오지 못했습니다. 다시 시도하세요." }
+        if source == "Unavailable" { return "이용 불가" }
+        if source == "Free" { return "무료" }
+        if source == "Restore purchases" { return "구매 복원" }
+        if source == "Refresh" { return "새로 고침" }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
@@ -1393,6 +1545,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "Adicionada a Meus níveis." }
         if source == "Guest" { return "Convidado" }
         if source == "Progress is kept only until this page closes." { return "O progresso só fica guardado até fechar esta página." }
+        if source == "Stages" { return "Etapas" }
+        if source == "Stage" { return "Etapa" }
+        if source == "Continue" { return "Continuar" }
+        if source == "Finished levels" { return "Níveis concluídos" }
+        if source == "Arrow keys and W A S D always steer." { return "As setas e W A S D sempre controlam." }
+        if source == "Owned" { return "Adquirido" }
+        if source == "Mountains" { return "Montanhas" }
+        if source == "Loading shop…" { return "Carregando loja…" }
+        if source == "Purchase pending. Restore to check again." { return "Compra pendente. Restaure para verificar novamente." }
+        if source == "Could not save. Please retry." { return "Não foi possível salvar. Tente novamente." }
+        if source == "Purchase cancelled. You can retry." { return "Compra cancelada. Você pode tentar novamente." }
+        if source == "Purchases restored." { return "Compras restauradas." }
+        if source == "Sign in to shop." { return "Entre para comprar." }
+        if source == "Purchases unavailable here." { return "As compras não estão disponíveis aqui." }
+        if source == "Could not load the shop. Please retry." { return "Não foi possível carregar a loja. Tente novamente." }
+        if source == "Unavailable" { return "Indisponível" }
+        if source == "Free" { return "Grátis" }
+        if source == "Restore purchases" { return "Restaurar compras" }
+        if source == "Refresh" { return "Atualizar" }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
@@ -1547,6 +1718,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "Добавлено в Мои уровни." }
         if source == "Guest" { return "Гость" }
         if source == "Progress is kept only until this page closes." { return "Прогресс сохраняется только до закрытия этой страницы." }
+        if source == "Stages" { return "Этапы" }
+        if source == "Stage" { return "Этап" }
+        if source == "Continue" { return "Продолжить" }
+        if source == "Finished levels" { return "Пройденные уровни" }
+        if source == "Arrow keys and W A S D always steer." { return "Стрелки и W A S D работают всегда." }
+        if source == "Owned" { return "Приобретено" }
+        if source == "Mountains" { return "Горы" }
+        if source == "Loading shop…" { return "Загрузка магазина…" }
+        if source == "Purchase pending. Restore to check again." { return "Покупка ожидает подтверждения. Восстановите покупки для проверки." }
+        if source == "Could not save. Please retry." { return "Не удалось сохранить. Повторите попытку." }
+        if source == "Purchase cancelled. You can retry." { return "Покупка отменена. Можно попробовать снова." }
+        if source == "Purchases restored." { return "Покупки восстановлены." }
+        if source == "Sign in to shop." { return "Войдите, чтобы покупать." }
+        if source == "Purchases unavailable here." { return "Покупки здесь недоступны." }
+        if source == "Could not load the shop. Please retry." { return "Не удалось загрузить магазин. Повторите попытку." }
+        if source == "Unavailable" { return "Недоступно" }
+        if source == "Free" { return "Бесплатно" }
+        if source == "Restore purchases" { return "Восстановить покупки" }
+        if source == "Refresh" { return "Обновить" }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
@@ -1701,6 +1891,25 @@ Text :: (source: string) -> string {
         if source == "Added to My levels." { return "已添加到我的关卡。" }
         if source == "Guest" { return "访客" }
         if source == "Progress is kept only until this page closes." { return "进度只保留到关闭此页面为止。" }
+        if source == "Stages" { return "关卡" }
+        if source == "Stage" { return "关卡" }
+        if source == "Continue" { return "继续" }
+        if source == "Finished levels" { return "已完成关卡" }
+        if source == "Arrow keys and W A S D always steer." { return "方向键和 W A S D 随时都能操控。" }
+        if source == "Owned" { return "已拥有" }
+        if source == "Mountains" { return "山脉" }
+        if source == "Loading shop…" { return "正在加载商店…" }
+        if source == "Purchase pending. Restore to check again." { return "购买待确认。请恢复购买以再次检查。" }
+        if source == "Could not save. Please retry." { return "无法保存。请重试。" }
+        if source == "Purchase cancelled. You can retry." { return "购买已取消。可以重试。" }
+        if source == "Purchases restored." { return "购买已恢复。" }
+        if source == "Sign in to shop." { return "请登录后购买。" }
+        if source == "Purchases unavailable here." { return "此处暂不支持购买。" }
+        if source == "Could not load the shop. Please retry." { return "无法加载商店。请重试。" }
+        if source == "Unavailable" { return "不可用" }
+        if source == "Free" { return "免费" }
+        if source == "Restore purchases" { return "恢复购买" }
+        if source == "Refresh" { return "刷新" }
     }
     return source
 }

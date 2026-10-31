@@ -14,6 +14,7 @@
 #import "crypto/sha256"
 #import, file "../src/account_build.zi";
 PortalConfig :: #import, file "../src/portal_config.zi";
+StoreModel :: #import, file "../src/portal_store.zi";
 WebArt :: #import, file "../src/web_art.zi";
 
 OUT :: "build/web"
@@ -278,8 +279,21 @@ BuildCrazyGames :: () -> bool {
     key := EnvironmentText("CRAZYGAMES_LEADERBOARD_KEY")
     ads := EnvironmentText("CRAZYGAMES_ADS_ENABLED")
     if !PortalConfig.Valid(key, ads) { return Fail("invalid CrazyGames configuration (expected a 32-byte base64 key and true/false ads)") }
+    store := EnvironmentText("CRAZYGAMES_STORE_CONFIG")
+    store_file := EnvironmentText("CRAZYGAMES_STORE_CONFIG_FILE")
+    if store_file.count > 0 {
+        if store.count > 0 || !IsFile(store_file) || PathStatus(store_file).size > PortalConfig.STORE_MAX { return Fail("invalid store configuration input") }
+        found: bool
+        store, found = ReadEntireFile(store_file)
+        if !found || store.count == 0 { return Fail("cannot read store configuration") }
+    }
+    store_state: StoreModel.StoreState
+    sandbox: bool
+    if !PortalConfig.Store(store, *store_state, *sandbox) || sandbox { return Fail("invalid public store configuration (production sandbox must be false)") }
     if !BuildWeb(true) { return false }
-    if !WriteEntireFile(JoinPath(PORTAL_OUT, "portal-config.js"), PortalConfig.Text(key, ads)) { return Fail("cannot write portal configuration") }
+    config: Vec(u8)
+    Append(*config, PortalConfig.Text(key, ads)); Append(*config, PortalConfig.StoreText(store))
+    if !WriteEntireFile(JoinPath(PORTAL_OUT, "portal-config.js"), BuilderFinish(config)) { return Fail("cannot write portal configuration") }
     bytes: s64
     files: s64
     if !Measure(PORTAL_OUT, *bytes, *files) { return Fail("cannot measure the portal copy") }

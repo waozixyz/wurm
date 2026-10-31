@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "sandbox": false,
+  "products": [
+    {"kind":"skin","skinId":1,"sku":"EXAMPLE_ONLY_skin_1","purchaseId":"EXAMPLE_ONLY_purchase_skin_1"},
+    {"kind":"skin","skinId":2,"sku":"EXAMPLE_ONLY_skin_2","purchaseId":"EXAMPLE_ONLY_purchase_skin_2"},
+    {"kind":"skin","skinId":3,"sku":"EXAMPLE_ONLY_skin_3","purchaseId":"EXAMPLE_ONLY_purchase_skin_3"},
+    {"kind":"skin","skinId":7,"sku":"EXAMPLE_ONLY_skin_7","purchaseId":"EXAMPLE_ONLY_purchase_skin_7"},
+    {"kind":"mountains","sku":"EXAMPLE_ONLY_mountains","purchaseId":"EXAMPLE_ONLY_purchase_mountains"},
+    {"kind":"coins","packCoins":100,"cumulativeInventory":true,"sku":"EXAMPLE_ONLY_pack_100","purchaseId":"EXAMPLE_ONLY_purchase_pack_100"},
+    {"kind":"coins","packCoins":500,"cumulativeInventory":true,"sku":"EXAMPLE_ONLY_pack_500","purchaseId":"EXAMPLE_ONLY_purchase_pack_500"},
+    {"kind":"coins","packCoins":1000,"cumulativeInventory":true,"sku":"EXAMPLE_ONLY_pack_1000","purchaseId":"EXAMPLE_ONLY_purchase_pack_1000"}
+  ]
+}

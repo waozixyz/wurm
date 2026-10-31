@@ -1,0 +1,157 @@
+Editor :: #import, file "../src/portal_editor.zi";
+#import, file "../src/own_levels.zi";
+#import, file "../src/game.zi";
+#import, file "../src/level_json.zi";
+Collections :: #import "entity/level_collections";
+Custom :: #import, file "../src/custom_levels.zi";
+File :: #import "std/file_linux";
+#import "std/text_buffer"
+#import "std/vec"
+#import "std/c_string"
+
+// A synchronous SDK-like store with independent account namespaces. No app
+// state survives Reload; only successful writes reach these durable slots.
+data: [2][655361]u8;
+lengths: [2]s64 = .[-2, -2];
+account: s32;
+fail_write: bool;
+fail_read: bool;
+writes: s32;
+failures: s32;
+
+Check :: (value: bool, label: string) {
+    if !value { print("FAIL: %\n", label); failures += 1 }
+}
+Read :: (name: string, output: []u8) -> s64 {
+    unused name;
+    if fail_read { return -1 }
+    count := lengths[account]
+    if count < 0 { return count }
+    if count >= output.count { return -1 }
+    for index: 0..count - 1 { output[index] = data[account][index] }
+    return count
+}
+Write :: (name: string, text: string) -> bool {
+    unused name;
+    writes += 1
+    if fail_write || text.count > Editor.MAX_BYTES { return false }
+    for byte, index: text { data[account][index] = byte }
+    lengths[account] = text.count
+    return true
+}
+Reload :: () {
+    OwnClearOpen("", 0)
+    own_collection_count = 0
+}
+Level :: (name: string) -> WurmLevel {
+    level: WurmLevel
+    unused CopyCString(name, level.name[:])
+    level.stage = 2
+    level.apples = 1
+    level.board[10] = 1
+    level.objects[11] = OBJECT_SNAIL
+    level.has_portrait = true
+    level.portrait[12] = 1
+    return level
+}
+
+#program_export
+main :: () -> s32 {
+    Editor.read_record = Read
+    Editor.write_record = Write
+    own_service = Editor.Service
+    Check(OwnRefresh() && own_collection_count == 0, "missing account starts empty")
+    OwnNew("First — Á", 200)
+    for index: 0..23 {
+        level := Level(ifx index == 0 then "first" else "next")
+        Check(OwnAdd(*level) == index, "24 levels accepted")
+    }
+    extra := Level("extra")
+    Check(OwnAdd(*extra) == -1, "25th level rejected")
+    Check(OwnSave(), "large multi-level save")
+    Check(lengths[0] > 100000, "payload exceeds old bridge and fake limits")
+    first: [33]u8
+    unused CopyCString(TextUntilNul(own_record[:]), first[:])
+    Reload()
+    Check(OwnOpen(TextUntilNul(first[:])) && own_level_count == 24, "reload restores all levels")
+    Check(TextUntilNul(own_levels[0].name[:]) == "first" && own_levels[23].portrait[12] == 1, "large payload exact read")
+    OwnRename("Renamed — Ö")
+    Check(OwnMove(0, 1), "reorder levels")
+    own_order = -10
+    Check(OwnSave(), "rename and order saved")
+    Reload()
+    Check(OwnOpen(TextUntilNul(first[:])) && own_order == -10 && TextUntilNul(own_title[:]) == "Renamed — Ö", "metadata reload")
+    Check(TextUntilNul(own_levels[1].name[:]) == "first", "level order reload")
+    fail_write = true
+    OwnRename("must not replace")
+    Check(!OwnSave(), "write failure visible")
+    Check(!OwnDelete(), "delete failure visible")
+    fail_write = false
+    Check(OwnOpen(TextUntilNul(first[:])) && TextUntilNul(own_title[:]) == "Renamed — Ö", "failed mutations preserve save")
+    fail_read = true
+    before := writes
+    Check(!OwnSave() && !OwnRefresh(), "read errors fail closed")
+    Check(writes == before, "read failure never overwrites")
+    fail_read = false
+
+    account = 1
+    Reload()
+    Check(OwnRefresh() && own_collection_count == 0, "second account never borrows first")
+    Check(!OwnOpen(TextUntilNul(first[:])), "missing account cannot open another draft")
+    OwnNew("Other account", 0)
+    Check(OwnAdd(*extra) == 0 && OwnSave(), "second account save")
+    account = 0
+    Reload()
+    Check(OwnRefresh() && own_collection_count == 1, "first account list isolated")
+    Check(TextUntilNul(own_collections[0].title[:]) == "Renamed — Ö", "first account content isolated")
+
+    // Fill aggregate storage until quota guard refuses without calling writer.
+    accepted: s32
+    while accepted < 32 {
+        OwnNew("Large", 300 + cast(s64)accepted)
+        for index: 0..23 { unused OwnAdd(*extra) }
+        before = writes
+        if !OwnSave() {
+            Check(writes == before, "quota rejected before durable write")
+            break
+        }
+        accepted += 1
+    }
+    Check(accepted > 0 && accepted < 31, "aggregate quota bounded")
+    Check(OwnOpen(TextUntilNul(first[:])) && own_level_count == 24, "quota preserves prior large content")
+    Check(OwnDelete(), "delete saved collection")
+    Check(!OwnOpen(TextUntilNul(first[:])), "deleted collection missing after reload")
+
+    // A separate namespace reaches the collection limit with small drafts.
+    account = 1
+    for index: 1..31 { OwnNew("Small", index); Check(OwnSave(), "32 collection capacity") }
+    OwnNew("Too many", 99)
+    Check(!OwnSave(), "33rd collection rejected")
+    Reload()
+    Check(OwnRefresh() && own_collection_count == 32, "all 32 saved collections retained")
+    // A corrupt/oversized SDK read is a visible failure, never an empty store.
+    lengths[1] = Editor.MAX_BYTES + 1
+    before = writes
+    Check(!OwnRefresh() && !OwnSave() && writes == before, "oversized read fails closed")
+    data[1][0] = #char "{"
+    lengths[1] = 1
+    Check(!OwnRefresh() && !OwnSave() && writes == before, "corrupt read fails closed")
+
+    // Exercise the actual no-SDK route at a private current Custom root.
+    Check(Custom.CustomSetRoot("work/portal-editor-test/"), "private local root")
+    unused File.CreateDirectory("work/portal-editor-test")
+    unused File.RemoveFile("work/portal-editor-test/editor-drafts-v1.json")
+    Editor.read_record = Editor.ReadStorage
+    Editor.write_record = Editor.WriteStorage
+    OwnNew("Local preview", 7)
+    Check(OwnAdd(*extra) == 0 && OwnSave(), "local preview durable save")
+    local_id: [33]u8
+    unused CopyCString(TextUntilNul(own_record[:]), local_id[:])
+    Reload()
+    Check(OwnOpen(TextUntilNul(local_id[:])) && TextUntilNul(own_title[:]) == "Local preview", "local preview file reload")
+    Check(File.PathExists("work/portal-editor-test/editor-drafts-v1.json"), "uses Custom root")
+    Check(OwnDelete(), "local preview delete")
+    unused File.RemoveFile("work/portal-editor-test/editor-drafts-v1.json")
+    print("Portal editor local test failures: %\n", failures)
+    return ifx failures == 0 then 0 else 1
+}
