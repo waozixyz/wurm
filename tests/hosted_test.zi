@@ -6,6 +6,7 @@
 #import "kryon/widget_kind"
 #import "kryon/text_input_props"
 #import "kryon/input_protocol"
+#import "kryon/frame_snapshot"
 #import "kryon/pixmap"
 #import "kryon/scroll_device"
 #import "apps/node_types"
@@ -15,6 +16,7 @@
 Portable :: #import, file "../src/portable.zi";
 App :: #import, file "../src/app.zi";
 Game :: #import, file "../src/game.zi";
+Local :: #import, file "../src/multiplayer.zi";
 Account :: #import, file "../src/account.zi";
 Progress :: #import, file "../src/progress.zi";
 Own :: #import, file "../src/own_levels.zi";
@@ -46,7 +48,7 @@ field_input: TextFieldInput;
 #program_export
 AppFieldInputHost :: () -> TextFieldInput { return field_input }
 #program_export
-AppKeyHost :: () -> s32 { return 0 }
+AppKeyHost :: () -> s32 { return frame_key }
 #program_export
 AppNowHost :: () -> float64 { return 1793232000.0 }
 #program_export
@@ -97,8 +99,16 @@ AppServiceHost :: (name: string, request: string) -> string {
 Expect :: (ok: bool, reason: string) {
     if !ok { print("FAIL: %\n", reason); failures += 1 }
 }
+frame_input: FrameInputSnapshot = .{.focused = true};
+frame_key: s32;
 Draw :: () {
     frame.now += 0.1
+    frame_input.available = true
+    frame_input.pointer = pointer
+    frame_input.sequence += 1
+    Expect(FrameInputBegin(frame.session, frame_input), "publish hosted frame input")
+    published := frame.session
+    defer { FrameInputEnd(published) }
     BeginScrollFrame(frame.session, Vector2.{pointer.x, pointer.y}, pointer.pressed,
         pointer.down, pointer.released, 0.0, frame.now)
     Expect(cast(s32)BeginFrame(frame.session, 1, Rectangle.{0.0, 0.0, cast(float32)frame.width, cast(float32)frame.height}) == 0, "start hosted frame")
@@ -235,6 +245,71 @@ NameFields :: () {
     unused SessionClose(session)
     print("Name field consumer local tests: % failures\n", failures)
 }
+// The real Wurm Frame consumes the public snapshot before simulation, while
+// the UI key remains available for navigation. No native window is involved.
+InputFrames :: () {
+    round: *Local.Round = *App.local_round
+    App.StartLevel(11, 0, 1)
+    App.game.mode = Game.MODE_PLAYING
+    App.game.next_step = 10000000
+    App.game.direction = Game.DIR_UP
+    App.game.length = 8
+    frame_input.keys[KeyLeft] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+    frame_key = KeyLeft
+    Draw()
+    Expect(App.game.next_direction == Game.DIR_LEFT, "real frame applies observed turn")
+    App.game.next_direction = Game.DIR_RIGHT
+    frame_input.keys[KeyLeft] = cast(u8)FrameKeyHeld
+    frame_key = 0
+    Draw()
+    Expect(App.game.next_direction == Game.DIR_RIGHT, "held key does not overwrite a queued turn")
+    frame_input.keys[KeyLeft] = cast(u8)(FrameKeyHeld | FrameKeyRepeated)
+    frame_key = KeyLeft
+    Draw()
+    Expect(App.game.next_direction == Game.DIR_LEFT, "real frame keeps host repeat cadence")
+    App.game.next_direction = Game.DIR_UP
+    frame_input.keys[KeyLeft] = cast(u8)FrameKeyReleased
+    Draw()
+    Expect(App.game.next_direction == Game.DIR_UP, "release adds no real frame turn")
+    frame_input.focused = false
+    frame_input.keys[KeyLeft] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+    Draw()
+    Expect(App.game.next_direction == Game.DIR_UP, "focus loss cancels frame steering")
+    frame_input.focused = true
+    frame_input.keys[KeyLeft] = cast(u8)FrameKeyHeld
+    Draw()
+    Expect(App.game.next_direction == Game.DIR_UP, "focus regain does not replay held turn")
+    frame_input.keys[KeyLeft] = 0
+    frame_input.keys[32] = cast(u8)(FrameKeyHeld | FrameKeyRepeated)
+    frame_key = 32
+    Draw()
+    Expect(App.game.mode == Game.MODE_PLAYING, "repeat does not activate pause shortcut")
+    frame_input.keys[32] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+    Draw()
+    Expect(App.game.mode == Game.MODE_PAUSED, "fresh press pauses through real frame")
+    frame_input = .{.focused = true}
+    frame_key = 0
+    App.game.mode = App.MODE_LOCAL
+    Expect(Local.Start(round, 4, 0, 1), "start real frame multiplayer fixture")
+    round.next_step = 10000000
+    for id: 0..3 {
+        round.players[id].alive = true
+        round.players[id].direction = Game.DIR_UP
+        round.players[id].next_direction = Game.DIR_UP
+    }
+    frame_input.keys[KeyLeft] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+    frame_input.keys[65] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+    frame_input.keys[74] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+    frame_input.keys[324] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+    frame_key = KeyLeft
+    Draw()
+    for id: 0..3 { Expect(round.players[id].next_direction == Game.DIR_LEFT, "real frame delivers all four players independently") }
+    frame_input = .{.focused = true}
+    frame_key = 0
+    App.OpenStages()
+    Draw()
+}
+
 #program_export
 main :: () -> s32 {
     NameFields()
@@ -267,6 +342,7 @@ main :: () -> s32 {
         Expect(message.succeeded, "shop Back returns inside the game")
         Draw()
     }
+    InputFrames()
     for portrait: 0..1 {
         frame.width = ifx portrait == 1 then 390 else 844
         frame.height = ifx portrait == 1 then 844 else 390

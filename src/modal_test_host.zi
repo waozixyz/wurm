@@ -5,6 +5,7 @@ using UI :: #import "kryon/Widgets";
 #import "kryon/tree"
 #import "kryon/tree_input"
 #import "kryon/Frame"
+#import "kryon/frame_snapshot"
 #import "kryon/test_driver"
 Timer :: #import "std/timer_linux";
 App :: #import "app";
@@ -22,6 +23,10 @@ Number :: (name: string, fallback: s32) -> s32 {
 }
 
 ProbeFrame :: (session: Session) -> bool {
+    // The progress probe also renders before the interactive loop begins.
+    if !PollDesktop() || !DesktopFrameInputBegin(session) { return false }
+    published := session
+    defer { FrameInputEnd(published) }
     BeginDesktopFrame()
     viewport := DesktopViewport()
     if cast(s32)BeginFrame(session, 1, viewport) != 0 { return false }
@@ -240,14 +245,26 @@ main :: () -> s32 {
     previous_direction: s32 = -1
     previous_contact: bool;
     while PollDesktop() {
+        if !DesktopFrameInputBegin(session) { return 6 }
+        published := session
+        defer { FrameInputEnd(published) }
         BeginDesktopFrame()
         // A private-display test drives the probe through KRYON_TEST_DRIVER.
-        TreePointerUpdate(session, TestDriverPointer(session, PollPointer()))
+        pointer_input := TestDriverPointer(session, PollPointer())
+        TreePointerUpdate(session, pointer_input)
         key := DesktopPressedKey()
+        scripted_key: s32
         if key == 0 {
-            for candidate: cast(s32)0..349 { if TestDriverKeyPressed(candidate) { key = candidate; break } }
+            for candidate: cast(s32)0..349 { if TestDriverKeyPressed(candidate) { key = candidate; scripted_key = candidate; break } }
         }
         if key != 0 { KeyboardSend(session, key) }
+        // Freeze the private driver's observations before the app callback,
+        // just as the normal host freezes its OS observations after Poll.
+        input := CaptureFrameInput(session)
+        FrameInputEnd(session)
+        input.pointer = pointer_input
+        if scripted_key != 0 { input.keys[scripted_key] = cast(u8)(FrameKeyHeld | FrameKeyPressed) }
+        if !FrameInputBegin(session, input) { return 7 }
         viewport := DesktopViewport()
         if cast(s32)BeginFrame(session, 1, viewport) != 0 { return 3 }
         if App.Frame(session, viewport) != 0 { return 4 }

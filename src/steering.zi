@@ -1,27 +1,37 @@
-// Relative finger movement, measured from the last accepted movement.
-// Re-anchoring lets one held finger make successive corners naturally.
-TouchSteering :: struct {
-    active: bool
-    x: float32
-    y: float32
+// Wurm turns on discrete input events; the host owns key observations and
+// Game2D owns relative swipe thresholds. Holding alone invents no repeat.
+#import "kryon/input_protocol"
+#import "game2d/controls"
+
+MovementKey :: (key: s32, multiplayer: bool = false) -> bool {
+    if key == KeyLeft || key == KeyUp || key == KeyRight || key == KeyDown ||
+        key == 65 || key == 87 || key == 68 || key == 83 { return true }
+    return multiplayer && (key == 74 || key == 73 || key == 76 || key == 75 ||
+        key == 324 || key == 328 || key == 326 || key == 325)
 }
 
-TouchDirection :: (touch: *TouchSteering, down: bool, x: float32, y: float32) -> s32 {
-    if !down { touch.active = false; return -1 }
-    if !touch.active {
-        touch.active = true
-        touch.x = x
-        touch.y = y
-        return -1
-    }
-    dx := x - touch.x
-    dy := y - touch.y
-    across := ifx dx < 0.0 then -dx else dx
-    along := ifx dy < 0.0 then -dy else dy
-    // Logical screen units: responsive on phones, without following jitter.
-    if across < 6.0 && along < 6.0 { return -1 }
-    touch.x = x
-    touch.y = y
-    if across >= along { return ifx dx < 0.0 then 0 else 2 }
-    return ifx dy < 0.0 then 1 else 3
+// Fresh presses and host repeats retain the keyboard's existing turn cadence.
+// A held key on focus regain must not replay a turn or a shortcut.
+TurnKey :: (input: FrameInputSnapshot, key: s32, multiplayer: bool = false) -> bool {
+    return input.available && input.focused && key > 0 && key < 512 &&
+        MovementKey(key, multiplayer) &&
+        (input.keys[key] & cast(u8)(FrameKeyPressed | FrameKeyRepeated)) != 0
+}
+
+ShortcutKey :: (input: FrameInputSnapshot, key: s32) -> s32 {
+    if !input.available || !input.focused || key <= 0 || key >= 512 { return 0 }
+    return ifx (input.keys[key] & cast(u8)FrameKeyPressed) != 0 then key else 0
+}
+
+// Keep the ordered key the UI queue supplied when it is a turn; otherwise
+// select one observed turn. The simulation and queued direction stay in Wurm.
+SingleTurnKey :: (input: FrameInputSnapshot, preferred: s32) -> s32 {
+    if TurnKey(input, preferred) { return preferred }
+    for key: cast(s32)1..511 { if TurnKey(input, key) { return key } }
+    return 0
+}
+
+TouchDirection :: (touch: *GameSwipe, down: bool, x: float32, y: float32) -> s32 {
+    direction := GameSwipeDirection(touch, down, x, y, 6.0)
+    return ifx touch.step then direction else -1
 }

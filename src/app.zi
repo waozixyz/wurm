@@ -43,6 +43,9 @@ Utf8 :: #import "std/utf8";
 ShopModel :: #import "entity/game_shop";
 FingerSwipe :: #import "mingcute/mingcute_filled_finger_swipe";
 Touch :: #import, file "steering.zi";
+GameControls :: #import "game2d/controls";
+Navigation :: #import "game2d/navigation";
+#import "kryon/frame_snapshot"
 #import "kryon/svg_icon_props"
 #import "kryon/svg_icon_widget"
 HeartIcon :: #import "mingcute/mingcute_filled_heart";
@@ -91,12 +94,6 @@ EditorApp :: () -> bool {
     ScrollDevice :: #import "kryon/scroll_device";
     TreeInput :: #import "kryon/tree_input";
 }
-// The desktop host hands over its ordered key queue for local rounds, so the
-// app links no window backend of its own and headless hosts can draw it.
-NativeKeys :: #type () -> s32;
-native_next_key: NativeKeys;
-native_keys_ready: bool;
-UseNativeKeys :: (next: NativeKeys) { native_next_key = next; native_keys_ready = true }
 #import "std/number_text"
 #import "std/text_buffer"
 #import, file "game.zi";
@@ -1342,7 +1339,7 @@ OpenStages :: () {
 // Play the selected layout from its own private override, published board
 // or mirror. An explicit editor mode takes precedence over window shape.
 PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, layout: s32 = -1) {
-    touch_steering.active = false
+    touch_steering = GameControls.GameSwipe.{}
     recorded_level = -1
     board: [CELLS]u8
     objects: [CELLS]u8
@@ -2871,7 +2868,7 @@ DrawLocalPiece :: (session: Session, key: u64, stage: Rectangle, at: Point, id: 
     unused Image(session, ImageProps.{.key = key, .asset_path = Sheet(0), .bounds = bounds,
         .source = source, .tint = LocalColour(id), .smooth = true, .alt_text = Locale.Text("Player")})
 }
-DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64) {
+DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64, input: Input.FrameInputSnapshot) {
     BoardSize(COLUMNS, ROWS)
     unused Box(session, BoxProps.{.key = 31000, .bounds = area, .fill = Appearance.Canvas()})
     if local_round.phase == Local.SETUP {
@@ -2925,19 +2922,14 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64) {
         }
         return
     }
-    native_keys := false
-    first := key
-    if native_keys_ready {
-        next := native_next_key()
-        if next != 0 { native_keys = true; first = next }
-    }
-    LocalKey(first, now)
-    #if !#defined(WURM_PORTABLE) {
-        for pending: 0..31 {
-            next := KeyboardTake(session)
-            if native_keys { next = native_next_key() }
-            if next == 0 { break }
-            LocalKey(next, now)
+    shortcut := Touch.ShortcutKey(input, key)
+    if Touch.MovementKey(shortcut, true) { shortcut = 0 }
+    LocalKey(shortcut, now)
+    // Each player's observed press/repeat is independent; consuming one UI
+    // key must not hide another player's turn in the same frame.
+    if local_round.phase == Local.PLAYING {
+        for turn: cast(s32)1..511 {
+            if Touch.TurnKey(input, turn, true) { unused Local.Input(*local_round, turn) }
         }
     }
     Local.Advance(*local_round, now)
@@ -3076,7 +3068,7 @@ StartChosenRun :: (now: s64) {
     if Portal.Guest() {
         game.mode = MODE_PLAYING
         game.next_step = now + TickInterval(game.level)
-        touch_steering.active = false
+        touch_steering = GameControls.GameSwipe.{}
     }
 }
 PlaySelected :: (level: s32, now: s64) -> bool {
@@ -3115,7 +3107,7 @@ OpenLevels :: () {
     level_chapter = StageOf(Progress.unlocked)
     level_scroll = 0
     game.mode = MODE_LEVELS
-    touch_steering.active = false
+    touch_steering = GameControls.GameSwipe.{}
 }
 DrawLevels :: (session: Session, area: Rectangle, now: s64) {
     if Button(session, ButtonProps.{.key = 26001,
@@ -3201,18 +3193,21 @@ DrawLevels :: (session: Session, area: Rectangle, now: s64) {
     if chosen >= 0 { unused PlaySelected(chosen, now) }
 }
 
-controls_previous_mode: s32 = MODE_STAGES;
+controls_navigation: Navigation.GameNavigation = .{.previous = MODE_STAGES};
 AskControls :: () {
-    controls_previous_mode = game.mode
+    controls_navigation.page = game.mode
+    Navigation.GameNavigationControls(*controls_navigation)
+    controls_navigation.pending_start = game.mode == MODE_STAGES || game.mode == MODE_LEVELS
     game.mode = MODE_CONTROLS
-    touch_steering.active = false
+    touch_steering = GameControls.GameSwipe.{}
 }
 ChooseControls :: (pad: bool, now: s64) {
     unused Controls.SetPad(pad)
     PreferencesChanged()
-    touch_steering.active = false
-    if controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS { StartChosenRun(now) }
-    else { game.mode = controls_previous_mode; game.next_step = now + TickInterval(game.level) }
+    touch_steering = GameControls.GameSwipe.{}
+    start := Navigation.GameNavigationChoose(*controls_navigation, ifx pad then Navigation.GAME_PAD else Navigation.GAME_SWIPE)
+    if start { StartChosenRun(now) }
+    else { game.mode = controls_navigation.page; game.next_step = now + TickInterval(game.level) }
 }
 DrawControls :: (session: Session, area: Rectangle, now: s64) {
     unused Box(session, BoxProps.{.key = 23000, .bounds = area, .fill = Color.{17, 38, 27, 175}})
@@ -3259,7 +3254,7 @@ HandleInput :: (key: s32, now: s64) {
     if game.mode == MODE_CONTROLS {
         if key == 49 { ChooseControls(false, now) }
         else if key == 50 { ChooseControls(true, now) }
-        else if key == Input.KeyEscape { game.mode = controls_previous_mode }
+        else if key == Input.KeyEscape { game.mode = controls_navigation.previous }
         return
     }
     #if #defined(WURM_CRAZYGAMES) {
@@ -3288,7 +3283,7 @@ HandleInput :: (key: s32, now: s64) {
         if key == Input.KeyEnter || key == 32 {
             game.mode = MODE_PLAYING
             game.next_step = now + TickInterval(game.level)
-            touch_steering.active = false
+            touch_steering = GameControls.GameSwipe.{}
         } else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_DIED {
         if key == Input.KeyEnter || key == 32 {
@@ -3336,7 +3331,7 @@ HandleInput :: (key: s32, now: s64) {
 // Normal play follows the window shape; editor playtests keep their explicit
 // layout. Steering stays in screen directions in either case.
 game_portrait: bool;
-touch_steering: Touch.TouchSteering;
+touch_steering: GameControls.GameSwipe;
 stage_digits: [21]u8;
 stage_total: [24]u8;
 
@@ -3452,6 +3447,8 @@ portal_ad_was_pending: bool;
 
 #program_export
 Frame :: (session: Session, viewport: Rectangle) -> s32 {
+    frame_input := CaptureFrameInput(session)
+    if game.mode != MODE_PLAYING || !frame_input.available || !frame_input.focused { touch_steering = GameControls.GameSwipe.{} }
     Portal.ConfigureLanguage()
     unused WidgetPaletteUse(session, Appearance.Palette())
     #if #defined(PLATFORM_WEB) {
@@ -3477,7 +3474,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         #if !#defined(WURM_PORTABLE) {
             while KeyboardTake(session) != 0 {}
         }
-        touch_steering.active = false
+        touch_steering = GameControls.GameSwipe.{}
         game.next_step = now + 25
         unused Box(session, BoxProps.{.key = 29990, .bounds = viewport, .fill = Appearance.Canvas()})
         CentreText(session, 29991, "Please wait…", viewport, 20)
@@ -3486,7 +3483,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     #if !#defined(WURM_PORTABLE) {
         // Every scrollable page shares the same input path, including the
         // skin shop, calendar and settings on small windows and phones.
-        pointer := GamePointer(session)
+        pointer := frame_input.pointer
         ScrollDevice.BeginScrollFrame(session, Vector2.{pointer.x, pointer.y}, pointer.pressed,
             pointer.down, pointer.released, TreeInput.PointerWheelTake(session, viewport), cast(float64)now / 1000.0)
     }
@@ -3503,10 +3500,11 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         Account.RefreshProfile()
         if game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY || game.mode == MODE_FINISHED || game.mode == MODE_DIED || game.mode == MODE_VICTORY {
             game.mode = MODE_STAGES
-            touch_steering.active = false
+            touch_steering = GameControls.GameSwipe.{}
         }
     }
     if Portal.ProfileVisible() {
+        touch_steering = GameControls.GameSwipe.{}
         EditorShareReset()
         profile_key: s32
         #if !#defined(WURM_PORTABLE) {
@@ -3533,6 +3531,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         return 0
     }
     if Account.ProfileVisible() {
+        touch_steering = GameControls.GameSwipe.{}
         EditorShareReset()
         profile_key: s32
         #if !#defined(WURM_PORTABLE) {
@@ -3575,8 +3574,16 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     if game.mode == MODE_LOCAL {
         Audio.UpdateAudio(local_round.phase == Local.PLAYING || local_round.phase == Local.PAUSED, 0, 1, 0, 0)
         Portal.Gameplay(local_round.phase == Local.PLAYING)
-        DrawLocal(session, viewport, key, now)
+        DrawLocal(session, viewport, key, now, frame_input)
         return 0
+    }
+    if game.mode == MODE_PLAYING {
+        turn := Touch.SingleTurnKey(frame_input, key)
+        key = Touch.ShortcutKey(frame_input, key)
+        if Touch.MovementKey(key) { key = 0 }
+        if turn != 0 { unused ApplyInput(*game, turn) }
+    } else if game.mode == MODE_PAUSED {
+        key = Touch.ShortcutKey(frame_input, key)
     }
     // A key that returns to the stages must not also start a level there.
     stage_key := ifx game.mode == MODE_STAGES then key else 0
@@ -3605,7 +3612,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // portrait and landscape both keep their proportions.
     showing_bar := game.mode != MODE_STAGES && game.mode != MODE_LEVELS &&
         game.mode != MODE_SETTINGS && game.mode != MODE_SHOP && game.mode != MODE_REWARDS &&
-        !(game.mode == MODE_CONTROLS && (controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS)) &&
+        !(game.mode == MODE_CONTROLS && (controls_navigation.previous == MODE_STAGES || controls_navigation.previous == MODE_LEVELS)) &&
         !(game.mode == MODE_EDITOR && editor_page != EDITOR_PAGE_EDIT)
     bar_height: float32 = 0.0
     if showing_bar { bar_height = ifx viewport.width < 520.0 then 104.0 else 72.0 }
@@ -3618,13 +3625,18 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // already use this frame's direction. SwipeArea supplies captured contact;
     // its release-only swipe result is deliberately unused.
     contact: SwipeAreaResult
-    if game.mode == MODE_PLAYING && !sound_popup && (!Controls.Pad() || KeyboardOnly()) && game.death_ticks == 0 && game.transition_ticks == 0 {
+    if frame_input.available && frame_input.focused && game.mode == MODE_PLAYING && !sound_popup && (!Controls.Pad() || KeyboardOnly()) && game.death_ticks == 0 && game.transition_ticks == 0 {
         contact = SwipeArea(session, SwipeAreaProps.{.key = PLAY_STEERING_KEY, .bounds = stage,
             .label = Locale.Text("Steer the worm"), .now = cast(float64)now / 1000.0,
             .min_distance = 6.0})
-        direction := Touch.TouchDirection(*touch_steering, contact.down, contact.at_x, contact.at_y)
-        if direction >= 0 { Steer(direction) }
-    } else { touch_steering.active = false }
+        // Losing capture while still pressed cancels, rather than releasing
+        // an unmoved gesture into a tap. Focus/navigation cancel likewise.
+        if !contact.down && frame_input.pointer.down { touch_steering = GameControls.GameSwipe.{} }
+        else {
+            direction := Touch.TouchDirection(*touch_steering, contact.down, contact.at_x, contact.at_y)
+            if direction >= 0 { Steer(direction) }
+        }
+    } else { touch_steering = GameControls.GameSwipe.{} }
     lives_before := game.lives
     unused Step(*game, now)
     // Save the next unlocked level on completion, before loading its board.
@@ -3685,7 +3697,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     } else if game.mode == MODE_LEVELS {
         DrawLevels(session, viewport, now)
     } else if game.mode == MODE_CONTROLS {
-        if controls_previous_mode == MODE_STAGES || controls_previous_mode == MODE_LEVELS { unused DrawTitle(session, viewport, 0, false) }
+        if controls_navigation.previous == MODE_STAGES || controls_navigation.previous == MODE_LEVELS { unused DrawTitle(session, viewport, 0, false) }
         else { DrawBoard(session, stage) }
         DrawControls(session, viewport, now)
     } else if game.mode == MODE_EDITOR {

@@ -2,7 +2,6 @@
 // the size WURM_WINDOW=WxH gives, so the mobile-first layout can be checked
 // in landscape and portrait.
 #import "kryon/desktop_loop"
-DesktopInput :: #import "kryon/Desktop";
 #import "std/environment_linux"
 #import "std/number_text"
 App :: #import "app";
@@ -37,7 +36,6 @@ main :: () -> s32 {
         return 1
     }
     StartScreen()
-    App.UseNativeKeys(DesktopInput.DesktopNextKey)
     width, height := WindowSize()
     return RunDesktop(width, height)
 }

@@ -1,20 +1,131 @@
 Touch :: #import, file "../src/steering.zi";
+Shared :: #import "game2d/controls";
+Navigation :: #import "game2d/navigation";
+Local :: #import, file "../src/multiplayer.zi";
 #import, file "../src/game.zi";
+#import "kryon/frame_snapshot"
+#import "kryon/input_protocol"
+#import "kryon/session"
+#import "kryon/tree_input"
+
+failed: s32;
+Expect :: (ok: bool, message: string) {
+    if !ok { print("FAIL: input: %\n", message); failed += 1 }
+}
+
+Swipes :: () {
+    touch: Shared.GameSwipe
+    Expect(Touch.TouchDirection(*touch, true, 100.0, 100.0) == -1, "initial contact anchors")
+    Expect(Touch.TouchDirection(*touch, true, 103.0, 102.0) == -1, "jitter does not turn")
+    Expect(Touch.TouchDirection(*touch, true, 108.0, 102.0) == DIR_RIGHT && touch.step, "first crossing turns")
+    Expect(Touch.TouchDirection(*touch, true, 116.0, 102.0) == DIR_RIGHT && touch.step, "same direction crossing turns again")
+    Expect(Touch.TouchDirection(*touch, true, 118.0, 103.0) == -1 && !touch.step && touch.direction == DIR_RIGHT,
+        "retained heading below threshold is not another event")
+    Expect(Touch.TouchDirection(*touch, true, 116.0, 110.0) == DIR_DOWN, "held contact turns down")
+    Expect(Touch.TouchDirection(*touch, true, 108.0, 110.0) == DIR_LEFT, "held contact turns left")
+    Expect(Touch.TouchDirection(*touch, true, 108.0, 102.0) == DIR_UP, "held contact turns up")
+    Expect(Touch.TouchDirection(*touch, false, 140.0, 102.0) == -1 && !touch.active && !touch.tapped,
+        "release after movement adds neither turn nor tap")
+    unused Touch.TouchDirection(*touch, true, 200.0, 200.0)
+    Expect(Touch.TouchDirection(*touch, false, 200.0, 200.0) == -1 && touch.tapped, "unmoved release is a tap without a turn")
+    unused Touch.TouchDirection(*touch, false, 200.0, 200.0)
+    Expect(!touch.tapped, "tap is a one-sample event")
+    unused Touch.TouchDirection(*touch, true, 200.0, 200.0)
+    touch = Shared.GameSwipe.{}
+    unused Touch.TouchDirection(*touch, false, 220.0, 200.0)
+    Expect(!touch.tapped && !touch.step && !touch.active, "cancel does not become a tap or turn")
+    Expect(Touch.TouchDirection(*touch, true, 300.0, 300.0) == -1, "new gesture anchors after cancellation")
+}
+
+Keyboard :: () {
+    session := SessionOpen()
+    other := SessionOpen()
+    Expect(!CaptureFrameInput(session).available, "no input outside a host frame")
+    raw: FrameInputSnapshot
+    raw.available = true; raw.focused = true; raw.sequence = 1
+    raw.keys[KeyLeft] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+    raw.keys[87] = cast(u8)FrameKeyHeld
+    raw.keys[68] = cast(u8)(FrameKeyHeld | FrameKeyRepeated)
+    raw.keys[83] = cast(u8)FrameKeyReleased
+    raw.keys[80] = cast(u8)(FrameKeyHeld | FrameKeyRepeated)
+    raw.keys[77] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+    Expect(FrameInputBegin(session, raw), "host publishes a frame")
+    input := CaptureFrameInput(session)
+    unused KeyboardSend(session, KeyEscape)
+    unused CaptureFrameInput(session)
+    Expect(KeyboardTake(session) == KeyEscape, "capture leaves Escape in the existing UI queue")
+    Expect(!CaptureFrameInput(other).available, "foreign session cannot sample the frame")
+    Expect(Touch.TurnKey(input, KeyLeft), "press turns")
+    Expect(!Touch.TurnKey(input, 87), "held alone invents no keyboard repeat")
+    Expect(Touch.TurnKey(input, 68), "host repeat turns")
+    Expect(!Touch.TurnKey(input, 83), "release does not turn")
+    Expect(Touch.ShortcutKey(input, 80) == 0 && Touch.ShortcutKey(input, 77) == 77,
+        "shortcuts use fresh presses, never repeat")
+    Expect(Touch.SingleTurnKey(input, 68) == 68, "ordered UI turn wins when also in snapshot")
+    game: Game
+    game.mode = MODE_PLAYING; game.direction = DIR_UP; game.length = 8
+    unused ApplyInput(*game, Touch.SingleTurnKey(input, KeyLeft))
+    Expect(game.next_direction == DIR_LEFT, "snapshot event reaches existing game turn input")
+    raw.keys[KeyLeft] = 0
+    Expect(!FrameInputBegin(session, raw), "same frame cannot replace immutable observations")
+    FrameInputEnd(session)
+    Expect(!CaptureFrameInput(session).available && input.keys[KeyLeft] != 0, "retained snapshot owns keys after end")
+    raw.focused = false; raw.sequence = 2
+    raw.keys[KeyLeft] = cast(u8)FrameKeyReleased
+    Expect(FrameInputBegin(session, raw), "publish focus loss")
+    Expect(Touch.SingleTurnKey(CaptureFrameInput(session), KeyLeft) == 0 &&
+        Touch.ShortcutKey(CaptureFrameInput(session), 77) == 0, "focus loss suppresses turns and shortcuts")
+    FrameInputEnd(session)
+    raw.focused = true; raw.keys[KeyLeft] = cast(u8)FrameKeyHeld; raw.keys[68] = 0; raw.keys[77] = cast(u8)FrameKeyHeld
+    Expect(FrameInputBegin(session, raw), "publish focus regain")
+    Expect(Touch.SingleTurnKey(CaptureFrameInput(session), KeyLeft) == 0 &&
+        Touch.ShortcutKey(CaptureFrameInput(session), 77) == 0, "regained held keys do not replay events")
+    FrameInputEnd(session)
+    unused SessionClose(other); unused SessionClose(session)
+}
+
+Multiplayer :: () {
+    keys: [16]s32 = .[263, 265, 262, 264, 65, 87, 68, 83, 74, 73, 76, 75, 324, 328, 326, 325]
+    directions: [4]s32 = .[DIR_LEFT, DIR_UP, DIR_RIGHT, DIR_DOWN]
+    for index: cast(s32)0..15 {
+        input: FrameInputSnapshot
+        input.available = true; input.focused = true
+        input.keys[keys[index]] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+        round: Local.Round
+        round.count = 4; round.phase = Local.PLAYING
+        for player: 0..3 { round.players[player].alive = true; round.players[player].direction = directions[index % 4] }
+        for key: cast(s32)1..511 { if Touch.TurnKey(input, key, true) { unused Local.Input(*round, key) } }
+        Expect(round.players[index / 4].next_direction == directions[index % 4], "every multiplayer key retains its player and direction")
+        if index >= 8 { Expect(!Touch.TurnKey(input, keys[index]), "extra multiplayer sets do not steer single player") }
+    }
+    input: FrameInputSnapshot
+    input.available = true; input.focused = true
+    simultaneous: [4]s32 = .[KeyLeft, 65, 74, 324]
+    for key: simultaneous { input.keys[key] = cast(u8)(FrameKeyHeld | FrameKeyRepeated) }
+    round: Local.Round
+    round.count = 4; round.phase = Local.PLAYING
+    for id: 0..3 { round.players[id].alive = true; round.players[id].direction = DIR_UP }
+    for key: cast(s32)1..511 { if Touch.TurnKey(input, key, true) { unused Local.Input(*round, key) } }
+    for id: 0..3 { Expect(round.players[id].next_direction == DIR_LEFT, "one sample delivers all four players' repeated turns") }
+}
+
+Controls :: () {
+    choice: Navigation.GameNavigation
+    choice.page = MODE_PAUSED
+    Navigation.GameNavigationControls(*choice)
+    Expect(!Navigation.GameNavigationChoose(*choice, Navigation.GAME_PAD) && choice.page == MODE_PAUSED,
+        "control choice returns to paused game")
+    choice.page = MODE_STAGES
+    Navigation.GameNavigationControls(*choice)
+    choice.pending_start = true
+    Expect(Navigation.GameNavigationChoose(*choice, Navigation.GAME_SWIPE) && choice.running,
+        "start waits for control choice")
+}
 
 #program_export
 main :: () -> s32 {
-    touch: Touch.TouchSteering
-    if Touch.TouchDirection(*touch, true, 100.0, 100.0) != -1 { return 1 }
-    if Touch.TouchDirection(*touch, true, 103.0, 102.0) != -1 { return 2 }
-    if Touch.TouchDirection(*touch, true, 108.0, 102.0) != DIR_RIGHT { return 3 }
-    // The same contact turns down, left and up without returning to its
-    // original press position. A fixed-origin swipe cannot follow this.
-    if Touch.TouchDirection(*touch, true, 108.0, 110.0) != DIR_DOWN { return 4 }
-    if Touch.TouchDirection(*touch, true, 100.0, 110.0) != DIR_LEFT { return 5 }
-    if Touch.TouchDirection(*touch, true, 100.0, 102.0) != DIR_UP { return 6 }
-    if Touch.TouchDirection(*touch, true, 100.0, 102.0) != -1 { return 7 }
-    if Touch.TouchDirection(*touch, false, 140.0, 102.0) != -1 || touch.active { return 8 }
-    if Touch.TouchDirection(*touch, true, 200.0, 200.0) != -1 { return 9 }
-    print("Touch local test: four turns during one contact, jitter ignored, release produces no extra turn.\n")
+    Swipes(); Keyboard(); Multiplayer(); Controls()
+    if failed != 0 { return 1 }
+    print("Wurm input local tests: press/repeat cadence, focus, immutable frame, four-player keys, relative swipe steps, cancellation, tap and controls navigation.\n")
     return 0
 }

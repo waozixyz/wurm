@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Keyboard turns share one frame snapshot across all four local players; swipes use shared relative steering without adding turns from held input.
+
 - Collection sharing discards cancelled requests and old account replies before adding or updating your levels.
 
 - Collection names and community searches keep text selection and Unicode edits consistent.

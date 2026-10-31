@@ -73,3 +73,7 @@ ref = "master"
 [dependencies.crypto]
 git = "https://github.com/ziranlang/crypto.git"
 ref = "master"
+
+[dependencies.game2d]
+git = "https://github.com/kryonlabs/game2d.git"
+ref = "master"
