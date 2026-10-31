@@ -30,6 +30,7 @@ True :: (expression: string) -> bool { return BrowserTrue(browser, expression) }
 
 Fail :: (message: string) -> bool {
     print("FAIL: browser: %\n", message)
+    if BrowserEvaluate(browser, "JSON.stringify({decoded:window.__wurmDecoded,context:window.__wurmContext?.state,music:window.__wurmMusic?.().map(s=>({duration:s.buffer.duration,gain:s.__gain?.gain.value})),errors:window.__wurmAudioErrors})") { print("audio state: %\n", browser.result) }
     return false
 }
 
@@ -69,8 +70,35 @@ Viewport :: (width: s32, height: s32, mobile: bool) -> bool {
 }
 
 Reload :: () -> bool {
-    return BrowserCall(browser, "Page.reload", "{}") && Until(LOADED)
+    return BrowserCall(browser, "Page.reload", "{}") && Until(LOADED) && Until("!!window.__wurmContext") && Click(2,2)
 }
+
+// Observe native WebAudio nodes without replacing playback or exposing game state.
+AUDIO_OBSERVER :: #string JS
+window.__wurmSources=[];window.__wurmDecoded=0;window.__wurmAudioErrors=[];
+const nativeDecode=BaseAudioContext.prototype.decodeAudioData;
+BaseAudioContext.prototype.decodeAudioData=function(...args){const result=nativeDecode.apply(this,args);result.then(()=>window.__wurmDecoded++,e=>window.__wurmAudioErrors.push(String(e)));return result};
+const NativeAudioContext=window.AudioContext||window.webkitAudioContext;
+window.AudioContext=new Proxy(NativeAudioContext,{construct(target,args){
+ const context=Reflect.construct(target,args);
+ window.__wurmContext=context;
+ const create=context.createBufferSource.bind(context);
+ context.createBufferSource=()=>{
+  const source=create(),connect=source.connect.bind(source),start=source.start.bind(source),stop=source.stop.bind(source);
+  source.__playing=false;
+  source.connect=(...args)=>{if(args[0]&&args[0].gain)source.__gain=args[0];return connect(...args)};
+  source.start=(...args)=>{const result=start(...args);source.__playing=true;source.__started=context.currentTime;return result};
+  source.stop=(...args)=>{const result=stop(...args);source.__playing=false;return result};
+  source.addEventListener('ended',()=>source.__playing=false);
+  window.__wurmSources.push(source);return source;
+ };
+ return context;
+}});
+window.__wurmMusic=()=>__wurmSources.filter(s=>s.__playing&&s.buffer&&s.buffer.duration>30);
+window.__wurmSilent=()=>__wurmDecoded>=7&&__wurmSources.filter(s=>s.__playing).every(s=>s.__gain&&s.__gain.gain.value===0);
+window.__wurmAudible=()=>__wurmMusic().some(s=>s.__gain&&s.__gain.gain.value>0);
+window.__wurmAssets=()=>['start.wav','pickup.wav','lose.wav','exit.wav','garden.ogg','factory.ogg','space.ogg'].every(name=>Module.FS.analyzePath('/assets/sounds/'+name).exists);
+JS;
 
 LOADED :: "typeof Module!=='undefined' && Module.FS && document.getElementById('loading').hidden"
 
@@ -96,8 +124,8 @@ Play :: () -> bool {
     profile := JoinPath(ResolvePath(OUT), "profile")
     unused RemoveTree(profile)
     if !BrowserOpen(browser, profile) { return Fail("the private Chromium did not start") }
-    // Observe real HTML audio in this disposable browser without app hooks.
-    audio := "window.__wurmAudio=[];window.__wurmAudioErrors=[];window.Audio=new Proxy(window.Audio,{construct(target,args){const audio=Reflect.construct(target,args),play=audio.play.bind(audio);audio.play=()=>{const p=play();p.catch(e=>window.__wurmAudioErrors.push({src:audio.src,error:String(e)}));return p};window.__wurmAudio.push(audio);return audio;}});"
+    // Observe the shared provider through real WebAudio nodes.
+    audio := AUDIO_OBSERVER
     if !BrowserCall(browser, "Page.enable", "{}") || !BrowserCall(browser, "Runtime.enable", "{}") { return false }
     if !BrowserScriptOnLoad(browser, audio) || !Viewport(1100, 900, false) { return false }
     if !BrowserCall(browser, "Page.navigate", BrowserParams1("url", url)) { return false }
@@ -120,17 +148,17 @@ Play :: () -> bool {
     if !Shot("level-1") || !Key("ArrowRight", 39) { return false }
     Pause(150)
     if !Key(" ", 32) || !Shot("playing") { return false }
-    // Run a real recording quickly to its end. The next starts before the old
-    // one stops, with complementary gains, then finishes the fade on its own.
-    if !Until("window.__wurmAudio.length===7 && window.__wurmAudio.slice(4).some(a=>!a.paused && a.currentTime>0 && Number.isFinite(a.duration))") { return false }
-    if !True("(()=>{window.__outgoing=window.__wurmAudio.slice(4).find(a=>!a.paused);window.__outgoing.playbackRate=16;return true})()") { return false }
-    if !Until("window.__wurmAudio.slice(4).filter(a=>!a.paused).length===2") { return false }
-    if !BrowserEvaluate(browser, "window.__outgoing.playbackRate=1") { return false }
+    // The preceding Space has paused the simulation; the soundtrack continues.
+    // Wait for the actual authored recording. MediaAudio exposes no speed
+    // operation: the two native sources overlap with complementary gains.
+    if !Until("__wurmDecoded>=7&&__wurmMusic().length===1&&__wurmAudible()") { return false }
+    if !BrowserEvaluate(browser,"window.__outgoing=__wurmMusic()[0];true") { return false }
+    if !BrowserWait(browser,"__wurmMusic().length===2",180000) { return false }
     Pause(750)
-    if !True("(()=>{const playing=window.__wurmAudio.slice(4).filter(a=>!a.paused);return playing.length===2 && playing.every(a=>a.volume>0 && a.volume<0.4) && Math.abs(playing.reduce((s,a)=>s+a.volume,0)-0.4)<0.001})()") {
+    if !True("(()=>{const playing=__wurmMusic();return playing.length===2&&playing.every(s=>s.__gain.gain.value>0&&s.__gain.gain.value<0.4)&&Math.abs(playing.reduce((v,s)=>v+s.__gain.gain.value,0)-0.4)<0.001})()") {
         return Fail("music did not blend the two real recordings")
     }
-    if !Until("window.__outgoing.paused && window.__wurmAudio.slice(4).filter(a=>!a.paused).length===1") { return false }
+    if !Until("!__outgoing.__playing&&__wurmMusic().length===1") { return false }
     if !Viewport(390, 844, true) { return false }
     Pause(400)
     if !Shot("portrait") || !Reload() { return false }
@@ -283,20 +311,20 @@ PortalResults :: () -> bool {
     if !BrowserEvaluate(browser, "WurmPortal.levelFinished();true") || !True("!WurmPortal.adPending&&!window.__adCalls") { return Fail("Basic requested an ad") }
     if !BrowserEvaluate(browser, "WurmPortalConfig.adsEnabled=true;WurmPortal.levelFinished();true") || !True("WurmPortal.adPending&&!WurmPortal.adPlaying&&__adKind==='midgame'&&__adCalls===1") { return Fail("midgame request did not block while pending") }
     if !Key("Enter",13) || !Key("ArrowRight",39) || !True("WurmPortal.adPending&&__adCalls===1&&!__portal.includes('gameplayStart')") { return Fail("pending ad let input start gameplay") }
-    if !BrowserEvaluate(browser, "__adCallbacks.adStarted();true") || !Until("WurmPortal.adPlaying&&__wurmAudio.every(a=>a.muted)") { return Fail("actual ad playback did not mute") }
-    if !BrowserEvaluate(browser, "__portalSettings({muteAudio:true});__adCallbacks.adFinished();true") || !Until("!WurmPortal.adPending&&__wurmAudio.every(a=>a.muted)") { return Fail("SDK mute was lost after ad") }
-    if !BrowserEvaluate(browser, "__portalSettings({muteAudio:false});true") || !Until("__wurmAudio.every(a=>!a.muted)") { return Fail("sound did not restore after ad") }
+    if !BrowserEvaluate(browser, "__adCallbacks.adStarted();true") || !Until("WurmPortal.adPlaying&&__wurmSilent()") { return Fail("actual ad playback did not mute") }
+    if !BrowserEvaluate(browser, "__portalSettings({muteAudio:true});__adCallbacks.adFinished();true") || !Until("!WurmPortal.adPending&&__wurmSilent()") { return Fail("SDK mute was lost after ad") }
+    if !BrowserEvaluate(browser, "__portalSettings({muteAudio:false});true") || !Until("__wurmDecoded>=7&&!WurmPortal.muted") { return Fail("sound did not restore after ad") }
     if !BrowserEvaluate(browser, "window.__adMode='nofill';WurmPortal.levelFinished();true") || !True("!WurmPortal.adPending&&!WurmPortal.adPlaying") { return Fail("no fill froze the game") }
     if !BrowserEvaluate(browser, "window.__adMode='throw';WurmPortal.levelFinished();true") || !True("!WurmPortal.adPending") { return Fail("throw froze the game") }
     if !BrowserEvaluate(browser, "window.__adMode='reject';WurmPortal.levelFinished();true") || !Until("!WurmPortal.adPending") { return Fail("rejection froze the game") }
     if !BrowserEvaluate(browser, "window.__adMode='';window.__realTimer=window.setTimeout;window.setTimeout=(f,ms,...args)=>ms===30000?(window.__adTimeout=f,987654):__realTimer(f,ms,...args);WurmPortal.levelFinished();window.setTimeout=__realTimer;window.__late=__adCallbacks;__adTimeout();true") || !True("!WurmPortal.adPending&&WurmPortal.adsFailed") { return Fail("missing callback did not recover") }
-    if !BrowserEvaluate(browser, "__late.adStarted();true") || !Until("WurmPortal.adPending&&WurmPortal.adPlaying&&__wurmAudio.every(a=>a.muted)") { return Fail("late ad was allowed over the game") }
+    if !BrowserEvaluate(browser, "__late.adStarted();true") || !Until("WurmPortal.adPending&&WurmPortal.adPlaying&&__wurmSilent()") { return Fail("late ad was allowed over the game") }
     if !BrowserEvaluate(browser, "__late.adFinished();WurmPortal.levelFinished();true") || !True("!WurmPortal.adPending") { return Fail("late ad did not finish safely") }
     if !BrowserEvaluate(browser, "window.__oldEncrypt=crypto.subtle.encrypt;crypto.subtle.encrypt=()=>Promise.reject(new Error('encrypt'));WurmPortal.scoreAt=0;WurmPortal.submitBest(12348);true") || !Until("!WurmPortal.scoreBusy") || !True("__scores.length===3&&WurmPortal.scoreSent===12347") { return Fail("encryption failure sent a score") }
     if !BrowserEvaluate(browser, "crypto.subtle.encrypt=__oldEncrypt;WurmPortalConfig.leaderboardKey='';WurmPortal.submitBest(12349);true") || !True("__scores.length===3") { return Fail("missing key sent a score") }
     if !BrowserEvaluate(browser, "sessionStorage.removeItem('wurm-score-test');CrazyGames.SDK.data.setItem('best.dat','0000000000000000');CrazyGames.SDK.data.setItem('sound.dat','0164');true") || !Reload() { return false }
-    if !Until(LOADED) || !Until("__wurmAudio.length===7&&__wurmAudio.every(a=>a.muted)") { return Fail("saved mute did not load") }
-    if !BrowserEvaluate(browser, "WurmPortalConfig.adsEnabled=true;WurmPortal.levelFinished();__adCallbacks.adStarted();__adCallbacks.adFinished();true") || !Until("!WurmPortal.adPending&&__wurmAudio.every(a=>a.muted)") || CloudRecord("sound.dat") != "0164" { return Fail("ad changed saved user mute") }
+    if !Until(LOADED) || !Key("Enter",13) || !Key("1",49) || !Key("Enter",13) || !Key(" ",32) || !Until("__wurmMusic().length>0&&__wurmSilent()") { return Fail("saved mute did not load") }
+    if !BrowserEvaluate(browser, "WurmPortalConfig.adsEnabled=true;WurmPortal.levelFinished();__adCallbacks.adStarted();__adCallbacks.adFinished();true") || !Until("!WurmPortal.adPending&&__wurmSilent()") || CloudRecord("sound.dat") != "0164" { return Fail("ad changed saved user mute") }
     if !BrowserEvaluate(browser, "CrazyGames.SDK.data.setItem('sound.dat','0064');true") || !Reload() { return false }
     return Until(LOADED)
 }
@@ -317,13 +345,14 @@ Portal :: (root: string) -> bool {
     profile := JoinPath(ResolvePath(OUT), "portal-profile")
     unused RemoveTree(profile)
     if !BrowserOpen(browser, profile) { return Fail("the private Chromium did not start") }
-    audio := "window.__wurmAudio=[];window.Audio=new Proxy(window.Audio,{construct(target,args){const audio=Reflect.construct(target,args);window.__wurmAudio.push(audio);return audio;}});"
+    audio := AUDIO_OBSERVER
     if !BrowserCall(browser, "Page.enable", "{}") || !BrowserCall(browser, "Runtime.enable", "{}") { return false }
     if !BrowserScriptOnLoad(browser, audio) || !BrowserScriptOnLoad(browser, SDK_STUB) || !Viewport(907, 510, false) { return false }
     if !BrowserCall(browser, "Network.enable", "{}") || !BrowserCall(browser, "Network.setBlockedURLs", "{\"urls\":[\"*sdk.crazygames.com*\",\"https://*\"]}") { return false }
     if !BrowserCall(browser, "Page.navigate", BrowserParams1("url", url)) { return false }
     if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") { return Fail("the portal copy did not open") }
-    if !PortalResults() { return false }
+    if !True("__wurmAssets()") { return Fail("packed audio assets are missing from the virtual file system") }
+    if !Until("!!window.__wurmContext") || !Click(2,2) || !PortalResults() { return false }
     // The SDK starts before the game loads, hears when loading ends, gives the
     // game the player's language, and never asks the player to sign in there.
     if !Until("(()=>{const l=window.__portal;return l[0]==='init'&&l[1]==='loadingStart'&&l.indexOf('loadingStop')>1&&l.includes('locale')&&WurmPortal.locale==='de-DE'&&WurmPortal.sdkActive&&WurmPortal.accountAvailable&&WurmPortal.username===''&&!l.includes('showAuthPrompt')})()") { return Fail("the SDK did not start, report loading or give its language") }
@@ -365,9 +394,9 @@ Portal :: (root: string) -> bool {
     // The portal's mute silences music and effects over the player's On,
     // and lifting it brings the player's sound back.
     if !BrowserEvaluate(browser, "window.__portalSettings({muteAudio:true}),true") { return false }
-    if !Until("window.__wurmAudio.length>=7&&window.__wurmAudio.every(a=>a.muted)") { return Fail("the portal's mute did not silence the game") }
+    if !Until("__wurmMusic().length>0&&__wurmSilent()") { return Fail("the portal's mute did not silence the game") }
     if !BrowserEvaluate(browser, "window.__portalSettings({muteAudio:false}),true") { return false }
-    if !Until("window.__wurmAudio.every(a=>!a.muted)") { return Fail("the player's sound did not return after the portal's mute") }
+    if !Until("__wurmAudible()") { return Fail("the player's sound did not return after the portal's mute") }
     if !Key(" ", 32) { return false }
     Pause(300)
     paused := BrowserNumber(browser, CANVAS_HASH, -1.0)
@@ -403,8 +432,8 @@ Portal :: (root: string) -> bool {
     // Put an old guest save in browser IDB, then reload as Alice. Her missing
     // cloud record must not borrow it; she starts a new journey in her own data.
     if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-no-sdk','1'),true") || !Reload() { return false }
-    // Audio is initialized on the first frame after browser storage settles.
-    if !Until(LOADED) || !Until("window.__wurmAudio.length>=7") { return false }
+    // A trusted gesture unlocks the provider after storage settles.
+    if !Until(LOADED) || !Click(2,2) || !Until("__wurmDecoded>=7") { return false }
     if !BrowserEvaluate(browser, "new Promise((resolve,reject)=>{Module.FS.mkdirTree('/kryon-apps/wurm');Module.FS.writeFile('/kryon-apps/wurm/unlocked.dat',new Uint8Array([57]));Module.FS.syncfs(false,e=>e?reject(e):resolve(true))})") { return false }
     if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-account','Alice');sessionStorage.removeItem('wurm-no-sdk');true") || !Reload() { return false }
     if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") || !True("WurmPortal.username==='Alice'") { return Fail("the signed account did not load") }
@@ -430,7 +459,7 @@ Portal :: (root: string) -> bool {
     if CloudRecord("unlocked.dat") != "a4" { return Fail("Play from start erased guest progress") }
     // Every request stayed beside the page: no sign-in, shop or other site.
     check: Vec(u8)
-    BuilderPrint(*check, "(()=>{const b='%';const urls=performance.getEntriesByType('resource').map(e=>e.name).concat(Array.from(document.querySelectorAll('[src]'),e=>e.src),window.__wurmAudio.map(a=>a.src).filter(Boolean)).filter(u=>u!=='%');return urls.length>5&&urls.every(u=>u.startsWith(b))&&location.href.startsWith(b)})()", base, PORTAL_SDK)
+    BuilderPrint(*check, "(()=>{const b='%';const urls=performance.getEntriesByType('resource').map(e=>e.name).concat(Array.from(document.querySelectorAll('[src]'),e=>e.src)).filter(u=>u!=='%');return urls.length>0&&urls.every(u=>u.startsWith(b))&&location.href.startsWith(b)})()", base, PORTAL_SDK)
     if !True(BuilderFinish(check)) {
         unused BrowserEvaluate(browser, "JSON.stringify(performance.getEntriesByType('resource').map(e=>e.name))")
         print("requests: %\n", browser.result)
@@ -471,7 +500,7 @@ main :: () -> s32 {
     }
     passed := Play()
     if !passed {
-        if BrowserEvaluate(browser, "({audio:(window.__wurmAudio||[]).map(a=>({src:a.src,paused:a.paused,time:a.currentTime,duration:a.duration,volume:a.volume,ready:a.readyState,error:a.error?.code})),errors:window.__wurmAudioErrors})") {
+        if BrowserEvaluate(browser, "({context:window.__wurmContext?.state,decoded:window.__wurmDecoded,audio:(window.__wurmSources||[]).map(s=>({playing:s.__playing,duration:s.buffer?.duration,gain:s.__gain?.gain.value})),errors:window.__wurmAudioErrors})") {
             unused WriteEntireFile(JoinPath(OUT, "audio-failure.json"), browser.result)
         }
         unused Shot("failure")

@@ -123,15 +123,48 @@ BuildWeb :: (portal: bool) -> bool {
     art := ifx portal then JoinPath(native, "art") else JoinPath(out, "assets/art")
     if portal { unused RemoveTree(art) }
     if !CopyArt("assets/art", art) { return Fail("cannot copy the art") }
+    // The owner reader loads bytes from MEMFS; pack the encoded cues and
+    // scores with the other assets instead of leaving loose HTTP audio.
+    sounds := JoinPath(native, "sounds")
+    if !CreateDirectories(sounds) { return Fail("cannot create sounds") }
+    effects: [4]string = .["start", "pickup", "lose", "exit"]
+    for effects {
+        source: Vec(u8)
+        BuilderPrint(*source, "assets/sounds/%.pcm", it)
+        samples, found := ReadEntireFile(BuilderFinish(source))
+        target: Vec(u8)
+        BuilderPrint(*target, "%/%.wav", sounds, it)
+        if !found || !WriteWave(BuilderFinish(target), samples) { return Fail(JoinPath("cannot write", it)) }
+    }
+    music: [3]string = .["garden", "factory", "space"]
+    for music {
+        source: Vec(u8)
+        BuilderPrint(*source, "assets/sounds/%.pcm", it)
+        target: Vec(u8)
+        BuilderPrint(*target, "%/%.ogg", sounds, it)
+        encode: [17]string = .["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "s16le", "-ar", "22050",
+            "-ac", "1", "-i", BuilderFinish(source), "-c:a", "libvorbis", "-q:a", "4"]
+        command: Vec(string)
+        for encode { VecPush(command, it) }
+        VecPush(command, BuilderFinish(target))
+        if !Steps(VecSlice(command, 0, command.count)) { return Fail("ffmpeg failed") }
+    }
     emcc := EnvironmentText("EMCC")
     if emcc.count == 0 { emcc = JoinPath(EnvironmentText("HOME"), "emsdk/upstream/emscripten/emcc") }
     packager := JoinPath(PathParent(ResolvePath(emcc)), "tools/file_packager.py")
     // Pages limits each file: artwork and previews are separate asset bundles.
     preloads: Vec(u8)
-    names: [2]string = .["art", "previews"]
+    names: [3]string = .["art", "previews", "sounds"]
     for name: names {
-        source := ifx name == "art" then ResolvePath(art) else ResolvePath(JoinPath(art, "campaign-previews"))
-        virtual := ifx name == "art" then "/assets/art" else "/assets/art/campaign-previews"
+        source := ResolvePath(art)
+        virtual := "/assets/art"
+        if name == "previews" {
+            source = ResolvePath(JoinPath(art, "campaign-previews"))
+            virtual = "/assets/art/campaign-previews"
+        } else if name == "sounds" {
+            source = ResolvePath(sounds)
+            virtual = "/assets/sounds"
+        }
         mapping: Vec(u8)
         BuilderPrint(*mapping, "%@%", source, virtual)
         data: Vec(u8)
@@ -179,34 +212,10 @@ BuildWeb :: (portal: bool) -> bool {
     }
     VecPush(link, "-o"); VecPush(link, JoinPath(out, "game.js"))
     if !Steps(VecSlice(link, 0, link.count)) { return Fail("emcc failed") }
-    packs: [3]string = .["game.data", "art.data", "previews.data"]
+    packs: [4]string = .["game.data", "art.data", "previews.data", "sounds.data"]
     for packs {
         info := PathStatus(JoinPath(out, it))
         if !portal && info.size > 25 * 1024 * 1024 { return Fail(JoinPath(it, "exceeds the Pages limit")) }
-    }
-    sounds := JoinPath(out, "assets/sounds")
-    if !CreateDirectories(sounds) { return Fail("cannot create sounds") }
-    effects: [4]string = .["start", "pickup", "lose", "exit"]
-    for effects {
-        source: Vec(u8)
-        BuilderPrint(*source, "assets/sounds/%.pcm", it)
-        samples, found := ReadEntireFile(BuilderFinish(source))
-        target: Vec(u8)
-        BuilderPrint(*target, "%/%.wav", sounds, it)
-        if !found || !WriteWave(BuilderFinish(target), samples) { return Fail(JoinPath("cannot write", it)) }
-    }
-    music: [3]string = .["garden", "factory", "space"]
-    for music {
-        source: Vec(u8)
-        BuilderPrint(*source, "assets/sounds/%.pcm", it)
-        target: Vec(u8)
-        BuilderPrint(*target, "%/%.ogg", sounds, it)
-        encode: [17]string = .["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "s16le", "-ar", "22050",
-            "-ac", "1", "-i", BuilderFinish(source), "-c:a", "libvorbis", "-q:a", "4"]
-        command: Vec(string)
-        for encode { VecPush(command, it) }
-        VecPush(command, BuilderFinish(target))
-        if !Steps(VecSlice(command, 0, command.count)) { return Fail("ffmpeg failed") }
     }
     // Portals get their own page: no shared sign-in or links away.
     shell := ifx portal then "src/web/crazygames" else "src/web"
