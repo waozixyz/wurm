@@ -70,7 +70,9 @@ Viewport :: (width: s32, height: s32, mobile: bool) -> bool {
 }
 
 Reload :: () -> bool {
-    return BrowserCall(browser, "Page.reload", "{}") && Until(LOADED) && Until("!!window.__wurmContext") && Click(2,2)
+    if !BrowserCall(browser, "Page.reload", "{}") || !Until(LOADED) { return false }
+    if True("typeof window.__wurmSources==='undefined'") { return true }
+    return Until("!!window.__wurmContext") && Click(2,2)
 }
 
 // Observe native WebAudio nodes without replacing playback or exposing game state.
