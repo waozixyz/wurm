@@ -17,7 +17,8 @@ main :: () -> s32 {
         Expect(game.apple.x >= 0 && game.apple.y >= 0 && TileAt(*game, game.apple) < 20, "apple in permitted terrain")
         Expect(game.monster_count <= MONSTER_LIMIT, "monsters fit original limit")
     }
-    Expect(TickInterval(0) == 43 && TickInterval(10) == 43 && TickInterval(39) == 43 && TickInterval(40) == 25, "a modest movement increase keeps Meadow steady and later stages faster")
+    Expect(TickInterval(0) == 43 && TickInterval(10) == 43 && TickInterval(39) == 43 && TickInterval(40) == 40, "a modest movement increase keeps Meadow steady and later stages faster")
+    Expect(TickInterval(80) == 38 && TickInterval(120) == 36 && TickInterval(160) == 34 && TickInterval(199) == 34, "each later stage is only slightly quicker")
     for meadow: 0..39 { Expect(TickInterval(cast(s32)meadow) == 43, "Meadow never accelerates between levels") }
     Expect(BaseTickInterval(0) == 32 && BaseTickInterval(10) == 27 && BaseTickInterval(40) == 25, "movement timing preserves the scoring difficulty curve")
     StartGame(*game, 0, 100)
@@ -133,8 +134,9 @@ main :: () -> s32 {
     Expect(BoardFeature(IDEA_PORTALS) == FEATURE_PORTALS && BoardFeature(IDEA_PORTALS + 1) == FEATURE_NONE &&
         BoardFeature(IDEA_KEY) == FEATURE_KEY && BoardFeature(IDEA_SWITCH) == FEATURE_SWITCH &&
         BoardFeature(IDEA_PORTAL_ROOM) == FEATURE_PORTAL_ROOM, "each puzzle idea opens on its own board")
-    for level: 0..IDEA_SQUIRREL - 1 { Expect(RoamerAnimal(cast(s32)level, 0) == ANIMAL_CLASSIC, "no new animals in the meadow") }
-    Expect(RoamerAnimal(IDEA_SQUIRREL, 0) == ANIMAL_SQUIRREL && RoamerAnimal(IDEA_HEDGEHOG, 0) == ANIMAL_HEDGEHOG &&
+    for level: 0..IDEA_HEDGEHOG - 1 { Expect(RoamerAnimal(cast(s32)level, 0) == ANIMAL_CLASSIC, "no new animals before the hedgehogs") }
+    for level: 0..LEVEL_COUNT - 1 { for index: 0..7 { Expect(RoamerAnimal(cast(s32)level, cast(s32)index) != 1, "the retired squirrel never returns") } }
+    Expect(RoamerAnimal(IDEA_HEDGEHOG, 0) == ANIMAL_HEDGEHOG &&
         RoamerAnimal(IDEA_FROG, 0) == ANIMAL_FROG && PatrolAnimal(IDEA_STONE, 0) == ANIMAL_STONE &&
         PatrolAnimal(IDEA_STONE - 1, 0) == ANIMAL_CLASSIC, "each animal opens in its own landscape")
     placed: [5]s32
@@ -173,11 +175,11 @@ main :: () -> s32 {
             if room_level < 0 { room_level = cast(s32)level }
         }
     }
-    print("Ideas placed: portals % keys % switches % rooms %; animals after 180: flames % squirrels % hedgehogs % frogs % stones %\n",
-        placed[1], placed[2], placed[3], placed[4], later_animals[0], later_animals[1], later_animals[2], later_animals[3], later_animals[4])
+    print("Ideas placed: portals % keys % switches % rooms %; animals after 180: flames % hedgehogs % frogs % stones %\n",
+        placed[1], placed[2], placed[3], placed[4], later_animals[0], later_animals[2], later_animals[3], later_animals[4])
     Expect(placed[FEATURE_PORTALS] >= 20 && placed[FEATURE_KEY] >= 8 && placed[FEATURE_SWITCH] >= 6 && placed[FEATURE_PORTAL_ROOM] >= 7,
         "every puzzle idea comes back in later levels")
-    Expect(later_animals[1] > 0 && later_animals[2] > 0 && later_animals[3] > 0 && later_animals[4] > 0, "the last boards mix every animal")
+    Expect(later_animals[1] == 0 && later_animals[2] > 0 && later_animals[3] > 0 && later_animals[4] > 0, "the last boards mix every animal, without squirrels")
     Expect(key_level >= 0 && switch_level >= 0 && room_level >= 0 && portal_level >= 0, "every puzzle idea is placed somewhere")
     if key_level < 0 || switch_level < 0 || portal_level < 0 { print("Gameplay failures: %\n", failures); return failures }
     // The key opens its gate for good.
@@ -215,15 +217,7 @@ main :: () -> s32 {
     Expect(game.worm[0].x == portal.b.x && game.worm[0].y == portal.b.y, "the worm comes out of the partner ring")
     Tick(*game)
     Expect(game.worm[0].x == portal.b.x && game.worm[0].y == portal.b.y - 4 && game.death_ticks == 0, "it keeps its course out of the ring")
-    // A squirrel sits between dashes; a frog hops two tiles or not at all.
-    StartGame(*game, IDEA_SQUIRREL, 0)
-    for index: 0..game.monster_count - 1 {
-        if game.monsters[index].animal != ANIMAL_SQUIRREL { continue }
-        game.monsters[index].timer = 8
-        before := game.monsters[index].position
-        MoveMonster(*game, cast(s32)index)
-        Expect(game.monsters[index].position.x == before.x && game.monsters[index].position.y == before.y, "a squirrel sits between dashes")
-    }
+    // A frog hops two tiles or not at all.
     // A hedgehog curls into a still ball as the worm's head comes close.
     StartGame(*game, IDEA_HEDGEHOG, 0)
     curled := false

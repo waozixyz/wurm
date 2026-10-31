@@ -45,10 +45,14 @@ BaseTickInterval :: (level: s32) -> s64 {
     if interval < TICK_MS { interval = TICK_MS }
     return cast(s64)interval
 }
+// Milliseconds per step for each stage: Meadow stays steady and every later
+// stage is only slightly quicker. Scoring keeps BaseTickInterval's curve.
+STAGE_TICK_MS: [5]s64 = .[43, 40, 38, 36, 34];
 TickInterval :: (level: s32) -> s64 {
-    // A small pace increase keeps Meadow steady and the scoring curve intact.
-    interval := ifx level < 40 then 48 else (BaseTickInterval(level) * 9 + 4) / 8
-    return (interval * 9 + 5) / 10
+    stage := StageOf(level)
+    if stage < 0 { stage = 0 }
+    if stage > 4 { stage = 4 }
+    return STAGE_TICK_MS[stage]
 }
 
 Point :: struct { x: s32; y: s32; }
@@ -270,11 +274,10 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
 }
 
 // Meadow introduces a few spacious portal pairs before the later chapters
-// build a regular mix: squirrels from level 45, regular portals from 61,
+// build a regular mix: regular portals from 61,
 // hedgehogs from 85, keys and gates from 101, frogs from 125, switch stones
 // from 141, rolling stones from 165 and portal rooms from 181. A board's ideas
 // follow from its number and layout alone, so every player meets the same.
-IDEA_SQUIRREL :: 44
 IDEA_PORTALS :: 60
 IDEA_HEDGEHOG :: 84
 IDEA_KEY :: 100
@@ -289,7 +292,7 @@ FEATURE_KEY :: 2
 FEATURE_SWITCH :: 3
 FEATURE_PORTAL_ROOM :: 4
 ANIMAL_CLASSIC :: 0
-ANIMAL_SQUIRREL :: 1
+// 1 was the squirrel, retired for its jittery dashes; the numbers stay.
 ANIMAL_HEDGEHOG :: 2
 ANIMAL_FROG :: 3
 ANIMAL_STONE :: 4
@@ -337,7 +340,6 @@ PlainMix :: (level: s32) -> bool {
 }
 
 AnimalIntro :: (animal: s32) -> s32 {
-    if animal == ANIMAL_SQUIRREL { return IDEA_SQUIRREL }
     if animal == ANIMAL_HEDGEHOG { return IDEA_HEDGEHOG }
     if animal == ANIMAL_FROG { return IDEA_FROG }
     if animal == ANIMAL_STONE { return IDEA_STONE }
@@ -349,12 +351,11 @@ AnimalIntro :: (animal: s32) -> s32 {
 RoamerAnimal :: (level: s32, index: s32) -> s32 {
     available: [3]s32
     count: s32 = 0
-    if level >= IDEA_SQUIRREL { available[count] = ANIMAL_SQUIRREL; count += 1 }
     if level >= IDEA_HEDGEHOG { available[count] = ANIMAL_HEDGEHOG; count += 1 }
     if level >= IDEA_FROG { available[count] = ANIMAL_FROG; count += 1 }
     if count == 0 { return ANIMAL_CLASSIC }
     stage := StageOf(level)
-    native: s32 = ifx stage == 1 then ANIMAL_SQUIRREL else ifx stage == 2 then ANIMAL_HEDGEHOG else ifx stage == 3 then ANIMAL_FROG else ANIMAL_CLASSIC
+    native: s32 = ifx stage == 2 then ANIMAL_HEDGEHOG else ifx stage == 3 then ANIMAL_FROG else ANIMAL_CLASSIC
     ready := native != ANIMAL_CLASSIC && level >= AnimalIntro(native)
     if ready && level - AnimalIntro(native) < 10 { return native }
     roll := Mix(cast(s64)level * 131 + cast(s64)index) % 10
@@ -956,21 +957,6 @@ MoveMonster :: (game: *Game, index: s32) {
         // A rolling stone keeps its patrol at twice the pace.
         PatrolStep(game, index)
         PatrolStep(game, index)
-        return
-    }
-    if monster.kind == 1 && monster.animal == ANIMAL_SQUIRREL {
-        // A squirrel dashes at twice the pace for a moment, then sits still.
-        phase := monster.timer % 16
-        if phase >= 8 { return }
-        if phase == 0 { monster.direction = Random(game, 4) }
-        for step: 0..1 {
-            candidate := MonsterNext(monster.position, monster.direction)
-            if MonsterBlocked(game, index, candidate) || candidate.y < 16 {
-                monster.direction = Random(game, 4)
-                return
-            }
-            monster.position = candidate
-        }
         return
     }
     if monster.kind == 1 && monster.animal == ANIMAL_HEDGEHOG {

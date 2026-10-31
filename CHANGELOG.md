@@ -8,6 +8,8 @@
 
 - Collection names and community searches keep text selection and Unicode edits consistent.
 
+- The worm moves only slightly faster in each later landscape instead of much faster after the Meadow.
+- The jittery squirrels are gone; Leafwood keeps its regular creatures.
 - Meadow level 19 has wide garden paths instead of narrow corridors, tiny pockets and dead ends.
 - All thirteen skins have connected, shaded bodies, tapered tails and clearer heads that stay upright when turning left.
 - Daily rewards show the seven-day streak with claimed gifts marked. Missing a day starts a new streak without taking away earned coins or skins.
