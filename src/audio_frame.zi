@@ -1,0 +1,62 @@
+// One owner for this native app. Scope ends at every Frame return; voices
+// survive until the owning session closes or the process host disposes it.
+#import "kryon/media_audio_host"
+#import "kryon/session"
+#if #defined(PLATFORM_WEB) || #defined(ANDROID_BUILD) {
+    #import "kryon/media_audio_raylib"
+}
+#if #defined(ANDROID_BUILD) {
+    Assets :: #import "kryon/app_asset";
+    borrowed: string;
+} else {
+    #import "std/file"
+    cached_assets: [7]string;
+}
+owner: MediaAudioOwner;
+installed: bool;
+paths: [7]string = .["assets/sounds/start.wav", "assets/sounds/pickup.wav", "assets/sounds/lose.wav", "assets/sounds/exit.wav",
+    "assets/sounds/garden.ogg", "assets/sounds/factory.ogg", "assets/sounds/space.ogg"];
+Allowed :: (path: string) -> bool {
+    for paths { if it == path { return true } }
+    return false
+}
+Read :: (context: *void, path: string) -> string {
+    unused context
+    if !Allowed(path) { return "" }
+    #if #defined(ANDROID_BUILD) {
+        Assets.FreeAppAsset(borrowed)
+        borrowed = Assets.ReadAppAsset(path)
+        return borrowed
+    } else {
+        file := OpenRead(path)
+        if !file.valid { return "" }
+        defer CloseFile(file)
+        size := FileSize(file)
+        if size <= 0 || size > MEDIA_AUDIO_ASSET_LIMIT { return "" }
+        for index: 0..6 {
+            if paths[index] != path { continue }
+            if cached_assets[index] == "" {
+                bytes, ok := ReadEntireFile(path)
+                if !ok { return "" }
+                cached_assets[index] = bytes
+            }
+            return cached_assets[index]
+        }
+        return ""
+    }
+}
+Begin :: (session: Session) {
+    #if #defined(PLATFORM_WEB) || #defined(ANDROID_BUILD) {
+        if !installed { MediaAudioUseRaylib(); installed = true }
+    }
+    MediaAudioBegin(*owner, session, Allowed, Read, null)
+    MediaAudioOwnerTick(*owner)
+}
+End :: () {
+    MediaAudioEnd()
+    #if #defined(ANDROID_BUILD) {
+        Assets.FreeAppAsset(borrowed)
+        borrowed = ""
+    }
+}
+Close :: () { MediaAudioOwnerClose(*owner) }

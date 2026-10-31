@@ -1,0 +1,61 @@
+// Deterministic score/mixer output, also compiled against the saved pre-adoption
+// source during migration. The private device is paused so exactly two blocks
+// fit per pump; timing of the host machine cannot affect the result.
+Audio :: #import, file "../src/audio.zi";
+#if #defined(AUDIO_BASELINE) {
+    sdl :: #system_library "SDL2";
+    Init :: (flags: u32) -> s32 #foreign sdl "SDL_InitSubSystem";
+    Pause :: (device: u32, paused: s32) #foreign sdl "SDL_PauseAudioDevice";
+    Clear :: (device: u32) #foreign sdl "SDL_ClearQueuedAudio";
+    Quit :: () #foreign sdl "SDL_Quit";
+} else {
+    #import "kryon/media_audio"
+    #import "kryon/session"
+    queued: s32;
+    Clear :: (device: u32) { unused device; queued = 0 }
+    Provider :: (context: *void, session: Session, command: MediaAudioCommand) -> MediaAudioResult {
+        unused context; unused session
+        if command.operation == .Capabilities { return .{.code = .Ok, .capabilities = 8} }
+        if command.operation == .Status { return .{.code = .Ok, .state = .Playing, .writable = queued < 2} }
+        if command.operation == .SubmitStream { queued += 1 }
+        if command.operation == .Stop || command.operation == .Play { queued = 0 }
+        return .{.code = .Ok}
+    }
+}
+#program_export
+main :: () -> s32 {
+    #if #defined(AUDIO_BASELINE) {
+        if Init(32) != 0 { return 1 }
+        defer Quit()
+    } else {
+        session := SessionOpen()
+        defer SessionClose(session)
+        MediaAudioScopeBegin(Provider, null)
+        defer MediaAudioScopeEnd()
+        Audio.Bind(session)
+    }
+    Audio.EnsureAudio()
+    if Audio.device == 0 { return 2 }
+    #if #defined(AUDIO_BASELINE) {
+        Pause(Audio.device, 1)
+    }
+    defer Audio.CloseMusic()
+    hash: u64 = 17
+    for track: 1..3 {
+        Audio.ChangeMusic(cast(s32)track)
+        for block: 0..119 {
+            if block % 19 == 0 { Audio.PlayEffect(cast(s32)(block / 19) % 4) }
+            Audio.SetVolume(ifx block % 3 == 0 then 25 else 100)
+            #if #defined(AUDIO_BASELINE) {
+                Clear(Audio.device)
+            } else {
+                Clear(Audio.device)
+            }
+            Audio.PumpAudio()
+            for at: 0..2047 { hash = (hash * 31 + cast(u16)Audio.mixed[at]) % cast(u64)2147483647 }
+        }
+    }
+    if hash != cast(u64)1921628682 { return 3 }
+    print("Wurm deterministic PCM: %\n", hash)
+    return 0
+}

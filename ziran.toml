@@ -21,6 +21,8 @@ default_profile = "desktop"
 entry = "src/app.zi"
 
 [tool.kryon.profiles.desktop]
+native_artifacts = "kryon:renderer-raylib"
+native_platform = "linux-x86_64-gnu"
 backend = "desktop"
 library = "SDL2"
 # Sizes the window from WURM_WINDOW so landscape and portrait layouts can

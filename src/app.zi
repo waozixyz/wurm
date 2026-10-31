@@ -73,6 +73,10 @@ Input :: #import "kryon/input_protocol";
         Audio :: #import, file "audio.zi";
     }
 }
+#if !#defined(WURM_PORTABLE) {
+    AudioFrame :: #import, file "audio_frame.zi";
+    CloseAudio :: () { AudioFrame.Close() }
+}
 // A computer steers with its keyboard; only touch editions offer swipe
 // or the on-screen direction pad.
 KeyboardOnly :: () -> bool {
@@ -3447,6 +3451,11 @@ portal_ad_was_pending: bool;
 
 #program_export
 Frame :: (session: Session, viewport: Rectangle) -> s32 {
+    #if !#defined(WURM_PORTABLE) {
+        AudioFrame.Begin(session)
+        defer { AudioFrame.End() }
+    }
+    Audio.Bind(session)
     frame_input := CaptureFrameInput(session)
     if game.mode != MODE_PLAYING || !frame_input.available || !frame_input.focused { touch_steering = GameControls.GameSwipe.{} }
     Portal.ConfigureLanguage()

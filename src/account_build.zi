@@ -187,6 +187,18 @@ BuildAccountProgram :: (source: string, root: string, entry: string, output: str
     for i: 0..libraries.count - 1 { VecPush(compile, libraries[i]) }
     words := TextSplit(TextTrim(system), " ")
     for i: 0..words.count - 1 { if words[i].count > 0 { VecPush(compile, words[i]) } }
+    if source == "src/desktop_host.zi" {
+        artifact_command: [7]string = .["ziran", "pkg", "artifact", "kryon:renderer-raylib", "--platform", "linux-x86_64-gnu", "--locked"]
+        artifact_output, artifact_ok := Step(artifact_command[0:ifx Locked() then 7 else 6], true, no_extra[:])
+        if !artifact_ok { return false }
+        VecPush(compile, JoinPath(PathParent(TextTrim(artifact_output)), "lib/libraylib.a"))
+        renderer_command: [7]string = .["pkg-config", "--libs", "sdl2", "libdrm", "gbm", "egl", "glesv2"]
+        renderer_output, renderer_ok := Step(renderer_command[:], true, no_extra[:])
+        if !renderer_ok { return false }
+        renderer_words := TextSplit(TextTrim(renderer_output), " ")
+        for renderer_words { if it.count > 0 { VecPush(compile, it) } }
+        VecPush(compile, "-ldl")
+    }
     link: [5]string = .["-lX11", "-l:libcurl.so.4", "-lm", "-lpthread", "-lz"]
     for link { VecPush(compile, it) }
     candidate := JoinPath(output, "program.new")

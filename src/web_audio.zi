@@ -1,5 +1,6 @@
-// HTML audio follows the same calm playlist and phrase-length fades as PCM.
-#import "std/web"
+// Shared asset voices follow the same calm playlist and phrase-length fades as PCM.
+#import "kryon/media_audio"
+#import "kryon/session"
 #import, file "audio_volume.zi";
 #import, file "audio_score.zi";
 Portal :: #import, file "portal.zi";
@@ -8,8 +9,20 @@ muted: bool;
 // A portal's own mute, over the player's choice, which it leaves as it was.
 silenced: bool;
 volume: s32 = 100;
-sounds: [7]s32;
-ignore_play_failure: s32;
+session: Session;
+loaded: [7]bool;
+Bind :: (value: Session) {
+    if session.slot != value.slot || session.epoch != value.epoch {
+        for index: 0..6 { loaded[index] = false }
+        was_playing = false
+        music_incoming = 0
+        music_gain = 0.0
+    }
+    session = value
+}
+Voice :: (index: s32, operation: MediaAudioOperation) -> MediaAudioResult {
+    return MediaAudio(session, MediaAudioCommand.{.operation = operation, .voice = index + 1})
+}
 music_current: s32 = 1;
 music_incoming: s32;
 music_requested: s32 = 1;
@@ -30,53 +43,53 @@ ApplyVolume :: () {
             else if index == music_incoming + 3 { gain *= 0.4 * music_gain }
             else { gain = 0.0 }
         }
-        WebSet(sounds[index], WebName("volume"), WebNumber(gain))
+        unused MediaAudio(session, MediaAudioCommand.{.operation = .Gain, .voice = cast(s32)index + 1,
+            .gain = ifx muted || silenced then 0.0 else cast(float32)gain})
     }
 }
 SetVolume :: (value: s32) {
     volume = ClampVolume(value)
     Ensure()
-    mark := WebScope()
     ApplyVolume()
-    WebEnd(mark)
-}
-IgnorePlayFailure :: (context: s32, first: s32, second: s32, third: s32) {
-    unused context; unused first; unused second; unused third
 }
 Ensure :: () {
-    if ready { return }
-    ready = true
-    mark := WebScope()
-    constructor := WebGetObject(WebGlobal, WebName("Audio"))
     paths: [7]string = .["assets/sounds/start.wav", "assets/sounds/pickup.wav", "assets/sounds/lose.wav", "assets/sounds/exit.wav",
-    "assets/sounds/garden.ogg", "assets/sounds/factory.ogg", "assets/sounds/space.ogg"]
+        "assets/sounds/garden.ogg", "assets/sounds/factory.ogg", "assets/sounds/space.ogg"]
+    capabilities := MediaAudio(session, MediaAudioCommand.{.operation = .Capabilities})
+    if capabilities.code != .Ok || (capabilities.capabilities & cast(u32)55) != 55 { ready = false; return }
+    ready = true
     for index: 0..6 {
-        args: [1]WebValue = .[WebText(paths[index])]
-        sounds[index] = WebKeep(WebNew(constructor, *args[0], 1))
-        if index >= 4 {
-            WebSet(sounds[index], WebName("loop"), WebBool(true))
-            WebSet(sounds[index], WebName("preload"), WebText("auto"))
+        if loaded[index] && Voice(cast(s32)index, .Status).code == .Missing {
+            loaded[index] = false
+            was_playing = false
+            music_incoming = 0
+            music_gain = 0.0
         }
+        if !loaded[index] {
+            result := MediaAudio(session, MediaAudioCommand.{.operation = .Load, .voice = cast(s32)index + 1,
+                .asset = paths[index], .music = index >= 4, .gain = 0.0})
+            loaded[index] = result.code == .Ok
+        }
+        if !loaded[index] { ready = false }
     }
     ApplyVolume()
-    ignore_play_failure = WebFunction(IgnorePlayFailure, 0)
-    WebEnd(mark)
 }
-Play :: (index: s32) {
-    promise := WebAsObject(WebCall0(sounds[index], WebName("play")))
-    if promise != 0 { unused WebCall1(promise, WebName("catch"), WebObject(ignore_play_failure)) }
+Play :: (index: s32) -> bool {
+    status := Voice(index, .Status)
+    if status.code != .Ok { return false }
+    if status.state == .Paused { return Voice(index, .Resume).code == .Ok }
+    return MediaAudio(session, MediaAudioCommand.{.operation = .Play, .voice = index + 1, .looping = index >= 4}).code == .Ok
 }
-ApplyMute :: () {
-    mark := WebScope()
-    for index: 0..6 { WebSet(sounds[index], WebName("muted"), WebBool(muted || silenced)) }
-    WebEnd(mark)
-}
+ApplyMute :: () { ApplyVolume() }
 ToggleMute :: () {
     Ensure()
     muted = !muted
     ApplyMute()
 }
-MusicTime :: (track: s32) -> float64 { return WebGetNumber(sounds[track + 3], WebName("currentTime")) }
+MusicTime :: (track: s32) -> float64 {
+    result := Voice(track + 3, .Status)
+    return ifx result.code == .Ok && result.has_position then result.position_seconds else -1.0
+}
 RequestMusic :: (track: s32) {
     if track == music_requested { return }
     music_requested = track
@@ -85,18 +98,21 @@ RequestMusic :: (track: s32) {
 }
 PumpMusic :: () {
     time := MusicTime(music_current)
+    if time < 0.0 { return }
     duration := cast(float64)MusicFrames(music_current) / MUSIC_RATE
     fading := cast(float64)MUSIC_FADE_FRAMES / MUSIC_RATE
     if music_incoming == 0 && ((music_requested != music_current && time >= music_change_at) || (duration > 0.0 && duration - time <= fading)) {
         if music_requested == music_current { music_requested = NextMusic(music_current) }
         music_incoming = music_requested
-        WebSet(sounds[music_incoming + 3], WebName("currentTime"), WebNumber(0.0))
-        Play(music_incoming + 3)
+        unused Voice(music_incoming + 3, .Stop)
+        if !Play(music_incoming + 3) { music_incoming = 0; return }
     }
     if music_incoming != 0 {
-        fraction := MusicTime(music_incoming) / fading
+        incoming_time := MusicTime(music_incoming)
+        if incoming_time < 0.0 { return }
+        fraction := incoming_time / fading
         if fraction >= 1.0 {
-            unused WebCall0(sounds[music_current + 3], WebName("pause"))
+            unused Voice(music_current + 3, .Pause)
             music_current = music_incoming
             music_incoming = 0
             music_gain = 0.0
@@ -111,14 +127,14 @@ PumpMusic :: () {
 }
 UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: s32, active: bool = true) {
     EnforceMute()
-    mark := WebScope()
+    if !ready { return }
     if playing && !was_playing {
-        Play(music_current + 3)
-        if music_incoming != 0 { Play(music_incoming + 3) }
+        if !Play(music_current + 3) { return }
+        if music_incoming != 0 && !Play(music_incoming + 3) { return }
     }
     if !playing && was_playing {
-        unused WebCall0(sounds[music_current + 3], WebName("pause"))
-        if music_incoming != 0 { unused WebCall0(sounds[music_incoming + 3], WebName("pause")) }
+        if Voice(music_current + 3, .Pause).code != .Ok { return }
+        if music_incoming != 0 && Voice(music_incoming + 3, .Pause).code != .Ok { return }
     }
     if playing {
         if !was_playing || level / 4 != previous_level / 4 { RequestMusic(MusicForLevel(level)) }
@@ -130,8 +146,8 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
     else if playing && active && death > previous_death { effect = 2 }
     else if playing && active && transition > previous_transition { effect = 3 }
     if effect >= 0 && !muted && !silenced {
-        WebSet(sounds[effect], WebName("currentTime"), WebNumber(0.0))
-        Play(effect)
+        unused Voice(effect, .Stop)
+        unused Play(effect)
     }
     was_playing = playing
     was_active = playing && active
@@ -139,7 +155,6 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
     previous_apples = apples
     previous_death = death
     previous_transition = transition
-    WebEnd(mark)
 }
 
 // Also called before modal and pending-ad early returns.

@@ -15,6 +15,7 @@ Board :: #import "entity/leaderboard_native";
 Model :: #import "entity/leaderboard_model";
 #import "kryon/pixmap"
 #import "kryon/session"
+#import "kryon/frame_snapshot"
 #import "kryon/tree"
 #import "kryon/tree_input"
 #import "kryon/tree_draw"
@@ -33,7 +34,11 @@ failures: s32;
 Expect :: (ok: bool, reason: string) {
     if !ok { print("FAIL: %\n", reason); failures += 1 }
 }
-Draw :: (session: Session, width: float32, height: float32) {
+Draw :: (session: Session, width: float32, height: float32, pressed: s32 = 0) {
+    input := FrameInputSnapshot.{.available = true, .focused = true}
+    if pressed > 0 { input.keys[pressed] = FrameKeyPressed }
+    Expect(FrameInputBegin(session, input), "publish account frame input")
+    defer FrameInputEnd(session)
     bounds := Rectangle.{0.0, 0.0, width, height}
     PixmapBegin(cast(u32)PixmapBackground)
     Expect(cast(s32)BeginFrame(session, 1, bounds) == 0, "begin account frame")
@@ -195,7 +200,7 @@ main :: () -> s32 {
     Expect(Model.ProfileLeaderboardDecode(Board.EntityLeaderboardAnswer(""), *page) &&
         page.board_count == 1 && page.row_count == 1, "guest leaderboard has its actual score row")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(!Account.ProfileVisible(), "leaderboard Back returns to the game")
     Account.OpenLeaderboard()
     Draw(session, 844.0, 390.0)
@@ -227,7 +232,7 @@ main :: () -> s32 {
         TextUntilNul(page.rows[0].value[:]) == "0", "new account gets its own zero-score leaderboard row")
     Expect(HasLabel(session, 55403, "0") && HasLabel(session, 55210, "Score"), "new account score row is drawn")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(!Account.ProfileVisible(), "Back still returns after an account change")
     // A closed direct board must not be reopened behind a later Profile.
     request.sequence = 2
@@ -244,11 +249,11 @@ main :: () -> s32 {
     Draw(session, 390.0, 780.0)
     Expect(!HasLabel(session, 55210, "Score"), "Profile does not reopen the previous leaderboard")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(!Account.ProfileVisible(), "Profile Back returns after logout")
     App.game.mode = Game.MODE_SETTINGS
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.game.mode == Game.MODE_STAGES && KeyboardTake(session) == 0, "Settings consumes Back before returning to the title")
     Expect(!App.NavigateBack(0), "title has no in-app Back destination")
 
@@ -261,7 +266,7 @@ main :: () -> s32 {
     Expect(HasLabel(session, 29671, "Claim") || HasLabel(session, 29671, "Come back tomorrow"), "the chest card offers today's gift")
     Expect(!HasLabel(session, 29672, "See all days"), "later days stay a surprise")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.game.mode == Game.MODE_STAGES, "Back closes the chest card")
     Expect(HasLabel(session, 28000, "Shop") && HasLabel(session, 28003, "Settings"), "the title's painted shop and settings icons")
     App.OpenShop()
@@ -272,7 +277,7 @@ main :: () -> s32 {
     Expect(HasLabel(session, 28626, "2"), "coin packs are offered for Dew")
     App.shop_tab = App.SHOP_SKINS
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.game.mode == Game.MODE_STAGES, "Back leaves the shop")
 
     // The game's editor offers only the landscapes and levels reached.
@@ -300,16 +305,16 @@ main :: () -> s32 {
     App.editor.browsing = false
     // Back climbs: board, levels, landscapes, editor title, game title.
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.editor.browsing, "Back from a board shows its levels")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.editor_page == App.EDITOR_PAGE_STAGES, "Back from levels shows the landscapes")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.editor_page == App.EDITOR_PAGE_HOME, "Back from landscapes shows the editor title")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.game.mode == Game.MODE_STAGES, "Back from the editor title returns to the game")
 
     // Own levels are private, named collections that remain playable in the editor.
@@ -350,7 +355,7 @@ main :: () -> s32 {
     Expect(App.game.mode != Game.MODE_EDITOR && App.editor.playtest && App.editor.own &&
         App.editor.own_index == play_index, "an own level playtests from its editor board")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.game.mode == Game.MODE_PAUSED, "Escape pauses an own playtest like a game")
     App.LeavePlay()
     Draw(session, 390.0, 780.0)
@@ -387,10 +392,10 @@ main :: () -> s32 {
         "a signed-out reply asks to sign in")
     fake_pub_mode = 0
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.editor_page == App.EDITOR_PAGE_MINE, "Escape from the share page returns to My levels")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.editor_page == App.EDITOR_PAGE_HOME, "My levels returns to the editor title")
     App.EditorPick(App.EDITOR_PICK_TEMPLATE)
     App.EditorOpenStage(0)
@@ -408,7 +413,7 @@ main :: () -> s32 {
     App.EditorOpenOwn(1)
     App.EditorBrowse()
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     campaign_board: [1200]u8
     campaign_objects: [1200]u8
     campaign_board[Custom.At(5, 5)] = 20
@@ -463,13 +468,13 @@ main :: () -> s32 {
     Expect(HasLabel(session, 40409, "Private: only you can see it."), "the added collection is shown as private")
     Expect(OwnDelete() && OwnRefresh() && own_collection_count == 0, "cleanup removes the added collection")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     fake_find_count = 0
     Expect(Click(session, 40017), "open Community again")
     FinishShare(session)
     Expect(HasLabel(session, 43105, "No shared collections found."), "an empty find says nothing was found")
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 390.0, 780.0)
+    Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.editor_page == App.EDITOR_PAGE_HOME, "Escape from Community returns to the editor title")
 
     // Local players: a name each, and owned skins only, never shared.
@@ -485,7 +490,7 @@ main :: () -> s32 {
     Expect(App.LocalPlayerText(1, name[:]) == "Mo", "a named player shows the name")
     App.local_names[1].length = 0
     unused KeyboardSend(session, KeyEscape)
-    Draw(session, 1280.0, 760.0)
+    Draw(session, 1280.0, 760.0, KeyEscape)
     Expect(App.game.mode == Game.MODE_STAGES, "Back leaves the multiplayer setup")
     print("Account navigation local test failures: %\n", failures)
     return failures

@@ -2,21 +2,38 @@ Audio :: #import, file "../src/audio.zi";
 Volume :: #import, file "../src/audio_volume.zi";
 Score :: #import, file "../src/audio_score.zi";
 File :: #import "std/file_linux";
-sdl :: #system_library "SDL2";
-CloseDevice :: (device: u32) #foreign sdl "SDL_CloseAudioDevice";
-Quit :: () #foreign sdl "SDL_Quit";
-Init :: (flags: u32) -> s32 #foreign sdl "SDL_InitSubSystem";
-Clear :: (device: u32) #foreign sdl "SDL_ClearQueuedAudio";
-Queued :: (device: u32) -> u32 #foreign sdl "SDL_GetQueuedAudioSize";
+#import "kryon/media_audio"
+#import "kryon/session"
+queued: u32;
+reject: bool;
+accepted: s32;
+copy: [4096]u8;
+Clear :: (device: u32) { unused device; queued = 0 }
+Queued :: (device: u32) -> u32 { unused device; return queued }
+Provider :: (context: *void, session: Session, command: MediaAudioCommand) -> MediaAudioResult {
+    unused context; unused session
+    if command.operation == .Capabilities { return .{.code = .Ok, .capabilities = 8} }
+    if command.operation == .Status { return .{.code = .Ok, .state = .Playing, .writable = queued < 8192} }
+    if command.operation == .SubmitStream {
+        if command.pcm.count != 4096 { return .{.code = .Invalid} }
+        if reject { return .{.code = .Backpressure} }
+        for at: 0..4095 { copy[at] = command.pcm[at] }
+        accepted += 1
+        queued += 4096
+    }
+    if command.operation == .Stop || command.operation == .Play { queued = 0 }
+    return .{.code = .Ok}
+}
 
 #program_export
 main :: () -> s32 {
-    // No real sound device or owner desktop: SDL's dummy drivers only.
-    if Init(32) != 0 { return 1 }
-    defer Quit()
+    session := SessionOpen()
+    defer SessionClose(session)
+    MediaAudioScopeBegin(Provider, null)
+    defer MediaAudioScopeEnd()
+    Audio.Bind(session)
     Audio.EnsureAudio()
     if Audio.device == 0 { return 2 }
-    defer CloseDevice(Audio.device)
     defer Audio.CloseMusic()
     for index: 0..3 { if Audio.effects[index].count <= 0 { return 3 } }
     for track: 1..3 {
@@ -96,6 +113,22 @@ main :: () -> s32 {
     current.position = current.bytes - Score.MUSIC_FADE_FRAMES * 2
     Audio.ReadMusicSamples()
     if Audio.music_incoming < 0 || Audio.music[Audio.music_incoming].track != 1 { return 26 }
+    // Provider readiness can change between Status and Submit. A rejected
+    // block must be retried byte-for-byte, without advancing the score again.
+    Clear(Audio.device)
+    reject = true
+    Audio.PumpAudio()
+    if !Audio.pending_block { return 27 }
+    kept_position := Audio.music[Audio.music_current].position
+    kept_samples := Audio.mixed
+    reject = false
+    queued = 4096 // Room for precisely the retained block.
+    Audio.PumpAudio()
+    if Audio.pending_block || Audio.music[Audio.music_current].position != kept_position { return 28 }
+    for at: 0..2047 {
+        value := cast(u16)kept_samples[at]
+        if copy[at * 2] != cast(u8)(value & 255) || copy[at * 2 + 1] != cast(u8)(value >> 8) { return 29 }
+    }
     Audio.ToggleMute()
     if !Audio.muted { return 7 }
     print("Audio local tests: three scores, phrase-scheduled PCM crossfades, queued changes, exact loop seam, Ready continuity and volume.\n")

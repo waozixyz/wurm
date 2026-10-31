@@ -1,4 +1,6 @@
-// One game mixer, with SDL desktop and raylib Android output.
+// Wurm score, phrase scheduler and mixer over shared MediaAudio PCM.
+#import "kryon/media_audio"
+#import "kryon/session"
 File :: #import "std/file_linux";
 Output :: #import, file "audio_output.zi";
 #import, file "audio_volume.zi";
@@ -15,7 +17,7 @@ volume: s32 = 100;
 CanSetVolume :: () -> bool { return true }
 SetVolume :: (value: s32) {
     volume = ClampVolume(value)
-    if device != 0 { Output.Clear(device) }
+    if device != 0 { ClearOutput() }
 }
 effects: [4]Effect;
 MusicStream :: struct { file: File.FileHandle; data: string; bytes: s64; position: s64; track: s32; }
@@ -29,6 +31,21 @@ music_raw: [4096]u8;
 music_next_raw: [4096]u8;
 music_samples: [4096]u8;
 mixed: [2048]s16;
+pending_block: bool;
+Bind :: (session: Session) {
+    if device != 0 {
+        status := MediaAudio(session, MediaAudioCommand.{.operation = .Status, .voice = 1})
+        if status.code == .Missing || status.code == .Denied {
+            device = 0
+            attempted = false
+            pending_block = false
+            CloseMusic()
+            for index: 0..3 { effects[index].playing = false }
+            was_playing = false
+        }
+    }
+    Output.Bind(session)
+}
 previous_level: s32 = -1;
 previous_apples: s32;
 previous_death: s32;
@@ -184,9 +201,9 @@ CloseMusic :: () {
 EnsureAudio :: () {
     // Display-free pixmap verification never opens a real audio device.
     if attempted || !Output.Available() { return }
-    attempted = true
     device = Output.Open()
     if device == 0 { return }
+    attempted = true
     LoadEffect(0, "assets/sounds/start.pcm")
     LoadEffect(1, "assets/sounds/exit.pcm")
     LoadEffect(2, "assets/sounds/lose.pcm")
@@ -198,14 +215,24 @@ PlayEffect :: (index: s32) {
     effects[index].playing = true
 }
 
+ClearOutput :: () {
+    pending_block = false
+    Output.Clear(device)
+}
+
 ToggleMute :: () {
     muted = !muted
-    if device != 0 { Output.Clear(device) }
+    if device != 0 { ClearOutput() }
 }
 
 PumpAudio :: () {
     if device == 0 || muted { return }
     while Output.Ready(device) {
+        if pending_block {
+            if !Output.Submit(device, mixed[:]) { pending_block = true; return }
+            pending_block = false
+            continue
+        }
         for index: 0..4095 { music_samples[index] = 0 }
         ReadMusicSamples()
         for index: 0..2047 {
@@ -220,7 +247,7 @@ PumpAudio :: () {
             }
             mixed[index] = VolumeSample(value,volume)
         }
-        if !Output.Submit(device, mixed[:]) { return }
+        if !Output.Submit(device, mixed[:]) { pending_block = true; return }
     }
 }
 
@@ -239,7 +266,7 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
         }
         PumpAudio()
     } else if was_playing {
-        Output.Clear(device)
+        ClearOutput()
         for index: 0..3 { effects[index].playing = false }
     }
     was_playing = playing

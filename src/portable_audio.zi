@@ -1,28 +1,29 @@
-// Packed effects use the host's sound device; the guest never opens SDL.
-host_api :: #system_library "host_api";
-AppSoundHost :: (path: string) -> bool #foreign host_api;
-AppServiceHost :: (name: string, request: string) -> string #foreign host_api;
-#import "std/number_text"
-#import "std/text_buffer"
-#import "std/vec"
+// Packed cues use the actual app instance's MediaAudio permission and owner.
+#import "kryon/media_audio"
+#import "kryon/session"
 #import, file "audio_volume.zi";
 muted: bool;
 volume: s32 = 100;
-CanSetVolume :: () -> bool { return AppServiceHost("arcade.sound","volume.get") != "" }
-SetVolume :: (value: s32) {
-    volume = ClampVolume(value)
-    request: Vec(u8)
-    BuilderPrint(*request,"volume:%",volume)
-    unused AppServiceHost("arcade.sound",TextView(VecSlice(request,0,request.count)))
-    VecFree(request)
+session: Session;
+Bind :: (value: Session) { session = value }
+CanSetVolume :: () -> bool {
+    result := MediaAudio(session, MediaAudioCommand.{.operation = .Capabilities})
+    return result.code == .Ok && (result.capabilities & cast(u32)4) != 0
 }
+ApplyVolume :: () {
+    for voice: 1..4 {
+        unused MediaAudio(session, MediaAudioCommand.{.operation = .Gain, .voice = cast(s32)voice,
+            .gain = ifx muted then 0.0 else cast(float32)volume / 100.0})
+    }
+}
+SetVolume :: (value: s32) { volume = ClampVolume(value); ApplyVolume() }
 previous_level: s32 = -1;
 previous_apples: s32;
 previous_death: s32;
 previous_transition: s32;
 was_playing: bool;
 was_active: bool;
-ToggleMute :: () { muted = !muted }
+ToggleMute :: () { muted = !muted; ApplyVolume() }
 #if #defined(WURM_EDITOR_APP) {
     SOUND_START :: "assets/wurm-editor/sounds/start.wav";
     SOUND_PICKUP :: "assets/wurm-editor/sounds/pickup.wav";
@@ -40,7 +41,22 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
     else if active && playing && apples < previous_apples { path = SOUND_PICKUP }
     else if active && death > previous_death { path = SOUND_LOSE }
     else if active && transition > previous_transition { path = SOUND_EXIT }
-    if !muted && volume > 0 && path != "" { unused AppSoundHost(path) }
+    if !muted && volume > 0 && path != "" {
+        paths: [4]string = .[SOUND_START, SOUND_PICKUP, SOUND_LOSE, SOUND_EXIT]
+        for at: 0..3 {
+            if path != paths[at] { continue }
+            voice := cast(s32)at + 1
+            status := MediaAudio(session, MediaAudioCommand.{.operation = .Status, .voice = voice})
+            if status.code == .Missing {
+                status = MediaAudio(session, MediaAudioCommand.{.operation = .Load, .voice = voice, .asset = path,
+                    .gain = cast(float32)volume / 100.0})
+            }
+            if status.code == .Ok {
+                ApplyVolume()
+                unused MediaAudio(session, MediaAudioCommand.{.operation = .Play, .voice = voice})
+            }
+        }
+    }
     was_playing = playing
     was_active = playing && active
     previous_level = level

@@ -4,7 +4,7 @@
 // ziran.local.toml are used when present; CI has none and uses the lock.
 //
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- [ARCHIVE]
-//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- input | engine | hosted
+//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- input | engine | hosted | audio
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web | crazygames
 //
 // ui, account-ui and web run the private Xvfb, account and browser tests;
@@ -251,6 +251,14 @@ Interface :: (name: string, output: string, link: string) -> bool {
 main :: (argc: s32, argv: **u8) -> s32 {
     unused CreateDirectories("build/research")
     mode := ifx argc > 1 then TextFromCString(argv[1]) else ""
+    if mode == "audio" {
+        if !Test("audio_test", "audio-test", none[:], "", none[:]) { return Fail("audio mixer") }
+        if !Test("pcm_equivalence_test", "pcm-equivalence-test", none[:], "", none[:]) { return Fail("audio PCM equivalence") }
+        command: [3]string = .["python3", "tests/audio_transport_test.py", "--browser"]
+        if !Run(command[0:2], none[:]) { return Fail("native audio transport") }
+        return ifx Run(command[:], none[:]) then 0 else Fail("browser audio transport")
+    }
+    if mode == "account-navigation" { return ifx AccountNavigation() then 0 else Fail("account navigation") }
     if mode == "hosted" { return ifx Hosted() then 0 else Fail("hosted input") }
     if mode == "engine" { return ifx Engine() then 0 else Fail("game engine") }
     if mode == "input" { return ifx InputIntegration() then 0 else Fail("input integration") }
@@ -288,8 +296,8 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !Hosted() { return Fail("hosted") }
     if !Test("authored_levels_test", "authored-levels-test", none[:], "", none[:]) { return Fail("published campaign") }
     if !Test("orientation_test", "orientation-test", none[:], "", none[:]) { return Fail("mirrored layouts") }
-    sound: [2]string = .["SDL_VIDEODRIVER=dummy", "SDL_AUDIODRIVER=dummy"]
-    if !Test("audio_test", "audio-test", none[:], "-lSDL2", sound[:]) { return Fail("audio") }
+    if !Test("audio_test", "audio-test", none[:], "", none[:]) { return Fail("audio") }
+    if !Test("pcm_equivalence_test", "pcm-equivalence-test", none[:], "", none[:]) { return Fail("audio PCM equivalence") }
     finale: [1]string = .["WORM_SHOT_LEVEL=200"]
     stages: [2]string = .["WORM_SHOT_LEVEL=20", "WORM_SHOT_STAGES=1"]
     editor: [1]string = .["WORM_SHOT_EDITOR=1"]
