@@ -1,5 +1,8 @@
 #import "android_device"
 #import "android_jni"
+#if #defined(WURM_ACCOUNTS) {
+    Handoff :: #import "entity/account_handoff";
+}
 
 // Registers Kryon's canonical Android natives on this activity. Keep your
 // own JNI_OnLoad and call AndroidJniOnLoad yourself to add application
@@ -7,5 +10,9 @@
 #program_export
 JNI_OnLoad :: (vm: *JniVm, reserved: *void) -> s32 {
     unused reserved
-    return AndroidJniOnLoad(vm, "xyz/waozi/wurm/MainActivity")
+    version := AndroidJniOnLoad(vm, "xyz/waozi/wurm/MainActivity")
+    #if #defined(WURM_ACCOUNTS) {
+        Handoff.AccountHandoffJniOnLoad(vm)
+    }
+    return version
 }

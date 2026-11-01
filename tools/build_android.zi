@@ -164,6 +164,8 @@ main :: (argc: s32, argv: **u8) -> s32 {
     gradle = TextReplace(gradle, "applicationId 'xyz.waozi.wurm'", "applicationId (project.findProperty('app.installId') ?: 'xyz.waozi.wurm')")
     gradle = ReplaceNumber(gradle, "versionCode ", code_text)
     gradle = ReplaceQuoted(gradle, "versionName '", "'", version)
+    // "Continue as @name" between waozi apps, in every edition.
+    gradle = TextReplace(gradle, "android {\n", "apply from: new File(kryonDir, 'templates/android-account-handoff.gradle')\n\nandroid {\n")
     if !WriteEntireFile(gradle_path, gradle) { return Fail("cannot write build.gradle") }
     manifest_path := "droid/app/src/main/AndroidManifest.xml"
     manifest, has_manifest := ReadEntireFile(manifest_path)
