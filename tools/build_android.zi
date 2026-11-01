@@ -201,7 +201,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     Append(*accounts, cmake)
     Append(*accounts, "\n# Apfelwurm account libraries\nset(OQS_BUILD_ONLY_LIB ON CACHE BOOL \"\" FORCE)\nset(OQS_USE_OPENSSL OFF CACHE BOOL \"\" FORCE)\n")
     Append(*accounts, "set(OQS_DIST_BUILD OFF CACHE BOOL \"\" FORCE)\nset(OQS_OPT_TARGET generic CACHE STRING \"\" FORCE)\n")
-    Append(*accounts, "set(OQS_MINIMAL_BUILD SIG_ml_dsa_44 CACHE STRING \"\" FORCE)\n")
+    Append(*accounts, "set(OQS_MINIMAL_BUILD \"SIG_ml_dsa_44;KEM_ml_kem_768\" CACHE STRING \"\" FORCE)\n")
     BuilderPrint(*accounts, "add_subdirectory(\"%\" \"${CMAKE_BINARY_DIR}/account-oqs\" EXCLUDE_FROM_ALL)\n", liboqs)
     BuilderPrint(*accounts, "target_sources(main PRIVATE \"%/src/monocypher.c\" \"%/src/optional/monocypher-ed25519.c\")\n", monocypher, monocypher)
     BuilderPrint(*accounts, "target_include_directories(main PRIVATE \"%/src\")\ntarget_link_libraries(main oqs)\n", monocypher)

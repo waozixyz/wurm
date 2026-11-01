@@ -116,7 +116,7 @@ AccountLibraries :: (web: bool, output: *Vec(string)) -> bool {
         "-DOQS_BUILD_ONLY_LIB=ON", "-DOQS_USE_OPENSSL=OFF", "-DOQS_DIST_BUILD=OFF"]
     for options { VecPush(configure, it) }
     VecPush(configure, "-DOQS_OPT_TARGET=generic")
-    VecPush(configure, "-DOQS_MINIMAL_BUILD=SIG_ml_dsa_44")
+    VecPush(configure, "-DOQS_MINIMAL_BUILD=SIG_ml_dsa_44;KEM_ml_kem_768")
     out2, configured := Step(VecSlice(configure, 0, configure.count), false, no_extra[:])
     if !configured { return false }
     compile: [7]string = .["cmake", "--build", oqs_build, "--target", "oqs", "-j1", ""]
