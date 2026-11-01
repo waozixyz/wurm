@@ -520,3 +520,6 @@ Ripristina acquisti
 [wurm_portal_shop_11]
 Aggiorna
 ---
+[wurm_rewards_streak]
+Serie: giorno %. Se salti un giorno, ricomincia.
+---

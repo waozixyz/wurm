@@ -201,6 +201,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Zdarma" }
         if source == "Restore purchases" { return "Obnovit nákupy" }
         if source == "Refresh" { return "Obnovit" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "Série: den %. Vynecháš den a začíná znovu." }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
@@ -367,6 +368,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Kostenlos" }
         if source == "Restore purchases" { return "Käufe wiederherstellen" }
         if source == "Refresh" { return "Aktualisieren" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "Serie: Tag %. Verpasst du einen Tag, beginnt sie neu." }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
@@ -539,6 +541,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Gratis" }
         if source == "Restore purchases" { return "Restaurar compras" }
         if source == "Refresh" { return "Actualizar" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "Racha: día %. Si faltas un día, vuelve a empezar." }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
@@ -707,6 +710,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Gratuit" }
         if source == "Restore purchases" { return "Restaurer les achats" }
         if source == "Refresh" { return "Actualiser" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "Série : jour %. Un jour manqué et elle recommence." }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
@@ -876,6 +880,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Gratis" }
         if source == "Restore purchases" { return "Pulihkan pembelian" }
         if source == "Refresh" { return "Muat ulang" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "Beruntun: hari ke-%. Lewat sehari, mulai dari awal." }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
@@ -1047,6 +1052,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Gratis" }
         if source == "Restore purchases" { return "Ripristina acquisti" }
         if source == "Refresh" { return "Aggiorna" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "Serie: giorno %. Se salti un giorno, ricomincia." }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
@@ -1220,6 +1226,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "無料" }
         if source == "Restore purchases" { return "購入を復元" }
         if source == "Refresh" { return "更新" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "連続 % 日目。1日でも休むと最初からです。" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
@@ -1393,6 +1400,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "무료" }
         if source == "Restore purchases" { return "구매 복원" }
         if source == "Refresh" { return "새로 고침" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "연속 %일째. 하루라도 빠지면 처음부터 다시 시작해요." }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
@@ -1564,6 +1572,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Grátis" }
         if source == "Restore purchases" { return "Restaurar compras" }
         if source == "Refresh" { return "Atualizar" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "Sequência: dia %. Se perder um dia, recomeça." }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
@@ -1737,6 +1746,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Бесплатно" }
         if source == "Restore purchases" { return "Восстановить покупки" }
         if source == "Refresh" { return "Обновить" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "Серия: день %. Пропустите день — начнётся заново." }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
@@ -1910,6 +1920,7 @@ Text :: (source: string) -> string {
         if source == "Free" { return "免费" }
         if source == "Restore purchases" { return "恢复购买" }
         if source == "Refresh" { return "刷新" }
+        if source == "Streak: day %. Miss a day and it starts over." { return "连续第 % 天。中断一天就要重新开始。" }
     }
     return source
 }

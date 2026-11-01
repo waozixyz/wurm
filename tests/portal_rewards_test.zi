@@ -9,7 +9,7 @@ active: bool;
 account: s32;
 fail_read: bool;
 fail_write: bool;
-records: [2][27]u8;
+records: [2][39]u8;
 lengths: [2]s64 = .[-2, -2];
 writes: s32;
 reads: s32;
@@ -29,7 +29,7 @@ Read :: (name: string, output: []u8) -> s64 {
 }
 Write :: (name: string, text: string) -> bool {
     writes += 1
-    if name != "rewards.dat" || fail_write || text.count > 26 { return false }
+    if name != "rewards.dat" || fail_write || text.count > 38 { return false }
     for byte, index: text { records[account][index] = byte }
     lengths[account] = text.count
     return true
@@ -102,6 +102,11 @@ main :: () -> s32 {
     Expect(Rewards.Buy(10) && Rewards.Owns(9) && Rewards.Owns(10) && Rewards.Coins() == 640, "retry reads old skin before adding new purchase")
     account = 1; Reload()
     Expect(Rewards.Owns(11) && !Rewards.Owns(9) && !Rewards.Owns(10) && Rewards.Day() == 8, "other account persistent record unchanged")
+    // A missed day keeps the gift and coins in the longer record, also across a reload.
+    Rewards.test_day = 20010
+    Expect(Rewards.Claim() && Rewards.Day() == 1 && lengths[1] == 38, "a restart saves what it kept")
+    Reload()
+    Expect(Rewards.Day() == 1 && Rewards.Owns(11) && Rewards.kept_coins > 0, "the kept record reloads")
     account = 0; Reload()
     Expect(Rewards.SetPortalCredits(1000000000, true), "maximum verified credit accepted")
     Progress.replays = 9223372036854775807

@@ -520,3 +520,6 @@ Obnovit nákupy
 [wurm_portal_shop_11]
 Obnovit
 ---
+[wurm_rewards_streak]
+Série: den %. Vynecháš den a začíná znovu.
+---

@@ -1,0 +1,142 @@
+// The daily plan advances only on consecutive UTC days: a missed day restarts
+// it at day one, a day is claimed once, and nothing earned is ever lost, also
+// from records saved before the restart existed.
+Progress :: #import, file "../src/progress.zi";
+Rewards :: #import, file "../src/rewards.zi";
+Records :: #import, file "../src/controls.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+File :: #import "std/file";
+#import "std/file_tree_linux"
+
+#program_export
+WurmAccountService :: (name: string, request: string) -> string { return "" }
+
+ROOT :: "build/rewards-streak-test-data";
+RECORD :: "build/rewards-streak-test-data/rewards.dat";
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: %\n", message); failures += 1 }
+}
+At :: (day: s64) { Rewards.test_day = day }
+Claim :: (day: s64) -> bool { At(day); return Rewards.Claim() }
+Fresh :: () {
+    unused File.RemoveFile(RECORD)
+    Rewards.Reset()
+}
+// A record exactly as the first version wrote it.
+WriteFirstVersion :: (days: s32, last: s64, week: u8) {
+    bytes: [12]u8
+    bytes[0] = 1
+    bytes[1] = cast(u8)(days & 255); bytes[2] = cast(u8)((days >> 8) & 255)
+    for index: 0..3 { bytes[index + 3] = cast(u8)((last >> (index * 8)) & 255) }
+    bytes[11] = week
+    Expect(Records.WriteRecord("rewards.dat", bytes[:]), "write a first-version record")
+    Rewards.Reset()
+}
+
+Consecutive :: () {
+    Fresh()
+    Expect(Rewards.Day() == 0 && Claim(30000) && Rewards.Day() == 1, "the first claim is day one")
+    Expect(Claim(30001) && Rewards.Day() == 2, "the next day advances")
+    Expect(Claim(30002) && Rewards.Day() == 3 && Rewards.Coins() == 20 + 25 + 30, "three days in a row")
+    Expect(Rewards.toast_coins == 30, "the claim shows that day's coins")
+}
+SameDay :: () {
+    Fresh()
+    Expect(Claim(30000), "claim today")
+    Expect(!Rewards.ClaimReady() && !Claim(30000) && !Claim(30000), "today cannot be claimed twice")
+    Expect(Rewards.Day() == 1 && Rewards.Coins() == 20, "a repeated claim adds nothing")
+    Rewards.Reset()
+    Expect(!Rewards.ClaimReady() && Rewards.Day() == 1, "nor after a restart")
+    At(29999)
+    Expect(!Rewards.ClaimReady(), "an earlier clock cannot claim")
+}
+Missed :: () {
+    Fresh()
+    Expect(Claim(30000) && Claim(30001) && Claim(30002), "three days in a row")
+    At(30003)
+    Expect(Rewards.Day() == 3 && Rewards.ClaimReady(), "the next day still holds the streak")
+    At(30004)
+    Expect(Rewards.Day() == 0 && Rewards.WeekClaimed() == 0 && Rewards.Coins() == 75, "a missed day clears the streak and keeps the coins")
+    Expect(Claim(30004) && Rewards.Day() == 1 && Rewards.toast_coins == 20, "the claim after it is day one")
+    Expect(Rewards.Coins() == 75 + 20 && Rewards.WeekClaimed() == 1, "day one pays on top of the kept coins")
+    Expect(Claim(30005) && Rewards.Day() == 2 && Rewards.Coins() == 75 + 20 + 25, "the new streak advances")
+    Rewards.Reset()
+    Expect(Rewards.Day() == 2 && Rewards.Coins() == 75 + 20 + 25 && Rewards.kept_coins == 75, "the kept coins survive a restart")
+}
+FailedSave :: () {
+    Fresh()
+    Expect(Claim(30000) && Claim(30001), "two days in a row")
+    Expect(File.RemoveFile(RECORD) && File.CreateDirectory(RECORD), "block the reward record")
+    Expect(!Claim(30005), "a failed save refuses the claim")
+    Expect(Rewards.days == 2 && Rewards.kept_coins == 0 && Rewards.last_day == 30001 && Rewards.Coins() == 45, "a failed save restores the ended run")
+    unused RemoveTree(RECORD)
+    Expect(Rewards.Save(), "restore the record")
+    Expect(Rewards.ClaimReady() && Claim(30005) && Rewards.Day() == 1, "the claim works once it can be saved")
+}
+Gifts :: () {
+    Fresh()
+    day: s64 = 30000
+    for count: 1..7 { Expect(Claim(day), "claim a week"); day += 1 }
+    coins := Rewards.Coins()
+    Expect(Rewards.Owns(11) && coins == 190, "day seven gives Mushroom and no coins")
+    At(day + 1)
+    Expect(Rewards.Owns(11) && Rewards.Coins() == coins, "a missed day keeps the skin")
+    Expect(Claim(day + 1) && Rewards.Owns(11) && Rewards.Day() == 1, "the restart keeps the skin")
+    Expect(Rewards.DaySkin(7) == 0 && Rewards.DayCoins(7) == 100, "reaching day seven again pays coins")
+    Expect(!Rewards.Buy(11), "a kept gift is never bought")
+    day += 2
+    for count: 1..6 { Expect(Claim(day), "claim the second week"); day += 1 }
+    Expect(Rewards.Day() == 7 && Rewards.Coins() == coins + 190 + 100, "the second day seven gives its coins")
+}
+FirstVersion :: () {
+    Fresh()
+    At(30101)
+    WriteFirstVersion(12, 30100, 5)
+    coins := Rewards.Coins()
+    Expect(Rewards.Day() == 12 && Rewards.Owns(11) && coins == 190 + 30 + 35 + 50 + 40 + 45, "an unbroken older record keeps its plan day, coins and skin")
+    Expect(Claim(30101) && Rewards.Day() == 13 && Rewards.Coins() == coins + 50, "and continues")
+    At(30200)
+    WriteFirstVersion(12, 30100, 5)
+    coins = Rewards.Coins()
+    Expect(Rewards.Day() == 0 && Rewards.Owns(11) && Rewards.Coins() == coins, "a broken older record keeps its coins and skin")
+    Expect(Claim(30200) && Rewards.Day() == 1 && Rewards.Coins() == coins + 20 && Rewards.Owns(11), "its next claim is day one")
+    Rewards.Reset()
+    Expect(Rewards.Day() == 1 && Rewards.Coins() == coins + 20 && Rewards.Owns(11), "the migrated record survives a restart")
+}
+Merged :: () {
+    // Another device restarted from the same history: nothing counts twice.
+    Fresh()
+    Expect(Claim(30000) && Claim(30001) && Claim(30002), "three days here")
+    Rewards.MergePlan(1, 30010, 0, 0, 45, 0, 0)
+    Expect(Rewards.days == 1 && Rewards.last_day == 30010 && Rewards.kept_coins == 75, "a later restart replaces the run and keeps this device's day three")
+    Rewards.MergePlan(1, 30010, 0, 0, 75, 0, 0)
+    Expect(Rewards.kept_coins == 75, "merging the same plan again changes nothing")
+    // An older copy with more days cannot undo this device's restart.
+    Fresh()
+    Expect(Claim(30000) && Claim(30001) && Claim(30002) && Claim(30010), "a restart here")
+    Rewards.MergePlan(3, 30002, 0, 0, 0, 0, 0)
+    Expect(Rewards.days == 1 && Rewards.last_day == 30010 && Rewards.Coins() == 75 + 20, "an older longer run stays ended and is not counted twice")
+    // A next-day claim elsewhere continues the streak.
+    Fresh()
+    Expect(Claim(30000), "one day here")
+    Rewards.MergePlan(2, 30001, 0, 0, 0, 0, 0)
+    Expect(Rewards.days == 2 && Rewards.kept_coins == 0 && Rewards.week == 2, "a continued streak merges without keeping coins")
+}
+
+#program_export
+main :: () -> s32 {
+    unused RemoveTree(ROOT)
+    unused File.CreateDirectory(ROOT)
+    Expect(Custom.CustomSetRoot("build/rewards-streak-test-data/"), "private records")
+    Progress.Load()
+    Consecutive()
+    SameDay()
+    Missed()
+    FailedSave()
+    Gifts()
+    FirstVersion()
+    Merged()
+    print("Rewards streak local test failures: %\n", failures)
+    return failures
+}

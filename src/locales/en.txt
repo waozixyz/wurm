@@ -520,3 +520,6 @@ Restore purchases
 [wurm_portal_shop_11]
 Refresh
 ---
+[wurm_rewards_streak]
+Streak: day %. Miss a day and it starts over.
+---

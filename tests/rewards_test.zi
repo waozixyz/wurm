@@ -1,5 +1,6 @@
 // Coins, coin skins and the daily plan against a simulated account and node:
-// the node counts one check-in per UTC day and credits each Dew day once.
+// the node counts one check-in per UTC day, needs them unbroken up to today and
+// credits each Dew day once.
 Progress :: #import, file "../src/progress.zi";
 Rewards :: #import, file "../src/rewards.zi";
 Wardrobe :: #import, file "../src/wardrobe.zi";
@@ -37,6 +38,10 @@ Text :: (out: Vec(u8)) -> string {
     return TextUntilNul(answer[:])
 }
 Holder :: () -> s32 { return ifx owner == alice then 0 else 1 }
+NodeCheckedIn :: (holder: s32, day: s64) -> bool {
+    for index: cast(s32)0..checkin_count[holder] - 1 { if checkins[holder][index] == day { return true } }
+    return false
+}
 NodeClaim :: (reward: string) -> string {
     claims += 1
     holder := Holder()
@@ -44,6 +49,8 @@ NodeClaim :: (reward: string) -> string {
     seen := false
     for index: cast(s32)0..checkin_count[holder] - 1 { if checkins[holder][index] == day { seen = true } }
     if !seen { checkins[holder][checkin_count[holder]] = day; checkin_count[holder] += 1 }
+    streak: s32 = 0
+    while NodeCheckedIn(holder, day - cast(s64)streak) { streak += 1 }
     required: s32 = 0
     index: s32 = -1
     for milestone: cast(s32)0..4 {
@@ -51,7 +58,7 @@ NodeClaim :: (reward: string) -> string {
     }
     out: Vec(u8)
     if index < 0 { BuilderPrint(*out, "{\"status\":\"failed\",\"reward\":\"%\"}", reward) }
-    else if checkin_count[holder] < required { BuilderPrint(*out, "{\"status\":\"ineligible\",\"reward\":\"%\"}", reward) }
+    else if streak < required { BuilderPrint(*out, "{\"status\":\"ineligible\",\"reward\":\"%\"}", reward) }
     else {
         fresh := (credited[holder] & (1 << index)) == 0
         credited[holder] |= 1 << index
@@ -178,7 +185,7 @@ main :: () -> s32 {
     Progress.Load()
     Expect(Progress.replays == 1 && Rewards.Coins() == 12, "replays survive a restart")
 
-    // The plan: one claim per UTC day; a missed day keeps the plan going.
+    // The plan: one claim per UTC day; a missed day restarts it at day one.
     Rewards.test_day = 20000
     Expect(Rewards.ClaimReady() && ClaimDay(20000), "claim the first day")
     Expect(Rewards.Day() == 1 && Rewards.Coins() == 32 && Rewards.toast_coins == 20, "day one gives twenty coins")
@@ -192,25 +199,25 @@ main :: () -> s32 {
     unused RemoveTree("build/rewards-test-data/rewards.dat")
     Expect(Rewards.Save(), "restore the test's reward record")
     Rewards.test_day = 20003
-    Expect(Rewards.WeekClaimed() == 0 && Rewards.Day() == 2 && Rewards.Coins() == 32 + 25, "a missed day clears the week but keeps claimed days and coins")
-    Expect(ClaimDay(20004) && Rewards.WeekClaimed() == 1, "the claim after a missed day starts a new week")
+    Expect(Rewards.WeekClaimed() == 0 && Rewards.Day() == 0 && Rewards.Coins() == 32 + 25, "a missed day clears the plan day but keeps the coins")
+    Expect(ClaimDay(20004) && Rewards.WeekClaimed() == 1 && Rewards.Day() == 1, "the claim after a missed day is day one")
     Rewards.Reset()
-    Expect(Rewards.WeekClaimed() == 1 && Rewards.Day() == 3, "the week survives a restart")
-    Expect(Rewards.Day() == 3 && Rewards.Coins() == 32 + 25 + 30, "days two and three give their coins")
+    Expect(Rewards.WeekClaimed() == 1 && Rewards.Day() == 1, "the restarted plan survives a restart")
+    Expect(Rewards.Coins() == 57 + 20, "the restarted plan pays day one on top of the kept coins")
     Rewards.test_day = 20003
     Expect(!Rewards.ClaimReady(), "an earlier clock cannot claim again")
-    Expect(ClaimDay(20005) && ClaimDay(20006), "claim days four and five")
+    Expect(ClaimDay(20005) && ClaimDay(20006) && ClaimDay(20007) && ClaimDay(20008), "claim days two to five")
     Expect(Rewards.DayDew(5) == 0 && Rewards.DayCoins(5) == 40, "day five gives coins, not Dew")
     Expect(Rewards.DayDew(10) == 2 && Rewards.DewState(10) == 3 && Rewards.DayCoins(10) == 50, "a guest gets coins on a Dew day and is asked to sign in")
     Expect(Rewards.DayDew(15) == 0 && Rewards.DayDew(20) == 0 && Rewards.DayDew(25) == 3, "Dew is rare: days 10 and 25 only")
-    Expect(Rewards.Coins() == 32 + 25 + 30 + 35 + 40, "day five coins")
+    Expect(Rewards.Coins() == 57 + 20 + 25 + 30 + 35 + 40, "day five coins")
     Expect(claims == 0, "a guest never claims Dew")
     Expect(!Rewards.Owns(11) && !Wardrobe.Available(11), "the day-seven skin waits for day seven")
-    Expect(ClaimDay(20007) && ClaimDay(20008), "claim days six and seven")
+    Expect(ClaimDay(20009) && ClaimDay(20010), "claim days six and seven")
     Expect(Rewards.Owns(11) && Wardrobe.Available(11) && Rewards.DaySkin(7) == 11 && Rewards.DayCoins(7) == 0, "day seven gives Mushroom")
-    Expect(Rewards.WeekClaimed() == 5, "plan day seven after a missed day is the week's fifth")
+    Expect(Rewards.WeekClaimed() == 7, "plan day seven after a restart ends the week")
     coins := Rewards.Coins()
-    Expect(coins == 32 + 25 + 30 + 35 + 40 + 40, "the gift skin day gives no coins")
+    Expect(coins == 57 + 20 + 25 + 30 + 35 + 40 + 40, "the gift skin day gives no coins")
     Expect(File.RemoveFile("build/rewards-test-data/rewards.dat") && File.CreateDirectory("build/rewards-test-data/rewards.dat"), "block a private purchase save")
     Expect(!Rewards.Buy(9) && Rewards.Coins() == coins && !Rewards.Owns(9), "a failed purchase save never charges coins")
     unused RemoveTree("build/rewards-test-data/rewards.dat")
@@ -275,7 +282,7 @@ main :: () -> s32 {
 
     // Another device's purchases and claims merge; nothing is lost.
     SignIn(alice)
-    Expect(Rewards.Day() == 10, "alice's plan reloads")
+    Expect(Rewards.Day() == 0 && Rewards.days == 10, "alice's plan reloads, and her missed days ended her streak")
     Expect(Rewards.WeekClaimed() == 0, "alice's week ended with her missed days")
     Rewards.test_day = 20019
     Expect(Rewards.WeekClaimed() == 3, "alice keeps her own week")
@@ -298,8 +305,10 @@ main :: () -> s32 {
     Frames(2)
     Expect(plan_puts == puts && plan_owner == alice, "a plan is never written to another account")
 
-    // The full plan: day 30 gives Aurora; later days give coins only.
+    // The full plan: day 30 gives Aurora; later days give coins only. The other
+    // device's claims checked in with the node, so the streak there is unbroken.
     records_account = alice
+    for checked: cast(s64)20020..20030 { checkins[0][checkin_count[0]] = checked; checkin_count[0] += 1 }
     day := Rewards.Day()
     test_day: s64 = 20031
     while day < 29 { Expect(ClaimDay(test_day), "claim the rest of the plan"); test_day += 1; day += 1 }
@@ -322,6 +331,39 @@ main :: () -> s32 {
     total: s32 = 0
     for plan_day: cast(s32)1..30 { total += Rewards.PlanCoins(plan_day) }
     Expect(total == 1280, "the first plan gives 1280 coins")
+
+    // A missed day after the whole plan: earned coins, skins and Dew stay, the
+    // synced plan restarts and an older copy of it cannot bring the days back.
+    plan_coins := Rewards.Coins()
+    Rewards.test_day = test_day + 3
+    Expect(Rewards.Day() == 0 && Rewards.Coins() == plan_coins && Rewards.Owns(11) && Rewards.Owns(12), "a missed day keeps coins and skins")
+    Expect(ClaimDay(test_day + 3) && Rewards.Day() == 1, "the plan restarts at day one")
+    Expect(Rewards.Coins() == plan_coins + 20 && Rewards.Owns(11) && Rewards.Owns(12), "the restart adds day one and keeps everything earned")
+    Expect(Rewards.DayDew(10) == 0 && Rewards.DayCoins(10) == 50 && Rewards.DaySkin(7) == 0 && Rewards.DayCoins(7) == 100, "credited Dew and owned gifts pay coins the next time")
+    {
+        document := TextUntilNul(plan[:])
+        stored := ReadNumber(document, FieldAt(document, 0, "days"))
+        kept := ReadNumber(document, FieldAt(document, 0, "kept_coins"))
+        Expect(stored.valid && stored.value == 1.0 && kept.valid && kept.value > 0.0, "the synced plan holds the restart and the kept coins")
+    }
+    {
+        out: Vec(u8)
+        BuilderPrint(*out, "{\"days\":31,\"last\":%,\"skins\":1024,\"dew\":18}", test_day + 1)
+        unused CopyCString(BuilderFinish(out), plan[:])
+    }
+    Rewards.poll_at = 0
+    Frames(1)
+    Expect(Rewards.Day() == 1 && Rewards.Coins() == plan_coins + 20, "an older synced plan neither restores days nor adds coins")
+
+    // The node refuses Dew after a gap until its own streak is long enough.
+    SignIn(bob)
+    records_account = bob
+    bob_credit := credited[1]
+    bob_day := test_day + 10
+    Expect(ClaimDay(bob_day) && Rewards.Day() == 1 && Rewards.DewState(10) == 0, "bob's Dew day is ahead again after his gap")
+    Expect(credited[1] == bob_credit, "no Dew after a gap")
+    for step: cast(s64)1..8 { Expect(ClaimDay(bob_day + step) && credited[1] == bob_credit, "no Dew before ten days in a row") }
+    Expect(ClaimDay(bob_day + 9) && Rewards.Day() == 10 && credited[1] == 2 && Rewards.DewState(10) == 2, "ten days in a row credit day ten")
     print("Rewards local test failures: %\n", failures)
     return failures
 }

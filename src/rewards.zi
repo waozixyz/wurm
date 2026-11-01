@@ -1,8 +1,10 @@
 // Coins and the daily reward plan. Coins are cosmetic and follow from what
 // the player did: cleared levels, replays and claimed days, minus the skins
 // bought with them. Retrying, a restart or a second device therefore never
-// counts anything twice. Dew days are granted only by the node, once per
-// account: the game names the reward and shows what the node answered.
+// counts anything twice. The plan advances only on consecutive UTC days: the
+// claim after a missed day is day 1 again, and what the ended run earned stays.
+// Dew days are granted only by the node, once per account, after its own
+// unbroken check-ins: the game names the reward and shows what the node answered.
 Account :: #import, file "account.zi";
 Progress :: #import, file "progress.zi";
 Records :: #import, file "controls.zi";
@@ -29,20 +31,29 @@ DEW_DAY_COINS :: 50;
 // Skins 9 to 12, which coins can buy or the plan gives.
 REWARD_SKINS :: 7680;
 MILESTONES :: 5;
+RECORD_V1_SIZE :: 12;
+RECORD_SIZE :: 19;
+KEPT_COINS_LIMIT :: 2000000000;
 // The account's plan shares the cosmetics kind; record 1 is the holiday claim.
 RECORD_ID :: "00000000000000000000000000000002";
 
 loaded: bool;
 owner: [65]u8;
-// Claimed days, and the UTC day of the latest claim (days since 1970).
+// Claimed days of the current run, and the UTC day of the latest claim (days
+// since 1970). Stays as saved until the claim that restarts it; Day() reads 0
+// once a day was missed.
 days: s32;
 last_day: s64 = -1;
 // The latest claim's place in its week of consecutive days, 1 to 7; 0 none.
-// Only the chest's week follows it: a missed day never takes back a plan day.
 week: s32;
 coin_skins: s32;
 // Bit N: the node credited Dew milestone N.
 dew_done: s32;
+// What earlier runs earned: their coins, the gift skins they reached and the
+// Dew they were credited. A kept gift or Dew pays coins when reached again.
+kept_coins: s32;
+kept_skins: s32;
+kept_dew: s32;
 // A claim since the node last counted a check-in.
 checkin: bool;
 dirty: bool;
@@ -128,6 +139,9 @@ CoinPrice :: (id: s32) -> s32 {
 }
 SignedIn :: () -> bool { return Progress.owner[0] != 0 }
 
+ValidRecord :: (count: s64, version: u8) -> bool {
+    return (count == RECORD_V1_SIZE && version == 1) || (count == RECORD_SIZE && version == 2)
+}
 // Each signed-in account and the guest keep their own plan and coins.
 Load :: () {
     active := PortalActive()
@@ -138,18 +152,19 @@ Load :: () {
     loaded = true
     owner = Progress.owner
     days = 0; last_day = -1; week = 0; coin_skins = 0; dew_done = 0; checkin = false; dirty = false
+    kept_coins = 0; kept_skins = 0; kept_dew = 0
     other_replays = 0; poll_at = 0; claim_active = -1; claim_at = 0
-    bytes: [13]u8
+    bytes: [RECORD_SIZE + 1]u8
     count: s64
     if active {
         count = Portal.ReadByteRecord(Progress.RecordName("rewards.dat"), bytes[:])
         if count == -2 { portal_read_ready = true; return }
         // Unknown/corrupt snapshots must never be replaced by empty state.
-        if count != 12 || bytes[0] != 1 { return }
+        if !ValidRecord(count, bytes[0]) { return }
         portal_read_ready = true
     } else {
         count = Records.ReadRecord(Progress.RecordName("rewards.dat"), bytes[:])
-        if count != 12 || bytes[0] != 1 { return }
+        if !ValidRecord(count, bytes[0]) { return }
     }
     days = cast(s32)bytes[1] | (cast(s32)bytes[2] << 8)
     stored: s64 = 0
@@ -162,13 +177,24 @@ Load :: () {
     // Records from before the week count only their latest claim.
     week = cast(s32)bytes[11]
     if week > 7 || (week == 0 && days > 0) { week = 1 }
+    // A first-version record has nothing kept. Its plan day and everything it
+    // earned stay as they were; only its next missed day restarts the plan.
+    if count == RECORD_SIZE {
+        stored_coins: s64 = 0
+        for index: 0..3 { stored_coins |= cast(s64)bytes[index + 12] << (index * 8) }
+        kept_coins = ifx stored_coins > KEPT_COINS_LIMIT then KEPT_COINS_LIMIT else cast(s32)stored_coins
+        kept_skins = (cast(s32)bytes[16] | (cast(s32)bytes[17] << 8)) & REWARD_SKINS
+        kept_dew = cast(s32)bytes[18] & 31
+    }
 }
 Save :: () -> bool {
     // Do not retry a read here: callers may already have mutated the snapshot.
     if PortalActive() && (!loaded || !portal_loaded || !portal_read_ready ||
         TextUntilNul(owner[:]) != TextUntilNul(Progress.owner[:])) { return false }
-    bytes: [12]u8
-    bytes[0] = 1
+    bytes: [RECORD_SIZE]u8
+    // Nothing kept yet stays in the first version's twelve bytes.
+    kept := kept_coins != 0 || kept_skins != 0 || kept_dew != 0
+    bytes[0] = ifx kept then 2 else 1
     bytes[1] = cast(u8)(days & 255); bytes[2] = cast(u8)((days >> 8) & 255)
     stored: s64 = ifx last_day < 0 then 4294967295 else last_day
     for index: 0..3 { bytes[index + 3] = cast(u8)((stored >> (index * 8)) & 255) }
@@ -176,8 +202,12 @@ Save :: () -> bool {
     bytes[9] = cast(u8)dew_done
     bytes[10] = cast(u8)((ifx dirty then 1 else 0) | (ifx checkin then 2 else 0))
     bytes[11] = cast(u8)week
-    if PortalActive() { return Portal.WriteByteRecord(Progress.RecordName("rewards.dat"), bytes[:]) }
-    return Records.WriteRecord(Progress.RecordName("rewards.dat"), bytes[:])
+    for index: 0..3 { bytes[index + 12] = cast(u8)((kept_coins >> (index * 8)) & 255) }
+    bytes[16] = cast(u8)(kept_skins & 255); bytes[17] = cast(u8)((kept_skins >> 8) & 255)
+    bytes[18] = cast(u8)kept_dew
+    size: s64 = ifx kept then RECORD_SIZE else RECORD_V1_SIZE
+    if PortalActive() { return Portal.WriteByteRecord(Progress.RecordName("rewards.dat"), bytes[:size]) }
+    return Records.WriteRecord(Progress.RecordName("rewards.dat"), bytes[:size])
 }
 Reset :: () {
     loaded = false
@@ -203,28 +233,58 @@ CurrentDay :: () -> s64 {
     return today
 }
 
-// What a plan day gives. Days after the first plan give coins only.
-DayCoins :: (day: s32) -> s32 {
+// What a plan day gives, given what earlier runs kept. Days after the first
+// plan, and a gift or Dew already earned, give coins only.
+RunDayCoins :: (day: s32, skins: s32, dew: s32) -> s32 {
     if day < 1 { return 0 }
     cycle := (day - 1) % DAILY_DAYS + 1
     first := day <= DAILY_DAYS
     coins := PlanCoins(cycle)
     if coins > 0 { return coins }
-    if Milestone(cycle) >= 0 { return ifx first && SignedIn() then 0 else DEW_DAY_COINS }
+    index := Milestone(cycle)
+    if index >= 0 { return ifx first && SignedIn() && (dew & (1 << index)) == 0 then 0 else DEW_DAY_COINS }
     gift := GiftSkin(cycle)
-    if first && (coin_skins & (1 << gift)) == 0 { return 0 }
+    if first && ((coin_skins | skins) & (1 << gift)) == 0 { return 0 }
     return GIFT_COINS
+}
+DayCoins :: (day: s32) -> s32 { return RunDayCoins(day, kept_skins, kept_dew) }
+// The coins of a run's first COUNT days.
+RunCoins :: (count: s32, skins: s32, dew: s32) -> s64 {
+    earned: s64 = 0
+    day: s32 = 1
+    while day <= count { earned += cast(s64)RunDayCoins(day, skins, dew); day += 1 }
+    return earned
+}
+ReachedGifts :: (count: s32) -> s32 {
+    gifts: s32 = 0
+    if count >= 7 { gifts |= 1 << GiftSkin(7) }
+    if count >= 30 { gifts |= 1 << GiftSkin(30) }
+    return gifts
+}
+KeepCoins :: (coins: s64) {
+    capped := ifx coins > KEPT_COINS_LIMIT then cast(s64)KEPT_COINS_LIMIT else coins
+    if capped > cast(s64)kept_coins { kept_coins = cast(s32)capped }
+}
+// Keeps what the current run earned and empties it for day 1.
+EndRun :: () {
+    KeepCoins(cast(s64)kept_coins + RunCoins(days, kept_skins, kept_dew))
+    kept_skins |= ReachedGifts(days)
+    kept_dew |= dew_done
+    days = 0
 }
 // Whole Dew a day offers; guests see it and sign in to receive it.
 DayDew :: (day: s32) -> s32 {
+    Load()
     if day < 1 || day > DAILY_DAYS { return 0 }
-    return MilestoneDew(Milestone(day))
+    index := Milestone(day)
+    if index >= 0 && (kept_dew & (1 << index)) != 0 { return 0 }
+    return MilestoneDew(index)
 }
 DaySkin :: (day: s32) -> s32 {
     Load()
     if day < 1 || day > DAILY_DAYS { return 0 }
     gift := GiftSkin(day)
-    if gift == 0 || (coin_skins & (1 << gift)) != 0 { return 0 }
+    if gift == 0 || ((coin_skins | kept_skins) & (1 << gift)) != 0 { return 0 }
     return gift
 }
 // 0 upcoming, 1 collecting from the node, 2 collected, 3 sign in.
@@ -234,10 +294,18 @@ DewState :: (day: s32) -> s32 {
     if index < 0 { return 0 }
     if !SignedIn() { return 3 }
     if (dew_done & (1 << index)) != 0 { return 2 }
-    return ifx day <= days then 1 else 0
+    return ifx day <= Day() then 1 else 0
 }
 
-Day :: () -> s32 { Load(); return days }
+// True once a whole UTC day passed without a claim.
+RunMissed :: () -> bool {
+    return last_day >= 0 && CurrentDay() > last_day + 1
+}
+// The current streak's plan day; 0 once a day was missed.
+Day :: () -> s32 {
+    Load()
+    return ifx RunMissed() then 0 else days
+}
 // Days of the chest's week already claimed. Today's claim stays shown, and a
 // full week until the next day starts another; a missed UTC day clears it.
 WeekClaimed :: () -> s32 {
@@ -255,20 +323,27 @@ ClaimReady :: () -> bool {
     current := CurrentDay()
     return current >= 0 && current > last_day && days < 65535
 }
-// Claims today's plan day. Coins and skins follow at once; on a Dew day the
-// node credits the Dew. Every signed-in claim also checks in with the node.
+// Claims today's plan day: the next one after yesterday's claim, otherwise day
+// 1. Coins and skins follow at once; on a Dew day the node credits the Dew.
+// Every signed-in claim also checks in with the node.
 Claim :: () -> bool {
     if !ClaimReady() { return false }
     previous_day := last_day
     previous_dirty := dirty
     previous_checkin := checkin
     previous_week := week
+    previous_days := days
+    previous_kept_coins := kept_coins
+    previous_kept_skins := kept_skins
+    previous_kept_dew := kept_dew
+    if RunMissed() { EndRun() }
     days += 1
     week = ifx week > 0 && CurrentDay() == last_day + 1 then week % 7 + 1 else 1
     last_day = CurrentDay()
     if SignedIn() { dirty = true; checkin = true; claim_at = 0; poll_at = 0 }
     if !Save() {
-        days -= 1; last_day = previous_day; week = previous_week
+        days = previous_days; last_day = previous_day; week = previous_week
+        kept_coins = previous_kept_coins; kept_skins = previous_kept_skins; kept_dew = previous_kept_dew
         dirty = previous_dirty; checkin = previous_checkin
         return false
     }
@@ -281,9 +356,7 @@ Claim :: () -> bool {
 Owns :: (id: s32) -> bool {
     Load()
     if id < 9 || id >= SKIN_COUNT { return false }
-    if (coin_skins & (1 << id)) != 0 { return true }
-    if id == 11 { return days >= 7 }
-    if id == 12 { return days >= 30 }
+    if ((coin_skins | kept_skins | ReachedGifts(days)) & (1 << id)) != 0 { return true }
     return false
 }
 Coins :: () -> s32 {
@@ -296,8 +369,7 @@ Coins :: () -> s32 {
     for count: replay_counts {
         if count > 0 { earned += REPLAY_COINS * (ifx count > 2000000000 then cast(s64)2000000000 else count) }
     }
-    day: s32 = 1
-    while day <= days { earned += cast(s64)DayCoins(day); day += 1 }
+    earned += cast(s64)kept_coins + RunCoins(days, kept_skins, kept_dew)
     if PortalActive() {
         if portal_verified { earned += portal_credits }
     } else if SignedIn() { earned += cast(s64)bought_coins }
@@ -379,7 +451,7 @@ DewPump :: (now: s64) {
     index: s32 = 0
     while index < MILESTONES && (!Offered(index) || (dew_done & (1 << index)) != 0) { index += 1 }
     if index >= MILESTONES { checkin = false; return }
-    due := (index + 1) * 5 <= days
+    due := (index + 1) * 5 <= Day()
     if !checkin && !due { return }
     if !SameAccount() { claim_at = now + 5000; return }
     request: [96]u8
@@ -403,6 +475,41 @@ CopyText :: (text: string, output: []u8) -> bool {
     return true
 }
 
+// A whole number in a stored plan, 0 when a record from an older version lacks
+// it, or -1 when it is malformed.
+StoredCount :: (reply: string, document: s32, name: string, limit: float64) -> s64 {
+    at := FieldAt(reply, document, name)
+    if at < 0 { return 0 }
+    number := ReadNumber(reply, at)
+    if !number.valid || number.value < 0.0 || number.value > limit || number.value != cast(float64)cast(s64)number.value { return -1 }
+    return cast(s64)number.value
+}
+// Merges another device's plan. The later claim names the current run, or the
+// longer run when both claimed the same day; a run it replaces keeps its coins,
+// gifts and Dew, and shared history is never counted twice.
+MergePlan :: (stored_days: s32, stored_last: s64, stored_skins: s32, stored_dew: s32,
+    stored_kept_coins: s32, stored_kept_skins: s32, stored_kept_dew: s32) {
+    if stored_last > last_day {
+        // Another device's next-day claim continues the week; anything else
+        // it claimed starts a new one there.
+        week = ifx week > 0 && stored_last == last_day + 1 && stored_days == days + 1 then week % 7 + 1 else 1
+    }
+    if stored_last > last_day || (stored_last == last_day && stored_days > days) {
+        if stored_days < days { EndRun() }
+        days = stored_days
+        last_day = stored_last
+    } else if stored_days > days {
+        KeepCoins(cast(s64)stored_kept_coins + RunCoins(stored_days, stored_kept_skins, stored_kept_dew))
+        kept_skins |= ReachedGifts(stored_days)
+        kept_dew |= stored_dew
+    }
+    KeepCoins(cast(s64)stored_kept_coins)
+    kept_skins |= stored_kept_skins
+    kept_dew |= stored_kept_dew
+    coin_skins |= stored_skins
+    dew_done |= stored_dew
+}
+
 // The account's plan, skins bought with coins and credited milestones,
 // merged so that no device's claim or purchase is lost.
 SyncPump :: (now: s64) {
@@ -423,28 +530,28 @@ SyncPump :: (now: s64) {
             remote_last.valid && remote_last.value >= -1.0 && remote_last.value <= 4000000.0 &&
             remote_skins.valid && remote_skins.value >= 0.0 && remote_skins.value <= 65535.0 &&
             remote_dew.valid && remote_dew.value >= 0.0 && remote_dew.value <= 31.0
+        remote_kept_coins := StoredCount(reply, document, "kept_coins", cast(float64)KEPT_COINS_LIMIT)
+        remote_kept_skins := StoredCount(reply, document, "kept_skins", 65535.0)
+        remote_kept_dew := StoredCount(reply, document, "kept_dew", 31.0)
+        valid = valid && remote_kept_coins >= 0 && remote_kept_skins >= 0 && remote_kept_dew >= 0
         if valid {
             stored_days := cast(s32)remote_days.value
             stored_last := cast(s64)remote_last.value
-            stored_skins := cast(s32)remote_skins.value
-            stored_dew := cast(s32)remote_dew.value
-            // Another device's next-day claim continues the week; anything
-            // else it claimed starts a new one there.
-            if stored_last > last_day {
-                week = ifx week > 0 && stored_last == last_day + 1 && stored_days == days + 1 then week % 7 + 1 else 1
-            }
-            if stored_days > days { days = stored_days }
-            if stored_last > last_day { last_day = stored_last }
-            coin_skins |= stored_skins & REWARD_SKINS
-            dew_done |= stored_dew & 31
-            if days != stored_days || last_day != stored_last || coin_skins != stored_skins || dew_done != stored_dew { dirty = true }
+            stored_skins := cast(s32)remote_skins.value & REWARD_SKINS
+            stored_dew := cast(s32)remote_dew.value & 31
+            stored_kept_coins := cast(s32)remote_kept_coins
+            stored_kept_skins := cast(s32)remote_kept_skins & REWARD_SKINS
+            stored_kept_dew := cast(s32)remote_kept_dew & 31
+            MergePlan(stored_days, stored_last, stored_skins, stored_dew, stored_kept_coins, stored_kept_skins, stored_kept_dew)
+            if days != stored_days || last_day != stored_last || coin_skins != stored_skins || dew_done != stored_dew ||
+                kept_coins != stored_kept_coins || kept_skins != stored_kept_skins || kept_dew != stored_kept_dew { dirty = true }
             unused Save()
         }
-    } else if TextUntilNul(status[:]) == "missing" && (days > 0 || coin_skins != 0 || dew_done != 0) { dirty = true }
+    } else if TextUntilNul(status[:]) == "missing" && (days > 0 || coin_skins != 0 || dew_done != 0 || kept_coins != 0 || kept_skins != 0 || kept_dew != 0) { dirty = true }
     if !dirty { return }
     out: Vec(u8)
-    BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"wurm-cosmetics\",\"schema\":\"wurm.rewards.v1\",\"id\":\"%\",\"document\":{\"days\":%,\"last\":%,\"skins\":%,\"dew\":%}}",
-        RECORD_ID, days, last_day, coin_skins, dew_done)
+    BuilderPrint(*out, "{\"operation\":\"put\",\"kind\":\"wurm-cosmetics\",\"schema\":\"wurm.rewards.v1\",\"id\":\"%\",\"document\":{\"days\":%,\"last\":%,\"skins\":%,\"dew\":%,\"kept_coins\":%,\"kept_skins\":%,\"kept_dew\":%}}",
+        RECORD_ID, days, last_day, coin_skins, dew_done, kept_coins, kept_skins, kept_dew)
     answer := Account.Service("entity.records", TextView(VecSlice(out, 0, out.count)))
     done: [16]u8
     dirty = ReadStringText(answer, FieldAt(answer, 0, "status"), done[:]) < 0 || TextUntilNul(done[:]) != "done"

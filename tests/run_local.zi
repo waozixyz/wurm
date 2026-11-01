@@ -4,7 +4,7 @@
 // ziran.local.toml are used when present; CI has none and uses the lock.
 //
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- [ARCHIVE]
-//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- input | engine | hosted | audio
+//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- input | engine | hosted | audio | rewards-streak
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web | crazygames | editor-campaign
 //
 // ui, account-ui and web run the private Xvfb, account and browser tests;
@@ -283,6 +283,10 @@ main :: (argc: s32, argv: **u8) -> s32 {
         if !Test("portal_rewards_test", "portal-rewards-test", portal[:], "", none[:]) { return Fail("portal rewards") }
         return ifx Test("rewards_test", "rewards-test", accounts[:], "", none[:]) then 0 else Fail("rewards regression")
     }
+    if mode == "rewards-streak" {
+        accounts: [1]string = .["WURM_ACCOUNT_TEST"]
+        return ifx Test("rewards_streak_test", "rewards-streak-test", accounts[:], "", none[:]) then 0 else Fail("rewards streak")
+    }
     if mode == "store-model" { return ifx Test("portal_store_test", "portal-store-test", none[:], "", none[:]) then 0 else Fail("portal store model") }
     if mode == "ui" { return ifx Interface("private_ui_test", "private-ui-test", "-lX11 -lcairo -lm") then 0 else Fail("private UI") }
     if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
@@ -329,6 +333,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     accounts: [1]string = .["WURM_ACCOUNT_TEST"]
     if !Test("account_test", "account-test", accounts[:], "", none[:]) { return Fail("account") }
     if !Test("rewards_test", "rewards-test", accounts[:], "", none[:]) { return Fail("rewards") }
+    if !Test("rewards_streak_test", "rewards-streak-test", accounts[:], "", none[:]) { return Fail("rewards streak") }
     guest: [1]string = .["WURM_CRAZYGAMES"]
     if !Test("portal_test", "portal-test", none[:], "", none[:]) || !Test("portal_test", "portal-guest-test", guest[:], "", none[:]) { return Fail("portal policy") }
     if !Test("skin_art_test", "skin-art-test", none[:], "-lz", none[:]) { return Fail("skin art parity") }

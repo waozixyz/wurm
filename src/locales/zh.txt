@@ -520,3 +520,6 @@ Dew 不足。
 [wurm_portal_shop_11]
 刷新
 ---
+[wurm_rewards_streak]
+连续第 % 天。中断一天就要重新开始。
+---
