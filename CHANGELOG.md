@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Profile signs in with your backup file and its password, and saves backups named after your username or public ID.
+
 - Keyboard turns share one frame snapshot across all four local players; swipes use shared relative steering without adding turns from held input.
 
 - Collection sharing discards cancelled requests and old account replies before adding or updating your levels.

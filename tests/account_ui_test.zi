@@ -121,16 +121,16 @@ Orientation :: (size: string, version: string) -> bool {
     if !Press("Buy") || !Show("Sign in") || !Press("Cancel") || !Show("Buy") {
         return Fail("Mountains requires confirmation and can be cancelled", size)
     }
-    if !Press("Buy") || !Press("Sign in") || !Show("Import key") || !Press("Back") || !Show("Sign in") {
+    if !Press("Buy") || !Press("Sign in") || !Show("Create account") || !Press("Back") || !Show("Cancel") {
         return Fail("Mountains sign-in opens shared Profile and returns to its confirmation", size)
     }
     if !Press("Cancel") || !Press("Skins") || !Show("Mint") { return Fail("skin catalog survives stage offer", size) }
     if !DriverPress(driver, .{label = "Buy", index = 0, enabled = true}) || !Show("Sign in") {
         return Fail("a purchase must ask for confirmation and sign-in", size)
     }
-    profile: [3]string = .["Profile", "Import key", "Link from another device"]
+    profile: [3]string = .["Profile", "Create account", "Sign in with another device"]
     if !Press("Sign in") || !Shows(profile[:], 5000) { return Fail("shop sign-in must open shared Profile", size) }
-    if !Press("Back") || !Show("Sign in") { return Fail("Profile Back must return to the confirmation", size) }
+    if !Press("Back") || !Show("Cancel") { return Fail("Profile Back must return to the confirmation", size) }
     if !Press("Cancel") || !Press("Back") || !Press("Profile") || !Show("Profile") { return Fail("no Profile from the title", size) }
     account := false
     for i: 0..driver.nodes.count - 1 { if TextContains(TextLower(driver.nodes[i].label), "account") { account = true } }
