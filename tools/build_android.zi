@@ -64,6 +64,14 @@ WithoutCleartext :: (text: string) -> string {
 }
 
 // The launcher icon at each density, from the reviewed bitmap.
+InstallBackupRules :: () -> bool {
+    folder := "droid/app/src/main/res/xml"
+    if !CreateDirectories(folder) { return false }
+    full := "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<full-backup-content>\n    <exclude domain=\"file\" path=\"profile/\" />\n</full-backup-content>\n"
+    extraction := "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<data-extraction-rules>\n    <cloud-backup><exclude domain=\"file\" path=\"profile/\" /></cloud-backup>\n    <device-transfer><exclude domain=\"file\" path=\"profile/\" /></device-transfer>\n</data-extraction-rules>\n"
+    return WriteEntireFile(JoinPath(folder, "backup_rules.xml"), full) && WriteEntireFile(JoinPath(folder, "data_extraction_rules.xml"), extraction)
+}
+
 InstallIcon :: () -> bool {
     resources := "droid/app/src/main/res"
     source := ReadPNGFile("assets/app/icon.png")
@@ -178,6 +186,11 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !TextContains(manifest, "android:icon=") {
         manifest = ReplaceFirst(manifest, "    <application", "    <application\n        android:icon=\"@mipmap/ic_launcher\"\n        android:roundIcon=\"@mipmap/ic_launcher\"")
     }
+    // The saved account key has no passphrase, so system backups must leave it out.
+    if !TextContains(manifest, "android:fullBackupContent=") {
+        manifest = ReplaceFirst(manifest, "android:allowBackup=\"true\"", "android:allowBackup=\"true\"\n        android:fullBackupContent=\"@xml/backup_rules\"\n        android:dataExtractionRules=\"@xml/data_extraction_rules\"")
+    }
+    if !InstallBackupRules() { return Fail("cannot write the backup rules") }
     manifest = WithoutCleartext(manifest)
     if verification {
         // The Moto fixture connects only to its private localhost Daochi node.

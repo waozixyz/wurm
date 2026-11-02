@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Keep the account key out of Android system backups, which have no passphrase.
 - On Android, Continue as can use the account from another signed-in Waozi app, once you approve it there.
 - Profile signs in with your backup file and its password, and saves backups named after your username or public ID.
 
