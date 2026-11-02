@@ -9,6 +9,7 @@ Account :: #import, file "account.zi";
 Progress :: #import, file "progress.zi";
 Records :: #import, file "controls.zi";
 Portal :: #import, file "portal.zi";
+Policy :: #import, file "reward_policy.zi";
 #if #defined(WURM_PORTABLE) {
     // Seconds since 1970, from the collection's host.
     host_api :: #system_library "host_api";
@@ -321,7 +322,14 @@ ClaimReady :: () -> bool {
     Load()
     if PortalActive() && !portal_read_ready { return false }
     current := CurrentDay()
-    return current >= 0 && current > last_day && days < 65535
+    return Policy.ChestReady(current, last_day, days)
+}
+// The reminder reads the same loaded profile as the title's chest. It never
+// changes claims, streaks or earned rewards.
+ReminderAvailableAfter :: () -> s64 {
+    Load()
+    if PortalActive() && !portal_read_ready { return -1 }
+    return Policy.ChestAvailableAfter(last_day, days)
 }
 // Claims today's plan day: the next one after yesterday's claim, otherwise day
 // 1. Coins and skins follow at once; on a Dew day the node credits the Dew.

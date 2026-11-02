@@ -523,3 +523,7 @@ Atualizar
 [wurm_rewards_streak]
 Sequência: dia %. Se perder um dia, recomeça.
 ---
+
+[wurm_reward_reminder]
+Seu baú de recompensa está esperando. Abra Apfelwurm para resgatá-lo.
+---

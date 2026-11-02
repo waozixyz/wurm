@@ -1,0 +1,47 @@
+// Compile and execute the real hosted scheduler boundary. Deliberately no
+// native permission host exists here: the collection owns that interaction.
+Reminder :: #import, file "../src/reward_reminder.zi";
+#import "kryon/notification"
+
+registrations: s32;
+opens: s32;
+cancels: s32;
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: %\n", message); failures += 1 }
+}
+
+#program_export
+DailyNotificationsSupportedHost :: () -> bool { return true }
+#program_export
+ScheduleDailyNotificationHost :: (props: NotificationProps, hour: s32, minute: s32,
+    suppress_on_open: bool, not_before_unix_ms: s64, weekdays: u32, skip_local_date: s32) -> bool {
+    registrations += 1
+    Expect(props.tag == "wurm.daily_chest" && props.id == 1 && hour == 19 && minute == 0 &&
+        suppress_on_open && not_before_unix_ms == 2592086400000 && weekdays == 127 && skip_local_date == 0,
+        "hosted rule forwards Wurm's daily local time and actual UTC chest eligibility")
+    return true
+}
+#program_export
+NotificationAppOpenedHost :: (tag: string, id: s32) -> bool {
+    opens += 1
+    Expect(tag == "wurm.daily_chest" && id == 1, "host receives only the opened game's rule")
+    return true
+}
+#program_export
+CancelDailyNotificationHost :: (tag: string, id: s32) -> bool {
+    cancels += 1
+    Expect(tag == "wurm.daily_chest" && id == 1, "host cancels only Wurm's rule")
+    return true
+}
+
+#program_export
+main :: () -> s32 {
+    Reminder.Pump(0, true, 2592086400000, "Daily rewards", "Your reward chest is waiting.")
+    Reminder.Pump(16, true, 2592086400000, "Daily rewards", "Your reward chest is waiting.")
+    Expect(registrations == 1 && opens == 1, "hosted frames cache the rule without native permission effects")
+    Reminder.Pump(32, true, -1, "Daily rewards", "Your reward chest is waiting.")
+    Expect(cancels == 1, "unavailable hosted chest cancels its persisted rule")
+    print("Hosted reward reminder local test failures: %\n", failures)
+    return failures
+}

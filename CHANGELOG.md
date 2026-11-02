@@ -28,6 +28,10 @@
 - The separate CrazyGames edition swipes between Play/Continue and the editor, starts with one Play click, saves private editor levels and campaign progress through your portal profile, and restores paid Mountains ownership through CrazyGames inventory.
 - It supports CrazyGames leaderboards and optional platform-approved video ads between levels, while respecting platform language and sound settings.
 
+## [0.2.29] - 2026-11-02
+
+- Android can remind you at 19:00 local about your reward chest on days you have not opened Apfelwurm. Opening the game silences that day's reminder.
+
 ## [0.2.28] - 2026-10-30
 
 - The editor title painting includes the Apfelwurm Editor logo in portrait and landscape.

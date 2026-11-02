@@ -523,3 +523,7 @@ Actualizar
 [wurm_rewards_streak]
 Racha: día %. Si faltas un día, vuelve a empezar.
 ---
+
+[wurm_reward_reminder]
+Tu cofre de recompensa te espera. Abre Apfelwurm para recogerlo.
+---

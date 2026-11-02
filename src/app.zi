@@ -112,6 +112,9 @@ LevelJson :: #import, file "level_json.zi";
 Mirror :: #import, file "board_orientation.zi";
 Local :: #import, file "multiplayer.zi";
 Rewards :: #import, file "rewards.zi";
+#if (#defined(ANDROID_BUILD) || #defined(WURM_PORTABLE)) && !#defined(WURM_EDITOR_APP) {
+    RewardReminder :: #import, file "reward_reminder.zi";
+}
 
 MODE_LOCAL :: 12;
 MODE_REWARDS :: 13;
@@ -4026,6 +4029,11 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     }
     #if #defined(WURM_CRAZYGAMES) {
         PortalShop.Pump(now)
+    }
+    #if (#defined(ANDROID_BUILD) || #defined(WURM_PORTABLE)) && !#defined(WURM_EDITOR_APP) {
+        RewardReminder.Pump(now, frame_input.available && frame_input.focused,
+            Rewards.ReminderAvailableAfter(), Locale.Text("Daily rewards"),
+            Locale.Text("Your reward chest is waiting. Open Apfelwurm to collect it."))
     }
     if Portal.ProfileVisible() {
         touch_steering = GameControls.GameSwipe.{}

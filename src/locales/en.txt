@@ -523,3 +523,7 @@ Refresh
 [wurm_rewards_streak]
 Streak: day %. Miss a day and it starts over.
 ---
+
+[wurm_reward_reminder]
+Your reward chest is waiting. Open Apfelwurm to collect it.
+---

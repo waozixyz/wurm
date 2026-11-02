@@ -523,3 +523,7 @@ Dew 충전
 [wurm_rewards_streak]
 연속 %일째. 하루라도 빠지면 처음부터 다시 시작해요.
 ---
+
+[wurm_reward_reminder]
+보상 상자가 기다리고 있어요. Apfelwurm을 열어 받아 가세요.
+---

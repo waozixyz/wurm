@@ -116,6 +116,11 @@ jobs:
           packages: waozixyz/wurm/build/android/Apfelwurm-universal-gplay-release-unsigned.apk
           source: ''
           expect-google: 'true'
+      - name: Verify the reminder receiver in both release APKs
+        run: >-
+          python3 tests/android_notification_packaging_test.py
+          --apk build/android/Apfelwurm-universal-release-unsigned.apk
+          --apk build/android/Apfelwurm-universal-gplay-release-unsigned.apk
       - name: Sign and verify the Google-free downloads and Google Play APK
         env:
           KEYSTORE: ${{ secrets.WURM_ANDROID_KEYSTORE }}

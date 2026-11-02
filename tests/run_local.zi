@@ -4,7 +4,8 @@
 // ziran.local.toml are used when present; CI has none and uses the lock.
 //
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- [ARCHIVE]
-//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- input | engine | hosted | audio | rewards-streak
+//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- input | engine | hosted | audio | rewards-streak | reward-reminder
+//     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- rewards | reward-reminder-android
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web | crazygames | editor-campaign
 //
 // ui, account-ui and web run the private Xvfb, account and browser tests;
@@ -112,6 +113,20 @@ Pair :: (name: string, path: string) -> string {
 }
 
 none: [0]string;
+
+RewardReminder :: () -> bool {
+    accounts: [1]string = .["WURM_ACCOUNT_TEST"]
+    hosted: [2]string = .["WURM_PORTABLE", "KRYON_HOSTED_UI"]
+    if !Test("reward_reminder_test", "reward-reminder-test", accounts[:], "", none[:]) { return false }
+    if !Test("reward_reminder_hosted_test", "reward-reminder-hosted-test", hosted[:], "", none[:]) { return false }
+    bundle: [15]string = .["bundle", "--project", "--root", "tests", "--define", "WURM_PORTABLE",
+        "--define", "KRYON_HOSTED_UI", "--bind-host", "reward_reminder_hosted_test",
+        "--entry", "reward_reminder_hosted_test:main", "-o", "build/reward-reminder-hosted-test/test.zx",
+        "tests/reward_reminder_hosted_test.zi"]
+    if !Ziran(bundle[:], none[:]) { return false }
+    run: [2]string = .["run", "build/reward-reminder-hosted-test/test.zx"]
+    return Ziran(run[:], none[:])
+}
 
 // The portal policy in both editions, then the packed CrazyGames copy in
 // the private browser, as a portal serves it below its own path.
@@ -287,6 +302,25 @@ main :: (argc: s32, argv: **u8) -> s32 {
         accounts: [1]string = .["WURM_ACCOUNT_TEST"]
         return ifx Test("rewards_streak_test", "rewards-streak-test", accounts[:], "", none[:]) then 0 else Fail("rewards streak")
     }
+    if mode == "reward-reminder" {
+        return ifx RewardReminder() then 0 else Fail("reward reminder")
+    }
+    if mode == "reward-reminder-android" {
+        glue: [9]string = .["check", "--project", "--define", "ANDROID_BUILD", "--define", "WURM_ACCOUNTS",
+            "--define", "__aarch64__", "src/android_glue.zi"]
+        if !Ziran(glue[:], none[:]) { return Fail("Android notification glue package imports") }
+        kryon := PackagePath("kryon")
+        if kryon.count == 0 { return Fail("Kryon package") }
+        command: [4]string = .["python3", "tests/android_notification_packaging_test.py", "--kryon", kryon]
+        return ifx Run(command[:], none[:]) then 0 else Fail("Android reminder packaging")
+    }
+    if mode == "rewards" {
+        accounts: [1]string = .["WURM_ACCOUNT_TEST"]
+        if !Test("rewards_test", "rewards-test", accounts[:], "", none[:]) { return Fail("rewards") }
+        if !Test("rewards_streak_test", "rewards-streak-test", accounts[:], "", none[:]) { return Fail("rewards streak") }
+        if !RewardReminder() { return Fail("reward reminder") }
+        return ifx Tool("locales", "--check") then 0 else Fail("reward localization")
+    }
     if mode == "store-model" { return ifx Test("portal_store_test", "portal-store-test", none[:], "", none[:]) then 0 else Fail("portal store model") }
     if mode == "ui" { return ifx Interface("private_ui_test", "private-ui-test", "-lX11 -lcairo -lm") then 0 else Fail("private UI") }
     if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
@@ -334,6 +368,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !Test("account_test", "account-test", accounts[:], "", none[:]) { return Fail("account") }
     if !Test("rewards_test", "rewards-test", accounts[:], "", none[:]) { return Fail("rewards") }
     if !Test("rewards_streak_test", "rewards-streak-test", accounts[:], "", none[:]) { return Fail("rewards streak") }
+    if !RewardReminder() { return Fail("reward reminder") }
     guest: [1]string = .["WURM_CRAZYGAMES"]
     if !Test("portal_test", "portal-test", none[:], "", none[:]) || !Test("portal_test", "portal-guest-test", guest[:], "", none[:]) { return Fail("portal policy") }
     if !Test("skin_art_test", "skin-art-test", none[:], "-lz", none[:]) { return Fail("skin art parity") }

@@ -149,9 +149,11 @@ main :: (argc: s32, argv: **u8) -> s32 {
     BuilderPrint(*version_code, "%", cast(s64)code.value)
     code_text := BuilderFinish(version_code)
     kryon := PackagePath("kryon"); ziran := PackagePath("ziran"); raylib := PackagePath("raylib")
+    webp := PackagePath("libwebp")
     monocypher := PackagePath("monocypher"); liboqs := PackagePath("liboqs")
     profile := BuildProfile()
     if profile.count == 0 || kryon.count == 0 { return Fail("the Profile bundle or packages failed") }
+    if webp.count == 0 { return Fail("the WebP package failed") }
     scaffold: [11]string = .["python3", JoinPath(kryon, "scripts/android_scaffold.py"), "--root", ResolvePath("."),
         "--name", "Apfelwurm", "--package", "xyz.waozi.wurm", "--activity", "MainActivity", "--kryon"]
     scaffold_all: Vec(string)
@@ -174,6 +176,14 @@ main :: (argc: s32, argv: **u8) -> s32 {
     gradle = ReplaceQuoted(gradle, "versionName '", "'", version)
     // "Continue as @name" between waozi apps, in every edition.
     gradle = TextReplace(gradle, "android {\n", "apply from: new File(kryonDir, 'templates/android-account-handoff.gradle')\n\nandroid {\n")
+    // Scaffolding preserves older app files. Apply the existing shared edition
+    // hook there too, once, with Google dependencies confined to Google Play.
+    if !TextContains(gradle, "templates/android-gplay.gradle") {
+        migrated: Vec(u8)
+        Append(*migrated, gradle)
+        Append(*migrated, "\nif ((project.findProperty('app.edition') ?: 'direct') == 'gplay') {\n    apply from: new File(kryonDir, 'templates/android-gplay.gradle')\n}\n")
+        gradle = BuilderFinish(migrated)
+    }
     if !WriteEntireFile(gradle_path, gradle) { return Fail("cannot write build.gradle") }
     manifest_path := "droid/app/src/main/AndroidManifest.xml"
     manifest, has_manifest := ReadEntireFile(manifest_path)
@@ -206,7 +216,9 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if defines >= 0 {
         close := TextFind(cmake, ")", defines)
         out: Vec(u8)
-        Append(*out, cmake[0:defines]); Append(*out, "set(APP_ZIRAN_DEFINES --define ANDROID_BUILD --define WURM_ACCOUNTS)")
+        Append(*out, cmake[0:defines]); Append(*out, "set(APP_ZIRAN_DEFINES --define ANDROID_BUILD --define WURM_ACCOUNTS")
+        if edition == "gplay" { Append(*out, " --define GOOGLE_PLAY") }
+        Append(*out, ")")
         Append(*out, cmake[close + 1:cmake.count])
         cmake = BuilderFinish(out)
     }
@@ -244,13 +256,16 @@ main :: (argc: s32, argv: **u8) -> s32 {
     pairs: Vec(string)
     VecPush(pairs, Pair("-Pkryon.dir", kryon)); VecPush(pairs, Pair("-Pziran.dir", ziran))
     VecPush(pairs, Pair("-Praylib.dir", JoinPath(raylib, "src"))); VecPush(pairs, Pair("-Papp.abis", abis))
-    VecPush(pairs, "-Papp.minSdk=21"); VecPush(pairs, "-Papp.codegen=c99"); VecPush(pairs, Pair("-Papp.edition", edition))
+    VecPush(pairs, Pair("-Pwebp.dir", webp))
+    VecPush(pairs, ifx edition == "gplay" then "-Papp.minSdk=23" else "-Papp.minSdk=21")
+    VecPush(pairs, "-Papp.codegen=c99"); VecPush(pairs, Pair("-Papp.edition", edition))
     VecPush(pairs, Pair("-Pandroid.aapt2FromMavenOverride", aapt))
     // Kryon's Google Play edition adds Play Billing, so Dew is bought through Play.
     if edition == "gplay" { VecPush(pairs, "-Pandroid.useAndroidX=true") }
     VecPush(pairs, Pair("-Papp.installId", ifx verification then "xyz.waozi.wurm.verification" else "xyz.waozi.wurm"))
     for i: 0..pairs.count - 1 { VecPush(command, pairs[i]) }
-    sdk_settings: [2]string = .[Pair("ANDROID_SDK_ROOT", sdk), Pair("ANDROID_HOME", sdk)]
+    // Older scaffolds use Kryon's compatibility environment fallback.
+    sdk_settings: [3]string = .[Pair("ANDROID_SDK_ROOT", sdk), Pair("ANDROID_HOME", sdk), Pair("KRYON_ANDROID_WEBP_DIR", webp)]
     out2, built := Step(VecSlice(command, 0, command.count), false, sdk_settings[:])
     if !built { return Fail("Gradle failed") }
     unused CreateDirectories("build/android")

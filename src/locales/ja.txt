@@ -523,3 +523,7 @@ Dewをチャージ
 [wurm_rewards_streak]
 連続 % 日目。1日でも休むと最初からです。
 ---
+
+[wurm_reward_reminder]
+報酬の宝箱が待っています。Apfelwurmを開いて受け取りましょう。
+---

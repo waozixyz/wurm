@@ -523,3 +523,7 @@ Obnovit
 [wurm_rewards_streak]
 Série: den %. Vynecháš den a začíná znovu.
 ---
+
+[wurm_reward_reminder]
+Tvá truhla s odměnou čeká. Otevři Apfelwurm a vyzvedni si ji.
+---

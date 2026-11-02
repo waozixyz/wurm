@@ -1,0 +1,87 @@
+// Wurm owns the chest policy and text. Kryon owns permission, local dates,
+// persistent alarms, duplicate delivery guards and Android lifecycle effects.
+#import "kryon/notification"
+Schedule :: #import "kryon/notification_schedule";
+#if !#defined(WURM_PORTABLE) && !#defined(KRYON_HOSTED_UI) {
+    Records :: #import, file "controls.zi";
+}
+
+TAG :: "wurm.daily_chest";
+ID :: 1;
+HOUR :: 19;
+PERMISSION_RECORD :: "reward-reminder-permission.dat";
+
+Supported :: #type () -> bool;
+Register :: #type (NotificationProps, s32, s32, bool, s64, u32, s32) -> bool;
+Opened :: #type (string, s32) -> bool;
+Cancel :: #type (string, s32) -> bool;
+Request :: #type () -> bool;
+supported: Supported = Schedule.DailyNotificationsSupported;
+register: Register = Schedule.ScheduleDailyNotification;
+opened: Opened = Schedule.NotificationAppOpened;
+cancel: Cancel = Schedule.CancelDailyNotification;
+#if !#defined(WURM_PORTABLE) && !#defined(KRYON_HOSTED_UI) {
+    request: Request = RequestNotifications;
+}
+
+registered: bool;
+available_after: s64 = -2;
+last_title: string;
+last_body: string;
+was_focused: bool;
+marked_at: s64 = -1;
+permission_read: bool;
+permission_attempted: bool;
+
+// Persist the attempt before invoking the OS. A denied permission is the
+// user's preference, so restarts must never turn it into repeated prompts.
+#if !#defined(WURM_PORTABLE) && !#defined(KRYON_HOSTED_UI) {
+RequestOnce :: () {
+    if !permission_read {
+        permission_read = true
+        bytes: [2]u8
+        count := Records.ReadRecord(PERMISSION_RECORD, bytes[:])
+        permission_attempted = count >= 0
+    }
+    if permission_attempted { return }
+    bytes: [1]u8 = .[1]
+    if !Records.WriteRecord(PERMISSION_RECORD, bytes[:]) { return }
+    permission_attempted = true
+    unused request()
+}
+}
+
+// Call only from the game's own visible frame, never from the collection's
+// home screen. Poll the scoped open marker while focused so crossing local
+// midnight counts as opening that new day, even without a process restart.
+Pump :: (now: s64, focused: bool, chest_after: s64, title: string, body: string) {
+    if !supported() { return }
+    if chest_after < 0 {
+        if available_after != chest_after || registered {
+            if !cancel(TAG, ID) { return }
+            available_after = chest_after; registered = false
+        }
+        was_focused = focused
+        return
+    }
+    if !registered || available_after != chest_after || last_title != title || last_body != body {
+        props := NotificationProps.{.title = title, .body = body, .tag = TAG, .id = ID,
+            .suppress_when_focused = true}
+        if !register(props, HOUR, 0, true, chest_after, 127, 0) { return }
+        registered = true; available_after = chest_after
+        last_title = title; last_body = body
+        // A changed rule must be suppressed before it can notify today.
+        marked_at = -1
+    }
+    if focused {
+        if !was_focused || marked_at < 0 || now < marked_at || now - marked_at >= 1000 {
+            if !opened(TAG, ID) { return }
+            marked_at = now
+        }
+        // Collection hosts own their permission flow and preferences.
+        #if !#defined(WURM_PORTABLE) && !#defined(KRYON_HOSTED_UI) {
+            RequestOnce()
+        }
+    }
+    was_focused = focused
+}

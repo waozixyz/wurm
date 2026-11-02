@@ -1,0 +1,20 @@
+// Chest eligibility is UTC, even when an evening reminder uses local time.
+// Keep this calculation shared by the chest and the reminder so a claim late
+// in the local evening cannot advertise the same UTC reward tomorrow.
+DAY_MILLISECONDS :: 86400000;
+MAX_DAYS :: 65535;
+
+ChestReady :: (utc_day: s64, last_claim_day: s64, claimed_days: s32) -> bool {
+    return utc_day >= 0 && utc_day > last_claim_day && claimed_days < MAX_DAYS
+}
+
+// -1 disables reminders when this saved plan cannot offer another chest.
+// Zero means a fresh guest/account has a reward available already.
+ChestAvailableAfter :: (last_claim_day: s64, claimed_days: s32) -> s64 {
+    if claimed_days >= MAX_DAYS { return -1 }
+    if last_claim_day < 0 { return 0 }
+    // rewards.dat stores an unsigned 32-bit UTC day, with all ones meaning
+    // no claim. Its highest valid day remains safely inside s64 milliseconds.
+    if last_claim_day > 4294967294 { return -1 }
+    return (last_claim_day + 1) * DAY_MILLISECONDS
+}

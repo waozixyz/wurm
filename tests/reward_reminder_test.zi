@@ -1,0 +1,181 @@
+// Actual chest state and its UTC eligibility; the shared Kryon scheduler
+// owns local-day/open suppression and platform persistence.
+Rewards :: #import, file "../src/rewards.zi";
+Policy :: #import, file "../src/reward_policy.zi";
+Reminder :: #import, file "../src/reward_reminder.zi";
+Daily :: #import "kryon/notification_schedule_policy";
+#import "kryon/notification"
+Progress :: #import, file "../src/progress.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+File :: #import "std/file";
+#import "std/file_tree_linux"
+
+#program_export
+WurmAccountService :: (name: string, request: string) -> string { return "" }
+#program_export
+NotificationRequestHost :: () -> bool { return false }
+
+ROOT :: "build/reward-reminder-test-data";
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value { print("FAIL: %\n", message); failures += 1 }
+}
+
+// Capture scheduling effects only. Nothing in this test can send a desktop,
+// Android or push notification. The real shared delivery guard decides days.
+registrations: s32;
+opens: s32;
+cancels: s32;
+requests: s32;
+supported: bool = true;
+register_ok: bool = true;
+permission: bool;
+today: s32 = 20261102;
+opened_day: s32;
+delivered_day: s32;
+not_before: s64;
+suppressed: bool;
+schedule_tag: string;
+schedule_id: s32;
+schedule_hour: s32;
+schedule_minute: s32;
+schedule_weekdays: u32;
+Supports :: () -> bool { return supported }
+Register :: (props: NotificationProps, hour: s32, minute: s32, suppress: bool, after: s64, weekdays: u32, skip_date: s32) -> bool {
+    registrations += 1
+    schedule_tag = props.tag; schedule_id = props.id
+    schedule_hour = hour; schedule_minute = minute; schedule_weekdays = weekdays
+    not_before = after; suppressed = suppress
+    Expect(props.title.count > 0 && props.body.count > 0 && props.suppress_when_focused && skip_date == 0,
+        "registered chest has readable text and focused suppression")
+    return register_ok
+}
+Opened :: (tag: string, id: s32) -> bool {
+    Expect(tag == Reminder.TAG && id == Reminder.ID, "mark only Wurm's rule opened")
+    opens += 1
+    if today > opened_day { opened_day = today }
+    return true
+}
+Cancel :: (tag: string, id: s32) -> bool {
+    Expect(tag == Reminder.TAG && id == Reminder.ID, "cancel only Wurm's rule")
+    cancels += 1
+    return true
+}
+Request :: () -> bool { requests += 1; return permission }
+ClientRestart :: () {
+    Reminder.registered = false; Reminder.available_after = -2
+    Reminder.last_title = ""; Reminder.last_body = ""
+    Reminder.was_focused = false; Reminder.marked_at = -1
+    Reminder.permission_read = false; Reminder.permission_attempted = false
+}
+Frame :: (now: s64, focused: bool, after: s64 = 0) {
+    Reminder.Pump(now, focused, after, "Daily rewards", "Your reward chest is waiting. Open Apfelwurm to collect it.")
+}
+Due :: (unix_ms: s64) -> bool {
+    return permission && unix_ms >= not_before &&
+        Daily.NotificationDayAllowed(today, opened_day, delivered_day, suppressed, 1, schedule_weekdays)
+}
+
+DailyPolicy :: () {
+    Reminder.supported = Supports; Reminder.register = Register
+    Reminder.opened = Opened; Reminder.cancel = Cancel; Reminder.request = Request
+    ClientRestart()
+    Frame(0, true)
+    Expect(registrations == 1 && opens == 1 && requests == 1,
+        "first game open registers and suppresses today, then requests permission once")
+    Expect(schedule_tag == "wurm.daily_chest" && schedule_id == 1 &&
+        schedule_hour == 19 && schedule_minute == 0 && schedule_weekdays == 127 && suppressed,
+        "stable daily rule uses 19:00 local every day and game-open suppression")
+    permission = true
+    Expect(!Due(30001 * 86400000), "game open before evening suppresses an unclaimed chest")
+    Frame(16, true)
+    Expect(registrations == 1 && opens == 1 && requests == 1,
+        "ordinary frames do not register duplicate triggers or permission prompts")
+    Frame(32, false)
+    Frame(48, true)
+    Expect(opens == 2, "resume marks the actual game open immediately")
+    ClientRestart()
+    Frame(0, true)
+    Expect(requests == 1 && schedule_tag == "wurm.daily_chest" && !Due(30001 * 86400000),
+        "restart reuses rule identity and preserved permission attempt, without today's reminder")
+    today = 20261103
+    Expect(Due(30001 * 86400000), "an unopened local day can remind")
+    delivered_day = today
+    Expect(!Due(30001 * 86400000), "same day alarm retry cannot deliver twice")
+    today = 20261102
+    Expect(!Due(30001 * 86400000), "date or timezone rollback cannot replay a delivered day")
+    today = 20261104
+    Expect(Due(30001 * 86400000), "local date advancement keeps future days eligible")
+    Frame(1000, true)
+    Expect(!Due(30001 * 86400000), "visible game across local midnight marks the new day open")
+    today = 20261105
+    Frame(2000, false)
+    Expect(Due(30001 * 86400000), "unfocused game does not mark an unopened new day")
+    permission = false
+    Expect(!Due(30001 * 86400000), "notifications disabled prevents delivery")
+    Frame(2100, true)
+    Expect(requests == 1, "permission denial remains respected after focus returns")
+    Frame(2200, true, 30002 * 86400000)
+    Expect(not_before == 30002 * 86400000, "claim update moves existing rule's UTC eligibility")
+    today = 20261106; permission = true
+    Expect(!Due(30001 * 86400000 + 22 * 3600000) && Due(30002 * 86400000),
+        "next local evening cannot promise an already claimed UTC reward")
+    Frame(2300, true, -1)
+    Frame(2400, true, -1)
+    Expect(cancels == 1, "unavailable plan cancels once and never schedules a false reward")
+    supported = false
+    Frame(2500, true)
+    Expect(cancels == 1 && requests == 1, "unsupported hosts have no scheduling or permission effects")
+}
+
+ChestState :: () {
+    Rewards.test_day = 30000
+    Expect(Rewards.ClaimReady() && Rewards.ReminderAvailableAfter() == 0,
+        "a fresh guest has an available chest without network")
+    Expect(Rewards.Claim(), "claim today's actual chest")
+    coins := Rewards.Coins()
+    Expect(!Rewards.ClaimReady() && Rewards.ReminderAvailableAfter() == 2592086400000,
+        "claimed chest waits for next UTC midnight")
+    Rewards.Reset()
+    Expect(Rewards.ReminderAvailableAfter() == 2592086400000 && !Rewards.ClaimReady(),
+        "restart reloads eligibility from the existing reward record")
+    Expect(Rewards.Coins() == coins && Rewards.Day() == 1,
+        "reading reminder eligibility preserves coins and streak")
+    Rewards.test_day = 29999
+    Expect(!Rewards.ClaimReady(), "clock rollback cannot advertise an earlier reward")
+    Rewards.test_day = 30001
+    Expect(Rewards.ClaimReady(), "next UTC day offers the saved plan's next chest")
+    Rewards.days = 65535
+    Expect(Rewards.ReminderAvailableAfter() == -1 && !Rewards.ClaimReady(),
+        "exhausted record never advertises a chest")
+}
+
+UtcBoundary :: () {
+    // At UTC-3, a claim on local D at 23:00 is UTC D+1 at 02:00.
+    // The following local evening at 19:00 is UTC D+1 at 22:00:
+    // the chest has not reset yet, despite a new local reminder date.
+    after := Policy.ChestAvailableAfter(30001, 1)
+    next_evening: s64 = 30001 * 86400000 + 22 * 3600000
+    Expect(after > next_evening, "next local evening skips the same UTC claim")
+    Expect(!Policy.ChestReady(next_evening / 86400000, 30001, 1),
+        "title chest agrees with the reminder not-before timestamp")
+    Expect(Policy.ChestReady(after / 86400000, 30001, 1),
+        "UTC reset is eligible at its exact millisecond boundary")
+    Expect(Policy.ChestAvailableAfter(4294967294, 1) == 371085174288000000,
+        "saved unsigned UTC day keeps full width")
+    Expect(Policy.ChestAvailableAfter(9223372036854775807, 1) == -1,
+        "invalid date cannot overflow reminder milliseconds")
+}
+
+#program_export
+main :: () -> s32 {
+    unused RemoveTree(ROOT)
+    unused File.CreateDirectory(ROOT)
+    Expect(Custom.CustomSetRoot("build/reward-reminder-test-data/"), "private reward fixture")
+    Progress.Load()
+    ChestState()
+    UtcBoundary()
+    DailyPolicy()
+    print("Reward reminder local test failures: %\n", failures)
+    return failures
+}
