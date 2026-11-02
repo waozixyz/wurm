@@ -263,6 +263,10 @@ Play :: () -> bool {
 // The whole canvas as one number, to tell motion from stillness.
 CANVAS_HASH :: "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let h=0;for(let i=0;i<p.length;i+=12)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()"
 
+// At this fixture's 907x510 viewport the title's gold lettering is above
+// Play. Runtime/FS readiness alone can precede the first interactive frame.
+PORTAL_TITLE_READY :: "(()=>{const c=document.getElementById('canvas');if(c.width!==907||c.height!==510)return false;const g=c.getContext('2d');return [300,600].every(x=>{const p=g.getImageData(x,100,1,1).data;return p[0]>160&&p[1]>100&&p[2]<120})})()"
+
 // Only the private SDK fixture calls this probe. Keep each transition visible
 // without exporting game state or reading account/browser storage contents.
 PortalFallbackProbe :: (name: string) {
@@ -618,9 +622,9 @@ Portal :: (root: string) -> bool {
     // says so, instead of silently borrowing another account's browser save.
     if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-data-fail','1'),true") || !Reload() { return false }
     if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") || !True("WurmPortal.saveLimited") { return Fail("a SDK Data error blocked the title or hid its save limit") }
-    if !Click(797, 42) || !True("WurmPortal.saveLimited&&WurmPortal.username===''") || !Click(50, 30) { return Fail("the save warning did not stay visible in the guest profile") }
+    if !Until(PORTAL_TITLE_READY) || !Click(797, 42) || !Until(BuilderJoin("!(", PORTAL_TITLE_READY, ")")) || !True("WurmPortal.saveLimited&&WurmPortal.username===''") || !Key("Escape", 27) || !Until(PORTAL_TITLE_READY) { return Fail("the save warning did not stay visible in the guest profile") }
     PortalFallbackProbe("fallback-title")
-    if !Key("Enter", 13) || !Key("1", 49) || !Key("Enter", 13) || !Key("ArrowRight", 39) { return false }
+    if !Click(453, 346) || !Until(GameplayEnds("gameplayStart")) || !Key("ArrowRight", 39) { return Fail("session-only Play did not start gameplay") }
     failed_still := BrowserNumber(browser, CANVAS_HASH, -1.0)
     Pause(450)
     failed_after := BrowserNumber(browser, CANVAS_HASH, -1.0)
