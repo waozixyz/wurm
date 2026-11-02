@@ -363,7 +363,7 @@ EditorBoardVisible :: () -> bool {
     return True("(()=>{const c=document.getElementById('canvas'),g=c.getContext('2d'),a=g.getImageData(795,100,1,1).data,b=g.getImageData(795,220,1,1).data;return a[3]===255&&a[0]===b[0]&&a[1]===b[1]&&a[2]===b[2]})()")
 }
 // At the reload fixture's 800x450 size, wait for the Editor home buttons
-// before clicking My levels. Loaded files/audio can precede this input frame.
+// before using any home action. Loaded files/audio can precede this input frame.
 EDITOR_HOME_READY :: "(()=>{const c=document.getElementById('canvas');if(c.width!==800||c.height!==450)return false;const g=c.getContext('2d');return [300,500].every(x=>{const a=g.getImageData(x,250,1,1).data,b=g.getImageData(x,380,1,1).data;return a[0]===113&&a[1]===152&&a[2]===106&&b[0]===51&&b[1]===62&&b[2]===56})})()"
 CoverHash :: () -> float64 {
     Pause(1100)
@@ -401,7 +401,7 @@ PortalEditorUI :: () -> bool {
     if !Key("l",76) || !PortalShot("stages") || !Key("Escape",27) || !Key("e",69) { return Fail("Stages or E shortcut was unreachable") }
     if !Reload() { return false }
     Pause(1000)
-    if !Key("ArrowRight",39) || !Key("Enter",13) { return Fail("keyboard did not activate editor") }
+    if !Key("ArrowRight",39) || !Key("Enter",13) || !Until(EDITOR_HOME_READY) { return Fail("keyboard did not activate editor") }
     if !PortalShot("editor-home") { return false }
     if !Click(400,244) || !Click(400,160) || !EditorBoardVisible() { return Fail("New level did not open a board") }
     if !True("JSON.parse(CrazyGames.SDK.data.getItem('editor-drafts-v1.json')).records[0].document.levels.length===1") { return Fail("New level was not stored") }
@@ -426,10 +426,10 @@ PortalEditorUI :: () -> bool {
     if !BrowserEvaluate(browser, "window.sessionStorage.setItem('editor-expected',CrazyGames.SDK.data.getItem('editor-drafts-v1.json'));true") || !Reload() || !Key("e",69) || !Until(EDITOR_HOME_READY) || !Click(400,390) || !Click(260,150) || !Click(250,175) || !EditorBoardVisible() { return Fail("My levels did not reopen after full reload") }
     if !True("CrazyGames.SDK.data.getItem('editor-drafts-v1.json')===sessionStorage.getItem('editor-expected')") || !PortalShot("reloaded") { return Fail("full reload changed saved painting") }
     // From a level copies the reached campaign board into this collection.
-    if !Reload() || !Key("e",69) || !Click(400,328) || !Click(400,160) || !Click(55,100) || !EditorBoardVisible() { return Fail("From a level did not open a copy") }
+    if !Reload() || !Key("e",69) || !Until(EDITOR_HOME_READY) || !Click(400,328) || !Click(400,160) || !Click(55,100) || !EditorBoardVisible() { return Fail("From a level did not open a copy") }
     if !True("JSON.parse(CrazyGames.SDK.data.getItem('editor-drafts-v1.json')).records[0].document.levels.length===2") { return Fail("template was not stored") }
     // Account change uses the SDK fixture only. The guest cannot see QA drafts.
-    if !BrowserEvaluate(browser,"__portalAccount('guest',false);true") || !Reload() || !Key("e",69) || !Click(400,390) { return false }
+    if !BrowserEvaluate(browser,"__portalAccount('guest',false);true") || !Reload() || !Key("e",69) || !Until(EDITOR_HOME_READY) || !Click(400,390) { return false }
     if !True("CrazyGames.SDK.data.getItem('editor-drafts-v1.json')===null") { return Fail("editor crossed account namespaces") }
     if !Viewport(450,800,true) || !Reload() { return false }
     Pause(1000)
@@ -440,7 +440,7 @@ PortalEditorUI :: () -> bool {
     // No SDK: local drafts persist across a real page reload as well.
     if !BrowserEvaluate(browser,"sessionStorage.setItem('wurm-no-sdk','1');true") || !Viewport(800,450,false) || !Reload() { return false }
     Pause(1000)
-    if !Key("e",69) || !Click(400,244) || !Click(400,160) || !EditorBoardVisible() || !Click(615,195) || !Click(250,220) || !Click(610,350) { return Fail("noSDK editor could not paint/save") }
+    if !Key("e",69) || !Until(EDITOR_HOME_READY) || !Click(400,244) || !Click(400,160) || !EditorBoardVisible() || !Click(615,195) || !Click(250,220) || !Click(610,350) { return Fail("noSDK editor could not paint/save") }
     if !BrowserEvaluate(browser,"sessionStorage.setItem('local-editor-expected',new TextDecoder().decode(Module.FS.readFile('/kryon-apps/wurm/editor-drafts-v1.json')));true") || !Reload() { return false }
     Pause(1000)
     if !True("new TextDecoder().decode(Module.FS.readFile('/kryon-apps/wurm/editor-drafts-v1.json'))===sessionStorage.getItem('local-editor-expected')") { return Fail("local draft changed after reload") }
