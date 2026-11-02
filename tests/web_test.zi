@@ -30,6 +30,8 @@ True :: (expression: string) -> bool { return BrowserTrue(browser, expression) }
 
 Fail :: (message: string) -> bool {
     print("FAIL: browser: %\n", message)
+    unused Shot("failure")
+    if BrowserEvaluate(browser, "JSON.stringify(window.__portal||[])") { print("portal events: %\n", browser.result) }
     if BrowserEvaluate(browser, "JSON.stringify({decoded:window.__wurmDecoded,context:window.__wurmContext?.state,music:window.__wurmMusic?.().map(s=>({duration:s.buffer.duration,gain:s.__gain?.gain.value})),errors:window.__wurmAudioErrors})") { print("audio state: %\n", browser.result) }
     return false
 }
@@ -260,6 +262,16 @@ Play :: () -> bool {
 
 // The whole canvas as one number, to tell motion from stillness.
 CANVAS_HASH :: "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let h=0;for(let i=0;i<p.length;i+=12)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()"
+
+// Only the private SDK fixture calls this probe. Keep each transition visible
+// without exporting game state or reading account/browser storage contents.
+PortalFallbackProbe :: (name: string) {
+    unused Shot(name)
+    if BrowserEvaluate(browser, "JSON.stringify({sdkActive:WurmPortal.sdkActive,saveLimited:WurmPortal.saveLimited,dataError:WurmPortal.dataError,fixtureDataFailure:sessionStorage.getItem('wurm-data-fail')==='1',events:(window.__portal||[]).slice(-24),canvas:{width:canvas.width,height:canvas.height},focused:document.hasFocus(),activeElement:document.activeElement?.tagName})") {
+        print("session-only %: %\n", name, browser.result)
+    }
+    print("session-only % canvas hash: %\n", name, BrowserNumber(browser, CANVAS_HASH, -1.0))
+}
 
 Record :: (name: string) -> string {
     text: Vec(u8)
@@ -607,10 +619,15 @@ Portal :: (root: string) -> bool {
     if !BrowserEvaluate(browser, "sessionStorage.setItem('wurm-data-fail','1'),true") || !Reload() { return false }
     if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") || !True("WurmPortal.saveLimited") { return Fail("a SDK Data error blocked the title or hid its save limit") }
     if !Click(797, 42) || !True("WurmPortal.saveLimited&&WurmPortal.username===''") || !Click(50, 30) { return Fail("the save warning did not stay visible in the guest profile") }
+    PortalFallbackProbe("fallback-title")
     if !Key("Enter", 13) || !Key("1", 49) || !Key("Enter", 13) || !Key("ArrowRight", 39) { return false }
     failed_still := BrowserNumber(browser, CANVAS_HASH, -1.0)
     Pause(450)
-    if BrowserNumber(browser, CANVAS_HASH, -1.0) == failed_still { return Fail("a SDK Data error stopped session-only play") }
+    failed_after := BrowserNumber(browser, CANVAS_HASH, -1.0)
+    if failed_after == failed_still {
+        PortalFallbackProbe("fallback-motion")
+        return Fail("a SDK Data error stopped session-only play")
+    }
     if !BrowserEvaluate(browser, "sessionStorage.removeItem('wurm-data-fail'),true") || !Reload() { return false }
     if !Until(LOADED) || CloudRecord("unlocked.dat") != "a4" { return Fail("SDK Data did not return after its error") }
     // Put an old guest save in browser IDB, then reload as Alice. Her missing
