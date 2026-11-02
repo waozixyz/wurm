@@ -128,7 +128,7 @@ Orientation :: (size: string, version: string) -> bool {
     if !DriverPress(driver, .{label = "Buy", index = 0, enabled = true}) || !Show("Sign in") {
         return Fail("a purchase must ask for confirmation and sign-in", size)
     }
-    profile: [3]string = .["Profile", "Create account", "Sign in with another device"]
+    profile: [3]string = .["Profile", "Create account", "Link a device"]
     if !Press("Sign in") || !Shows(profile[:], 5000) { return Fail("shop sign-in must open shared Profile", size) }
     if !Press("Back") || !Show("Cancel") { return Fail("Profile Back must return to the confirmation", size) }
     if !Press("Cancel") || !Press("Back") || !Press("Profile") || !Show("Profile") { return Fail("no Profile from the title", size) }
