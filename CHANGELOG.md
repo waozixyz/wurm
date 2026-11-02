@@ -27,6 +27,7 @@
 
 - The separate CrazyGames edition swipes between Play/Continue and the editor, starts with one Play click, saves private editor levels and campaign progress through your portal profile, and restores paid Mountains ownership through CrazyGames inventory.
 - It supports CrazyGames leaderboards and optional platform-approved video ads between levels, while respecting platform language and sound settings.
+- Continue as no longer crashes the other app when it was closed.
 
 ## [0.2.29] - 2026-11-02
 

@@ -11,7 +11,7 @@ ref = "c47f927ca316a0494dff4f2389de3333bc8e08b4"
 
 [dependencies.kryon]
 git = "https://github.com/kryonlabs/kryon.git"
-ref = "139f299d00f3921b386e07ee1fc5e9fad5216b9b"
+ref = "ead3eb7aa63535447a1116ecae7bb4d712d72034"
 
 [install]
 bin = "wurm"
@@ -66,11 +66,11 @@ ref = "master"
 
 [dependencies.apps]
 git = "https://github.com/waozixyz/apps.git"
-ref = "1b7d5c8472e52eecd4de0faa7c94a422a1ade4a3"
+ref = "fec5af055eda9bcc2a2d5a0002a7857bd5cc6a26"
 
 [dependencies.entity]
 git = "https://github.com/waozixyz/entity.git"
-ref = "463f3bd4ea7ea8a3ace207cc21d72b3a56287c3b"
+ref = "2d12bfca10e09e83ac540cc5fd85299b8438150a"
 
 [dependencies.crypto]
 git = "https://github.com/ziranlang/crypto.git"
@@ -78,4 +78,4 @@ ref = "master"
 
 [dependencies.game2d]
 git = "https://github.com/kryonlabs/game2d.git"
-ref = "42db0b20e0fd431f254ea8a06e553accda7d2e84"
+ref = "ce85309d693d9cae8a65c3e8750b6cde864c723e"
