@@ -11,7 +11,7 @@ ref = "e4e8efa4a92f36e2fb0cea1d56b11471afa68621"
 
 [dependencies.kryon]
 git = "https://github.com/kryonlabs/kryon.git"
-ref = "867f36452457b7b857be72dc7bffb9fd6a262e93"
+ref = "1cd873fda5d12cd4dd562956da94cee33c3e364c"
 
 [install]
 bin = "wurm"
