@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.31] - 2026-11-03
+
+- Ctrl+A selects the entire backup password even when the keys are released quickly.
+
 ## [0.2.30] - 2026-11-03
 
 - New backup passwords need at least 8 characters, a number and a lowercase letter; uppercase letters are optional.

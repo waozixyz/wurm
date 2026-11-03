@@ -699,11 +699,14 @@ Portal :: (root: string) -> bool {
 main :: () -> s32 {
     unused CreateDirectories(OUT)
     session: Browser
+    unused CreateDirectories("build/tmp")
+    session.temporary = ResolvePath("build/tmp")
     browser = *session
     portal := EnvironmentText("WURM_TEST_PORTAL")
     if portal.count > 0 {
         passed := Portal(portal)
         BrowserClose(browser)
+        if !passed { unused CopyFile(JoinPath(browser.profile, "browser.log"), JoinPath(OUT, "browser-failure.log")) }
         unused RemoveTree(JoinPath(ResolvePath(OUT), "portal-profile"))
         return ifx passed then 0 else 1
     }
@@ -715,6 +718,7 @@ main :: () -> s32 {
         unused Shot("failure")
     }
     BrowserClose(browser)
+    if !passed { unused CopyFile(JoinPath(browser.profile, "browser.log"), JoinPath(OUT, "browser-failure.log")) }
     unused RemoveTree(JoinPath(ResolvePath(OUT), "profile"))
     return ifx passed then 0 else 1
 }

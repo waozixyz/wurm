@@ -120,9 +120,9 @@ RewardReminder :: () -> bool {
     if !Test("reward_reminder_test", "reward-reminder-test", accounts[:], "", none[:]) { return false }
     if !Test("reward_reminder_hosted_test", "reward-reminder-hosted-test", hosted[:], "", none[:]) { return false }
     bundle: [15]string = .["bundle", "--project", "--root", "tests", "--define", "WURM_PORTABLE",
-        "--define", "KRYON_HOSTED_UI", "--bind-host", "reward_reminder_hosted_test",
-        "--entry", "reward_reminder_hosted_test:main", "-o", "build/reward-reminder-hosted-test/test.zx",
-        "tests/reward_reminder_hosted_test.zi"]
+    "--define", "KRYON_HOSTED_UI", "--bind-host", "reward_reminder_hosted_test",
+    "--entry", "reward_reminder_hosted_test:main", "-o", "build/reward-reminder-hosted-test/test.zx",
+    "tests/reward_reminder_hosted_test.zi"]
     if !Ziran(bundle[:], none[:]) { return false }
     run: [2]string = .["run", "build/reward-reminder-hosted-test/test.zx"]
     return Ziran(run[:], none[:])
@@ -307,7 +307,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     }
     if mode == "reward-reminder-android" {
         glue: [9]string = .["check", "--project", "--define", "ANDROID_BUILD", "--define", "WURM_ACCOUNTS",
-            "--define", "__aarch64__", "src/android_glue.zi"]
+        "--define", "__aarch64__", "src/android_glue.zi"]
         if !Ziran(glue[:], none[:]) { return Fail("Android notification glue package imports") }
         kryon := PackagePath("kryon")
         if kryon.count == 0 { return Fail("Kryon package") }
@@ -332,7 +332,11 @@ main :: (argc: s32, argv: **u8) -> s32 {
         if !Hosted() { return Fail("hosted shop") }
         return ifx AccountNavigation() then 0 else Fail("account navigation")
     }
-    if mode == "web" { return ifx Interface("web_test", "web-test-runner", "-lm") then 0 else Fail("browser") }
+    if mode == "web" {
+        if !Interface("web_test", "web-test-runner", "-lm") { return Fail("browser") }
+        password: [5]string = .["python3", "-I", "tests/browser_password_test.py", "--site", "build/web"]
+        return ifx Run(password[:], none[:]) then 0 else Fail("browser password editing")
+    }
     if mode == "editor-campaign" {
         web: [9]string = .["check", "--project", "--root", "tests", "--define", "WURM_CRAZYGAMES", "--define", "PLATFORM_WEB", "tests/portal_custom_levels_test.zi"]
         if !Ziran(web[:], none[:]) { return Fail("portal campaign web branch") }

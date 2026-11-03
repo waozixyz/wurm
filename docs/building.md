@@ -288,7 +288,8 @@ original Windows dialogs and DirectPlay multiplayer have not been ported.
 `LDLIBS=-lz ziran run --target=c tools/build_web.zi` compiles the same game with Kryon's Canvas2D host
 and Emscripten. `LDLIBS=-lz ziran run --target=c tests/run_local.zi -- web` runs a private
 browser test, including
-control selection, the direct start, portrait resizing and persistent saves.
+control selection, the direct start, portrait resizing, persistent saves and
+password selection, replacement and deletion with quick Ctrl+A presses.
 The browser stores records through Kryon's IndexedDB provider.
 
 The Downloads workflow packages the verified web build beside the signed APKs.
