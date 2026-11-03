@@ -190,6 +190,13 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !has_manifest { return Fail("the scaffold has no manifest") }
     manifest = TextReplace(manifest, "android:name=\".MainActivity\"", "android:name=\"xyz.waozi.wurm.MainActivity\"")
     manifest = TextReplace(manifest, "android:targetActivity=\".MainActivity\"", "android:targetActivity=\"xyz.waozi.wurm.MainActivity\"")
+    if !TextContains(manifest, "android:host=\"dew.waozi.xyz\"") {
+        invitation_filter := "            <intent-filter>\n                <action android:name=\"android.intent.action.VIEW\" />\n                <category android:name=\"android.intent.category.DEFAULT\" />\n                <category android:name=\"android.intent.category.BROWSABLE\" />\n                <data android:scheme=\"https\" android:host=\"dew.waozi.xyz\" android:pathPrefix=\"/invite/\" />\n            </intent-filter>\n"
+        joined: Vec(u8)
+        Append(*joined, invitation_filter)
+        Append(*joined, "        </activity>")
+        manifest = ReplaceFirst(manifest, "        </activity>", BuilderFinish(joined))
+    }
     if !TextContains(manifest, "android.permission.INTERNET") {
         manifest = ReplaceFirst(manifest, "    <application", "    <uses-permission android:name=\"android.permission.INTERNET\" />\n\n    <application")
     }

@@ -78,4 +78,4 @@ ref = "master"
 
 [dependencies.game2d]
 git = "https://github.com/kryonlabs/game2d.git"
-ref = "ce85309d693d9cae8a65c3e8750b6cde864c723e"
+ref = "8b5a989dea686250078da2d209fde1cd2946fc77"

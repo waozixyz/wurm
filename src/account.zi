@@ -12,6 +12,7 @@
     Runtime :: #import "portable_runtime";
     Controls :: #import, file "controls.zi";
     #import "std/text_buffer"
+    Memory :: #import "entity/model";
     shop_request: [128]u8;
     Service :: (name: string, request: string) -> string {
         if name == "entity.game-shop" && request.count < 120 {
@@ -28,7 +29,15 @@
     OpenProfile :: () { unused Service("entity.profile", "open") }
     OpenLeaderboard :: () { unused Service("entity.profile", "leaderboard") }
     OpenDew :: () { unused Service("entity.profile", "dew") }
+    OpenReferrals :: (code: string = "") -> bool {
+        out: Vec(u8)
+        BuilderPrint(*out, "referrals:%", code)
+        request := BuilderFinish(out)
+        defer { Memory.EntityFree(request) }
+        return Service("entity.profile", request) == "queued"
+    }
     ShowDew :: () {}
+    EmbeddedBack :: () -> bool { return false }
     OpenAppearance :: () { unused Service("entity.profile", "appearance") }
     ProfileTitle :: () -> string { return "Profile" }
     SharedTheme :: () -> s32 { return -1 }
@@ -42,6 +51,10 @@
     VisitWebsite :: () -> bool { return Service("entity.game-shop", "visit") == "queued" }
 } else #if #defined(WURM_ACCOUNTS) {
     Entity :: #import "entity/native_host";
+    Referral :: #import "entity/referral_native";
+    Payment :: #import "entity/dew_play";
+    ReferralLink :: #import "entity/referral_model";
+    ReferralAndroid :: #import "entity/referral_android";
     Records :: #import "entity/entity_records";
     Dew :: #import "entity/entity_dew";
     Shop :: #import "entity/game_shop_native";
@@ -98,10 +111,19 @@
             root: [4096]u8
             Leaderboard.leaderboard_installed = InstalledGame
             Entity.EntityHostProfileSections(10)
+            unused Referral.EntityReferralsSource(ifx Payment.DewPlayEdition() then "play" else "direct", "wurm")
             Entity.EntityHostGameContext("wurm")
             if profile_bytes != "" { ready = Entity.EntityHostOpen(profile_bytes, Root(root[:]), "arcade", true) }
         }
-        if ready { Entity.EntityHostPump() }
+        if ready {
+            Locale.Detect()
+            Entity.EntityHostReferralsLocale(TextUntilNul(Locale.language[:]))
+            Entity.EntityHostPump()
+            invitation: [129]u8
+            if ReferralAndroid.EntityTakeReferralInvitation(invitation[:]) {
+                unused OpenReferrals(TextUntilNul(invitation[:]))
+            }
+        }
     }
     Service :: (name: string, request: string) -> string {
         if !ready { return "" }
@@ -115,6 +137,9 @@
             return ifx saved then "saved" else "rejected"
         }
         if name == "entity.profile" && request == "open" { OpenProfile(); return "available" }
+        if name == "entity.profile" && (request == "referrals" || (request.count > 10 && request[:10] == "referrals:")) {
+            return ifx OpenReferrals(ifx request.count > 10 then request[10:] else "") then "queued" else "rejected"
+        }
         return ""
     }
     SharingAvailable :: () -> bool { return ready }
@@ -144,8 +169,17 @@
     }
     OpenLeaderboard :: () { OpenProfile(); profile_title = "Leaderboard"; if ready { unused Entity.EntityHostLeaderboard() } }
     OpenDew :: () { OpenProfile(); profile_title = "Dew"; if ready { unused Entity.EntityHostPage("dew") } }
+    OpenReferrals :: (value: string = "") -> bool {
+        code: [129]u8
+        if value != "" && !ReferralLink.ReferralCodeFromLink(value, code[:]) { return false }
+        OpenProfile()
+        return ready && Entity.EntityHostReferrals(TextUntilNul(code[:]))
+    }
     // The Dew page drawn inside the shop, without the Profile overlay.
     ShowDew :: () { if ready { unused Entity.EntityHostPage("dew") } }
+    // The shop embeds the Profile; its Back button must first leave an
+    // account/backup/referral child page before leaving the shop itself.
+    EmbeddedBack :: () -> bool { return ready && Entity.EntityHostBack() }
     OpenAppearance :: () { OpenProfile(); profile_title = "Appearance"; if ready { unused Entity.EntityHostPage("appearance") } }
     ProfileTitle :: () -> string { return profile_title }
     SharedTheme :: () -> s32 { return ifx ready then Entity.EntityHostAppearance().theme else -1 }
@@ -185,7 +219,9 @@
     OpenProfile :: () {}
     OpenLeaderboard :: () {}
     OpenDew :: () {}
+    OpenReferrals :: (code: string = "") -> bool { return false }
     ShowDew :: () {}
+    EmbeddedBack :: () -> bool { return false }
     OpenAppearance :: () {}
     ProfileTitle :: () -> string { return "Profile" }
     SharedTheme :: () -> s32 { return -1 }

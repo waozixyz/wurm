@@ -1,3 +1,6 @@
+#if #defined(PLATFORM_WEB) {
+    BrowserDriver :: #import "kryon/TestDriver";
+}
 #if #defined(WURM_PORTABLE) {
     #import "kryon/session"
     #import "kryon/geometry"
@@ -593,7 +596,7 @@ PageHeading :: (session: Session, area: Rectangle, title: string) {
     unused Box(session, BoxProps.{.key = 28100, .bounds = area, .fill = Appearance.Canvas()})
     GameText(session, 28101, title, Rectangle.{area.x + 108.0, area.y + 18.0, area.width - 124.0, 32.0}, 24)
     if Button(session, ButtonProps.{.key = 28102, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 84.0, 44.0},
-            .label = Locale.Text("Back"), .class_name = 11}) != 0 { game.mode = MODE_STAGES; buy_skin = 0 }
+            .label = Locale.Text("Back"), .class_name = 11}) != 0 { unused NavigateBack(Timer.MonotonicMilliseconds()) }
 }
 settings_scroll: s32;
 DrawSettings :: (session: Session, area: Rectangle) {
@@ -3763,6 +3766,7 @@ DrawControls :: (session: Session, area: Rectangle, now: s64) {
 HandleInput :: (key: s32, now: s64) {
     if key == 77 || key == 109 { ToggleSound(); return }
     if game.mode == MODE_SHOP || game.mode == MODE_SETTINGS || game.mode == MODE_REWARDS {
+        if key == Input.KeyEscape && game.mode == MODE_SHOP && shop_tab == SHOP_DEW && Account.EmbeddedBack() { return }
         if key == Input.KeyEscape { game.mode = MODE_STAGES; buy_skin = 0 }
         return
     }
@@ -3968,6 +3972,11 @@ portal_ad_was_pending: bool;
 
 #program_export
 Frame :: (session: Session, viewport: Rectangle) -> s32 {
+    #if #defined(PLATFORM_WEB) {
+        // Inspect the last committed frame in private browser tests. Dormant
+        // unless the test sets KRYON_TEST_DRIVER before the runtime starts.
+        BrowserDriver.TestDriverFrame(session)
+    }
     #if !#defined(WURM_PORTABLE) {
         AudioFrame.Begin(session)
         defer { AudioFrame.End() }
