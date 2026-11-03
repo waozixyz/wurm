@@ -520,10 +520,6 @@ Pulihkan pembelian
 [wurm_portal_shop_11]
 Muat ulang
 ---
-[wurm_rewards_streak]
-Beruntun: hari ke-%. Lewat sehari, mulai dari awal.
----
-
 [wurm_reward_reminder]
 Peti hadiahmu menunggu. Buka Apfelwurm untuk mengambilnya.
 ---

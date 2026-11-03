@@ -520,10 +520,6 @@ Käufe wiederherstellen
 [wurm_portal_shop_11]
 Aktualisieren
 ---
-[wurm_rewards_streak]
-Serie: Tag %. Verpasst du einen Tag, beginnt sie neu.
----
-
 [wurm_reward_reminder]
 Deine Belohnungstruhe wartet. Öffne Apfelwurm und hole sie dir.
 ---

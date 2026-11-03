@@ -1,6 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.30] - 2026-11-03
+
+- New backup passwords need at least 8 characters, a number and a lowercase letter; uppercase letters are optional.
+- The backup page uses shorter, practical instructions.
+- Daily rewards show the gifts without a separate streak caption.
+- Refresh the shared Profile and password editing.
 
 - Keep browser play compatible with the shared console controller and game controls.
 

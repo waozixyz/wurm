@@ -520,10 +520,6 @@ Ripristina acquisti
 [wurm_portal_shop_11]
 Aggiorna
 ---
-[wurm_rewards_streak]
-Serie: giorno %. Se salti un giorno, ricomincia.
----
-
 [wurm_reward_reminder]
 Il tuo forziere ti aspetta. Apri Apfelwurm per ritirare la ricompensa.
 ---

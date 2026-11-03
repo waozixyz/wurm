@@ -520,10 +520,6 @@ Restaurer les achats
 [wurm_portal_shop_11]
 Actualiser
 ---
-[wurm_rewards_streak]
-Série : jour %. Un jour manqué et elle recommence.
----
-
 [wurm_reward_reminder]
 Ton coffre de récompense t’attend. Ouvre Apfelwurm pour le récupérer.
 ---

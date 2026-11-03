@@ -201,7 +201,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Zdarma" }
         if source == "Restore purchases" { return "Obnovit nákupy" }
         if source == "Refresh" { return "Obnovit" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "Série: den %. Vynecháš den a začíná znovu." }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Tvá truhla s odměnou čeká. Otevři Apfelwurm a vyzvedni si ji." }
     }
     if locale == "de" {
@@ -369,7 +368,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Kostenlos" }
         if source == "Restore purchases" { return "Käufe wiederherstellen" }
         if source == "Refresh" { return "Aktualisieren" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "Serie: Tag %. Verpasst du einen Tag, beginnt sie neu." }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Deine Belohnungstruhe wartet. Öffne Apfelwurm und hole sie dir." }
     }
     if locale == "es" {
@@ -543,7 +541,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Gratis" }
         if source == "Restore purchases" { return "Restaurar compras" }
         if source == "Refresh" { return "Actualizar" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "Racha: día %. Si faltas un día, vuelve a empezar." }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Tu cofre de recompensa te espera. Abre Apfelwurm para recogerlo." }
     }
     if locale == "fr" {
@@ -713,7 +710,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Gratuit" }
         if source == "Restore purchases" { return "Restaurer les achats" }
         if source == "Refresh" { return "Actualiser" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "Série : jour %. Un jour manqué et elle recommence." }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Ton coffre de récompense t’attend. Ouvre Apfelwurm pour le récupérer." }
     }
     if locale == "id" {
@@ -884,7 +880,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Gratis" }
         if source == "Restore purchases" { return "Pulihkan pembelian" }
         if source == "Refresh" { return "Muat ulang" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "Beruntun: hari ke-%. Lewat sehari, mulai dari awal." }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Peti hadiahmu menunggu. Buka Apfelwurm untuk mengambilnya." }
     }
     if locale == "it" {
@@ -1057,7 +1052,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Gratis" }
         if source == "Restore purchases" { return "Ripristina acquisti" }
         if source == "Refresh" { return "Aggiorna" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "Serie: giorno %. Se salti un giorno, ricomincia." }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Il tuo forziere ti aspetta. Apri Apfelwurm per ritirare la ricompensa." }
     }
     if locale == "ja" {
@@ -1232,7 +1226,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "無料" }
         if source == "Restore purchases" { return "購入を復元" }
         if source == "Refresh" { return "更新" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "連続 % 日目。1日でも休むと最初からです。" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "報酬の宝箱が待っています。Apfelwurmを開いて受け取りましょう。" }
     }
     if locale == "ko" {
@@ -1407,7 +1400,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "무료" }
         if source == "Restore purchases" { return "구매 복원" }
         if source == "Refresh" { return "새로 고침" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "연속 %일째. 하루라도 빠지면 처음부터 다시 시작해요." }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "보상 상자가 기다리고 있어요. Apfelwurm을 열어 받아 가세요." }
     }
     if locale == "pt" {
@@ -1580,7 +1572,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Grátis" }
         if source == "Restore purchases" { return "Restaurar compras" }
         if source == "Refresh" { return "Atualizar" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "Sequência: dia %. Se perder um dia, recomeça." }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Seu baú de recompensa está esperando. Abra Apfelwurm para resgatá-lo." }
     }
     if locale == "ru" {
@@ -1755,7 +1746,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "Бесплатно" }
         if source == "Restore purchases" { return "Восстановить покупки" }
         if source == "Refresh" { return "Обновить" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "Серия: день %. Пропустите день — начнётся заново." }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Твой сундук с наградой ждёт. Открой Apfelwurm, чтобы забрать её." }
     }
     if locale == "zh" {
@@ -1930,7 +1920,6 @@ Text :: (source: string) -> string {
         if source == "Free" { return "免费" }
         if source == "Restore purchases" { return "恢复购买" }
         if source == "Refresh" { return "刷新" }
-        if source == "Streak: day %. Miss a day and it starts over." { return "连续第 % 天。中断一天就要重新开始。" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "奖励宝箱正等着你。打开 Apfelwurm 领取吧。" }
     }
     return source

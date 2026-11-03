@@ -2989,7 +2989,6 @@ CoinText :: (amount: s32) -> string {
 // today's gift and the next days, one icon each, so there is always a reason
 // to come back tomorrow. Later weeks stay a surprise.
 reward_day_label: [7][32]u8;
-reward_streak_label: [160]u8;
 DrawRewardsModal :: (session: Session, area: Rectangle) {
     unused Box(session, BoxProps.{.key = 29620, .bounds = area, .fill = Color.{8, 18, 12, 150}})
     width := area.width - 32.0
@@ -3002,7 +3001,7 @@ DrawRewardsModal :: (session: Session, area: Rectangle) {
     #if #defined(WURM_CRAZYGAMES) {
         guest = false
     }
-    height: float32 = ifx guest then 400.0 else 356.0
+    height: float32 = ifx guest then 366.0 else 322.0
     card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0 + 24.0, width, height}
     // A tap beside the card closes it.
     pointer := GamePointer(session)
@@ -3078,18 +3077,7 @@ DrawRewardsModal :: (session: Session, area: Rectangle) {
                 Rectangle.{tile.x + 1.0, tile.y + 84.0, tile.width - 2.0, 22.0}, ifx skin > 0 then 11 else ifx narrow then 13 else 16, false, true)
         }
     }
-    // The streak's plan day; after a missed day the next claim is day 1.
-    streak_digits: [21]u8
-    streak_number := FormatInteger(cast(s64)(ifx streak < 1 then 1 else streak), streak_digits[:])
-    streak_at: s32 = 0
-    for byte: Locale.Text("Streak: day %. Miss a day and it starts over.") {
-        if byte == #char "%" { streak_at = CopyInto(reward_streak_label[:], streak_at, streak_number) }
-        else if streak_at < 159 { reward_streak_label[streak_at] = byte; streak_at += 1 }
-    }
-    reward_streak_label[streak_at] = 0
-    unused Text(session, TextProps.{.key = 29672, .bounds = Rectangle.{card.x + 16.0, card.y + 252.0, width - 32.0, 32.0},
-        .text = TextUntilNul(reward_streak_label[:]), .font = 12, .class_name = 2, .align = TextAlign.TextAlignCenter})
-    y := card.y + 294.0
+    y := card.y + 260.0
     #if !#defined(WURM_PORTABLE) {
         if guest {
             if Button(session, ButtonProps.{.key = 29670, .bounds = Rectangle.{card.x + 16.0, y, width - 32.0, 36.0},

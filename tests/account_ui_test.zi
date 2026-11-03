@@ -11,6 +11,7 @@
 #import "std/json_scan"
 #import "std/timer_linux"
 #import "std/text_tools"
+#import "std/process_run_linux"
 
 OUT :: "build/account-ui-test"
 
@@ -135,7 +136,59 @@ Orientation :: (size: string, version: string) -> bool {
     account := false
     for i: 0..driver.nodes.count - 1 { if TextContains(TextLower(driver.nodes[i].label), "account") { account = true } }
     if !account { return Fail("Profile does not mention the account", size) }
+    if !PasswordKeys(size) { return false }
     return Capture("profile", size, *image)
+}
+
+// Actual OS keys on the private owned display, after the shared Profile has
+// focused its password input. Only validation labels are inspected.
+PhysicalKey :: (key: string) -> bool {
+    if !PrivateDisplayOwned(display) || window == 0 { return false }
+    target: Vec(u8)
+    BuilderPrint(*target, "%", window)
+    arguments: [6]string = .["xdotool", "windowfocus", BuilderFinish(target), "key", "--clearmodifiers", key]
+    extra: [0]string
+    changes: Vec(string)
+    DisplayEnvironment(display, extra[:], *changes)
+    process: ProcessRun
+    ok := RunProcess(ProcessOptions.{.arguments = arguments[:],
+        .environment = VecSlice(changes, 0, changes.count)}, *process) && process.code == 0
+    unused SleepMilliseconds(200)
+    return ok
+}
+RevealPress :: (label: string) -> bool {
+    tries: s32 = 0
+    while tries < 20 {
+        if DriverFind(driver, .{label = label, enabled = true}) > 0 { return Press(label) }
+        if !DriverWheel(driver, 200.0, 200.0, -2.0) { return false }
+        unused SleepMilliseconds(100)
+        tries += 1
+    }
+    return false
+}
+HasLabelPart :: (part: string) -> bool {
+    unused DriverTree(driver)
+    for index: 0..driver.nodes.count - 1 {
+        if TextContains(driver.nodes[index].label, part) { return true }
+    }
+    return false
+}
+PasswordKeys :: (size: string) -> bool {
+    if !RevealPress("Create account") || !RevealPress("Password") || !DriverType(driver, "abcdefg1") {
+        return Fail("cannot focus private password field", size)
+    }
+    if !PhysicalKey("ctrl+a") || !PhysicalKey("z") { return Fail("cannot send private password keys", size) }
+    deadline := MonotonicMilliseconds() + 5000
+    replaced := false
+    while MonotonicMilliseconds() < deadline {
+        if HasLabelPart("at least 8 characters") { replaced = true; break }
+        unused SleepMilliseconds(50)
+    }
+    if !replaced { return Fail("Ctrl+A must replace the complete password", size) }
+    // Keep two characters so Backspace alone cannot satisfy the deletion test.
+    if !PhysicalKey("x") || !PhysicalKey("ctrl+a") || !PhysicalKey("BackSpace") { return false }
+    if HasLabelPart("Still needed:") { return Fail("Ctrl+A Backspace must clear the password", size) }
+    return true
 }
 
 #program_export
@@ -155,13 +208,15 @@ main :: () -> s32 {
     sizes: [2]string = .["390x780", "844x390"]
     passed := true
     for size: sizes {
+        unused RemoveTree(Join(fixture, "profile"))
+        unused RemoveTree(Join(fixture, "data"))
         extra: Vec(string)
         fixed: [4]string = .["SDL_RENDER_DRIVER=software", "SDL_AUDIODRIVER=dummy", "LP_NUM_THREADS=1", "LANG=en_US.UTF-8"]
         for fixed { VecPush(extra, it) }
         // Saves, the profile and opened websites stay in this fixture.
-        names: [3]string = .["WURM_LEVEL_DIR", "WURM_PROFILE_DIR", "KRYON_TEST_OPEN_URI_CAPTURE"]
-        places: [3]string = .["levels", "profile", "website.txt"]
-        for index: 0..2 {
+        names: [4]string = .["WURM_LEVEL_DIR", "WURM_PROFILE_DIR", "KRYON_TEST_OPEN_URI_CAPTURE", "XDG_DATA_HOME"]
+        places: [4]string = .["levels", "profile", "website.txt", "data"]
+        for index: 0..3 {
             entry: Vec(u8)
             BuilderPrint(*entry, "%=%", names[index], Join(fixture, places[index]))
             VecPush(extra, BuilderFinish(entry))
