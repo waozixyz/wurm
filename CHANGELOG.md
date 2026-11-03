@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Keep browser play compatible with the shared console controller and game controls.
+
 - Open Wurm at its normal title in Arcade, with the level editor inside the game and a compatible link to retained editor addon drafts.
 
 - Keep the account key out of Android system backups, which have no passphrase.
