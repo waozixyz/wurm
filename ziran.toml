@@ -7,11 +7,11 @@ tool = "kryon"
 
 [toolchain]
 git = "https://github.com/ziranlang/ziran.git"
-ref = "c47f927ca316a0494dff4f2389de3333bc8e08b4"
+ref = "e4e8efa4a92f36e2fb0cea1d56b11471afa68621"
 
 [dependencies.kryon]
 git = "https://github.com/kryonlabs/kryon.git"
-ref = "ead3eb7aa63535447a1116ecae7bb4d712d72034"
+ref = "1cd873fda5d12cd4dd562956da94cee33c3e364c"
 
 [install]
 bin = "wurm"
@@ -66,11 +66,11 @@ ref = "master"
 
 [dependencies.apps]
 git = "https://github.com/waozixyz/apps.git"
-ref = "fec5af055eda9bcc2a2d5a0002a7857bd5cc6a26"
+ref = "3515cdf3af20e79001f7774eed224e94180540ed"
 
 [dependencies.entity]
 git = "https://github.com/waozixyz/entity.git"
-ref = "2d12bfca10e09e83ac540cc5fd85299b8438150a"
+ref = "075784438af94fe4a0aba48ed4d8c7208c161bf1"
 
 [dependencies.crypto]
 git = "https://github.com/ziranlang/crypto.git"

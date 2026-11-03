@@ -1,0 +1,58 @@
+// The actual portable entry and widget actions, using a private in-memory host.
+H :: #import, file "hosted_test.zi";
+App :: #import, file "../src/app.zi";
+Game :: #import, file "../src/game.zi";
+Runtime :: #import, file "../src/portable_runtime.zi";
+#import "apps/node_types"
+#import "kryon/session"
+#import "std/text_buffer"
+
+#program_export
+main :: () -> s32 {
+    H.message.abi = MODULE_ABI
+    H.message.locale = "en"
+    H.frame.session = SessionOpen()
+    H.frame.now = 1.0
+    H.frame.width = 844
+    H.frame.height = 390
+    // A campaign record is not migrated, cleared or rewritten by navigation.
+    H.Expect(H.SaveAppRecordHost("campaign-level-1", "01020304"), "seed legacy campaign record")
+    H.Draw()
+    #if #defined(WURM_EDITOR_APP) {
+        H.Expect(App.game.mode == Game.MODE_EDITOR && H.Find("My levels") >= 0,
+            "retained editor addon enters its own editor with its existing record scope")
+    } else {
+        H.Expect(App.game.mode == Game.MODE_STAGES && H.Find("Play") >= 0,
+            "Arcade game selection enters normal title")
+        H.Expect(H.Find("Level editor") >= 0, "normal title offers editor")
+        H.Click("Level editor")
+        H.Expect(App.game.mode == Game.MODE_EDITOR && H.Find("My levels") >= 0,
+            "normal editor is reachable from title")
+        H.Expect(H.Find("Apfelwurm Editor") < 0, "hosts without navigation do not show legacy link")
+        H.navigation_available = true
+        H.Draw()
+        H.Expect(H.Find("Apfelwurm Editor") >= 0, "shared host offers legacy addon route inside normal editor")
+        H.Click("Apfelwurm Editor")
+        H.Expect(H.navigation_requests == 1 && H.navigation_target == "xyz.waozi.wurm-editor",
+            "legacy link requests exact addon ID through shared Apps transport")
+        H.Expect(App.game.mode == Game.MODE_EDITOR, "queued host route does not locally replace runtime")
+        H.Click("Back")
+        H.Expect(App.game.mode == Game.MODE_STAGES, "editor Back returns to normal game title")
+        H.frame.width = 720; H.frame.height = 1080
+        H.Draw()
+        H.Click("Level editor")
+        H.Expect(H.Find("My levels") >= 0, "portrait normal editor remains reachable")
+    }
+    #if #defined(WURM_EDITOR_APP) {
+        H.navigation_available = true
+        H.Draw()
+        H.Expect(H.Find("Apfelwurm Editor") < 0 && H.navigation_requests == 0, "legacy addon has no recursive link")
+    }
+    bytes: [8]u8
+    H.Expect(Runtime.ReadLevel("campaign-level-1", bytes[:]) == 4 && bytes[0] == 1 && bytes[3] == 4,
+        "existing record remains readable without migration")
+    H.Expect(H.AppRecordHost("campaign-level-1") == "01020304", "entry and editor navigation preserve saved bytes")
+    H.Expect(H.invalid_record_names == 0, "navigation uses valid bounded records")
+    if H.failures == 0 { print("PASS: portable title/editor entry and retained records\n") }
+    return ifx H.failures == 0 then 0 else 1
+}

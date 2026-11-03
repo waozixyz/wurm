@@ -2252,6 +2252,21 @@ DrawEditorHome :: (session: Session, area: Rectangle, now: s64) {
         .fill = Color.{20, 47, 22, 0}, .fill_bottom = Color.{20, 47, 22, 200}, .has_fill_bottom = true})
     if !EditorApp() && Button(session, ButtonProps.{.key = 40004, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 84.0, 44.0},
             .label = Locale.Text("Back"), .class_name = 11}) != 0 { OpenStages(); return }
+    // Installed legacy addons retain their own campaign records. The shared
+    // Apps host opens the verified addon without moving or merging save data.
+    #if #defined(WURM_PORTABLE) {
+        if !EditorApp() && Controls.HostSupports("app-navigation") {
+            if Button(session, ButtonProps.{.key = 40018,
+                    .bounds = Rectangle.{area.x + area.width - 204.0, area.y + 12.0, 192.0, 44.0},
+                    .label = "Apfelwurm Editor", .class_name = 11}) != 0 {
+                EditorSave()
+                if !editor.save_failed {
+                    unused Timer.Service("apps.navigation", "xyz.waozi.wurm-editor")
+                }
+                return
+            }
+        }
+    }
     width := area.width - 48.0
     if width > 300.0 { width = 300.0 }
     left := area.x + (area.width - width) / 2.0

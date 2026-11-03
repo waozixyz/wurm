@@ -62,8 +62,11 @@ PollPointer :: () -> PointerFrame { return pointer }
 #program_export
 AppSoundHost :: (name: string) -> bool { unused name; return true }
 // A touch host: the controls question still comes.
+navigation_available: bool;
+navigation_requests: s32;
+navigation_target: string;
 #program_export
-AppSupportsHost :: (capability: string) -> bool { unused capability; return false }
+AppSupportsHost :: (capability: string) -> bool { return capability == "app-navigation" && navigation_available }
 #program_export
 AppRecordHost :: (name: string) -> string {
     for index: cast(s32)0..record_count - 1 {
@@ -84,6 +87,11 @@ SaveAppRecordHost :: (name: string, value: string) -> bool {
 }
 #program_export
 AppServiceHost :: (name: string, request: string) -> string {
+    if name == "apps.navigation" {
+        navigation_requests += 1
+        navigation_target = request
+        return "{\"v\":1,\"status\":\"queued\",\"request\":1,\"receipt\":\"\",\"reason\":\"\"}"
+    }
     if name == "entity.profile" && request == "open" { profile_opens += 1; return "available" }
     if name == "entity.records" {
         if request == "{\"operation\":\"status\"}" {

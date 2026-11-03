@@ -62,8 +62,9 @@ losing the last one ends the game at zero.
 Collect the apples, then leave through the top opening. Every level, across
 all five landscapes, connects automatically, keeping lives and score. Lives lost
 are saved immediately; lives earned within a level are kept by finishing it.
-Hosted in Arcade, the cover is the title, so opening the game goes straight
-into play.
+Hosted in Arcade, opening the game shows its normal title. The Level editor
+button opens the in-game editor; compatible shared hosts also offer the retained
+Apfelwurm Editor addon from the editor home without migrating its private records.
 
 ## Mobile-first layout
 
@@ -147,9 +148,22 @@ published board; a new personal edit takes precedence over it.
 
 ## Build
 
-Arcade builds `catalog.json`'s portable entry from this repository and offers
-`wurm.zx` as an individual download. It uses the same campaign, artwork,
-controls and editor; private editor records belong to `xyz.waozi.wurm`.
+Build the portable game and retained editor addon in this repository:
+
+```sh
+build-queue -- python3 tools/build_portable.py
+```
+
+This uses `tools/portable_assets.zi` and the current game sources, writing
+`build/games/wurm.zx` and `build/games/wurm-editor.zx`. Each has adjacent
+`-resources.json`, `-catalog.json` and `-preview.png` files. The editor's
+resource links bind its original asset namespace to the game dependency;
+its packaged requirements pin the newly built game's digest. Copy these
+outputs unchanged into the host's published-style fixture. Arcade consumes
+the bundles and does not compile game sources. The source/digest receipt is
+`work/arcade-entry/portable-receipt.json`; packaging never signs, publishes
+or changes versions. It uses the same campaign, artwork, controls and editor;
+private records retain their original game or addon identity.
 The portable host plays packed sound effects. The native editions keep the
 streaming soundtrack and secondary-pointer editor controls.
 
