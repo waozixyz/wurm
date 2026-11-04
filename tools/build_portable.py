@@ -10,10 +10,29 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/games'
 WORK = ROOT / 'work/portable-package'
+
+EXPORT_FILES = tuple(name + suffix for name in ('wurm', 'wurm-editor')
+                     for suffix in ('.zx', '-resources.json', '-catalog.json', '-preview.png'))
+
+
+def package_archive(root=ROOT):
+    """Publish only portable exports, never local profiles or campaign records."""
+    version = json.loads((root / 'version.json').read_text())['version']
+    exports = root / 'build/games'
+    for name in EXPORT_FILES:
+        if not (exports / name).is_file() or not (exports / name).stat().st_size:
+            raise ValueError(f'Missing portable export: {name}')
+    archive = root / f'build/downloads/wurm-portable-v{version}.tar.gz'
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive, 'w:gz') as output:
+        for name in EXPORT_FILES:
+            output.add(exports / name, arcname=name, recursive=False)
+    return archive
 
 
 def digest(path):
@@ -138,6 +157,7 @@ def main():
                'apps': records}
     write_json(ROOT / 'work/arcade-entry/portable-receipt.json', receipt)
     print('Receipt: work/arcade-entry/portable-receipt.json', flush=True)
+    print('Release export:', package_archive(), flush=True)
 
 
 if __name__ == '__main__':

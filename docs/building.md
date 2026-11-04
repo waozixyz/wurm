@@ -164,6 +164,10 @@ the bundles and does not compile game sources. The source/digest receipt is
 `work/arcade-entry/portable-receipt.json`; packaging never signs, publishes
 or changes versions. It uses the same campaign, artwork, controls and editor;
 private records retain their original game or addon identity.
+The same command packages these eight public files in
+`build/downloads/wurm-portable-vVERSION.tar.gz`. Downloads publishes that
+archive with the release; Arcade downloads it from the exact pinned release
+instead of compiling Wurm or expecting build outputs in a source package.
 The portable host plays packed sound effects. The native editions keep the
 streaming soundtrack and secondary-pointer editor controls.
 
