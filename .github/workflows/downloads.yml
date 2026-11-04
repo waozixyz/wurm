@@ -22,6 +22,8 @@ jobs:
       MAKEFLAGS: -j1
       OMP_NUM_THREADS: '1'
       YUE_DESKTOP_RECOVERY: '0'
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
     defaults:
       run:
         working-directory: waozixyz/wurm
@@ -161,6 +163,7 @@ jobs:
           ' CHANGELOG.md > build/release-notes.md
           test -s build/release-notes.md
       - name: Publish this version only after its downloads are ready
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -178,6 +181,7 @@ jobs:
           fi
           gh release upload "$tag" "build/downloads/wurm-v$VERSION.apk" "build/downloads/wurm-$VERSION-fdroid.apk" "build/downloads/wurm-v$VERSION-gplay.apk" "build/downloads/wurm-web-v$VERSION.zip" "build/downloads/wurm-portable-v$VERSION.tar.gz" --clobber
           gh release edit "$tag" --draft=false --latest
+          echo "published=true" >> "$GITHUB_OUTPUT"
       - name: Install itch.io Butler
         run: |
           curl --fail --show-error --location --retry 3 \
@@ -212,3 +216,11 @@ jobs:
             exit 0
           fi
           gh workflow run game-updates.yml -R waozixyz/arcade --ref master
+
+  google-play:
+    needs: build
+    if: ${{ always() && needs.build.outputs.published == 'true' }}
+    uses: ./.github/workflows/play-bundle.yml
+    with:
+      revision: ${{ github.sha }}
+    secrets: inherit

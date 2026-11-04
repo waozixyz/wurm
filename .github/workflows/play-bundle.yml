@@ -1,14 +1,19 @@
 name: Google Play bundle
 
 on:
+  workflow_call:
+    inputs:
+      revision:
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      revision:
+        description: Full published Wurm release commit (defaults to this run)
+        type: string
 
 permissions:
   contents: read
-
-concurrency:
-  group: wurm-play-bundle
-  cancel-in-progress: false
 
 jobs:
   bundle:
@@ -20,12 +25,19 @@ jobs:
       MAKEFLAGS: -j1
       OMP_NUM_THREADS: '1'
       YUE_DESKTOP_RECOVERY: '0'
+    concurrency:
+      group: wurm-google-play
+      cancel-in-progress: false
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_code: ${{ steps.version.outputs.version_code }}
     defaults:
       run:
         working-directory: waozixyz/wurm
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
+          ref: ${{ inputs.revision || github.sha }}
           path: waozixyz/wurm
           persist-credentials: false
       - name: Read the release version
@@ -34,6 +46,18 @@ jobs:
           version=$(sed -n 's/^ *"version": "\([^"]*\)".*/\1/p' version.json)
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_code=$(python3 -c 'import json; print(json.load(open("version.json"))["version_code"])')" >> "$GITHUB_OUTPUT"
+      - name: Require an already published GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          release = json.loads(subprocess.check_output(
+              ['gh', 'release', 'view', 'v' + os.environ['VERSION'], '--json', 'isDraft,publishedAt'], text=True))
+          assert not release['isDraft'] and release['publishedAt'], 'Publish the GitHub release first'
+          PY
       # The locked compiler comes prebuilt, the package checkouts cached, and
       # Ubuntu packages from the canonical archive.
       - name: Set up the locked Ziran, its packages and the build tools
@@ -84,3 +108,20 @@ jobs:
           path: waozixyz/wurm/build/downloads/wurm-v${{ steps.version.outputs.version }}-gplay.aab
           if-no-files-found: error
           retention-days: 14
+      - name: Upload only the Google Play edition to internal testing
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: xyz.waozi.wurm
+          releaseFiles: waozixyz/wurm/build/downloads/wurm-v${{ steps.version.outputs.version }}-gplay.aab
+          releaseName: ${{ steps.version.outputs.version }}
+          track: internal
+          status: completed
+
+  closed-testing:
+    needs: bundle
+    uses: ./.github/workflows/play-promote.yml
+    with:
+      version: ${{ needs.bundle.outputs.version }}
+      version_code: ${{ needs.bundle.outputs.version_code }}
+    secrets: inherit
