@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.33] - 2026-11-07
+
+- Runs in the latest Inner Breeze and Arcade.
+
 ## [0.2.32] - 2026-11-03
 
 - Include Apfelwurm and its editor in Arcade's automatic game updates.

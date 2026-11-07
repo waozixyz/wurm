@@ -1,7 +1,8 @@
 # Apfelwurm Editor changelog
 
-## [Unreleased]
+## [0.1.2] - 2026-11-07
 
+- Runs in the latest Inner Breeze and Arcade.
 - Playtest worms have connected, shaded bodies, tapered tails and clearer heads for every skin.
 
 ## [0.1.1] - 2026-10-30
