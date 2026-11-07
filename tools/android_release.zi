@@ -335,15 +335,18 @@ main :: (argc: s32, argv: **u8) -> s32 {
         tools := BuildTools()
         if tools.count == 0 { return Fail("no build tools") }
         suffix := ifx edition == "gplay" then "-gplay" else ""
-        names: [4]Vec(u8)
-        BuilderPrint(*names[0], "aligned%-unsigned.apk", suffix)
-        BuilderPrint(*names[1], "wurm%.new.apk", suffix)
-        BuilderPrint(*names[2], "wurm-v%", version); Append(*names[2], suffix); Append(*names[2], ".apk")
-        BuilderPrint(*names[3], "wurm-%-fdroid.apk", version)
-        aligned := JoinPath(output, BuilderFinish(names[0]))
-        temporary := JoinPath(output, BuilderFinish(names[1]))
-        target := JoinPath(output, BuilderFinish(names[2]))
-        fdroid := JoinPath(output, BuilderFinish(names[3]))
+        aligned_name: Vec(u8)
+        temporary_name: Vec(u8)
+        target_name: Vec(u8)
+        fdroid_name: Vec(u8)
+        BuilderPrint(*aligned_name, "aligned%-unsigned.apk", suffix)
+        BuilderPrint(*temporary_name, "wurm%.new.apk", suffix)
+        BuilderPrint(*target_name, "wurm-v%", version); Append(*target_name, suffix); Append(*target_name, ".apk")
+        BuilderPrint(*fdroid_name, "wurm-%-fdroid.apk", version)
+        aligned := JoinPath(output, BuilderFinish(aligned_name))
+        temporary := JoinPath(output, BuilderFinish(temporary_name))
+        target := JoinPath(output, BuilderFinish(target_name))
+        fdroid := JoinPath(output, BuilderFinish(fdroid_name))
         align: [7]string = .[JoinPath(tools, "zipalign"), "-P", "16", "-f", "4", ResolvePath(file), aligned]
         sign: [11]string = .[JoinPath(tools, "apksigner"), "sign", "--alignment-preserved", "--ks", ResolvePath(keystore),
             "--ks-key-alias", "wurm", "--ks-pass", "", "--out", temporary]
