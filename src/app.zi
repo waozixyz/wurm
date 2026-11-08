@@ -3850,7 +3850,7 @@ stage_total: [24]u8;
 
 // Finger movement steers like arrow keys, without waiting for release.
 Steer :: (direction: s32) {
-    if game.length >= 8 && direction != (game.direction + 2) % 4 { game.next_direction = direction }
+    unused ApplyDirection(*game, direction)
 }
 
 // One icon and one number per status chip: widths stay fixed as lives and

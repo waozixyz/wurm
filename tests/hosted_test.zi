@@ -325,6 +325,7 @@ InputFrames :: () {
     App.game.next_step = 10000000
     App.game.direction = Game.DIR_UP
     App.game.length = 8
+    App.game.worm[0].y = (Game.board_rows - 2) * 16 + 8
     frame_input.keys[KeyLeft] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
     frame_key = KeyLeft
     Draw()
@@ -381,6 +382,83 @@ InputFrames :: () {
     Draw()
 }
 
+// Consume the final apple, leave through the real exit, then use the app's
+// reload/preview/start path. Repeat with a delayed frame and buffered turns
+// while the new head is still passing through the bottom entrance.
+LevelTransitions :: () {
+    for portrait: 0..1 {
+        frame.width = ifx portrait == 1 then 390 else 844
+        frame.height = ifx portrait == 1 then 844 else 390
+        App.game_portrait = portrait == 1
+        frame_input = .{.focused = true}
+        frame_key = 0
+        App.StartLevel(0, cast(s64)(frame.now * 1000.0), 1)
+        App.game.score = 32
+        for level: 0..2 {
+            game := *App.game
+            score := game.score
+            lives := game.lives
+            multiplier := game.multiplier
+            expected_lives := lives + (score + 6 * multiplier) / (33 * multiplier) - score / (33 * multiplier)
+            game.length = 16
+            game.direction = Game.DIR_UP
+            game.next_direction = Game.DIR_UP
+            for i: 0..15 { game.worm[i] = Game.Point.{Game.board_columns / 2 * 16 + 8, 24 + cast(s32)i * 4} }
+            game.apple = Game.Point.{game.worm[0].x, 20}
+            game.apples = 1
+            game.next_step = cast(s64)((frame.now + 0.1) * 1000.0)
+            Draw()
+            Expect(game.apples == 0 && game.score == score + multiplier && game.death_ticks == 0,
+                "real frame consumes final apple without death")
+            for tick: 0..39 {
+                if game.mode == Game.MODE_READY { break }
+                Draw()
+                Expect(game.death_ticks == 0 && game.mode != Game.MODE_DIED, "exit and transition remain alive")
+            }
+            Expect(game.mode == Game.MODE_READY && game.level == level + 1 && game.score == score + 6 * multiplier && game.lives == expected_lives,
+                "real completion reloads next level and preserves score and lives")
+            Expect(game.length == 1 && game.direction == Game.DIR_UP && game.next_direction == Game.DIR_UP && game.transition_ticks == 0 && game.apples > 0,
+                "next board resets body and transition steering")
+            frame_input.keys[KeyRight] = cast(u8)(FrameKeyHeld | FrameKeyRepeated)
+            frame_key = KeyRight
+            frame.now += 10.0
+            Draw()
+            Expect(game.mode == Game.MODE_READY && game.length == 1, "buffered turn and old ticks cannot start preview")
+            frame_input = .{.focused = true}
+            frame_key = KeyEnter
+            Draw()
+            Expect(game.mode == Game.MODE_PLAYING && game.length == 1, "Start resets the movement clock")
+            frame_key = KeyRight
+            frame_input.keys[KeyRight] = cast(u8)(FrameKeyHeld | FrameKeyRepeated)
+            frame.now += 10.0
+            Draw()
+            // Eight catch-up ticks leave the head inside the bottom gate.
+            Expect(game.length == 9, "delayed frame caps catch-up at eight ticks")
+            App.Steer(Game.DIR_LEFT)
+            Expect(game.next_direction == Game.DIR_UP, "swipe and pad cannot turn inside the entrance")
+            Draw()
+            Expect(game.next_direction == Game.DIR_UP, "entrance rejects the buffered sideways turn")
+            frame_input = .{.focused = true}
+            frame_key = 0
+            for tick: 0..5 { Draw() }
+            App.Steer(Game.DIR_LEFT)
+            Expect(game.next_direction == Game.DIR_LEFT, "swipe and pad work after entry")
+            frame_input.keys[KeyRight] = cast(u8)(FrameKeyHeld | FrameKeyPressed)
+            frame_key = KeyRight
+            Draw()
+            Expect(game.next_direction == Game.DIR_RIGHT, "steering works once the new head has entered")
+            frame_input = .{.focused = true}
+            frame_key = 0
+            Expect(game.mode == Game.MODE_PLAYING && game.death_ticks == 0 && game.lives == expected_lives,
+                "buffered entrance turn cannot kill the next level")
+        }
+    }
+    frame_input = .{.focused = true}
+    frame_key = 0
+    App.OpenStages()
+    Draw()
+}
+
 #program_export
 main :: () -> s32 {
     NameFields()
@@ -415,6 +493,7 @@ main :: () -> s32 {
         Draw()
     }
     InputFrames()
+    LevelTransitions()
     for portrait: 0..1 {
         frame.width = ifx portrait == 1 then 390 else 844
         frame.height = ifx portrait == 1 then 844 else 390

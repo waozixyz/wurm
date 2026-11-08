@@ -1160,6 +1160,15 @@ Step :: (game: *Game, now: s64) -> bool {
     }
     return true
 }
+ApplyDirection :: (game: *Game, direction: s32) -> bool {
+    // During entry the head still crosses the bottom wall when length
+    // first reaches eight. A buffered turn there leaves the gate sideways
+    // and dies as soon as collisions become active. Enter the floor first.
+    if direction < 0 || direction > 3 || game.length < 8 ||
+        game.worm[0].y >= (board_rows - 1) * 16 || direction == (game.direction + 2) % 4 { return false }
+    game.next_direction = direction
+    return true
+}
 ApplyInput :: (game: *Game, key: s32) -> bool {
     // Escape, Space and P toggle pause; Q leaves a paused game for the stages.
     pause_key := key == 27 || key == 256 || key == 32 || key == 80 || key == 112
@@ -1170,10 +1179,7 @@ ApplyInput :: (game: *Game, key: s32) -> bool {
         else if key == 264 || key == 83 || key == 115 { direction = DIR_DOWN }
         else if key == 263 || key == 65 || key == 97 { direction = DIR_LEFT }
         else if key == 265 || key == 87 || key == 119 { direction = DIR_UP }
-        if direction >= 0 && game.length >= 8 && direction != (game.direction + 2) % 4 {
-            game.next_direction = direction
-            return true
-        }
+        return ApplyDirection(game, direction)
     } else if game.mode == MODE_PAUSED {
         if pause_key { game.mode = MODE_PLAYING; return true }
         if key == 81 || key == 113 { game.mode = MODE_STAGES; return true }

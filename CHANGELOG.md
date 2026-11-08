@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Prevent buffered turns at the next level’s entrance from causing an immediate death.
+
 ## [0.2.33] - 2026-11-07
 
 - Runs in the latest Inner Breeze and Arcade.
