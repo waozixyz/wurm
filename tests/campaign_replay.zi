@@ -6,11 +6,41 @@ CampaignSeeds: [400]u32 = .[1, 1, 65538, 65538, 131075, 138994, 196612, 196612, 
 CampaignRoutes: [400]s32 = .[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0, 0, 0, 0, 116, 11, 0, 2];
 CampaignReverse: [400]s32 = .[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0];
 // campaign-cases:end
+// Frozen active-mechanics witnesses for the redesigned opening campaign.
+// These are deliberately separate from the legacy 200-level geometry cases:
+// each pair is landscape/portrait and runs with hazards and ideas enabled.
+OpeningSeeds: [100]u32 = .[1, 1, 65538, 65538, 131075, 131075, 196612, 196612, 262149, 262149, 327686, 327686, 393223, 393223, 458760, 458760, 524297, 524297, 589834, 589834, 655371, 663290, 728827, 720908, 794364, 786445, 851982, 851982, 925438, 917519, 983056, 983056, 1048593, 1048593, 1114130, 1114130, 1179667, 1179667, 1245204, 1245204, 1318660, 1310741, 1376278, 1376278, 1441815, 1441815, 1507352, 1507352, 1572889, 1572889, 1638426, 1638426, 1703963, 1703963, 1769500, 1769500, 1835037, 1835037, 1900574, 1900574, 1966111, 1966111, 2039567, 2031648, 2097185, 2097185, 2170641, 2162722, 2228259, 2228259, 2293796, 2301715, 2359333, 2359333, 2424870, 2424870, 2490407, 2490407, 2555944, 2555944, 2621481, 2637319, 2694937, 2687018, 2752555, 2752555, 2818092, 2818092, 2891548, 2883629, 2957085, 3060032, 3030541, 3014703, 3088159, 3080240, 3145777, 3145777, 3211314, 3211314];
+OpeningReverse: [100]s32 = .[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0];
+OpeningSeed :: (level: s32, orientation: s32) -> u32 {
+    if level == 30 && orientation == 0 { return 1974030 }
+    if level == 33 && orientation == 0 { return 2162722 }
+    if level == 34 && orientation == 1 { return 2236178 }
+    if level == 42 && orientation == 0 { return 2760474 }
+    if level == 43 && orientation == 0 { return 2826011 }
+    if level == 44 && orientation == 0 { return 2883629 }
+    if level == 45 && orientation == 1 { return 2965004 }
+    if level == 46 && orientation == 0 { return 3014703 }
+    if level == 46 && orientation == 1 { return 3022622 }
+    if level == 49 && orientation == 1 { return 3227152 }
+    return OpeningSeeds[level * 2 + orientation]
+}
+OpeningDirection :: (level: s32, orientation: s32) -> s32 {
+    if level == 30 && orientation == 0 { return 1 }
+    if level == 33 && orientation == 0 { return 0 }
+    if level == 34 && orientation == 1 { return 1 }
+    if level == 42 && orientation == 0 { return 1 }
+    if level == 43 && orientation == 0 { return 1 }
+    if level == 44 && orientation == 0 { return 0 }
+    if level == 46 && orientation == 1 { return 1 }
+    return OpeningReverse[level * 2 + orientation]
+}
 libc :: #system_library "libc";
 ParseNumber :: (text: *u8) -> s32 #foreign libc "atoi";
 File :: #import "std/file_linux";
 #import "std/number_text"
 #import "std/text_buffer"
+#import "std/c_string"
+#import "std/byte_text_linux"
 
 route_name: [96]u8;
 AppendName :: (at: s32, text: string) -> s32 {
@@ -56,6 +86,12 @@ DirectionKey :: (a: Point, b: Point) -> s32 {
     if b.y > a.y { return 264 }
     return 265
 }
+StepDirection :: (a: Point, b: Point) -> s32 {
+    if b.x > a.x { return DIR_RIGHT }
+    if b.x < a.x { return DIR_LEFT }
+    if b.y > a.y { return DIR_DOWN }
+    return DIR_UP
+}
 SafeTick :: (game: *Game) -> bool {
     Tick(game)
     return game.death_ticks == 0 && game.lives > 0 && game.mode != MODE_DIED
@@ -63,6 +99,21 @@ SafeTick :: (game: *Game) -> bool {
 route_indices: [1200]s32;
 RouteGap :: (from: s32, to: s32, count: s32) -> s32 {
     return (to - from + count) % count
+}
+ReplayTarget :: (game: *Game) -> Point {
+    target := ifx game.apples > 0 then Point.{game.apple.x / 16, game.apple.y / 16} else Point.{board_columns / 2, 1}
+    if replay_expected == 1 && (replay_mechanics & 1) == 0 && game.key.x >= 0 {
+        return Point.{game.key.x / 16, game.key.y / 16}
+    }
+    switch_reserve: s32 = ifx game.level == 34 then 2 else 1
+    if replay_expected == 2 && !game.gate_open && game.switch_stone.x >= 0 &&
+        ((replay_mechanics & 2) == 0 || game.apples <= switch_reserve) {
+        return Point.{game.switch_stone.x / 16, game.switch_stone.y / 16}
+    }
+    if replay_expected == 4 && (replay_mechanics & 4) == 0 && game.portal_count > 0 {
+        return Point.{game.portals[0].a.x / 16, game.portals[0].a.y / 16}
+    }
+    return target
 }
 SafeCell :: (game: *Game, direction: s32) -> bool {
     trial := game.*
@@ -73,11 +124,23 @@ SafeCell :: (game: *Game, direction: s32) -> bool {
     }
     return true
 }
-Detour :: (game: *Game, route: []Point, at: s32) -> s32 {
+FutureChoices :: (game: *Game, direction: s32) -> s32 {
+    trial := game.*
+    trial.next_direction = direction
+    for tick: 0..3 {
+        Tick(*trial)
+        if trial.death_ticks > 0 || trial.mode == MODE_DIED { return 0 }
+    }
+    choices: s32 = 0
+    for next: 0..3 {
+        if next != (trial.direction + 2) % 4 && SafeCell(*trial, cast(s32)next) { choices += 1 }
+    }
+    return choices
+}
+Detour :: (game: *Game, route: []Point, at: s32, target: Point) -> s32 {
     distances: [1200]s32
     queue: [1200]Point
     for i: 0..1199 { distances[i] = -1 }
-    target := ifx game.apples > 0 then Point.{game.apple.x / 16, game.apple.y / 16} else Point.{board_columns / 2, 1}
     distances[Index(target.x, target.y)] = 0
     queue[0] = target
     head: s32 = 0
@@ -99,6 +162,11 @@ Detour :: (game: *Game, route: []Point, at: s32) -> s32 {
     p := route[at]
     for d: 0..3 {
         if d == (game.direction + 2) % 4 || !SafeCell(game,cast(s32)d) { continue }
+        choices: s32 = 0
+        if game.level < 50 {
+            choices = FutureChoices(game, cast(s32)d)
+            if choices == 0 { continue }
+        }
         q := p
         if d == 0 { q.x -= 1 } else if d == 1 { q.y -= 1 } else if d == 2 { q.x += 1 } else { q.y += 1 }
         if !Inside(q.x,q.y) { continue }
@@ -107,6 +175,7 @@ Detour :: (game: *Game, route: []Point, at: s32) -> s32 {
         distance := distances[Index(q.x,q.y)]
         value := ifx distance >= 0 then 10000 - distance else -Abs(q.x-target.x)-Abs(q.y-target.y)
         value -= visits[Index(q.x,q.y)] * 8
+        if game.level < 50 { value += choices * 100 }
         if best < 0 || value > score { best = index; score = value }
     }
     return best
@@ -122,9 +191,9 @@ ChooseNext :: (game: *Game, route: []Point, at: s32) -> s32 {
     if free == 0 { free = count }
     growth := ((game.target_length + game.apples * 4) * 16 - game.length + 3) / 4 + 3
     if growth < 3 { growth = 3 }
-    apple_at: s32 = route_indices[Index(board_columns / 2, 1)]
-    if game.apples > 0 { apple_at = route_indices[Index(game.apple.x / 16, game.apple.y / 16)] }
-    target := ifx apple_at < 0 then count - 1 else RouteGap(at, apple_at, count)
+    target_point := ReplayTarget(game)
+    target_at := route_indices[Index(target_point.x, target_point.y)]
+    target := ifx target_at < 0 then count - 1 else RouteGap(at, target_at, count)
     here := route[at]
     best: s32 = -1
     score: s32 = -1000000
@@ -142,6 +211,11 @@ ChooseNext :: (game: *Game, route: []Point, at: s32) -> s32 {
         if gap < 1 || gap >= free - growth { continue }
         if gap > target && gap != 1 { continue }
         if !SafeCell(game, cast(s32)direction) { continue }
+        choices: s32 = 0
+        if game.level < 50 {
+            choices = FutureChoices(game, cast(s32)direction)
+            if choices == 0 { continue }
+        }
         value := gap
         // Keep a wide berth around moving hazards when a similarly useful
         // route exists. All moves still use the unchanged engine collisions.
@@ -150,19 +224,47 @@ ChooseNext :: (game: *Game, route: []Point, at: s32) -> s32 {
             distance := Abs(point.x - game.monsters[enemy].position.x) + Abs(point.y - game.monsters[enemy].position.y)
             if distance < 40 { value -= (40 - distance) * 6 }
         }
+        if game.level < 50 { value += choices * 100 }
         if best < 0 || value > score { best = index; score = value }
     }
     // If a patrol blocks the ordered loop, use an exact-collision-tested
     // detour. Flood distances avoid the current body rather than assuming
     // that a two-wide corridor is still free.
-    if best < 0 { best = Detour(game, route, at) }
+    if best < 0 { best = Detour(game, route, at, target_point) }
     return best
 }
 
 replay_reason: s32;
 replay_apples: s32;
+replay_x: s32;
+replay_y: s32;
+replay_at: s32;
+replay_apple_at: s32;
+replay_tile: s32;
+replay_body: bool;
+replay_columns: s32;
+replay_mechanics: s32;
+replay_expected: s32;
+replay_head_x: s32;
+replay_head_y: s32;
+replay_tail_x: s32;
+replay_tail_y: s32;
+replay_length: s32;
+replay_target_length: s32;
+replay_monsters: s32;
+replay_route_count: s32;
+
+MechanicBit :: (feature: s32) -> s32 {
+    if feature == FEATURE_KEY { return 1 }
+    if feature == FEATURE_SWITCH { return 2 }
+    if feature == FEATURE_PORTALS || feature == FEATURE_PORTAL_ROOM { return 4 }
+    return 0
+}
+
 Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
     replay_reason = 0
+    replay_mechanics = 0
+    replay_expected = ifx level < 50 then MechanicBit(BoardFeature(level)) else 0
     canonical: [CELLS]u8
     board: [CELLS]u8
     objects: [CELLS]u8
@@ -174,7 +276,9 @@ Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
     if portrait { PortraitBoard(level,canonical[:],board[:]) }
     else { board = canonical }
     apples := BaseApples(level)
-    if level < 40 {
+    // The redesigned opening campaign is replayed from exactly what
+    // PlayBoard loads. Levels 51+ keep their established geometry fixtures.
+    if level < 50 {
         Custom.EffectiveBoard(level, board[:], portrait)
         Custom.EffectiveObjects(level, objects[:], portrait)
         apples = Custom.EffectiveApples(level, portrait)
@@ -184,7 +288,7 @@ Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
     for i: 0..route.count - 1 { route_indices[Index(route[i].x, route[i].y)] = cast(s32)i }
     game: Game
     StartGameData(*game, level, 0, seed, board[:], apples, columns, rows, objects[:])
-    if level < 40 { game.monster_count = 0 }
+    if level < 50 && MechanicBit(game.feature) != replay_expected { return false }
     // Enter naturally from outside the bottom gate; no teleports or skips.
     while game.worm[0].y > (rows - 2) * 16 + 8 {
         if !SafeTick(*game) { return false }
@@ -200,25 +304,79 @@ Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
         here := route[cycle_at]
         visits[Index(here.x,here.y)] += 1
         if game.apples == 0 && here.x == columns / 2 && here.y == 1 {
-            if !ApplyInput(*game, 265) { return false }
+            if !ApplyInput(*game, 265) {
+                replay_reason = 2; replay_apples = game.apples
+                replay_x = here.x; replay_y = here.y; replay_at = cycle_at
+                replay_apple_at = -1
+                return false
+            }
             while game.transition_ticks == 0 {
                 if !SafeTick(*game) { return false }
             }
             for tick: 0..49 { Tick(*game) }
             replay_deaths = 3 - game.lives
             return game.lives > 0 && game.apples == 0 &&
-            (game.mode == MODE_FINISHED || game.mode == MODE_VICTORY)
+            (game.mode == MODE_FINISHED || game.mode == MODE_VICTORY) &&
+            (replay_mechanics & replay_expected) == replay_expected
         }
-        next_at := ChooseNext(*game, route, cycle_at)
-        if next_at < 0 { replay_reason = 1; replay_apples = game.apples; return false }
+        // The first fifty have fixed authored fruit on the certified loop.
+        // Follow that witness exactly instead of taking incidental floor
+        // chords that can strand a long worm in an otherwise open room.
+        // Spacious opening lessons can follow their authored cycle exactly.
+        // Later mechanics use forward, tail-safe chords with one-cell
+        // lookahead so a tempting shortcut cannot strand the grown worm.
+        cycle_witness := level < 25 && replay_expected == 0
+        next_at := ifx cycle_witness then (cycle_at + 1) % cast(s32)route.count else ChooseNext(*game, route, cycle_at)
+        if cycle_witness && !SafeCell(*game, StepDirection(route[cycle_at],route[next_at])) {
+            next_at = ChooseNext(*game, route, cycle_at)
+        }
+        if next_at < 0 && (replay_expected == 1 || replay_expected == 2) {
+            next_at = ChooseNext(*game, route, cycle_at)
+        }
+        if next_at < 0 {
+            candidate := (cycle_at + 1) % cast(s32)route.count
+            if SafeCell(*game, StepDirection(route[cycle_at],route[candidate])) { next_at = candidate }
+        }
+        if next_at < 0 {
+            replay_reason = 1; replay_apples = game.apples
+            replay_x = game.apple.x / 16; replay_y = game.apple.y / 16
+            replay_at = cycle_at; replay_apple_at = route_indices[Index(replay_x, replay_y)]
+            replay_head_x = game.worm[0].x / 16; replay_head_y = game.worm[0].y / 16
+            replay_tail_x = game.worm[game.length - 1].x / 16; replay_tail_y = game.worm[game.length - 1].y / 16
+            replay_length = game.length; replay_target_length = game.target_length
+            replay_monsters = game.monster_count
+            replay_route_count = cast(s32)route.count
+            return false
+        }
         next := route[next_at]
-        if !ApplyInput(*game, DirectionKey(here, next)) { replay_reason = 2; return false }
+        if !ApplyInput(*game, DirectionKey(here, next)) {
+            replay_reason = 2; replay_apples = game.apples
+            replay_x = here.x; replay_y = here.y
+            replay_at = cycle_at; replay_apple_at = next_at
+            return false
+        }
         hit := false
+        teleported := false
         for step: 0..3 {
+            before_head := game.worm[0]
+            had_key := game.key.x >= 0
+            gate_open := game.gate_open
             Tick(*game)
+            if had_key && game.key.x < 0 { replay_mechanics |= 1 }
+            if !had_key && gate_open != game.gate_open { replay_mechanics |= 2 }
+            if Abs(before_head.x - game.worm[0].x) + Abs(before_head.y - game.worm[0].y) > 32 {
+                replay_mechanics |= 4
+                teleported = true
+            }
             if game.death_ticks > 0 { hit = true; break }
         }
         if hit {
+            replay_x = game.worm[0].x / 16; replay_y = game.worm[0].y / 16
+            replay_at = cycle_at; replay_apple_at = next_at
+            replay_apples = game.apples
+            replay_tile = TileAt(*game,game.worm[0])
+            replay_body = WormNear(*game,game.worm[0],8,10)
+            replay_columns = board_columns
             while game.death_ticks > 0 && game.mode == MODE_PLAYING { Tick(*game) }
             if game.mode != MODE_PLAYING { replay_reason = 3; return false }
             while game.worm[0].y > (rows - 2) * 16 + 8 {
@@ -230,7 +388,24 @@ Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
             edge += 1
             continue
         }
-        if game.worm[0].x != next.x * 16 + 8 || game.worm[0].y != next.y * 16 + 8 { replay_reason = 4; return false }
+        if teleported {
+            x := game.worm[0].x / 16
+            y := game.worm[0].y / 16
+            if !Inside(x,y) || route_indices[Index(x,y)] < 0 {
+                replay_reason = 4; replay_x = x; replay_y = y
+                replay_at = cycle_at; replay_apple_at = next_at
+                return false
+            }
+            cycle_at = route_indices[Index(x,y)]
+            edge += 1
+            continue
+        }
+        if game.worm[0].x != next.x * 16 + 8 || game.worm[0].y != next.y * 16 + 8 {
+            replay_reason = 4
+            replay_x = game.worm[0].x / 16; replay_y = game.worm[0].y / 16
+            replay_at = cycle_at; replay_apple_at = next_at
+            return false
+        }
         if game.apple.x >= 0 && (game.apple.x < 16 || game.apple.y < 16 ||
             game.apple.x >= (columns - 1) * 16 || game.apple.y >= (rows - 1) * 16) { return false }
         cycle_at = next_at
@@ -238,18 +413,20 @@ Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
     }
     replay_reason = 5
     replay_apples = game.apples
+    replay_x = game.apple.x / 16; replay_y = game.apple.y / 16
+    replay_at = cycle_at; replay_apple_at = route_indices[Index(replay_x, replay_y)]
     return false
 }
 
 replay_deaths: s32;
 #program_export
 main :: (argc: s32, argv: **u8) -> s32 {
-    // The certificate proves every board can be won without its puzzle idea
-    // (portals, gates and switches); the animals stay active.
+    // Opening-campaign certificates keep their puzzle mechanics and authored
+    // animals active. Levels 51+ retain the older geometry-only fixtures.
     features_enabled = false
     if !Custom.CustomSetRoot("build/campaign-replay/private-levels/") { return 1 }
-    search := argc > 1
-    first: s32 = ifx argc > 2 then ParseNumber(argv[2]) - 1 else 40
+    search := argc > 1 && TextFromCString(argv[1]) == "search"
+    first: s32 = ifx argc > 2 then ParseNumber(argv[2]) - 1 else 0
     last: s32 = ifx argc > 3 then ParseNumber(argv[3]) - 1 else LEVEL_COUNT - 1
     canonical: [1200]Point
     route: [1200]Point
@@ -260,20 +437,22 @@ main :: (argc: s32, argv: **u8) -> s32 {
         if count == 0 { print("Invalid cycle for level %\n", level + 1); return 1 }
         for orientation: 0..1 {
             if orientation == 1 && HasPortraitDesign(cast(s32)level) { count = ReadCycle(cast(s32)level,canonical[:],0,true) }
-            attempts: s32 = ifx search then 16384 else 1
+            opening := level < 50
+            attempts: s32 = ifx search then (ifx opening then 4096 else 16384) else 1
             won := false
             reasons: [6]s32
             for attempt: 0..attempts - 1 {
-                variant := ifx search then cast(s32)(attempt / 128) else CampaignRoutes[level * 2 + orientation]
-                reverse := ifx search then cast(s32)(attempt / 64) % 2 else CampaignReverse[level * 2 + orientation]
-                if attempt % 128 == 0 {
+                features_enabled = opening
+                variant := ifx search && !opening then cast(s32)(attempt / 128) else ifx opening then 0 else CampaignRoutes[level * 2 + orientation]
+                reverse := ifx opening then (ifx search then cast(s32)(attempt % 2) else OpeningDirection(cast(s32)level, cast(s32)orientation)) else ifx search then cast(s32)(attempt / 64) % 2 else CampaignReverse[level * 2 + orientation]
+                if attempt == 0 || (level >= 50 && attempt % 128 == 0) {
                     if ReadCycle(cast(s32)level, canonical[:], variant,orientation == 1) != count { return 1 }
                 }
                 for i: 0..count - 1 {
                     point := canonical[ifx reverse == 0 then i else count - 1 - i]
                     route[i] = ifx orientation == 0 || HasPortraitDesign(cast(s32)level) then point else Point.{29 - point.y, point.x}
                 }
-                seed := CampaignSeeds[level * 2 + orientation]
+                seed := ifx opening then OpeningSeed(cast(s32)level, cast(s32)orientation) else CampaignSeeds[level * 2 + orientation]
                 if search { seed = cast(u32)(1 + attempt * 7919 + level * 65537) }
                 if Replay(cast(s32)level, orientation == 1, seed, route[0:count]) && replay_deaths == 0 {
                     print("WIN level % portrait % seed % deaths % reverse % route %\n", level + 1, orientation, seed, replay_deaths, reverse, variant)
@@ -285,7 +464,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
                 reasons[replay_reason] += 1
             }
             if !won {
-                print("Replay failed: level %, portrait %, % attempts; reasons % % % % % % apples %\n", level + 1, orientation, attempts, reasons[0], reasons[1], reasons[2], reasons[3], reasons[4], reasons[5], replay_apples)
+                print("Replay failed: level %, portrait %, % attempts; reasons % % % % % % apples %, at %,% route % current %/%, head %,% tail %,% length %/% monsters %, tile % canonical % body % columns % mechanics %/%\n", level + 1, orientation, attempts, reasons[0], reasons[1], reasons[2], reasons[3], reasons[4], reasons[5], replay_apples, replay_x, replay_y, replay_apple_at, replay_at, replay_route_count, replay_head_x, replay_head_y, replay_tail_x, replay_tail_y, replay_length, replay_target_length, replay_monsters, replay_tile, BaseTile(cast(s32)level,replay_y,29-replay_x), replay_body, replay_columns, replay_mechanics, replay_expected)
                 return 2
             }
         }

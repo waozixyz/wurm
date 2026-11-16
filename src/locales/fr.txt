@@ -523,3 +523,87 @@ Actualiser
 [wurm_reward_reminder]
 Ton coffre de récompense t’attend. Ouvre Apfelwurm pour le récupérer.
 ---
+[wurm_adventure_0]
+Aventure
+---
+[wurm_adventure_1]
+Aventure de casse-têtes
+---
+[wurm_adventure_2]
+Résous 3 casse-têtes pour débloquer la zone suivante.
+---
+[wurm_adventure_3]
+Zones
+---
+[wurm_adventure_4]
+Casse-tête
+---
+[wurm_adventure_5]
+Casse-tête terminé
+---
+[wurm_adventure_6]
+Parcours de fruits ordonné
+---
+[wurm_adventure_7]
+Clé et porte
+---
+[wurm_adventure_8]
+Porte à interrupteur
+---
+[wurm_adventure_9]
+Parcours de portails
+---
+[wurm_adventure_10]
+Casse-tête combiné
+---
+[wurm_adventure_11]
+Sentier du Verger
+---
+[wurm_adventure_12]
+Ruines de l’Anneau Lunaire
+---
+[wurm_adventure_13]
+Jardin Inondé
+---
+[wurm_adventure_14]
+Terrier des Braises
+---
+[wurm_adventure_15]
+Sanctuaire Céleste
+---
+[wurm_adventure_16]
+Ramasse les fruits dans l’ordre et planifie chaque tour.
+---
+[wurm_adventure_17]
+Utilise les anneaux identiques pour modifier ton parcours.
+---
+[wurm_adventure_18]
+Les pierres-interrupteurs ouvrent et ferment les portes du jardin.
+---
+[wurm_adventure_19]
+Planifie ton trajet autour des gardiens mobiles.
+---
+[wurm_adventure_20]
+Combine toutes les leçons pour atteindre le sommet.
+---
+[wurm_adventure_21]
+Résous 3 casse-têtes dans la zone précédente.
+---
+[wurm_adventure_22]
+Coups
+---
+[wurm_adventure_23]
+Fruits restants
+---
+[wurm_adventure_24]
+Annuler
+---
+[wurm_adventure_25]
+Recommencer le casse-tête
+---
+[wurm_adventure_26]
+Retour aux casse-têtes
+---
+[wurm_adventure_27]
+Annuler le coup
+---

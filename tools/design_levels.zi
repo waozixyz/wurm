@@ -21,6 +21,7 @@
 #import "std/json_scan"
 #import "std/text_tools"
 #import "std/byte_text_linux"
+Existing :: #import, file "../src/designed_levels.zi";
 
 MW :: 19
 MH :: 14
@@ -384,6 +385,95 @@ SameSignature :: (a: *Signature, b: *Signature) -> bool {
 REFERENCE_COUNT :: 84
 references: [REFERENCE_COUNT]s64;
 
+// Levels 1–50 are authored as explicit spatial lessons. These helpers place
+// whole two-cell-wide walls; there is no random blending or retry-generated
+// variation in this part of the campaign.
+WallH :: (walls: *Walls, y: s64, x0: s64, x1: s64, tile: u8 = 20) {
+    for x: x0..x1 { Set(walls, Key(x, y), tile) }
+}
+WallV :: (walls: *Walls, x: s64, y0: s64, y1: s64, tile: u8 = 20) {
+    for y: y0..y1 { Set(walls, Key(x, y), tile) }
+}
+Posts :: (walls: *Walls, first: s64, step: s64, y: s64, count: s64, tile: u8 = 20) {
+    for i: 0..count - 1 { Set(walls, Key(first + i * step, y), tile) }
+}
+
+FirstFiftyLayout :: (number: s64, walls: *Walls) {
+    walls.* = .{}
+    n := number - 1
+    tile: u8 = ifx number <= 40 then 20 else 21
+    if n == 0 { return }
+    if n == 1 { WallV(walls, 9, 3, 9, tile); Pop(walls, Key(9, 6)); return }
+    if n == 2 { WallH(walls, 7, 3, 15, tile); Pop(walls, Key(6, 7)); Pop(walls, Key(12, 7)); return }
+    if n == 3 { WallV(walls, 5, 2, 9, tile); WallH(walls, 9, 5, 13, tile); Pop(walls, Key(5, 6)); return }
+    if n == 4 { WallH(walls, 4, 5, 13, tile); WallH(walls, 9, 5, 13, tile); WallV(walls, 5, 4, 9, tile); WallV(walls, 13, 4, 9, tile); Pop(walls, Key(9, 4)); Pop(walls, Key(5, 7)); Pop(walls, Key(13, 7)); return }
+    if n == 5 { WallV(walls, 5, 1, 8, tile); WallV(walls, 13, 5, 12, tile); Pop(walls, Key(5, 5)); Pop(walls, Key(13, 9)); return }
+    if n == 6 { WallV(walls, 7, 2, 10, tile); WallV(walls, 11, 2, 10, tile); Pop(walls, Key(7, 5)); Pop(walls, Key(11, 8)); return }
+    if n == 7 { WallH(walls, 3, 4, 14, tile); WallV(walls, 4, 3, 11, tile); WallH(walls, 11, 4, 14, tile); WallV(walls, 14, 6, 11, tile); Pop(walls, Key(4, 7)); Pop(walls, Key(9, 11)); return }
+    if n == 8 { WallH(walls, 2, 3, 15, tile); WallV(walls, 15, 2, 11, tile); WallH(walls, 11, 5, 15, tile); WallV(walls, 5, 5, 11, tile); WallH(walls, 5, 5, 11, tile); Pop(walls, Key(9, 5)); return }
+    if n == 9 { WallV(walls, 4, 1, 8, tile); WallV(walls, 8, 5, 12, tile); WallV(walls, 12, 1, 8, tile); WallV(walls, 16, 5, 12, tile); WallH(walls, 9, 4, 16, tile); Pop(walls, Key(4, 5)); Pop(walls, Key(8, 9)); Pop(walls, Key(12, 5)); Pop(walls, Key(16, 9)); return }
+    if n == 10 { WallH(walls, 4, 2, 7, tile); WallH(walls, 9, 11, 16, tile); WallV(walls, 7, 2, 4, tile); WallV(walls, 11, 9, 11, tile); return }
+    if n == 11 { WallV(walls, 6, 1, 12, tile); WallV(walls, 12, 1, 12, tile); Pop(walls, Key(6, 4)); Pop(walls, Key(6, 10)); Pop(walls, Key(12, 3)); Pop(walls, Key(12, 8)); return }
+    if n == 12 { for i: 0..5 { Set(walls, Key(3 + i * 2, 2 + i), tile); Set(walls, Key(15 - i * 2, 10 - i), tile) }; return }
+    if n == 13 { WallH(walls, 3, 2, 8, tile); WallV(walls, 8, 3, 7, tile); WallH(walls, 10, 10, 16, tile); WallV(walls, 10, 6, 10, tile); Pop(walls, Key(8, 5)); Pop(walls, Key(10, 8)); return }
+    if n == 14 { WallH(walls, 3, 5, 13, tile); WallH(walls, 10, 5, 13, tile); WallV(walls, 5, 3, 10, tile); WallV(walls, 13, 3, 10, tile); Pop(walls, Key(9, 3)); Pop(walls, Key(13, 6)); Pop(walls, Key(9, 10)); return }
+    if n == 15 { WallV(walls, 3, 1, 10, tile); WallV(walls, 7, 3, 12, tile); WallV(walls, 11, 1, 10, tile); WallV(walls, 15, 3, 12, tile); Pop(walls, Key(3, 7)); Pop(walls, Key(7, 5)); Pop(walls, Key(11, 8)); Pop(walls, Key(15, 6)); return }
+    if n == 16 { WallH(walls, 3, 1, 14, tile); WallH(walls, 7, 4, 17, tile); WallH(walls, 11, 1, 14, tile); Pop(walls, Key(5, 3)); Pop(walls, Key(13, 7)); Pop(walls, Key(8, 11)); return }
+    if n == 17 { WallV(walls, 4, 1, 11, tile); WallV(walls, 9, 2, 12, tile); WallV(walls, 14, 1, 11, tile); Pop(walls, Key(4, 10)); Pop(walls, Key(9, 3)); Pop(walls, Key(14, 9)); return }
+    if n == 18 { WallH(walls, 4, 2, 8, tile); WallV(walls, 8, 4, 9, tile); WallH(walls, 9, 8, 16, tile); WallV(walls, 12, 2, 9, tile); WallH(walls, 2, 12, 16, tile); Pop(walls, Key(8, 6)); Pop(walls, Key(12, 5)); return }
+    if n == 19 { Posts(walls, 3, 3, 4, 5, tile); Posts(walls, 4, 3, 9, 4, tile); Set(walls, Key(9, 7), tile); return }
+    if n == 20 { WallH(walls, 6, 1, 17, tile); Pop(walls, Key(8, 6)); Pop(walls, Key(9, 6)); WallV(walls, 4, 2, 5, tile); WallV(walls, 14, 7, 11, tile); return }
+    if n == 21 { WallV(walls, 5, 1, 12, tile); Pop(walls, Key(5, 3)); WallH(walls, 3, 5, 15, tile); Pop(walls, Key(13, 3)); WallV(walls, 13, 3, 10, tile); Pop(walls, Key(13, 9)); return }
+    if n == 22 { WallH(walls, 3, 7, 11, tile); WallH(walls, 10, 7, 11, tile); WallV(walls, 6, 5, 8, tile); WallV(walls, 12, 5, 8, tile); Posts(walls, 3, 4, 7, 4, tile); return }
+    if n == 23 { WallV(walls, 9, 2, 11, tile); Pop(walls, Key(9, 5)); Pop(walls, Key(9, 9)); WallH(walls, 5, 3, 8, tile); WallH(walls, 9, 10, 15, tile); return }
+    if n == 24 { WallH(walls, 4, 2, 16, tile); WallH(walls, 9, 2, 16, tile); Pop(walls, Key(5, 4)); Pop(walls, Key(13, 9)); WallV(walls, 9, 4, 9, tile); Pop(walls, Key(9, 7)); return }
+    if n == 25 { WallH(walls, 3, 4, 14, tile); WallH(walls, 10, 4, 14, tile); Posts(walls, 4, 5, 6, 3, tile); Pop(walls, Key(9, 3)); Pop(walls, Key(9, 10)); return }
+    if n == 26 { WallV(walls, 4, 2, 11, tile); WallV(walls, 14, 2, 11, tile); WallH(walls, 6, 4, 14, tile); Pop(walls, Key(4, 8)); Pop(walls, Key(14, 4)); Pop(walls, Key(9, 6)); return }
+    if n == 27 { WallH(walls, 2, 3, 15, tile); WallV(walls, 3, 2, 11, tile); WallH(walls, 11, 3, 15, tile); WallV(walls, 15, 5, 11, tile); Posts(walls, 7, 2, 6, 3, tile); Pop(walls, Key(3, 7)); return }
+    if n == 28 { for i: 0..3 { WallV(walls, 3 + i * 4, 2 + (i % 2) * 3, 9 + (i % 2) * 3, tile) }; Pop(walls, Key(3, 8)); Pop(walls, Key(7, 6)); Pop(walls, Key(11, 8)); Pop(walls, Key(15, 6)); return }
+    if n == 29 { WallH(walls, 5, 2, 7, tile); WallH(walls, 5, 11, 16, tile); WallH(walls, 9, 5, 13, tile); WallV(walls, 5, 5, 9, tile); WallV(walls, 13, 5, 9, tile); Pop(walls, Key(9, 9)); return }
+    if n == 30 { WallH(walls, 6, 2, 16, tile); Pop(walls, Key(5, 6)); Pop(walls, Key(13, 6)); WallV(walls, 9, 2, 5, tile); WallV(walls, 9, 7, 11, tile); return }
+    if n == 31 { WallV(walls, 5, 1, 10, tile); WallV(walls, 13, 3, 12, tile); WallH(walls, 10, 5, 13, tile); Pop(walls, Key(5, 4)); Pop(walls, Key(9, 10)); Pop(walls, Key(13, 8)); return }
+    if n == 32 { WallH(walls, 3, 2, 16, tile); WallH(walls, 8, 2, 16, tile); WallV(walls, 7, 3, 8, tile); WallV(walls, 12, 3, 8, tile); Pop(walls, Key(4, 3)); Pop(walls, Key(9, 8)); Pop(walls, Key(15, 3)); return }
+    if n == 33 { WallV(walls, 3, 2, 11, tile); WallV(walls, 8, 1, 8, tile); WallV(walls, 13, 5, 12, tile); WallH(walls, 8, 8, 13, tile); Pop(walls, Key(3, 9)); Pop(walls, Key(8, 4)); Pop(walls, Key(13, 10)); return }
+    if n == 34 { WallH(walls, 3, 3, 15, tile); WallV(walls, 15, 3, 10, tile); WallH(walls, 10, 6, 15, tile); WallV(walls, 6, 6, 10, tile); Posts(walls, 8, 2, 6, 3, tile); Pop(walls, Key(11, 3)); return }
+    if n == 35 { WallV(walls, 4, 1, 12, tile); WallV(walls, 9, 1, 9, tile); WallV(walls, 14, 4, 12, tile); Pop(walls, Key(4, 4)); Pop(walls, Key(9, 7)); Pop(walls, Key(14, 9)); return }
+    if n == 36 { WallH(walls, 4, 2, 8, tile); WallH(walls, 4, 11, 16, tile); WallH(walls, 9, 2, 8, tile); WallH(walls, 9, 11, 16, tile); WallV(walls, 8, 4, 9, tile); WallV(walls, 11, 4, 9, tile); Pop(walls, Key(8, 6)); Pop(walls, Key(11, 7)); return }
+    if n == 37 { for i: 0..4 { WallH(walls, 2 + i * 2, 2 + (i % 2) * 4, 12 + (i % 2) * 4, tile) }; Pop(walls, Key(6, 2)); Pop(walls, Key(13, 4)); Pop(walls, Key(7, 6)); Pop(walls, Key(14, 8)); Pop(walls, Key(8, 10)); return }
+    if n == 38 { WallH(walls, 2, 4, 14, tile); WallV(walls, 4, 2, 11, tile); WallH(walls, 11, 4, 14, tile); WallV(walls, 14, 5, 11, tile); WallH(walls, 5, 8, 14, tile); WallV(walls, 8, 5, 8, tile); Pop(walls, Key(4, 7)); Pop(walls, Key(11, 5)); return }
+    if n == 39 { Posts(walls, 2, 2, 3, 8, tile); Posts(walls, 3, 2, 7, 7, tile); Posts(walls, 2, 2, 11, 8, tile); Set(walls, Key(9, 5), tile); Set(walls, Key(9, 9), tile); return }
+    if n == 40 { WallV(walls, 5, 1, 11, tile); WallV(walls, 13, 2, 12, tile); WallH(walls, 6, 5, 13, tile); Pop(walls, Key(5, 3)); Pop(walls, Key(9, 6)); Pop(walls, Key(13, 10)); return }
+    if n == 41 { WallH(walls, 3, 2, 16, tile); WallH(walls, 10, 2, 16, tile); WallV(walls, 9, 3, 10, tile); Pop(walls, Key(5, 3)); Pop(walls, Key(13, 10)); Pop(walls, Key(9, 7)); return }
+    if n == 42 { WallV(walls, 3, 2, 12, tile); WallV(walls, 8, 1, 9, tile); WallV(walls, 13, 4, 12, tile); WallH(walls, 9, 8, 13, tile); Pop(walls, Key(3, 8)); Pop(walls, Key(8, 5)); Pop(walls, Key(13, 10)); return }
+    if n == 43 { WallH(walls, 2, 3, 15, tile); WallV(walls, 15, 2, 11, tile); WallH(walls, 11, 6, 15, tile); WallV(walls, 6, 5, 11, tile); WallH(walls, 5, 6, 11, tile); Pop(walls, Key(9, 5)); Pop(walls, Key(15, 7)); return }
+    if n == 44 { WallH(walls, 4, 1, 7, tile); WallH(walls, 4, 11, 17, tile); WallH(walls, 9, 4, 14, tile); WallV(walls, 4, 7, 9, tile); WallV(walls, 14, 4, 7, tile); Posts(walls, 7, 2, 6, 3, tile); return }
+    if n == 45 { WallV(walls, 4, 1, 10, tile); WallV(walls, 9, 3, 12, tile); WallV(walls, 14, 1, 10, tile); WallH(walls, 7, 4, 14, tile); Pop(walls, Key(4, 5)); Pop(walls, Key(9, 9)); Pop(walls, Key(14, 4)); return }
+    if n == 46 { WallH(walls, 3, 2, 16, tile); WallH(walls, 7, 4, 14, tile); WallH(walls, 11, 2, 16, tile); WallV(walls, 4, 3, 7, tile); WallV(walls, 14, 7, 11, tile); Pop(walls, Key(10, 3)); Pop(walls, Key(8, 7)); Pop(walls, Key(12, 11)); return }
+    if n == 47 { WallV(walls, 3, 1, 12, tile); WallV(walls, 7, 1, 9, tile); WallV(walls, 11, 4, 12, tile); WallV(walls, 15, 1, 12, tile); WallH(walls, 9, 7, 11, tile); Pop(walls, Key(3, 7)); Pop(walls, Key(7, 4)); Pop(walls, Key(11, 9)); Pop(walls, Key(15, 6)); return }
+    if n == 48 { WallH(walls, 2, 2, 16, tile); WallV(walls, 2, 2, 11, tile); WallH(walls, 11, 2, 16, tile); WallV(walls, 16, 5, 11, tile); WallH(walls, 5, 7, 16, tile); WallV(walls, 7, 5, 8, tile); WallH(walls, 8, 7, 12, tile); Pop(walls, Key(2, 7)); Pop(walls, Key(11, 5)); return }
+    WallH(walls, 3, 3, 15, tile); WallH(walls, 10, 3, 15, tile)
+    WallV(walls, 3, 3, 10, tile); WallV(walls, 15, 3, 10, tile)
+    WallH(walls, 6, 7, 11, tile); WallV(walls, 9, 6, 9, tile)
+    Pop(walls, Key(9, 3)); Pop(walls, Key(15, 7)); Pop(walls, Key(9, 10))
+}
+
+ExistingWalls :: (number: s64, walls: *Walls) {
+    walls.* = .{}
+    level := cast(s32)(number - 1)
+    for mx: 0..MW - 1 {
+        for my: 0..MH - 1 {
+            tile: u8
+            for dx: 0..1 {
+                for dy: 0..1 {
+                    value := Existing.DesignedTile(level, cast(s32)(1 + mx * 2 + dx), cast(s32)(1 + my * 2 + dy))
+                    if value >= 20 && value < 40 { tile = value }
+                }
+            }
+            if tile != 0 { Set(walls, Key(mx, my), tile) }
+        }
+    }
+}
+
 Layout :: (stage: s64, within: s64, attempt: s64, walls: *Walls) -> (source: s64, accent: s64) {
     source := references[(within + stage * 17 + attempt * 7) % REFERENCE_COUNT]
     accent := references[(within * 11 + stage * 23 + attempt * 13 + 7) % REFERENCE_COUNT]
@@ -523,6 +613,54 @@ LevelName :: (within: s64) -> string {
     return names[within]
 }
 
+FirstFiftyName :: (number: s64) -> string {
+    names: [50]string = .[
+        "Open Orchard","Hedge Lesson","Two Windows","Broad Bend","Garden Court",
+        "Staggered Lanes","Fork and Return","Nested Garden","Wide Spiral","Four Aisles",
+        "First Rings","Portal Crossing","Ring Return","Paired Chambers","Growth Through Rings",
+        "Alternating Halls","Offset Windows","Long Return","Linked Courts","Quiet Posts",
+        "Gate in Sight","Key Detour","Diamond Court","Two Approaches","Ring and Key",
+        "Watch the Crossing","Patrol Court","Safe Perimeter","Timed Aisles","Resting Maze",
+        "First Switch","Loopback Switch","Window Relay","Crossing Toggle","Spiral Relay",
+        "Branching Rooms","Twin Courtyards","Garden Gauntlet","Meadow Ascent","Meadow Vista",
+        "Woodland Rings","Canopy Gate","Moss Toggle","Old Ringway","Fern Key",
+        "Portal Weave","Guarded Key","Longbody Switch","Canopy Ring","Final Toggle"]
+    return names[number - 1]
+}
+
+FirstFiftyFamily :: (number: s64) -> string {
+    families: [10]string = .["foundations","growth-routes","portal-lessons","route-memory","keys-and-gates",
+        "readable-patrols","switch-lessons","meadow-finale","leafwood-transition","combined-lessons"]
+    return families[(number - 1) / 5]
+}
+
+// The opening curriculum is authored alongside its names and families. These
+// values are emitted for the engine and manifest so a generated board cannot
+// silently drift from the lesson players are told they are playing.
+// 0: route/growth, 1: matching portals, 2: key gate, 3: switch gate.
+FirstFiftyFeature :: (number: s64) -> s32 {
+    features: [50]s32 = .[
+        0,0,0,0,0, 0,0,0,0,0, 1,1,1,1,1, 0,0,0,0,0,
+        2,2,2,2,2, 0,0,0,0,0, 3,3,3,3,3, 0,0,0,0,0,
+        1,2,3,1,2, 1,2,3,1,3
+    ]
+    return features[number - 1]
+}
+FirstFiftyMechanic :: (number: s64) -> string {
+    feature := FirstFiftyFeature(number)
+    if feature == 1 { return "matching-portals" }
+    if feature == 2 { return "key-gate" }
+    if feature == 3 { return "switch-gate" }
+    if number >= 26 && number <= 30 { return "readable-patrol" }
+    return "route-and-growth"
+}
+FirstFiftyTeaching :: (number: s64) -> string {
+    roles: [10]string = .["movement-and-space","growth-planning","portal-teach-and-confirm","route-memory",
+        "key-teach-and-confirm","patrol-observation","switch-teach-and-confirm","meadow-mastery",
+        "familiar-ideas-new-landscape","combined-mastery"]
+    return roles[(number - 1) / 5]
+}
+
 Campaign :: () -> string {
     known: s64
     for stage: 0..4 {
@@ -532,10 +670,19 @@ Campaign :: () -> string {
             room: [BLOCKS]bool
             source: s64; accent: s64
             chosen := false
-            for attempt: 0..511 {
-                source, accent = Layout(stage, within, attempt, *walls)
+            attempts: s64 = ifx number <= 50 then 1 else 1
+            for attempt: 0..attempts - 1 {
+                if number <= 50 {
+                    FirstFiftyLayout(number, *walls)
+                    JoinFloor(*walls)
+                    source = references[(number - 1) % REFERENCE_COUNT]
+                    accent = references[(number * 7 + 11) % REFERENCE_COUNT]
+                } else {
+                    ExistingWalls(number, *walls)
+                    source = references[(within + stage * 17) % REFERENCE_COUNT]
+                    accent = references[(within * 11 + stage * 23 + 7) % REFERENCE_COUNT]
+                }
                 for b: 0..BLOCKS - 1 { room[b] = false }
-                if PortalLevel(number) && !PortalRoom(*walls, number, room[:]) { continue }
                 floors := MW * MH - WallCount(*walls)
                 signature := MakeSignature(*walls)
                 duplicate := false
@@ -555,10 +702,26 @@ Campaign :: () -> string {
                 if walls.tile[b] == 0 { continue }
                 for dx: 0..1 { for dy: 0..1 { level.grid[(1 + (b / 32) * 2 + dx) * 30 + 1 + (b % 32) * 2 + dy] = walls.tile[b] } }
             }
+            if number > 50 {
+                for x: 0..39 {
+                    for y: 0..29 { level.grid[x * 30 + y] = Existing.DesignedTile(cast(s32)(number - 1), cast(s32)x, cast(s32)y) }
+                }
+            }
             allowed: [BLOCKS]bool
             for b: 0..BLOCKS - 1 { allowed[b] = ALL(b) && walls.tile[b] == 0 }
             if !SafeCycle(allowed[:], MW, MH, cast(u64)(number * 4099), *cycles[number - 1]) { return "no safe loop" }
-            count: s64 = ifx stage == 0 && within < 6 then 0 else 1 + stage + within / 16
+            count: s64 = ifx number <= 25 then 0 else ifx number <= 45 then 1 else ifx number <= 50 then 2 else 0
+            if number > 50 {
+                for x: 0..39 {
+                    for y: 0..29 {
+                        value := level.grid[x * 30 + y]
+                        if value >= 40 && value <= 45 {
+                            level.kinds[count] = cast(s64)value - 39
+                            count += 1
+                        }
+                    }
+                }
+            }
             if count > 8 { count = 8 }
             // Creatures stay out of a portal room, leaving room for the ring.
             candidates: Vec(s64)
@@ -570,33 +733,40 @@ Campaign :: () -> string {
                 far2 := (ifx dx2 < 0 then -dx2 else dx2) + (ifx dy2 < 0 then -dy2 else dy2) >= 10
                 if x >= 3 && x <= 36 && y >= 3 && y <= 23 && far1 && far2 && !room[Key((x - 1) / 2, (y - 1) / 2)] { unused VecPush(candidates, p) }
             }
-            rng: Twister
-            Seed(*rng, cast(u64)(number * 65537))
-            view: []s64 = VecSlice(candidates, 0, candidates.count)
-            Shuffle(*rng, view)
-            placed: [8]s64
-            placed_count: s64
-            for i: 0..candidates.count - 1 {
-                if placed_count >= count { break }
-                x := candidates[i] / 64; y := candidates[i] % 64
-                near := false
-                for j: 0..placed_count - 1 {
-                    ax := placed[j] / 64; ay := placed[j] % 64
-                    if (ifx x > ax then x - ax else ax - x) + (ifx y > ay then y - ay else ay - y) < 5 { near = true }
+            placed_count: s64 = count
+            if number <= 50 {
+                rng: Twister
+                Seed(*rng, cast(u64)(number * 65537))
+                view: []s64 = VecSlice(candidates, 0, candidates.count)
+                Shuffle(*rng, view)
+                placed: [8]s64
+                placed_count = 0
+                for i: 0..candidates.count - 1 {
+                    if placed_count >= count { break }
+                    x := candidates[i] / 64; y := candidates[i] % 64
+                    near := false
+                    for j: 0..placed_count - 1 {
+                        ax := placed[j] / 64; ay := placed[j] % 64
+                        if (ifx x > ax then x - ax else ax - x) + (ifx y > ay then y - ay else ay - y) < 5 { near = true }
+                    }
+                    if near { continue }
+                    kind: s64 = 41 + (number + placed_count) % 4
+                    // Level 28's crossing patrol travels horizontally. The
+                    // route is readable and clear in both quarter-turns;
+                    // the vertical patrol met the portrait entrance loop at
+                    // the same beat on every run.
+                    if number == 28 && placed_count == 0 { kind = 42 }
+                    if number >= 41 && placed_count == 0 { kind = 40 }
+                    level.grid[x * 30 + y] = cast(u8)kind
+                    placed[placed_count] = candidates[i]
+                    level.kinds[placed_count] = kind - 39
+                    placed_count += 1
                 }
-                if near { continue }
-                index := placed_count
-                kind: s64 = 41 + (within + index) % 4
-                if (within + index) % 3 == 0 && (stage > 0 || within >= 8) { kind = 40 }
-                else if stage >= 1 && (within + index) % 5 == 0 { kind = 45 }
-                level.grid[x * 30 + y] = cast(u8)kind
-                placed[placed_count] = candidates[i]
-                level.kinds[placed_count] = kind - 39
-                placed_count += 1
+                if placed_count != count { return "could not place every creature" }
             }
-            if placed_count != count { return "could not place every creature" }
             level.enemies = count
-            level.apples = 5 + stage + ifx within % 10 >= 7 then 1 else 0
+            level.apples = ifx number <= 50 then 3 + (number - 1) / 10 +
+                ifx number % 5 == 0 then 1 else 0 else cast(s64)Existing.DesignedApples[number - 1]
             level.floors = cycles[number - 1].count
             level.walls = WallCount(*walls) * 4
             if number == 2 {
@@ -613,6 +783,128 @@ Campaign :: () -> string {
     return ""
 }
 
+// ---- Puzzle adventure ----
+
+// Adventure is a separate authored journey: five four-puzzle areas. These
+// compact cell-authored rooms deliberately do not use the campaign's wall
+// recipes. Every interactive object and ordered fruit has an exact canonical
+// landscape cell; the engine rotates those cells for portrait play.
+ADVENTURE_LEVELS :: 20
+adventure: [ADVENTURE_LEVELS]Level;
+// Six explicit ordered objective slots per mission, packed as y * 40 + x;
+// -1 marks an unused slot.
+AdventureObjectiveCells: [120]s32 = .[
+    335, 864, -1, -1, -1, -1, 814, 305, -1, -1, -1, -1,
+    344, 255, -1, -1, -1, -1, 334, 265, -1, -1, -1, -1,
+    896, 345, 295, -1, -1, -1, 905, 374, 294, -1, -1, -1,
+    893, 346, 294, -1, -1, -1, 814, 265, 214, -1, -1, -1,
+    905, 384, 295, 225, -1, -1, 894, 374, 305, 216, -1, -1,
+    909, 505, 334, 225, -1, -1, 709, 706, 425, 254, -1, -1,
+    893, 706, 505, 335, 225, -1, 906, 854, 544, 305, 214, -1,
+    894, 825, 545, 345, 214, -1, 509, 505, 334, 225, 214, -1,
+    894, 825, 665, 345, 295, 214, 549, 706, 334, 265, 225, 214,
+    894, 825, 546, 345, 255, 214, 709, 706, 340, 337, 260, 218
+];
+
+// bit 0: key gate, bit 1: switch gate, bit 2: portals
+AdventureMechanics: [20]s32 = .[0,0,1,1,4,4,4,5,2,2,2,6,0,1,4,2,5,6,3,7];
+AdventureGateCells: [20]s32 = .[-1,-1,579,499,-1,-1,-1,339,579,499,539,739,-1,579,-1,539,579,579,579,739];
+AdventureKeyCells: [20]s32 = .[-1,-1,894,865,-1,-1,-1,894,-1,-1,-1,-1,-1,894,-1,-1,894,-1,894,709];
+AdventureSwitchCells: [20]s32 = .[-1,-1,-1,-1,-1,-1,-1,-1,854,865,909,709,-1,-1,-1,509,-1,549,345,337];
+AdventurePortalACells: [20]s32 = .[-1,-1,-1,-1,815,825,813,865,-1,-1,-1,705,-1,-1,825,-1,825,825,-1,665];
+AdventurePortalBCells: [20]s32 = .[-1,-1,-1,-1,384,374,386,465,-1,-1,-1,374,-1,-1,374,-1,374,374,-1,380];
+AdventureEnemyACells: [20]s32 = .[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,493,506,493,949,493,506,493,506];
+AdventureEnemyBCells: [20]s32 = .[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,706,693,706,693];
+AdventureMetadata :: (field: s32, index: s32) -> s32 {
+    if field == 0 { return AdventureMechanics[index] }
+    if field == 1 { return AdventureGateCells[index] }
+    if field == 2 { return AdventureKeyCells[index] }
+    if field == 3 { return AdventureSwitchCells[index] }
+    if field == 4 { return AdventurePortalACells[index] }
+    if field == 5 { return AdventurePortalBCells[index] }
+    if field == 6 { return AdventureEnemyACells[index] }
+    return AdventureEnemyBCells[index]
+}
+
+AdventureFill :: (level: *Level, tile: u8) {
+    for x: 0..39 { for y: 0..29 { level.grid[x * 30 + y] = tile } }
+}
+AdventureRect :: (level: *Level, x1: s64, y1: s64, x2: s64, y2: s64, tile: u8) {
+    for x: x1..x2 { for y: y1..y2 { level.grid[x * 30 + y] = tile } }
+}
+AdventureH :: (level: *Level, y: s64, x1: s64, x2: s64, tile: u8) { AdventureRect(level,x1,y,x2,y,tile) }
+AdventureV :: (level: *Level, x: s64, y1: s64, y2: s64, tile: u8) { AdventureRect(level,x,y1,x,y2,tile) }
+
+AdventureLayout :: (mission: s64, level: *Level) {
+    wall: u8 = ifx mission < 4 then 20 else ifx mission < 8 then 21 else ifx mission < 12 then 22 else 20
+    AdventureFill(level,wall)
+    AdventureRect(level,19,1,20,28,0)
+    if mission < 4 {
+        AdventureRect(level,12,4,27,25,0)
+        if mission == 0 { AdventureV(level,19,8,21,wall); AdventureV(level,20,8,21,wall); return }
+        if mission == 1 { AdventureH(level,18,12,18,wall); AdventureH(level,11,21,27,wall); return }
+        barrier := ifx mission == 2 then cast(s64)14 else cast(s64)12
+        AdventureH(level,barrier,12,27,wall); AdventureRect(level,19,barrier,20,barrier,0)
+        if mission == 2 { AdventureV(level,16,5,10,wall); AdventureV(level,23,18,24,wall) }
+        else { AdventureV(level,15,15,23,wall); AdventureV(level,24,5,10,wall) }
+        return
+    }
+    if mission < 8 {
+        AdventureRect(level,11,16,28,25,0); AdventureRect(level,11,4,28,13,0)
+        if mission == 4 { AdventureV(level,20,17,23,wall); AdventureV(level,19,5,11,wall) }
+        else if mission == 5 { AdventureH(level,20,12,23,wall); AdventureH(level,8,16,27,wall) }
+        else if mission == 6 { AdventureV(level,18,17,24,wall); AdventureV(level,23,5,12,wall); AdventureH(level,9,12,18,wall) }
+        else { AdventureH(level,8,11,28,wall); AdventureRect(level,19,8,20,8,0); AdventureV(level,16,17,24,wall); AdventureV(level,24,5,6,wall) }
+        return
+    }
+    if mission < 12 {
+        AdventureRect(level,10,4,29,25,0)
+        barrier := ifx mission == 9 then cast(s64)12 else ifx mission == 10 then cast(s64)13 else cast(s64)18
+        AdventureH(level,barrier,10,29,wall); AdventureRect(level,19,barrier,20,barrier,0)
+        if mission == 8 { AdventureV(level,16,5,11,wall); AdventureV(level,24,17,24,wall) }
+        else if mission == 9 { AdventureV(level,15,14,24,wall); AdventureH(level,8,21,28,wall) }
+        else if mission == 10 { AdventureV(level,26,5,10,wall) }
+        else { AdventureRect(level,28,barrier,29,barrier,0); AdventureH(level,11,10,29,wall); AdventureV(level,24,20,24,wall) }
+        return
+    }
+    AdventureRect(level,9,4,30,25,0)
+    if mission == 12 { AdventureV(level,17,7,21,wall); AdventureV(level,24,8,22,wall); AdventureH(level,14,17,24,wall); return }
+    if mission == 13 { AdventureH(level,14,9,30,wall); AdventureRect(level,19,14,20,14,0); AdventureV(level,15,16,24,wall); AdventureV(level,26,5,12,wall); return }
+    if mission == 14 { AdventureH(level,14,9,30,wall); AdventureV(level,17,16,24,wall); AdventureV(level,24,5,12,wall); return }
+    if mission == 15 { AdventureH(level,13,9,27,wall); AdventureRect(level,19,13,20,13,0); AdventureH(level,20,10,17,wall); AdventureH(level,8,23,29,wall); return }
+    if mission == 16 { AdventureH(level,14,9,30,wall); AdventureRect(level,19,14,20,14,0); AdventureV(level,15,16,24,wall); AdventureV(level,26,5,12,wall); return }
+    if mission == 17 { AdventureH(level,14,9,27,wall); AdventureRect(level,19,14,20,14,0); AdventureV(level,24,16,24,wall); return }
+    if mission == 18 { AdventureH(level,14,9,30,wall); AdventureRect(level,19,14,20,14,0); AdventureV(level,15,16,24,wall); AdventureH(level,8,22,24,wall); AdventureH(level,8,26,29,wall); return }
+    AdventureH(level,18,9,27,wall); AdventureRect(level,19,18,20,18,0)
+    AdventureH(level,11,9,30,wall); AdventureRect(level,20,11,20,11,0)
+    AdventureV(level,15,19,24,wall); AdventureV(level,26,4,10,wall)
+}
+
+AdventureCampaign :: () -> string {
+    for mission: 0..ADVENTURE_LEVELS - 1 {
+        level := *adventure[mission]
+        level.number = mission + 1
+        level.stage = mission / 4
+        level.within = mission % 4
+        level.apples = 2 + mission / 4
+        AdventureLayout(mission, level)
+        for i: 0..1199 { if level.grid[i] < 20 { level.floors += 1 } else { level.walls += 1 } }
+        enemy_a := AdventureEnemyACells[mission]
+        enemy_b := AdventureEnemyBCells[mission]
+        if enemy_a >= 0 {
+            x := enemy_a % 40; y := enemy_a / 40
+            level.grid[x * 30 + y] = cast(u8)(41 + mission % 4)
+            level.enemies += 1; level.kinds[0] = 2 + mission % 4
+        }
+        if enemy_b >= 0 {
+            x := enemy_b % 40; y := enemy_b / 40
+            level.grid[x * 30 + y] = cast(u8)(41 + (mission + 1) % 4)
+            level.enemies += 1; level.kinds[1] = 2 + (mission + 1) % 4
+        }
+    }
+    return ""
+}
+
 // ---- Output ----
 
 ALPHABET :: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -620,13 +912,16 @@ ALPHABET :: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 Encode :: () -> string {
     used: [256]bool
     for l: 0..199 { for i: 0..1199 { used[levels[l].grid[i]] = true } }
+    for l: 0..ADVENTURE_LEVELS - 1 { for i: 0..1199 { used[adventure[l].grid[i]] = true } }
     code: [256]u8
     values: Vec(u8)
     for v: 0..255 { if used[v] { code[v] = ALPHABET[values.count]; unused VecPush(values, cast(u8)v) } }
     out: Vec(u8)
     Append(*out, "// Generated by tools/design_levels.zi. 200 original-inspired challenges with active enemies.\n")
     Append(*out, "DESIGNED_LEVEL_COUNT :: 200;\nDesignedStageStarts: [6]s32 = .[0, 40, 80, 120, 160, 200];\n")
-    Append(*out, "DesignedMeadowPortals: [6]s32 = .[9, 11, 15, 22, 30, 37];\n")
+    Append(*out, "DesignedOpeningFeatures: [50]s32 = .[")
+    for number: 1..50 { if number > 1 { Append(*out, ", ") }; BuilderPrint(*out, "%", FirstFiftyFeature(number)) }
+    Append(*out, "];\nDesignedMeadowPortals: [9]s32 = .[10, 11, 12, 13, 14, 40, 43, 45, 48];\n")
     BuilderPrint(*out, "DesignedCodebook: [%]u8 = .[", values.count)
     for i: 0..values.count - 1 { if i > 0 { Append(*out, ", ") }; BuilderPrint(*out, "%", values[i]) }
     Append(*out, "];\nDesignedAlphabet :: \"")
@@ -644,6 +939,32 @@ Encode :: () -> string {
     Append(*out, "\" }\n    return \"\"\n}\n\nDesignedTile :: (level: s32, x: s32, y: s32) -> u8 {\n    text := DesignedLevelText(level)\n")
     Append(*out, "    code := text[x * 30 + y]\n    for index: 0..DesignedAlphabet.count - 1 {\n")
     Append(*out, "        if DesignedAlphabet[index] == code { return DesignedCodebook[index] }\n    }\n    return 20\n}\n")
+    Append(*out, "\nADVENTURE_LEVEL_COUNT :: 20;\nAdventureAreaStarts: [6]s32 = .[0, 4, 8, 12, 16, 20];\n")
+    Append(*out, "AdventureApples: [20]s32 = .[")
+    for l: 0..ADVENTURE_LEVELS - 1 { if l > 0 { Append(*out, ", ") }; BuilderPrint(*out, "%", adventure[l].apples) }
+    Append(*out, "];\nAdventureObjectiveCells: [120]s32 = .[")
+    for i: 0..119 { if i > 0 { Append(*out, ", ") }; BuilderPrint(*out, "%", AdventureObjectiveCells[i]) }
+    Append(*out, "];\n// bit 0: key gate, bit 1: switch gate, bit 2: portals\n")
+    names: [8]string = .["AdventureMechanics","AdventureGateCells","AdventureKeyCells","AdventureSwitchCells",
+        "AdventurePortalACells","AdventurePortalBCells","AdventureEnemyACells","AdventureEnemyBCells"]
+    for field: 0..7 {
+        BuilderPrint(*out, "%: [20]s32 = .[", names[field])
+        for i: 0..19 {
+            if i > 0 { Append(*out, ", ") }
+            BuilderPrint(*out, "%", AdventureMetadata(cast(s32)field,cast(s32)i))
+        }
+        Append(*out, "];\n")
+    }
+    Append(*out, "\n")
+    Append(*out, "AdventureLevelText :: (mission: s32) -> string {\n")
+    for l: 0..ADVENTURE_LEVELS - 1 {
+        BuilderPrint(*out, "    if mission == % { return \"", l)
+        for i: 0..1199 { unused VecPush(out, code[adventure[l].grid[i]]) }
+        Append(*out, "\" }\n")
+    }
+    Append(*out, "    return \"\"\n}\n\nAdventureTile :: (mission: s32, x: s32, y: s32) -> u8 {\n")
+    Append(*out, "    text := AdventureLevelText(mission)\n    if text.count != 1200 { return 20 }\n    code := text[x * 30 + y]\n")
+    Append(*out, "    for index: 0..DesignedAlphabet.count - 1 { if DesignedAlphabet[index] == code { return DesignedCodebook[index] } }\n    return 20\n}\n")
     return BuilderFinish(out)
 }
 
@@ -713,6 +1034,8 @@ main :: (argc: s32, argv: **u8) -> s32 {
     }
     problem := Campaign()
     if problem.count > 0 { return Fail(problem) }
+    problem = AdventureCampaign()
+    if problem.count > 0 { return Fail(problem) }
     source := Encode()
     cases_text, has_cases := ReadEntireFile("tests/campaign_cases.json")
     pairs: [200]s32
@@ -760,6 +1083,11 @@ main :: (argc: s32, argv: **u8) -> s32 {
     }
     unused RemoveTree("build/designed")
     if !CreateDirectories("build/designed") { return Fail("cannot create build/designed") }
+    for mission: 0..ADVENTURE_LEVELS - 1 {
+        if !WriteBoard(Path("adventure-level", mission + 1, ".dat"), adventure[mission].apples, adventure[mission].grid[:]) {
+            return Fail("cannot write adventure boards")
+        }
+    }
     manifest: Vec(u8)
     Append(*manifest, "[")
     for l: 0..199 {
@@ -792,9 +1120,16 @@ main :: (argc: s32, argv: **u8) -> s32 {
         Append(*manifest, ifx l == 0 then "\n  {\n" else ",\n  {\n")
         BuilderPrint(*manifest, "    \"number\": %,\n    \"name\": ", n)
         title: Vec(u8)
-        BuilderPrint(*title, "% — %", StageTitle(level.stage), LevelName(level.within))
+        BuilderPrint(*title, "% — %", StageTitle(level.stage), ifx n <= 50 then FirstFiftyName(n) else LevelName(level.within))
         Quote(*manifest, BuilderFinish(title))
-        BuilderPrint(*manifest, ",\n    \"family\": \"original-%\",\n    \"tier\": %,\n    \"apples\": %,\n", level.source, level.stage + 1, level.apples)
+        Append(*manifest, ",\n    \"family\": ")
+        if n <= 50 { Quote(*manifest, FirstFiftyFamily(n)) }
+        else { BuilderPrint(*manifest, "\"original-%\"", level.source) }
+        Append(*manifest, ",\n    \"mechanic\": ")
+        if n <= 50 { Quote(*manifest, FirstFiftyMechanic(n)) } else { Quote(*manifest, "systemic-mix") }
+        Append(*manifest, ",\n    \"teaching\": ")
+        if n <= 50 { Quote(*manifest, FirstFiftyTeaching(n)) } else { Quote(*manifest, "campaign-mastery") }
+        BuilderPrint(*manifest, ",\n    \"tier\": %,\n    \"apples\": %,\n", level.stage + 1, level.apples)
         BuilderPrint(*manifest, "    \"floors\": %,\n    \"walls\": %,\n    \"original\": %,\n", level.floors, level.walls, level.source)
         BuilderPrint(*manifest, "    \"accent\": %,\n    \"enemies\": %,\n    \"enemy_kinds\": ", level.accent, level.enemies)
         if level.enemies == 0 { Append(*manifest, "[]") } else {

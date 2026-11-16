@@ -27,19 +27,26 @@ F-Droid editions use Monero for Dew top-ups.
 
 ## Five landscapes. Forty levels each.
 
-- **Meadow:** learn at a gentle pace on spacious orchard paths. The first 20 levels have no moving enemies; matching portal rings introduce a simple shortcut from level 10.
+- **Meadow:** learn on fifty newly authored orchard and woodland puzzles. Open paths teach movement and growth before portals, keys, patrols and switches begin to combine.
 - **Leafwood:** weave through leafy rooms, mossy courtyards and branching trails.
 - **Pinewood:** follow fir-lined passages and watch the patrols around the next corner.
 - **Lake:** cross the shores, channels and islands without running out of room.
 - **Mountains:** wind through rock corridors, terraces and the final ascent.
 
-Layouts take inspiration from the recovered original game's rooms, spirals
-and crossings. Wandering fire, bouncing patrols and chasing enemies make the
-journey more demanding as you climb.
+The first 50 levels are individual authored compositions rather than shuffled
+wall variants. They move through open orchards, dividers, courtyards, loops,
+linked rooms and long-body routes in a teach–confirm–combine rhythm. Portals,
+keys, switches and readable patrols arrive in their own spacious lessons before
+appearing together. Every board has a verified route in landscape and portrait.
+Levels 51–200 keep their established layouts, while personal editor layouts
+continue to take priority over every published default.
 
-Meadow's landscape boards follow the portrait gardens' hedges and clear routes.
-Portal lessons appear on levels 10, 12, 16, 23, 31 and 38, with open exits and no
-moving enemies. Personal editor layouts keep priority over the new defaults.
+Each landscape now carries its own illustrated journey cards, palette and a
+larger family of floor, wall and decorative material variants. Framed
+playfields, continuous ground and water, stronger wall edges and glowing
+objectives keep routes readable without changing tile size, collision or
+solutions. The worm retains its classic proportions and skin silhouettes;
+the basic color skins use clearer, richer companion colors.
 
 Press **Play** and you are straight in the game. The levels follow one after
 another through all five landscapes. After each goal, preview the next board
@@ -56,6 +63,21 @@ see a large board preview for each unlocked level and a lock for later levels.
 Complete a level to unlock the next one.
 After a game over, **Try again** starts the furthest unlocked level with
 three lives and a fresh score.
+
+## Puzzle Adventure
+
+Choose **Adventure** on the title for a separate, deliberate puzzle journey.
+Its twenty authored missions are arranged across five areas: Orchard Trail,
+Moonring Ruins, Flooded Garden, Ember Burrow and Sky Sanctuary. Each open area
+offers four puzzles; complete any three to unlock the next area, so one hard
+puzzle never blocks the whole journey.
+
+Adventure advances exactly one cell per move. Fruit appears in a fixed order,
+and later areas add keys, switch gates, paired portals and moving guardians
+before the final puzzles combine them. Use **Undo** after a bad turn or
+**Restart puzzle** to begin again; Adventure never spends campaign lives or
+changes campaign score and progress. On a keyboard, **U** or **Z** undoes and
+**R** restarts. Adventure completion is saved separately for each account.
 
 ## Play your way
 

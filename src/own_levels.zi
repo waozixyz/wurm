@@ -16,7 +16,10 @@ OwnUnavailable :: (name: string, request: string) -> string {
     return "";
 }
 
-own_service: OwnService = OwnUnavailable;
+// The editor selects its account service before any draft operation. Tests
+// install their own service explicitly as well; leaving the pointer empty
+// keeps portable bundles free of a global procedure-address initializer.
+own_service: OwnService;
 own_collections: [OWN_COLLECTIONS]Collections.CollectionDraft;
 own_collection_count: s32;
 own_record: [33]u8;

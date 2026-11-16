@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Replace campaign levels 1–50 with authored gardens that teach route planning, growth, portals, keys, switches and readable patrols in a paced progression.
+- Add Puzzle Adventure: twenty deliberate move-by-move missions across five unlockable areas, with fixed objectives, undo/restart and separate saved progress.
+- Refresh the journey presentation with illustrated landscape cards, crafted board frames, richer terrain/material variants, clearer walls and objectives, restored classic worm proportions, and stronger basic-skin colors.
 - Prevent buffered turns at the next level’s entrance from causing an immediate death.
 
 ## [0.2.33] - 2026-11-07

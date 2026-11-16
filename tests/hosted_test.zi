@@ -4,7 +4,7 @@
 #import "kryon/tree_draw"
 #import "kryon/geometry"
 #import "kryon/widget_kind"
-#import "kryon/text_input_props"
+TextField :: #import "kryon/text_field";
 #import "kryon/input_protocol"
 #import "kryon/frame_snapshot"
 #import "kryon/pixmap"
@@ -49,10 +49,10 @@ ReadAppHost :: () -> AppMessage { return message }
 WriteAppHost :: (value: AppMessage) { message = value }
 #program_export
 ReadAppUiHost :: () -> AppUiFrame { return frame }
-field_input: TextFieldInput;
+field_input: TextField.Input;
 // Scripted input reaches the real collection/search field widget.
 #program_export
-AppFieldInputHost :: () -> TextFieldInput { return field_input }
+AppFieldInputHost :: () -> TextField.Input { return field_input }
 #program_export
 AppKeyHost :: () -> s32 { return frame_key }
 #program_export
@@ -210,7 +210,7 @@ Click :: (label: string) {
     Draw()
 }
 // Draw the actual consumer, including applying edits before queued paint flushes.
-NameFrame :: (session: Session, field: *App.NameField, input: TextFieldInput, limit: s32 = 60) -> bool {
+NameFrame :: (session: Session, field: *App.NameField, input: TextField.Input, limit: s32 = 60) -> bool {
     field_input = input
     Expect(cast(s32)BeginFrame(session, 1, Rectangle.{0.0, 0.0, 400.0, 150.0}) == 0, "name frame starts")
     committed := App.DrawNameField(session, field, 908, Rectangle.{10.0, 10.0, 160.0, 52.0}, "Collection name", limit)
@@ -519,7 +519,7 @@ main :: () -> s32 {
         message.action = APP_BACK
         unused Portable.Main()
         Expect(message.succeeded && App.game.mode == Game.MODE_STAGES, "hosted Back leaves the preview inside the game")
-        App.StartLevel(9, 0, 1)
+        App.StartLevel(10, 0, 1)
         App.game.mode = Game.MODE_READY
         Draw()
         hint: s32 = -1

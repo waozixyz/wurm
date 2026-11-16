@@ -523,3 +523,87 @@ Atualizar
 [wurm_reward_reminder]
 Seu baú de recompensa está esperando. Abra Apfelwurm para resgatá-lo.
 ---
+[wurm_adventure_0]
+Aventura
+---
+[wurm_adventure_1]
+Aventura de quebra-cabeças
+---
+[wurm_adventure_2]
+Conclua 3 quebra-cabeças para desbloquear a próxima área.
+---
+[wurm_adventure_3]
+Áreas
+---
+[wurm_adventure_4]
+Quebra-cabeça
+---
+[wurm_adventure_5]
+Quebra-cabeça concluído
+---
+[wurm_adventure_6]
+Rota de frutas em ordem
+---
+[wurm_adventure_7]
+Chave e portão
+---
+[wurm_adventure_8]
+Portão com interruptor
+---
+[wurm_adventure_9]
+Rota de portais
+---
+[wurm_adventure_10]
+Quebra-cabeça combinado
+---
+[wurm_adventure_11]
+Trilha do Pomar
+---
+[wurm_adventure_12]
+Ruínas do Anel Lunar
+---
+[wurm_adventure_13]
+Jardim Alagado
+---
+[wurm_adventure_14]
+Toca das Brasas
+---
+[wurm_adventure_15]
+Santuário Celeste
+---
+[wurm_adventure_16]
+Colete as frutas em ordem e planeje cada jogada.
+---
+[wurm_adventure_17]
+Use anéis iguais para mudar sua rota.
+---
+[wurm_adventure_18]
+As pedras-interruptor abrem e fecham os portões do jardim.
+---
+[wurm_adventure_19]
+Planeje o caminho ao redor dos guardiões móveis.
+---
+[wurm_adventure_20]
+Combine todas as lições para chegar ao topo.
+---
+[wurm_adventure_21]
+Conclua 3 quebra-cabeças na área anterior.
+---
+[wurm_adventure_22]
+Jogadas
+---
+[wurm_adventure_23]
+Frutas restantes
+---
+[wurm_adventure_24]
+Desfazer
+---
+[wurm_adventure_25]
+Reiniciar quebra-cabeça
+---
+[wurm_adventure_26]
+Voltar aos quebra-cabeças
+---
+[wurm_adventure_27]
+Desfazer jogada
+---

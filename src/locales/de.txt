@@ -523,3 +523,87 @@ Aktualisieren
 [wurm_reward_reminder]
 Deine Belohnungstruhe wartet. Öffne Apfelwurm und hole sie dir.
 ---
+[wurm_adventure_0]
+Abenteuer
+---
+[wurm_adventure_1]
+Rätselabenteuer
+---
+[wurm_adventure_2]
+Löse 3 Rätsel, um das nächste Gebiet freizuschalten.
+---
+[wurm_adventure_3]
+Gebiete
+---
+[wurm_adventure_4]
+Rätsel
+---
+[wurm_adventure_5]
+Rätsel gelöst
+---
+[wurm_adventure_6]
+Geordnete Obstroute
+---
+[wurm_adventure_7]
+Schlüssel und Tor
+---
+[wurm_adventure_8]
+Schaltertor
+---
+[wurm_adventure_9]
+Portalroute
+---
+[wurm_adventure_10]
+Kombiniertes Rätsel
+---
+[wurm_adventure_11]
+Obstgartenpfad
+---
+[wurm_adventure_12]
+Mondringruinen
+---
+[wurm_adventure_13]
+Überfluteter Garten
+---
+[wurm_adventure_14]
+Glutbau
+---
+[wurm_adventure_15]
+Himmelsheiligtum
+---
+[wurm_adventure_16]
+Sammle das Obst der Reihe nach und plane jeden Zug.
+---
+[wurm_adventure_17]
+Nutze gleiche Ringe, um deine Route neu zu formen.
+---
+[wurm_adventure_18]
+Schaltersteine öffnen und schließen Gartentore.
+---
+[wurm_adventure_19]
+Plane deinen Weg um die beweglichen Wächter.
+---
+[wurm_adventure_20]
+Verbinde alle Lektionen, um den Gipfel zu erreichen.
+---
+[wurm_adventure_21]
+Löse 3 Rätsel im vorherigen Gebiet.
+---
+[wurm_adventure_22]
+Züge
+---
+[wurm_adventure_23]
+Obst übrig
+---
+[wurm_adventure_24]
+Rückgängig
+---
+[wurm_adventure_25]
+Rätsel neu starten
+---
+[wurm_adventure_26]
+Zurück zu den Rätseln
+---
+[wurm_adventure_27]
+Zug rückgängig
+---

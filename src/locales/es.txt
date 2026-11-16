@@ -523,3 +523,87 @@ Actualizar
 [wurm_reward_reminder]
 Tu cofre de recompensa te espera. Abre Apfelwurm para recogerlo.
 ---
+[wurm_adventure_0]
+Aventura
+---
+[wurm_adventure_1]
+Aventura de puzles
+---
+[wurm_adventure_2]
+Completa 3 puzles para desbloquear la siguiente zona.
+---
+[wurm_adventure_3]
+Zonas
+---
+[wurm_adventure_4]
+Puzle
+---
+[wurm_adventure_5]
+Puzle completado
+---
+[wurm_adventure_6]
+Ruta de fruta en orden
+---
+[wurm_adventure_7]
+Llave y puerta
+---
+[wurm_adventure_8]
+Puerta con interruptor
+---
+[wurm_adventure_9]
+Ruta de portales
+---
+[wurm_adventure_10]
+Puzle combinado
+---
+[wurm_adventure_11]
+Sendero del Huerto
+---
+[wurm_adventure_12]
+Ruinas del Anillo Lunar
+---
+[wurm_adventure_13]
+Jardín Inundado
+---
+[wurm_adventure_14]
+Madriguera de Brasas
+---
+[wurm_adventure_15]
+Santuario Celeste
+---
+[wurm_adventure_16]
+Recoge la fruta en orden y planea cada turno.
+---
+[wurm_adventure_17]
+Usa anillos iguales para cambiar tu ruta.
+---
+[wurm_adventure_18]
+Las piedras interruptor abren y cierran las puertas del jardín.
+---
+[wurm_adventure_19]
+Planea cómo esquivar a los guardianes móviles.
+---
+[wurm_adventure_20]
+Combina todo lo aprendido para llegar a la cima.
+---
+[wurm_adventure_21]
+Completa 3 puzles en la zona anterior.
+---
+[wurm_adventure_22]
+Movimientos
+---
+[wurm_adventure_23]
+Fruta restante
+---
+[wurm_adventure_24]
+Deshacer
+---
+[wurm_adventure_25]
+Reiniciar puzle
+---
+[wurm_adventure_26]
+Volver a los puzles
+---
+[wurm_adventure_27]
+Deshacer movimiento
+---

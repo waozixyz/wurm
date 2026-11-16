@@ -58,6 +58,29 @@ HasKey :: (session: Session, key: u64) -> bool {
     }
     return false
 }
+// A one-cell run at the requested board coordinate proves that the selector
+// is drawing the effective tile plane rather than a pre-rendered screenshot.
+HasPreviewCellRun :: (session: Session, key: u64, x: s32, y: s32, columns: s32) -> bool {
+    map: Rectangle
+    found := false
+    for index: cast(s32)0..TreeCount(session) - 1 {
+        node := TreeNodeAt(session, index)
+        if node.key == key { map = node.bounds; found = true; break }
+    }
+    if !found { return false }
+    scale := map.width / cast(float32)columns
+    left := App.Snap(map.x + cast(float32)x * scale)
+    right := App.Snap(map.x + cast(float32)(x + 1) * scale)
+    top := App.Snap(map.y + cast(float32)y * scale)
+    bottom := App.Snap(map.y + cast(float32)(y + 1) * scale)
+    for index: cast(s32)0..TreeCount(session) - 1 {
+        node := TreeNodeAt(session, index)
+        if node.key > key && node.key < key + 2048 &&
+            node.bounds.x == left && node.bounds.y == top &&
+            node.bounds.width == right - left && node.bounds.height == bottom - top { return true }
+    }
+    return false
+}
 // Presses and releases the control with KEY, drawing a frame for each.
 Click :: (session: Session, key: u64) -> bool {
     for index: cast(s32)0..TreeCount(session) - 1 {
@@ -288,6 +311,20 @@ main :: () -> s32 {
         HasLabel(session, 40012, "From a level") && HasLabel(session, 40013, "My levels"), "the editor opens on its own title")
     Expect(App.EditorStageOpen(0) && !App.EditorStageOpen(1) && !App.EditorStageOpen(4), "only reached landscapes open")
     Expect(App.EditorOpenLevels(0) == Progress.unlocked + 1, "only reached levels open")
+    saved_level := Progress.level
+    saved_lives := Progress.lives
+    saved_score := Progress.score
+    saved_unlocked := Progress.unlocked
+    saved_dirty := Progress.dirty
+    App.UnlockAllAtStartup()
+    Expect(App.LevelAvailable(199) && App.EditorLevelOpen(199) && App.EditorOpenLevels(4) == Game.StageLevels(4) &&
+        Progress.AdventureAreaOpen(Progress.ADVENTURE_AREAS - 1),
+        "launch-only test access opens every campaign level and Adventure area")
+    Expect(Progress.level == saved_level && Progress.lives == saved_lives && Progress.score == saved_score &&
+        Progress.unlocked == saved_unlocked && Progress.dirty == saved_dirty,
+        "launch-only test access does not change saved progress")
+    App.unlock_everything = false
+    Progress.open_all = false
     App.EditorOpenStages()
     Draw(session, 390.0, 780.0)
     Expect(HasLabel(session, 40111, "Meadow") && !HasLabel(session, 40119, "Leafwood"), "the landscapes page lists only Meadow")
@@ -420,6 +457,31 @@ main :: () -> s32 {
     campaign_board[Custom.At(5, 5)] = 20
     Expect(Custom.SaveCustomLevel(0, campaign_board[:], campaign_objects[:], 3, false),
         "an old personal campaign edit remains representable")
+    campaign_portrait: [1200]u8
+    campaign_portrait_objects: [1200]u8
+    campaign_portrait[Custom.At(6, 7, true)] = 20
+    Expect(Custom.SaveCustomLevel(0, campaign_portrait[:], campaign_portrait_objects[:], 3, true),
+        "a portrait campaign edit remains independently representable")
+    App.OpenEditorHome()
+    App.EditorPick(App.EDITOR_PICK_CAMPAIGN)
+    App.EditorOpenStage(0)
+    App.editor.turned = false
+    Draw(session, 390.0, 780.0)
+    Expect(HasPreviewCellRun(session,52000000,5,5,Game.COLUMNS),
+        "the landscape selector minimap uses the personal effective board")
+    App.editor.turned = true
+    Draw(session, 390.0, 780.0)
+    Expect(HasPreviewCellRun(session,52000000,6,7,Game.ROWS),
+        "the portrait selector minimap uses the independent personal effective board")
+    App.PlayBoard(0,Timer.MonotonicMilliseconds(),1,false,0)
+    Expect(App.game.board[Custom.At(5,5)] == 20,
+        "landscape play uses the board shown in its selector minimap")
+    App.PlayBoard(0,Timer.MonotonicMilliseconds(),1,false,1)
+    Expect(App.game.board[Custom.At(6,7,true)] == 20,
+        "portrait play uses the board shown in its selector minimap")
+    Expect(Custom.ClearCustomLevel(0, true), "the portrait campaign edit can be removed")
+    App.editor.turned = false
+    App.OpenEditorHome()
     Draw(session, 390.0, 780.0)
     Expect(HasLabel(session, 40014, "Campaign changes"), "a personal campaign edit appears on the editor title")
     App.editor_page = App.EDITOR_PAGE_CHANGES
@@ -437,6 +499,7 @@ main :: () -> s32 {
     Expect(!Custom.HasCustomLevel(0, false), "no personal campaign record remains")
 
     // Community: other players' collections, added as private copies.
+    own_service = FakeService
     fake_find_count = 2
     level: WurmLevel = .{}
     for byte, place: "Alpha" { level.name[place] = byte }

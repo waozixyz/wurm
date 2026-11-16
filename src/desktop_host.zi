@@ -1,7 +1,8 @@
 // The desktop entry. It runs Kryon's desktop loop in a 1280x760 window, or
 // the size WURM_WINDOW=WxH gives, so the mobile-first layout can be checked
 // in landscape and portrait.
-#import "kryon/desktop_loop"
+DesktopLoop :: #import "kryon/desktop_loop";
+#import "kryon/tree_frame"
 #import "std/environment_linux"
 #import "std/number_text"
 App :: #import "app";
@@ -19,11 +20,14 @@ WindowSize :: () -> (width: s32, height: s32) {
 
 // WURM_START=editor opens straight into the level editor, optionally at
 // WURM_LEVEL=n (1-based), instead of the stage screen; WURM_START=rewards
-// opens the daily reward chest. WURM_UNLOCK_ALL=1 is the testing build's
-// switch: every stage and level opens in the stage selector.
+// opens the daily reward chest. WURM_START=levels or adventure opens that
+// selector directly. WURM_UNLOCK_ALL=1 is a non-persistent testing view: all
+// campaign and Adventure choices open without changing earned progress.
 StartScreen :: () {
     if EnvironmentText("WURM_UNLOCK_ALL") == "1" { App.UnlockAllAtStartup() }
     start := EnvironmentText("WURM_START")
+    if start.count > 0 && (start[0] == #char "l" || start[0] == #char "L") { App.LevelsAtStartup(); return }
+    if start.count > 0 && (start[0] == #char "a" || start[0] == #char "A") { App.AdventureAtStartup(); return }
     if start.count > 0 && (start[0] == #char "r" || start[0] == #char "R") { App.RewardsAtStartup(); return }
     if start.count == 0 || (start[0] != #char "e" && start[0] != #char "E") { return }
     level := EnvironmentNumber("WURM_LEVEL", 1) - 1
@@ -34,7 +38,7 @@ StartScreen :: () {
 #program_export
 main :: () -> s32 {
     // A direct launch starts beside the executable in build/.
-    if !DesktopStartBeside("assets/art/title.png") {
+    if !DesktopLoop.DesktopStartBeside("assets/art/title.png") {
         print("Apfelwurm could not find assets/art/title.png beside the game or its parent directory.\n")
         return 1
     }
@@ -42,5 +46,6 @@ main :: () -> s32 {
     defer { App.CloseAudio() }
     StartScreen()
     width, height := WindowSize()
-    return RunDesktop(width, height)
+    unused TreeFrameUse()
+    return DesktopLoop.Run(App.Frame, width, height)
 }

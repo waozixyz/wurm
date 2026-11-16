@@ -1,6 +1,5 @@
 // A private-display UI probe, never installed or used as the game launcher.
-using UI :: #import "kryon/Widgets";
-#import "kryon/Desktop"
+#import "kryon/desktop_runtime"
 #import "kryon/session"
 #import "kryon/tree"
 #import "kryon/tree_input"
@@ -271,7 +270,11 @@ main :: () -> s32 {
         // A private-display test drives the probe through KRYON_TEST_DRIVER.
         pointer_input := TestDriverPointer(session, PollPointer())
         TreePointerUpdate(session, pointer_input)
-        key := DesktopPressedKey()
+        input := CaptureFrameInput(session)
+        key: s32
+        for candidate: cast(s32)1..511 {
+            if (input.keys[candidate] & cast(u8)FrameKeyPressed) != cast(u8)0 { key = candidate; break }
+        }
         scripted_key: s32
         if key == 0 {
             for candidate: cast(s32)0..349 { if TestDriverKeyPressed(candidate) { key = candidate; scripted_key = candidate; break } }
@@ -279,7 +282,6 @@ main :: () -> s32 {
         if key != 0 { KeyboardSend(session, key) }
         // Freeze the private driver's observations before the app callback,
         // just as the normal host freezes its OS observations after Poll.
-        input := CaptureFrameInput(session)
         FrameInputEnd(session)
         input.pointer = pointer_input
         if scripted_key != 0 { input.keys[scripted_key] = cast(u8)(FrameKeyHeld | FrameKeyPressed) }

@@ -22,7 +22,7 @@ main :: () -> s32 {
     for meadow: 0..39 { Expect(TickInterval(cast(s32)meadow) == 43, "Meadow never accelerates between levels") }
     Expect(BaseTickInterval(0) == 32 && BaseTickInterval(10) == 27 && BaseTickInterval(40) == 25, "movement timing preserves the scoring difficulty curve")
     StartGame(*game, 0, 100)
-    Expect(game.apples == 5 && game.monster_count == 0, "gentle first level with five apples and no moving hazards")
+    Expect(game.apples == 3 && game.monster_count == 0, "gentle first authored level with three apples and no moving hazards")
     Expect(!Step(*game, 142), "no movement before the first tick")
     Expect(Step(*game, 143) && game.worm[0].y == 492, "four pixels per movement tick")
     Expect(!ApplyInput(*game, 262), "no steering before spawn is established")
@@ -126,11 +126,17 @@ main :: () -> s32 {
     Tick(*game)
     Expect(game.lives == 3 && game.worm[0].y == 496, "death consumes a life and respawns")
 
-    // New ideas open one at a time and come back in a mix.
-    for level: 0..IDEA_PORTALS - 1 {
-        expected := ifx MeadowPortalLevel(cast(s32)level) then FEATURE_PORTALS else FEATURE_NONE
-        Expect(BoardFeature(cast(s32)level) == expected, "only gentle Meadow portal lessons before the later idea mix")
-    }
+    // The first fifty now teach portals, keys and switches in authored sets.
+    Expect(BoardFeature(10) == FEATURE_PORTALS && BoardFeature(12) == FEATURE_PORTALS && BoardFeature(14) == FEATURE_PORTALS,
+        "portal lessons are introduced and confirmed")
+    Expect(BoardFeature(20) == FEATURE_KEY && BoardFeature(22) == FEATURE_KEY && BoardFeature(24) == FEATURE_KEY,
+        "key gates are introduced and confirmed")
+    Expect(BoardFeature(30) == FEATURE_SWITCH && BoardFeature(32) == FEATURE_SWITCH && BoardFeature(34) == FEATURE_SWITCH,
+        "switch gates are introduced and confirmed")
+    Expect(BoardFeature(40) == FEATURE_PORTALS && BoardFeature(42) == FEATURE_SWITCH && BoardFeature(46) == FEATURE_KEY,
+        "Leafwood combines the opening lessons")
+    Expect(BoardFeature(0) == FEATURE_NONE && BoardFeature(49) == FEATURE_SWITCH && BoardFeature(50) == FEATURE_NONE,
+        "plain boards leave breathing room around the lessons")
     Expect(BoardFeature(IDEA_PORTALS) == FEATURE_PORTALS && BoardFeature(IDEA_PORTALS + 1) == FEATURE_NONE &&
         BoardFeature(IDEA_KEY) == FEATURE_KEY && BoardFeature(IDEA_SWITCH) == FEATURE_SWITCH &&
         BoardFeature(IDEA_PORTAL_ROOM) == FEATURE_PORTAL_ROOM, "each puzzle idea opens on its own board")

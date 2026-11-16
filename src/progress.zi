@@ -9,6 +9,8 @@ Shared :: #import "entity/game_progress";
 #import "std/text_buffer"
 #import "std/vec"
 LEVELS :: 200;
+ADVENTURE_MISSIONS :: 20;
+ADVENTURE_AREAS :: 5;
 START_LIVES :: 3;
 level: s32;
 lives: s32 = START_LIVES;
@@ -17,6 +19,13 @@ unlocked: s32;
 loaded: bool;
 owner: [65]u8;
 completed: [200]u8;
+// Adventure uses its own account-scoped local record. It never changes the
+// campaign run, unlock, completion, leaderboard, replay or reward records.
+adventure_completed: [ADVENTURE_MISSIONS]u8;
+adventure_loaded: bool;
+// A launch-only testing view. It changes availability checks but is never
+// serialized, merged into account progress, or treated as a completion.
+open_all: bool;
 dirty: bool;
 poll_at: s64;
 record_name: [112]u8;
@@ -55,6 +64,46 @@ RecordName :: (name: string) -> string {
     for byte: name { record_name[at] = byte; at += 1 }
     record_name[at] = 0
     return TextUntilNul(record_name[:])
+}
+
+AdventureLoad :: () {
+    if adventure_loaded { return }
+    adventure_loaded = true
+    adventure_completed = .{}
+    bytes: [ADVENTURE_MISSIONS + 1]u8
+    if Records.ReadRecord(RecordName("adventure.dat"), bytes[:]) == ADVENTURE_MISSIONS {
+        for mission: 0..ADVENTURE_MISSIONS - 1 {
+            adventure_completed[mission] = ifx bytes[mission] == 1 then 1 else 0
+        }
+    }
+}
+AdventureCompleted :: (mission: s32) -> bool {
+    AdventureLoad()
+    return mission >= 0 && mission < ADVENTURE_MISSIONS && adventure_completed[mission] == 1
+}
+AdventureAreaCompleted :: (area: s32) -> s32 {
+    AdventureLoad()
+    if area < 0 || area >= ADVENTURE_AREAS { return 0 }
+    total: s32 = 0
+    for mission: area * 4..area * 4 + 3 { if adventure_completed[mission] == 1 { total += 1 } }
+    return total
+}
+AdventureAreaOpen :: (area: s32) -> bool {
+    if area < 0 || area >= ADVENTURE_AREAS { return false }
+    if open_all { return true }
+    if area == 0 { return true }
+    return AdventureAreaCompleted(area - 1) >= 3
+}
+AdventureMissionOpen :: (mission: s32) -> bool {
+    return mission >= 0 && mission < ADVENTURE_MISSIONS && AdventureAreaOpen(mission / 4)
+}
+AdventureComplete :: (mission: s32) -> bool {
+    AdventureLoad()
+    if mission < 0 || mission >= ADVENTURE_MISSIONS || adventure_completed[mission] == 1 { return false }
+    adventure_completed[mission] = 1
+    if Records.WriteRecord(RecordName("adventure.dat"), adventure_completed[:]) { return true }
+    adventure_completed[mission] = 0
+    return false
 }
 
 Load :: () {
@@ -225,8 +274,6 @@ LoseLife :: () -> bool {
 
 Restart :: () -> bool { return Begin(0, START_LIVES, 0) }
 Continue :: () -> bool { Load(); return Begin(unlocked, START_LIVES, 0) }
-// Testing builds start any level (WURM_UNLOCK_ALL=1 on desktop).
-open_all: bool;
 Select :: (at: s32, mountains: bool = false) -> bool {
     Load()
     locked := at < 160 && at > unlocked
@@ -294,9 +341,11 @@ Pump :: (now: s64) -> bool {
     if changed {
         owner = current
         loaded = false
+        adventure_loaded = false
         level = 0; lives = START_LIVES; score = 0; unlocked = 0; replays = 0
         best_level = 0; best_score = 0; reported_level = -1; reported_score = -1
         completed = .{}
+        adventure_completed = .{}
         dirty = false
         Load()
     }

@@ -72,11 +72,18 @@ portal_credits: s64;
 portal_verified: bool;
 portal_loaded: bool;
 portal_read_ready: bool;
-DataAvailable :: #type () -> bool;
-data_active: DataAvailable = Portal.DataActive;
+// Native portal fixtures can replace availability. Portable guests call the
+// bounded host capability directly because portable globals are scalar-only.
+#if #defined(WURM_PORTABLE) {
+    DataIsActive :: () -> bool { return Portal.DataActive() }
+} else {
+    DataAvailable :: #type () -> bool;
+    data_active: DataAvailable = Portal.DataActive;
+    DataIsActive :: () -> bool { return data_active() }
+}
 PortalActive :: () -> bool {
     #if #defined(WURM_CRAZYGAMES) {
-        return data_active()
+        return DataIsActive()
     } else {
         return false
     }

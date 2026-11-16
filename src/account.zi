@@ -67,10 +67,8 @@
     #import "kryon/app_files"
     #import "kryon/tree_input"
     #import "kryon/key_input"
-    #import "kryon/text_input_props"
-    #import "kryon/text_props"
+    Text :: #import "kryon/text";
     #import "kryon/text_align"
-    #import "kryon/text_widget"
     #import "kryon/open_uri"
     #if #defined(ANDROID_BUILD) {
         #import "kryon/android_jni"
@@ -202,7 +200,7 @@
         problem := Entity.EntityHostProblem()
         if !ready && problem == "" { problem = "The profile could not start. Reload the page to try again." }
         if problem == "" { return }
-        unused Text(session, TextProps.{.key = 29010, .text = Locale.Text(problem), .font = 18, .wrap = TextWrap.TextWrapAuto,
+        unused Text.Draw(session, Text.Props.{.key = 29010, .text = Locale.Text(problem), .size = 18, .wrap = Text.Wrap.TextWrapAuto,
                 .align = TextAlign.TextAlignCenter,
                 .bounds = Rectangle.{bounds.x + 24.0, bounds.y + 48.0, bounds.width - 48.0, 120.0}})
     }

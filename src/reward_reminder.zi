@@ -11,17 +11,39 @@ ID :: 1;
 HOUR :: 19;
 PERMISSION_RECORD :: "reward-reminder-permission.dat";
 
-Supported :: #type () -> bool;
-Register :: #type (NotificationProps, s32, s32, bool, s64, u32, s32) -> bool;
-Opened :: #type (string, s32) -> bool;
-Cancel :: #type (string, s32) -> bool;
-Request :: #type () -> bool;
-supported: Supported = Schedule.DailyNotificationsSupported;
-register: Register = Schedule.ScheduleDailyNotification;
-opened: Opened = Schedule.NotificationAppOpened;
-cancel: Cancel = Schedule.CancelDailyNotification;
 #if !#defined(WURM_PORTABLE) && !#defined(KRYON_HOSTED_UI) {
+    Supported :: #type () -> bool;
+    Register :: #type (NotificationProps, s32, s32, bool, s64, u32, s32) -> bool;
+    Opened :: #type (string, s32) -> bool;
+    Cancel :: #type (string, s32) -> bool;
+    Request :: #type () -> bool;
+    supported: Supported = Schedule.DailyNotificationsSupported;
+    register: Register = Schedule.ScheduleDailyNotification;
+    opened: Opened = Schedule.NotificationAppOpened;
+    cancel: Cancel = Schedule.CancelDailyNotification;
     request: Request = RequestNotifications;
+}
+
+SupportedNow :: () -> bool {
+    #if #defined(WURM_PORTABLE) || #defined(KRYON_HOSTED_UI) {
+        return Schedule.DailyNotificationsSupported()
+    } else { return supported() }
+}
+RegisterNow :: (props: NotificationProps, hour: s32, minute: s32,
+    suppress: bool, after: s64, weekdays: u32, skip_date: s32) -> bool {
+    #if #defined(WURM_PORTABLE) || #defined(KRYON_HOSTED_UI) {
+        return Schedule.ScheduleDailyNotification(props, hour, minute, suppress, after, weekdays, skip_date)
+    } else { return register(props, hour, minute, suppress, after, weekdays, skip_date) }
+}
+OpenedNow :: (tag: string, id: s32) -> bool {
+    #if #defined(WURM_PORTABLE) || #defined(KRYON_HOSTED_UI) {
+        return Schedule.NotificationAppOpened(tag, id)
+    } else { return opened(tag, id) }
+}
+CancelNow :: (tag: string, id: s32) -> bool {
+    #if #defined(WURM_PORTABLE) || #defined(KRYON_HOSTED_UI) {
+        return Schedule.CancelDailyNotification(tag, id)
+    } else { return cancel(tag, id) }
 }
 
 registered: bool;
@@ -55,10 +77,10 @@ RequestOnce :: () {
 // home screen. Poll the scoped open marker while focused so crossing local
 // midnight counts as opening that new day, even without a process restart.
 Pump :: (now: s64, focused: bool, chest_after: s64, title: string, body: string) {
-    if !supported() { return }
+    if !SupportedNow() { return }
     if chest_after < 0 {
         if available_after != chest_after || registered {
-            if !cancel(TAG, ID) { return }
+            if !CancelNow(TAG, ID) { return }
             available_after = chest_after; registered = false
         }
         was_focused = focused
@@ -67,7 +89,7 @@ Pump :: (now: s64, focused: bool, chest_after: s64, title: string, body: string)
     if !registered || available_after != chest_after || last_title != title || last_body != body {
         props := NotificationProps.{.title = title, .body = body, .tag = TAG, .id = ID,
             .suppress_when_focused = true}
-        if !register(props, HOUR, 0, true, chest_after, 127, 0) { return }
+        if !RegisterNow(props, HOUR, 0, true, chest_after, 127, 0) { return }
         registered = true; available_after = chest_after
         last_title = title; last_body = body
         // A changed rule must be suppressed before it can notify today.
@@ -75,7 +97,7 @@ Pump :: (now: s64, focused: bool, chest_after: s64, title: string, body: string)
     }
     if focused {
         if !was_focused || marked_at < 0 || now < marked_at || now - marked_at >= 1000 {
-            if !opened(TAG, ID) { return }
+            if !OpenedNow(TAG, ID) { return }
             marked_at = now
         }
         // Collection hosts own their permission flow and preferences.

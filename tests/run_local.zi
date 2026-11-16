@@ -8,8 +8,9 @@
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- rewards | reward-reminder-android
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web | crazygames | editor-campaign
 //
-// ui, account-ui and web run the private Xvfb, account and browser tests;
-// build the desktop, modal-test, account and web editions first.
+// ui builds its driven desktop editions, runs them in private Xvfb and then
+// restores normal desktop binaries. Build account and web editions first for
+// account-ui and web.
 // store-rewards runs focused native SDK wallet tests and normal rewards regression.
 // store-runtime runs native store/config/rewards and private async SDK fixtures.
 // crazygames checks the portal policy and plays work/crazygames.zip, unpacked
@@ -58,7 +59,10 @@ Tool :: (name: string, argument: string) -> bool {
 // Builds tests/NAME.zi into build/OUTPUT and runs it with ENVIRONMENT.
 Test :: (name: string, output: string, defines: []string, link: string, environment: []string, argument: string = "") -> bool {
     arguments: Vec(string)
-    head: [5]string = .["build", "--project", "--root", "tests", "--target=c"]
+    // Tests may provide host modules consumed by application sources (for
+    // example portable_levels). Keep that fixture root explicit alongside
+    // project dependency resolution instead of spelling dependency paths.
+    head: [7]string = .["build", "--project", "--root", "tests", "--module-path", "tests", "--target=c"]
     for head { VecPush(arguments, it) }
     for defines { VecPush(arguments, "--define"); VecPush(arguments, it) }
     entry: Vec(u8)
@@ -99,9 +103,11 @@ InputIntegration :: () -> bool {
 
 // Existing campaign/engine suite, independent of asset builds and publishing.
 Engine :: () -> bool {
-    engine: [7]string = .["game_test", "start_clearance_test", "meadow_test", "campaign_replay", "progress_test", "editor_test", "multiplayer_test"]
-    folders: [7]string = .["game-test", "start-clearance-test", "meadow-test", "campaign-replay", "progress-test", "editor-test", "multiplayer-test"]
-    for i: 0..6 { if !Test(engine[i], folders[i], none[:], "", none[:]) { return false } }
+    engine: [9]string = .["game_test", "start_clearance_test", "meadow_test", "campaign_design_test", "campaign_replay",
+        "adventure_test", "progress_test", "editor_test", "multiplayer_test"]
+    folders: [9]string = .["game-test", "start-clearance-test", "meadow-test", "campaign-design-test", "campaign-replay",
+        "adventure-test", "progress-test", "editor-test", "multiplayer-test"]
+    for i: 0..8 { if !Test(engine[i], folders[i], none[:], "", none[:]) { return false } }
     return InputIntegration()
 }
 
@@ -170,30 +176,8 @@ AccountNavigation :: () -> bool {
 
 // The real portable entry with a private host account and retained UI tree.
 Hosted :: () -> bool {
-    toolchain := PackagePath("ziran")
-    kryon := PackagePath("kryon")
-    command: Vec(string)
-    start: [3]string = .[JoinPath(toolchain, "build/bin/ziran"), "build", "--root"]
-    for start { VecPush(command, it) }
-    VecPush(command, ResolvePath("src"))
-    paths: Vec(string)
-    VecPush(paths, ResolvePath("tests")); VecPush(paths, ResolvePath("src"))
-    VecPush(paths, Pair("kryon", JoinPath(kryon, "src/ui")))
-    VecPush(paths, Pair("kryon", JoinPath(kryon, "src/backend")))
-    VecPush(paths, JoinPath(kryon, "src/ui"))
-    VecPush(paths, Pair("std", JoinPath(toolchain, "std")))
-    VecPush(paths, JoinPath(toolchain, "std"))
-    packages: [4]string = .["apps", "mingcute", "entity", "game2d"]
-    for packages { VecPush(paths, Pair(it, JoinPath(PackagePath(it), "src"))) }
-    for i: 0..paths.count - 1 { VecPush(command, "--module-path"); VecPush(command, paths[i]) }
-    rest: [9]string = .["--define", "WURM_PORTABLE", "--target=c", "--entry", "hosted_test:main", "--exe", "-o", "", ""]
-    for i: 0..6 { VecPush(command, rest[i]) }
-    if !CreateDirectories("build/hosted-test") { return false }
-    VecPush(command, ResolvePath("build/hosted-test"))
-    VecPush(command, ResolvePath("tests/hosted_test.zi"))
-    if !Run(VecSlice(command, 0, command.count), none[:]) { return false }
-    program: [1]string = .["build/hosted-test/hosted_test"]
-    return Run(program[:], none[:])
+    hosted: [1]string = .["WURM_PORTABLE"]
+    return Test("hosted_test", "hosted-test", hosted[:], "", none[:])
 }
 
 // A headless picture from the shot host: 960x600 with real artwork.
@@ -264,6 +248,22 @@ Interface :: (name: string, output: string, link: string) -> bool {
     return Test(name, output, scrubbed[:], link, scrubbed[:])
 }
 
+// The app side of the private UI protocol must include Kryon's test driver.
+// Both profiles use their stable paths while the test runs; always rebuild
+// normal editions afterward so development and installation never inherit a
+// test-enabled binary.
+PrivateUI :: () -> bool {
+    desktop: [2]string = .["build", "desktop"]
+    modal: [2]string = .["build", "modal-test"]
+    driver: [1]string = .["KRYON_TEST_DRIVER=1"]
+    built := Ziran(desktop[:], driver[:])
+    if built { built = Ziran(modal[:], driver[:]) }
+    tested := ifx built then Interface("private_ui_test", "private-ui-test", "-lX11 -lcairo -lm") else false
+    restored_desktop := Ziran(desktop[:], none[:])
+    restored_modal := Ziran(modal[:], none[:])
+    return tested && restored_desktop && restored_modal
+}
+
 #program_export
 main :: (argc: s32, argv: **u8) -> s32 {
     unused CreateDirectories("build/research")
@@ -322,7 +322,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
         return ifx Tool("locales", "--check") then 0 else Fail("reward localization")
     }
     if mode == "store-model" { return ifx Test("portal_store_test", "portal-store-test", none[:], "", none[:]) then 0 else Fail("portal store model") }
-    if mode == "ui" { return ifx Interface("private_ui_test", "private-ui-test", "-lX11 -lcairo -lm") then 0 else Fail("private UI") }
+    if mode == "ui" { return ifx PrivateUI() then 0 else Fail("private UI") }
     if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
     if mode == "name-field" { return ifx Hosted() then 0 else Fail("name field consumer") }
     if mode == "shop" {

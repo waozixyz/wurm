@@ -288,7 +288,13 @@ Editor :: () -> bool {
     Sleep(200)
     image: DisplayImage
     if !Click(868, 32) || !Capture("volume-dropdown", *image) { return false }
-    if !Click(720, 180) { return false }  // Lower the real slider.
+    // Follow the semantic slider bounds: its label and track deliberately grow
+    // to the current theme's minimum touch size, so a fixed y coordinate would
+    // only test yesterday's typography. The centre is inside the real track.
+    if !DriverPress(driver, .{.key = cast(u64)24104, .has_key = true, .enabled = true}) {
+        return Fail("volume slider is missing")
+    }
+    Sleep(150)
     sound := Bytes("sound.dat")
     if sound.count != 2 || sound[1] == 0 || sound[1] >= 100 { return Fail("volume slider did not save its gain") }
     if !Key(DRIVER_KEY_ESCAPE) || !Key(DRIVER_KEY_SPACE) { return false }
@@ -1062,6 +1068,29 @@ SettingsLocal :: () -> bool {
     return true
 }
 
+// The distinct Adventure journey must remain visible and navigable in the
+// native app, not merely exist in engine fixtures.
+AdventureScreens :: () -> bool {
+    SetEnv("WURM_WINDOW", "960x600")
+    SetEnv("WURM_START", "adventure")
+    if !Launch(desktop, "build", Out("adventure-ui", ".log")) { return false }
+    Unset("WURM_START")
+    areas: [2]string = .["Puzzle adventure", "Orchard Trail"]
+    if !Shows(areas[:], 5000) { return Fail("Adventure area journey did not open") }
+    picture: DisplayImage
+    if !Capture("adventure-areas", *picture) { return false }
+    if !DriverPress(driver, .{.key = cast(u64)45021, .has_key = true, .enabled = true}) { return Fail("first Adventure area is not selectable") }
+    missions: [2]string = .["Orchard Trail", "Puzzle 1"]
+    if !Shows(missions[:], 5000) { return Fail("Adventure mission journey did not open") }
+    if !Capture("adventure-missions", *picture) { return false }
+    if !DriverPress(driver, .{.key = cast(u64)45221, .has_key = true, .enabled = true}) { return Fail("first Adventure puzzle is not selectable") }
+    Sleep(300)
+    if !Capture("adventure-puzzle", *picture) { return false }
+    if Bright(*picture) <= 0.80 { return Fail("Adventure board artwork is missing or black") }
+    print("Private UI local test: Adventure area map, mission picker and live puzzle opened.\n")
+    return true
+}
+
 Run :: () -> bool {
     if !Editor() || !PortraitWindow() || !ProgressProbe() || !Dialogs() || !ResponsiveTitles() { return false }
     if !HeldSteering(false) { return false }
@@ -1071,7 +1100,8 @@ Run :: () -> bool {
     if !HeldSteering(true) { return false }
     swipe: [1]u8 = .[0]
     unused WriteRecord("controls.dat", swipe[:])
-    return PlaytestLayouts() && Rotation() && Landscapes() && Gameplay() && Skins() && WormBodyGeometry() && SettingsLocal()
+    return PlaytestLayouts() && Rotation() && Landscapes() && Gameplay() && Skins() && WormBodyGeometry() &&
+        SettingsLocal() && AdventureScreens()
 }
 
 #program_export

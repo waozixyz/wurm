@@ -69,6 +69,30 @@ Terrain :: (sources: *Sources, index: s32) -> Image { return Cell(*sources.terra
 Detail :: (sources: *Sources, index: s32) -> Image { return Cell(*sources.details, 2, 1, index) }
 JourneyCell :: (sources: *Sources, index: s32) -> Image { return Cell(*sources.journey, 4, 5, index) }
 
+// The generated journey source has much more material detail than a single
+// 32-pixel crop can show. Take deterministic windows from inside one source
+// cell so the stable tile IDs expose a coherent family of floor and wall
+// variants instead of repeating one stamp across an entire board.
+JourneyCellVariant :: (sources: *Sources, index: s32, variant: s32) -> Image {
+    columns: s32 = 4
+    rows: s32 = 5
+    cell_width := cast(float64)sources.journey.width / cast(float64)columns
+    cell_height := cast(float64)sources.journey.height / cast(float64)rows
+    cell_x := index % columns
+    cell_y := index / columns
+    inset_x := cell_width * 0.09
+    inset_y := cell_height * 0.09
+    window_width := cell_width * 0.82
+    window_height := cell_height * 0.82
+    column := variant % 3
+    row := (variant / 3) % 3
+    x0 := cast(float64)cell_x * cell_width + inset_x * cast(float64)column
+    y0 := cast(float64)cell_y * cell_height + inset_y * cast(float64)row
+    part := CropImage(*sources.journey, Round(x0), Round(y0),
+        Round(x0 + window_width), Round(y0 + window_height))
+    return ResizeLanczos(*part, CELL, CELL)
+}
+
 // Sprite cells, with the worm's seven cells replacing the old worm and the
 // four head turns: left, up, right and down, the engine's directions.
 Sprite :: (sources: *Sources, index: s32) -> Image {
@@ -205,17 +229,29 @@ Build :: (forest: bool, sources: *Sources) -> Image {
 // Generated terrain on the existing collision and sprite coordinates.
 Journey :: (base: *Image, sources: *Sources, row: s32) -> Image {
     sheet := CopyImage(base)
-    floor := JourneyCell(sources, row * 4)
-    wall := JourneyCell(sources, row * 4 + 1)
+    floor_index := row * 4
+    wall_index := row * 4 + 1
     stone := JourneyCell(sources, row * 4 + 2)
     water := JourneyCell(sources, row * 4 + 3)
     for tile: 0..19 {
+        floor := JourneyCellVariant(sources, floor_index, cast(s32)(tile % 9))
         PasteImage(*sheet, *floor, cast(s32)tile * CELL, 0)
-        PasteImage(*sheet, ifx tile == 1 then *stone else ifx tile == 2 then *water else *wall, cast(s32)tile * CELL, CELL)
+        wall := JourneyCellVariant(sources, wall_index, cast(s32)(tile % 9))
+        PasteImage(*sheet, ifx tile == 1 then *stone else ifx tile == 2 then *water else *wall,
+            cast(s32)tile * CELL, CELL)
     }
-    for piece: 0..8 { PasteImage(*sheet, *wall, cast(s32)(10 + piece) * CELL, 2 * CELL) }
-    for frame: 0..2 { PasteImage(*sheet, *water, cast(s32)frame * CELL, 11 * CELL) }
-    for variant: 0..3 { PasteImage(*sheet, *floor, cast(s32)(4 + variant) * CELL, 11 * CELL) }
+    for piece: 0..8 {
+        wall := JourneyCellVariant(sources, wall_index, cast(s32)piece)
+        PasteImage(*sheet, *wall, cast(s32)(10 + piece) * CELL, 2 * CELL)
+    }
+    for frame: 0..2 {
+        water_variant := JourneyCellVariant(sources, row * 4 + 3, cast(s32)(frame * 4))
+        PasteImage(*sheet, *water_variant, cast(s32)frame * CELL, 11 * CELL)
+    }
+    for variant: 0..3 {
+        floor := JourneyCellVariant(sources, floor_index, cast(s32)(variant * 2))
+        PasteImage(*sheet, *floor, cast(s32)(4 + variant) * CELL, 11 * CELL)
+    }
     return sheet
 }
 

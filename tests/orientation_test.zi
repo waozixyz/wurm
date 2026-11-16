@@ -340,52 +340,53 @@ CheckPersonal :: () {
     board: [CELLS]u8
     objects: [CELLS]u8
     published: [CELLS]u8
+    authored: s32 = 80
     // A level with an authored portrait: a personal landscape wins, and the
     // portrait stays the authored one.
-    Custom.DefaultBoard(12, board[:])
+    Custom.DefaultBoard(authored, board[:])
     board[5 * COLUMNS + 5] = 21
-    Expect(Custom.SaveCustomLevel(12, board[:], objects[:], 7), "save a personal landscape")
-    Expect(Custom.LayoutSource(12) == Custom.LAYOUT_PERSONAL && Custom.EffectiveTile(12, 5, 5) == 21 && Custom.EffectiveApples(12) == 7,
+    Expect(Custom.SaveCustomLevel(authored, board[:], objects[:], 7), "save a personal landscape")
+    Expect(Custom.LayoutSource(authored) == Custom.LAYOUT_PERSONAL && Custom.EffectiveTile(authored, 5, 5) == 21 && Custom.EffectiveApples(authored) == 7,
         "a personal landscape wins over the mirrored portrait")
-    Expect(Custom.LayoutSource(12, true) == Custom.LAYOUT_AUTHORED, "the authored portrait stays")
-    Expect(Custom.ClearCustomLevel(12), "remove the personal landscape")
+    Expect(Custom.LayoutSource(authored, true) == Custom.LAYOUT_AUTHORED, "the authored portrait stays")
+    Expect(Custom.ClearCustomLevel(authored), "remove the personal landscape")
     // A personal portrait wins over the authored one, and the landscape
     // mirrors it until a personal landscape exists; the published layouts
     // never read either.
-    Custom.DefaultBoard(12, published[:])
-    Custom.DefaultBoard(12, board[:], true)
+    Custom.DefaultBoard(authored, published[:])
+    Custom.DefaultBoard(authored, board[:], true)
     board[Custom.At(4, 6, true)] = 21
-    Expect(Custom.SaveCustomLevel(12, board[:], objects[:], 6, true), "save a personal portrait")
-    Expect(Custom.EffectiveTile(12, 4, 6, true) == 21, "a personal portrait wins over the authored one")
+    Expect(Custom.SaveCustomLevel(authored, board[:], objects[:], 6, true), "save a personal portrait")
+    Expect(Custom.EffectiveTile(authored, 4, 6, true) == 21, "a personal portrait wins over the authored one")
     mirrored: [CELLS]u8
     mirrored_objects: [CELLS]u8
-    unused Mirror.MirrorLevel(12, board[:], objects[:], false, mirrored[:], mirrored_objects[:])
+    unused Mirror.MirrorLevel(authored, board[:], objects[:], false, mirrored[:], mirrored_objects[:])
     shown: [CELLS]u8
     shown_objects: [CELLS]u8
-    Custom.EffectiveBoard(12, shown[:])
-    Custom.EffectiveObjects(12, shown_objects[:])
+    Custom.EffectiveBoard(authored, shown[:])
+    Custom.EffectiveObjects(authored, shown_objects[:])
     same := true
     for at: 0..CELLS - 1 { if shown[at] != mirrored[at] || shown_objects[at] != mirrored_objects[at] { same = false } }
-    Expect(same && Custom.LayoutSource(12) == Custom.LAYOUT_MIRRORED && Custom.EffectiveApples(12) == 6,
+    Expect(same && Custom.LayoutSource(authored) == Custom.LAYOUT_MIRRORED && Custom.EffectiveApples(authored) == 6,
         "the landscape mirrors the personal portrait and its apple goal")
-    Custom.DefaultBoard(12, shown[:])
+    Custom.DefaultBoard(authored, shown[:])
     same = true
     for at: 0..CELLS - 1 { if shown[at] != published[at] { same = false } }
-    Expect(same && Custom.LayoutSource(12, false, true) == Custom.LAYOUT_MIRRORED, "the published landscape ignores the personal portrait")
+    Expect(same && Custom.LayoutSource(authored, false, true) == Custom.LAYOUT_MIRRORED, "the published landscape ignores the personal portrait")
     // Both personal layouts stay independent.
-    Custom.DefaultBoard(12, shown[:])
+    Custom.DefaultBoard(authored, shown[:])
     shown[Custom.At(7, 3)] = 21
-    Expect(Custom.SaveCustomLevel(12, shown[:], objects[:], 8), "save a personal landscape beside the personal portrait")
-    Expect(Custom.LayoutSource(12) == Custom.LAYOUT_PERSONAL && Custom.EffectiveTile(12, 7, 3) == 21 && Custom.EffectiveApples(12) == 8 &&
-        Custom.LayoutSource(12, true) == Custom.LAYOUT_PERSONAL && Custom.EffectiveTile(12, 4, 6, true) == 21 && Custom.EffectiveApples(12, true) == 6,
+    Expect(Custom.SaveCustomLevel(authored, shown[:], objects[:], 8), "save a personal landscape beside the personal portrait")
+    Expect(Custom.LayoutSource(authored) == Custom.LAYOUT_PERSONAL && Custom.EffectiveTile(authored, 7, 3) == 21 && Custom.EffectiveApples(authored) == 8 &&
+        Custom.LayoutSource(authored, true) == Custom.LAYOUT_PERSONAL && Custom.EffectiveTile(authored, 4, 6, true) == 21 && Custom.EffectiveApples(authored, true) == 6,
         "personal landscape and portrait stay independent")
-    Expect(Custom.ClearCustomLevel(12), "remove the personal landscape")
-    Custom.EffectiveBoard(12, shown[:])
+    Expect(Custom.ClearCustomLevel(authored), "remove the personal landscape")
+    Custom.EffectiveBoard(authored, shown[:])
     same = true
     for at: 0..CELLS - 1 { if shown[at] != mirrored[at] { same = false } }
     Expect(same, "removing the personal landscape mirrors the personal portrait again")
-    Expect(Custom.ClearCustomLevel(12, true), "remove the personal portrait")
-    Custom.EffectiveBoard(12, shown[:])
+    Expect(Custom.ClearCustomLevel(authored, true), "remove the personal portrait")
+    Custom.EffectiveBoard(authored, shown[:])
     same = true
     for at: 0..CELLS - 1 { if shown[at] != published[at] { same = false } }
     Expect(same, "removing the personal portrait restores the published landscape")

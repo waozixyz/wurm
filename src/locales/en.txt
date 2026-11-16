@@ -523,3 +523,87 @@ Refresh
 [wurm_reward_reminder]
 Your reward chest is waiting. Open Apfelwurm to collect it.
 ---
+[wurm_adventure_0]
+Adventure
+---
+[wurm_adventure_1]
+Puzzle adventure
+---
+[wurm_adventure_2]
+Complete 3 puzzles to unlock the next area.
+---
+[wurm_adventure_3]
+Areas
+---
+[wurm_adventure_4]
+Puzzle
+---
+[wurm_adventure_5]
+Puzzle complete
+---
+[wurm_adventure_6]
+Ordered fruit route
+---
+[wurm_adventure_7]
+Key and gate
+---
+[wurm_adventure_8]
+Switch gate
+---
+[wurm_adventure_9]
+Portal route
+---
+[wurm_adventure_10]
+Combined puzzle
+---
+[wurm_adventure_11]
+Orchard Trail
+---
+[wurm_adventure_12]
+Moonring Ruins
+---
+[wurm_adventure_13]
+Flooded Garden
+---
+[wurm_adventure_14]
+Ember Burrow
+---
+[wurm_adventure_15]
+Sky Sanctuary
+---
+[wurm_adventure_16]
+Collect fruit in order and plan every turn.
+---
+[wurm_adventure_17]
+Use matching rings to reshape your route.
+---
+[wurm_adventure_18]
+Switch stones open and close garden gates.
+---
+[wurm_adventure_19]
+Plan around moving guardians.
+---
+[wurm_adventure_20]
+Combine every lesson to reach the summit.
+---
+[wurm_adventure_21]
+Complete 3 puzzles in the previous area.
+---
+[wurm_adventure_22]
+Moves
+---
+[wurm_adventure_23]
+Fruit left
+---
+[wurm_adventure_24]
+Undo
+---
+[wurm_adventure_25]
+Restart puzzle
+---
+[wurm_adventure_26]
+Back to puzzles
+---
+[wurm_adventure_27]
+Undo move
+---

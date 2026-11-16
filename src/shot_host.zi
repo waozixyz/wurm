@@ -2,7 +2,7 @@
 // pixmap asset API. Each .argb beside a picture holds its width, height and
 // BGRA pixels.
 using P :: #import "kryon/pixmap";
-using UI :: #import "kryon/Widgets";
+#import "kryon/geometry";
 #import "kryon/session";
 #import "kryon/tree";
 #import "kryon/Frame";

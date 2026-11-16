@@ -208,11 +208,23 @@ WriteTextRecord :: (name: string, text: string) -> bool {
 BYTE_RECORD_MAX :: 2401;
 ByteReadText :: #type (name: string, output: []u8) -> s64;
 ByteWriteText :: #type (name: string, text: string) -> bool;
+#if !#defined(WURM_PORTABLE) && !#defined(KRYON_HOSTED_UI) {
 byte_read_text: ByteReadText = ReadTextRecord;
 byte_write_text: ByteWriteText = WriteTextRecord;
+}
+ReadByteTextNow :: (name: string, output: []u8) -> s64 {
+    #if #defined(WURM_PORTABLE) || #defined(KRYON_HOSTED_UI) {
+        return ReadTextRecord(name, output)
+    } else { return byte_read_text(name, output) }
+}
+WriteByteTextNow :: (name: string, text: string) -> bool {
+    #if #defined(WURM_PORTABLE) || #defined(KRYON_HOSTED_UI) {
+        return WriteTextRecord(name, text)
+    } else { return byte_write_text(name, text) }
+}
 ReadByteRecord :: (name: string, output: []u8) -> s64 {
     text: [BYTE_RECORD_MAX * 2 + 1]u8
-    length := byte_read_text(name, text[:])
+    length := ReadByteTextNow(name, text[:])
     if length < 0 { return ifx length == -2 then -2 else -1 }
     if length > BYTE_RECORD_MAX * 2 || length % 2 != 0 || length / 2 > output.count { return -1 }
     // Validate before touching the caller's bytes.
@@ -229,7 +241,7 @@ WriteByteRecord :: (name: string, bytes: []u8) -> bool {
         text[index * 2] = HexValue(bytes[index], false)
         text[index * 2 + 1] = HexValue(bytes[index], true)
     }
-    return byte_write_text(name, TextView(text[:bytes.count * 2]))
+    return WriteByteTextNow(name, TextView(text[:bytes.count * 2]))
 }
 
 PumpAccount :: () {

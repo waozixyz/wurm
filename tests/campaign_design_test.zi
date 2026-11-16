@@ -2,6 +2,7 @@
 // in build/designed: shapes, routes, reachability and the difficulty curve.
 #import "std/file"
 #import "std/json_scan"
+Designed :: #import, file "../src/designed_levels.zi";
 
 LEVELS :: 200
 STAGES :: string.["meadow", "leafwood", "pinewood", "lake", "mountains"]
@@ -23,6 +24,8 @@ Entry :: struct {
     stage: JsonSpan
     name: JsonSpan
     family: JsonSpan
+    mechanic: JsonSpan
+    teaching: JsonSpan
 }
 
 manifest: string;
@@ -205,6 +208,8 @@ main :: () -> s32 {
         entry.stage = Text(at, "stage")
         entry.name = Text(at, "name")
         entry.family = Text(at, "family")
+        entry.mechanic = Text(at, "mechanic")
+        entry.teaching = Text(at, "teaching")
         kinds_at := FieldAt(manifest, at, "enemy_kinds")
         kinds: [16]s32
         kind_count := ArrayPositions(manifest, kinds_at, kinds[:])
@@ -215,7 +220,24 @@ main :: () -> s32 {
         }
         entries[i] = entry
         Expect(manifest[entry.stage.start:entry.stage.end] == STAGES[i / 40], "complete five-landscape journey", i + 1)
-        Expect(entry.apples >= 5 && entry.apples <= 10, "5 to 10 apples", i + 1)
+        if i < 50 {
+            Expect(entry.apples >= 3 && entry.apples <= 8, "authored opening apple goal", i + 1)
+            families: [10]string = .["foundations","growth-routes","portal-lessons","route-memory","keys-and-gates",
+                "readable-patrols","switch-lessons","meadow-finale","leafwood-transition","combined-lessons"]
+            teachings: [10]string = .["movement-and-space","growth-planning","portal-teach-and-confirm","route-memory",
+                "key-teach-and-confirm","patrol-observation","switch-teach-and-confirm","meadow-mastery",
+                "familiar-ideas-new-landscape","combined-mastery"]
+            feature := Designed.DesignedOpeningFeatures[i]
+            mechanic: string = "route-and-growth"
+            if feature == 1 { mechanic = "matching-portals" }
+            else if feature == 2 { mechanic = "key-gate" }
+            else if feature == 3 { mechanic = "switch-gate" }
+            else if i >= 25 && i <= 29 { mechanic = "readable-patrol" }
+            Expect(manifest[entry.family.start:entry.family.end] == families[i / 5], "authored family follows the teaching cadence", i + 1)
+            Expect(manifest[entry.teaching.start:entry.teaching.end] == teachings[i / 5], "teaching metadata follows the feature cadence", i + 1)
+            Expect(manifest[entry.mechanic.start:entry.mechanic.end] == mechanic, "mechanic metadata matches the engine lesson", i + 1)
+        }
+        else { Expect(entry.apples >= 5 && entry.apples <= 10, "5 to 10 apples", i + 1) }
         for previous: 0..i - 1 {
             if SameSpan(entries[previous].name, entry.name) { Expect(false, "unique name", i + 1) }
         }
@@ -236,8 +258,11 @@ main :: () -> s32 {
         kinds |= entries[i].kinds
     }
     Expect(families >= 10, "at least ten families")
-    Expect(entries[0].apples == 5 && entries[1].apples == 5 && entries[0].enemies == 0 && entries[1].enemies == 0,
-        "five apples and a gentle, open level 2")
+    Expect(entries[0].apples == 3 && entries[1].apples == 3 && entries[0].enemies == 0 && entries[1].enemies == 0,
+        "three apples and a gentle, open level 2")
+    for i: 0..24 { Expect(entries[i].enemies == 0, "the first 25 authored levels are hazard-free", i + 1) }
+    for i: 25..44 { Expect(entries[i].enemies == 1, "one readable hazard in the middle lessons", i + 1) }
+    for i: 45..49 { Expect(entries[i].enemies == 2, "two hazards only after the mechanics are known", i + 1) }
     early: s32
     late: s32
     for i: 0..7 { early += entries[i].apples; late += entries[LEVELS - 8 + i].apples }
@@ -255,6 +280,6 @@ main :: () -> s32 {
         Expect(this_stage < next_stage, "increasing stage difficulty")
     }
     if failures > 0 { return 1 }
-    print("Campaign local test: 200 unique layouts, no rotated copies, complete reachability and wide routes in both orientations; original references, all six enemy types and increasing stage difficulty.\n")
+    print("Campaign local test: 50 authored opening lessons and 150 preserved later layouts; no rotated copies, complete reachability and wide solution routes in both orientations.\n")
     return 0
 }

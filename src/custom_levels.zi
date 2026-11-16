@@ -39,18 +39,28 @@ custom_root: [96]u8;
 custom_root_length: s32;
 custom_loaded: bool;
 custom_present: [LEVEL_COUNT * 2]bool;
+// True only for a player's saved record. Bundled published snapshots also
+// populate custom_present for legacy campaigns, but must not mask a newly
+// authored default.
+custom_personal: [LEVEL_COUNT * 2]bool;
 custom_apples: [LEVEL_COUNT * 2]s32;
 custom_boards: [LEVEL_COUNT * 2][CELLS]u8;
 custom_objects: [LEVEL_COUNT * 2][CELLS]u8;
 
 // Native fixtures may inject SDK availability. Production authentication
 // changes reload the app, including all campaign and mirror caches.
-DataAvailable :: #type () -> bool;
-data_active: DataAvailable = Portal.DataActive;
+#if #defined(WURM_PORTABLE) {
+    DataIsActive :: () -> bool { return Portal.DataActive() }
+} else {
+    DataAvailable :: #type () -> bool;
+    data_active: DataAvailable = Portal.DataActive;
+    DataIsActive :: () -> bool { return data_active() }
+}
 CustomReload :: () {
     custom_loaded = false
     for slot: 0..LEVEL_COUNT * 2 - 1 {
         custom_present[slot] = false
+        custom_personal[slot] = false
         custom_apples[slot] = 0
         for at: 0..CELLS - 1 {
             custom_boards[slot][at] = 0
@@ -143,18 +153,22 @@ EnsureLoaded :: () {
         rows := ifx portrait then COLUMNS else ROWS
         size: s64
         read: s64
-        if data_active() {
+        personal := false
+        if DataIsActive() {
             size = Portal.ReadByteRecord(RecordName(level, portrait), bytes[:])
+            personal = size == LEVEL_FILE_BYTES || size == LEVEL_FILE_V2_BYTES
             // Missing, empty and failed active reads all use the published
             // campaign. Never borrow a previous guest's local override.
             read = size
         } else {
         #if #defined(WURM_PORTABLE) {
             size = Storage.ReadLevel(LevelPath(level, ".dat", portrait), bytes[:])
+            personal = size >= 0
             if size < 0 && !portrait { size = BundledLevel(level, bytes[:]) }
             read = size
         } else {
         file := File.OpenRead(LevelPath(level, ".dat", portrait))
+        personal = file.valid
         if file.valid {
             size = File.FileSize(file)
             if size != LEVEL_FILE_BYTES && size != LEVEL_FILE_V2_BYTES {
@@ -172,6 +186,7 @@ EnsureLoaded :: () {
         if size != LEVEL_FILE_BYTES && size != LEVEL_FILE_V2_BYTES { continue }
         if read != size { continue }
         custom_present[slot] = true
+        custom_personal[slot] = personal
         custom_apples[slot] = cast(s32)bytes[0]
         for column: 0..columns - 1 {
             for row: 0..rows - 1 {
@@ -191,7 +206,16 @@ HasCustomLevel :: (level: s32, portrait: bool = false) -> bool {
     if level < 0 || level >= LEVEL_COUNT { return false }
     return custom_present[Slot(level, portrait)]
 }
+HasPersonalLevel :: (level: s32, portrait: bool = false) -> bool {
+    EnsureLoaded()
+    if level < 0 || level >= LEVEL_COUNT { return false }
+    return custom_personal[Slot(level, portrait)]
+}
 HasAuthoredLevel :: (level: s32, portrait: bool = false) -> bool {
+    // The redesigned first fifty use their new generated boards. These old
+    // published editor snapshots remain in the archive for provenance, but
+    // are no longer defaults. A player's personal layout still wins above.
+    if level >= 0 && level < 50 { return false }
     return AuthoredTiles(level,portrait).count == CELLS
 }
 HasPortraitSource :: (level: s32) -> bool { return HasAuthoredLevel(level,true) || HasPortraitDesign(level) }
@@ -207,20 +231,32 @@ LAYOUT_AUTHORED :: 2;
 LAYOUT_DESIGNED :: 3;
 LAYOUT_MIRRORED :: 4;
 LayoutSource :: (level: s32, portrait: bool = false, published: bool = false) -> s32 {
-    if !published && HasCustomLevel(level,portrait) { return LAYOUT_PERSONAL }
+    opening := level >= 0 && level < 50
+    if !published && (ifx opening then HasPersonalLevel(level,portrait) else HasCustomLevel(level,portrait)) { return LAYOUT_PERSONAL }
     if portrait {
         if HasAuthoredLevel(level,true) { return LAYOUT_AUTHORED }
-        if !published && HasCustomLevel(level) { return LAYOUT_MIRRORED }
+        if !published && (ifx opening then HasPersonalLevel(level) else HasCustomLevel(level)) { return LAYOUT_MIRRORED }
+        // The redesigned opening campaign is authored as orientation-safe
+        // geometry with a certified quarter-turn. Do not seam-compress these
+        // boards into a different puzzle; PortraitBoard adds only the two
+        // fixed gate connectors. A player's own landscape still mirrors as
+        // requested above.
+        if opening { return LAYOUT_DESIGNED }
         return ifx HasPortraitDesign(level) then LAYOUT_DESIGNED else LAYOUT_MIRRORED
     }
-    if (!published && HasCustomLevel(level,true)) || HasPortraitSource(level) { return LAYOUT_MIRRORED }
+    if !published && (ifx opening then HasPersonalLevel(level,true) else HasCustomLevel(level,true)) { return LAYOUT_MIRRORED }
+    if opening { return LAYOUT_DESIGNED }
+    if HasPortraitSource(level) { return LAYOUT_MIRRORED }
     return ifx HasAuthoredLevel(level) then LAYOUT_AUTHORED else LAYOUT_DESIGNED
 }
 IsMirroredLayout :: (level: s32, portrait: bool = false) -> bool { return LayoutSource(level,portrait) == LAYOUT_MIRRORED }
 // Whether a mirrored layout comes from the player's own other orientation.
-MirrorsPersonal :: (level: s32, portrait: bool) -> bool { return HasCustomLevel(level,!portrait) }
+MirrorsPersonal :: (level: s32, portrait: bool) -> bool {
+    return ifx level >= 0 && level < 50 then HasPersonalLevel(level,!portrait) else HasCustomLevel(level,!portrait)
+}
 
 PublishedApples :: (level: s32, portrait: bool) -> s32 {
+    if level >= 0 && level < 50 { return BaseApples(level) }
     authored := AuthoredApples(level,portrait)
     return ifx authored >= 0 then authored else BaseApples(level)
 }
@@ -236,6 +272,7 @@ EffectiveApples :: (level: s32, portrait: bool = false) -> s32 {
 // portrait design or the landscape design.
 PublishedBoard :: (level: s32, board: []u8, portrait: bool) {
     text := AuthoredTiles(level,portrait)
+    if level >= 0 && level < 50 { text = "" }
     columns := ifx portrait then ROWS else COLUMNS
     rows := ifx portrait then COLUMNS else ROWS
     if text.count == CELLS {
@@ -397,7 +434,7 @@ SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32, portrai
             bytes[1 + CELLS + column * rows + row] = objects[At(column, row, portrait)]
         }
     }
-    if data_active() {
+    if DataIsActive() {
         if !Portal.WriteByteRecord(RecordName(level, portrait), bytes[:]) { return false }
     } else {
     #if #defined(WURM_PORTABLE) {
@@ -427,6 +464,7 @@ SaveCustomLevel :: (level: s32, board: []u8, objects: []u8, apples: s32, portrai
     }
     }
     custom_present[slot] = true
+    custom_personal[slot] = true
     ForgetMirrors(level)
     custom_apples[slot] = apples
     for at: 0..CELLS - 1 {
@@ -441,7 +479,7 @@ ClearCustomLevel :: (level: s32, portrait: bool = false) -> bool {
     EnsureLoaded()
     if level < 0 || level >= LEVEL_COUNT { return false }
     slot := Slot(level,portrait)
-    if data_active() {
+    if DataIsActive() {
         empty: [0]u8
         if !Portal.WriteByteRecord(RecordName(level, portrait), empty[:]) { return false }
     } else {
@@ -456,6 +494,7 @@ ClearCustomLevel :: (level: s32, portrait: bool = false) -> bool {
     }
     }
     custom_present[slot] = false
+    custom_personal[slot] = false
     ForgetMirrors(level)
     return true
 }
