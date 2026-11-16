@@ -277,7 +277,10 @@ main :: (argc: s32, argv: **u8) -> s32 {
     }
     if mode == "account-navigation" { return ifx AccountNavigation() then 0 else Fail("account navigation") }
     if mode == "hosted" { return ifx Hosted() then 0 else Fail("hosted input") }
-    if mode == "engine" { return ifx Engine() then 0 else Fail("game engine") }
+    if mode == "engine" {
+        if !Tool("design_levels", "--check") { return Fail("campaign design") }
+        return ifx Engine() then 0 else Fail("game engine")
+    }
     if mode == "input" { return ifx InputIntegration() then 0 else Fail("input integration") }
     if mode == "store-runtime" {
         portal: [1]string = .["WURM_CRAZYGAMES"]
@@ -322,7 +325,10 @@ main :: (argc: s32, argv: **u8) -> s32 {
         return ifx Tool("locales", "--check") then 0 else Fail("reward localization")
     }
     if mode == "store-model" { return ifx Test("portal_store_test", "portal-store-test", none[:], "", none[:]) then 0 else Fail("portal store model") }
-    if mode == "ui" { return ifx PrivateUI() then 0 else Fail("private UI") }
+    if mode == "ui" {
+        if !Tool("design_levels", "--check") { return Fail("campaign design") }
+        return ifx PrivateUI() then 0 else Fail("private UI")
+    }
     if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
     if mode == "name-field" { return ifx Hosted() then 0 else Fail("name field consumer") }
     if mode == "shop" {
