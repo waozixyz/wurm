@@ -7,10 +7,6 @@ Runtime :: #import, file "../src/portable_runtime.zi";
 #import "kryon/session"
 #import "std/text_buffer"
 
-AdventureMoves :: (direction: s32, count: s32) {
-    for move: 0..count - 1 { App.AdventureMove(direction) }
-}
-
 #program_export
 main :: () -> s32 {
     H.message.abi = MODULE_ABI
@@ -46,23 +42,6 @@ main :: () -> s32 {
         H.Draw()
         H.Click("Level editor")
         H.Expect(H.Find("My levels") >= 0, "portrait normal editor remains reachable")
-        // Long exploratory solutions keep accepting input and remain undoable;
-        // the former fixed 512-entry history silently stopped here.
-        App.game_portrait = false
-        Game.features_enabled = true
-        unused Game.StartAdventure(*App.game, 0, 0, false)
-        VecClear(App.adventure_moves)
-        AdventureMoves(Game.DIR_LEFT,2); AdventureMoves(Game.DIR_UP,3); AdventureMoves(Game.DIR_LEFT,6)
-        for lap: 0..7 {
-            AdventureMoves(Game.DIR_UP,21); AdventureMoves(Game.DIR_RIGHT,15)
-            AdventureMoves(Game.DIR_DOWN,21); AdventureMoves(Game.DIR_LEFT,15)
-        }
-        H.Expect(App.adventure_moves.count > 512 && App.game.mode == Game.MODE_PLAYING,
-            "Adventure accepts and records more than 512 deliberate moves")
-        before_undo := App.adventure_moves.count
-        App.AdventureUndo(0)
-        H.Expect(App.adventure_moves.count == before_undo - 1 && App.game.mode == Game.MODE_PLAYING,
-            "a long Adventure history remains undoable")
     }
     #if #defined(WURM_EDITOR_APP) {
         H.navigation_available = true

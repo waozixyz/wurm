@@ -202,34 +202,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "Obnovit nákupy" }
         if source == "Refresh" { return "Obnovit" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Tvá truhla s odměnou čeká. Otevři Apfelwurm a vyzvedni si ji." }
-        if source == "Adventure" { return "Dobrodružství" }
-        if source == "Puzzle adventure" { return "Logické dobrodružství" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "Vyřeš 3 hádanky a odemkni další oblast." }
-        if source == "Areas" { return "Oblasti" }
-        if source == "Puzzle" { return "Hádanka" }
-        if source == "Puzzle complete" { return "Hádanka dokončena" }
-        if source == "Ordered fruit route" { return "Trasa s ovocem v pořadí" }
-        if source == "Key and gate" { return "Klíč a brána" }
-        if source == "Switch gate" { return "Spínací brána" }
-        if source == "Portal route" { return "Trasa s portály" }
-        if source == "Combined puzzle" { return "Kombinovaná hádanka" }
-        if source == "Orchard Trail" { return "Ovocná stezka" }
-        if source == "Moonring Ruins" { return "Ruiny měsíčních kruhů" }
-        if source == "Flooded Garden" { return "Zatopená zahrada" }
-        if source == "Ember Burrow" { return "Žhavá nora" }
-        if source == "Sky Sanctuary" { return "Nebeská svatyně" }
-        if source == "Collect fruit in order and plan every turn." { return "Sbírej ovoce v pořadí a plánuj každý tah." }
-        if source == "Use matching rings to reshape your route." { return "Použij stejné kruhy a změň svou trasu." }
-        if source == "Switch stones open and close garden gates." { return "Spínací kameny otevírají a zavírají zahradní brány." }
-        if source == "Plan around moving guardians." { return "Plánuj cestu kolem pohybujících se strážců." }
-        if source == "Combine every lesson to reach the summit." { return "Spoj všechny lekce a dostaň se na vrchol." }
-        if source == "Complete 3 puzzles in the previous area." { return "Vyřeš 3 hádanky v předchozí oblasti." }
-        if source == "Moves" { return "Tahy" }
-        if source == "Fruit left" { return "Zbývá ovoce" }
-        if source == "Undo" { return "Vrátit" }
-        if source == "Restart puzzle" { return "Restartovat hádanku" }
-        if source == "Back to puzzles" { return "Zpět k hádankám" }
-        if source == "Undo move" { return "Vrátit tah" }
+        if source == "Stage challenge" { return "Výzva úrovně" }
+        if source == "Challenge complete" { return "Výzva splněna" }
+        if source == "Challenge missed" { return "Výzva nesplněna" }
+        if source == "Collect every fruit in its fixed order." { return "Posbírej všechno ovoce v pevném pořadí." }
+        if source == "Reach the marked garden stone." { return "Dostaň se k označenému zahradnímu kameni." }
+        if source == "Finish without a collision." { return "Dokonči úroveň bez srážky." }
+        if source == "Use a matching portal." { return "Použij odpovídající portál." }
+        if source == "Find the key and open its gate." { return "Najdi klíč a otevři jeho bránu." }
+        if source == "Step on the switch stone." { return "Stoupni na spínací kámen." }
     }
     if locale == "de" {
         if source == "Back" { return "Zurück" }
@@ -397,34 +378,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "Käufe wiederherstellen" }
         if source == "Refresh" { return "Aktualisieren" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Deine Belohnungstruhe wartet. Öffne Apfelwurm und hole sie dir." }
-        if source == "Adventure" { return "Abenteuer" }
-        if source == "Puzzle adventure" { return "Rätselabenteuer" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "Löse 3 Rätsel, um das nächste Gebiet freizuschalten." }
-        if source == "Areas" { return "Gebiete" }
-        if source == "Puzzle" { return "Rätsel" }
-        if source == "Puzzle complete" { return "Rätsel gelöst" }
-        if source == "Ordered fruit route" { return "Geordnete Obstroute" }
-        if source == "Key and gate" { return "Schlüssel und Tor" }
-        if source == "Switch gate" { return "Schaltertor" }
-        if source == "Portal route" { return "Portalroute" }
-        if source == "Combined puzzle" { return "Kombiniertes Rätsel" }
-        if source == "Orchard Trail" { return "Obstgartenpfad" }
-        if source == "Moonring Ruins" { return "Mondringruinen" }
-        if source == "Flooded Garden" { return "Überfluteter Garten" }
-        if source == "Ember Burrow" { return "Glutbau" }
-        if source == "Sky Sanctuary" { return "Himmelsheiligtum" }
-        if source == "Collect fruit in order and plan every turn." { return "Sammle das Obst der Reihe nach und plane jeden Zug." }
-        if source == "Use matching rings to reshape your route." { return "Nutze gleiche Ringe, um deine Route neu zu formen." }
-        if source == "Switch stones open and close garden gates." { return "Schaltersteine öffnen und schließen Gartentore." }
-        if source == "Plan around moving guardians." { return "Plane deinen Weg um die beweglichen Wächter." }
-        if source == "Combine every lesson to reach the summit." { return "Verbinde alle Lektionen, um den Gipfel zu erreichen." }
-        if source == "Complete 3 puzzles in the previous area." { return "Löse 3 Rätsel im vorherigen Gebiet." }
-        if source == "Moves" { return "Züge" }
-        if source == "Fruit left" { return "Obst übrig" }
-        if source == "Undo" { return "Rückgängig" }
-        if source == "Restart puzzle" { return "Rätsel neu starten" }
-        if source == "Back to puzzles" { return "Zurück zu den Rätseln" }
-        if source == "Undo move" { return "Zug rückgängig" }
+        if source == "Stage challenge" { return "Level-Herausforderung" }
+        if source == "Challenge complete" { return "Herausforderung geschafft" }
+        if source == "Challenge missed" { return "Herausforderung verpasst" }
+        if source == "Collect every fruit in its fixed order." { return "Sammle alle Früchte in der vorgegebenen Reihenfolge." }
+        if source == "Reach the marked garden stone." { return "Erreiche den markierten Gartenstein." }
+        if source == "Finish without a collision." { return "Beende das Level ohne Zusammenstoß." }
+        if source == "Use a matching portal." { return "Benutze ein passendes Portal." }
+        if source == "Find the key and open its gate." { return "Finde den Schlüssel und öffne das Tor." }
+        if source == "Step on the switch stone." { return "Tritt auf den Schalterstein." }
     }
     if locale == "es" {
         if source == "Back" { return "Atrás" }
@@ -598,34 +560,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "Restaurar compras" }
         if source == "Refresh" { return "Actualizar" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Tu cofre de recompensa te espera. Abre Apfelwurm para recogerlo." }
-        if source == "Adventure" { return "Aventura" }
-        if source == "Puzzle adventure" { return "Aventura de puzles" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "Completa 3 puzles para desbloquear la siguiente zona." }
-        if source == "Areas" { return "Zonas" }
-        if source == "Puzzle" { return "Puzle" }
-        if source == "Puzzle complete" { return "Puzle completado" }
-        if source == "Ordered fruit route" { return "Ruta de fruta en orden" }
-        if source == "Key and gate" { return "Llave y puerta" }
-        if source == "Switch gate" { return "Puerta con interruptor" }
-        if source == "Portal route" { return "Ruta de portales" }
-        if source == "Combined puzzle" { return "Puzle combinado" }
-        if source == "Orchard Trail" { return "Sendero del Huerto" }
-        if source == "Moonring Ruins" { return "Ruinas del Anillo Lunar" }
-        if source == "Flooded Garden" { return "Jardín Inundado" }
-        if source == "Ember Burrow" { return "Madriguera de Brasas" }
-        if source == "Sky Sanctuary" { return "Santuario Celeste" }
-        if source == "Collect fruit in order and plan every turn." { return "Recoge la fruta en orden y planea cada turno." }
-        if source == "Use matching rings to reshape your route." { return "Usa anillos iguales para cambiar tu ruta." }
-        if source == "Switch stones open and close garden gates." { return "Las piedras interruptor abren y cierran las puertas del jardín." }
-        if source == "Plan around moving guardians." { return "Planea cómo esquivar a los guardianes móviles." }
-        if source == "Combine every lesson to reach the summit." { return "Combina todo lo aprendido para llegar a la cima." }
-        if source == "Complete 3 puzzles in the previous area." { return "Completa 3 puzles en la zona anterior." }
-        if source == "Moves" { return "Movimientos" }
-        if source == "Fruit left" { return "Fruta restante" }
-        if source == "Undo" { return "Deshacer" }
-        if source == "Restart puzzle" { return "Reiniciar puzle" }
-        if source == "Back to puzzles" { return "Volver a los puzles" }
-        if source == "Undo move" { return "Deshacer movimiento" }
+        if source == "Stage challenge" { return "Desafío del nivel" }
+        if source == "Challenge complete" { return "Desafío completado" }
+        if source == "Challenge missed" { return "Desafío no completado" }
+        if source == "Collect every fruit in its fixed order." { return "Recoge toda la fruta en el orden indicado." }
+        if source == "Reach the marked garden stone." { return "Llega a la piedra marcada del jardín." }
+        if source == "Finish without a collision." { return "Termina el nivel sin chocar." }
+        if source == "Use a matching portal." { return "Usa un portal correspondiente." }
+        if source == "Find the key and open its gate." { return "Encuentra la llave y abre su puerta." }
+        if source == "Step on the switch stone." { return "Pisa la piedra interruptor." }
     }
     if locale == "fr" {
         if source == "Back" { return "Retour" }
@@ -795,34 +738,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "Restaurer les achats" }
         if source == "Refresh" { return "Actualiser" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Ton coffre de récompense t’attend. Ouvre Apfelwurm pour le récupérer." }
-        if source == "Adventure" { return "Aventure" }
-        if source == "Puzzle adventure" { return "Aventure de casse-têtes" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "Résous 3 casse-têtes pour débloquer la zone suivante." }
-        if source == "Areas" { return "Zones" }
-        if source == "Puzzle" { return "Casse-tête" }
-        if source == "Puzzle complete" { return "Casse-tête terminé" }
-        if source == "Ordered fruit route" { return "Parcours de fruits ordonné" }
-        if source == "Key and gate" { return "Clé et porte" }
-        if source == "Switch gate" { return "Porte à interrupteur" }
-        if source == "Portal route" { return "Parcours de portails" }
-        if source == "Combined puzzle" { return "Casse-tête combiné" }
-        if source == "Orchard Trail" { return "Sentier du Verger" }
-        if source == "Moonring Ruins" { return "Ruines de l’Anneau Lunaire" }
-        if source == "Flooded Garden" { return "Jardin Inondé" }
-        if source == "Ember Burrow" { return "Terrier des Braises" }
-        if source == "Sky Sanctuary" { return "Sanctuaire Céleste" }
-        if source == "Collect fruit in order and plan every turn." { return "Ramasse les fruits dans l’ordre et planifie chaque tour." }
-        if source == "Use matching rings to reshape your route." { return "Utilise les anneaux identiques pour modifier ton parcours." }
-        if source == "Switch stones open and close garden gates." { return "Les pierres-interrupteurs ouvrent et ferment les portes du jardin." }
-        if source == "Plan around moving guardians." { return "Planifie ton trajet autour des gardiens mobiles." }
-        if source == "Combine every lesson to reach the summit." { return "Combine toutes les leçons pour atteindre le sommet." }
-        if source == "Complete 3 puzzles in the previous area." { return "Résous 3 casse-têtes dans la zone précédente." }
-        if source == "Moves" { return "Coups" }
-        if source == "Fruit left" { return "Fruits restants" }
-        if source == "Undo" { return "Annuler" }
-        if source == "Restart puzzle" { return "Recommencer le casse-tête" }
-        if source == "Back to puzzles" { return "Retour aux casse-têtes" }
-        if source == "Undo move" { return "Annuler le coup" }
+        if source == "Stage challenge" { return "Défi du niveau" }
+        if source == "Challenge complete" { return "Défi réussi" }
+        if source == "Challenge missed" { return "Défi manqué" }
+        if source == "Collect every fruit in its fixed order." { return "Ramasse tous les fruits dans l’ordre indiqué." }
+        if source == "Reach the marked garden stone." { return "Atteins la pierre marquée du jardin." }
+        if source == "Finish without a collision." { return "Termine le niveau sans collision." }
+        if source == "Use a matching portal." { return "Utilise un portail correspondant." }
+        if source == "Find the key and open its gate." { return "Trouve la clé et ouvre sa porte." }
+        if source == "Step on the switch stone." { return "Marche sur la pierre-interrupteur." }
     }
     if locale == "id" {
         if source == "Back" { return "Kembali" }
@@ -993,34 +917,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "Pulihkan pembelian" }
         if source == "Refresh" { return "Muat ulang" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Peti hadiahmu menunggu. Buka Apfelwurm untuk mengambilnya." }
-        if source == "Adventure" { return "Petualangan" }
-        if source == "Puzzle adventure" { return "Petualangan teka-teki" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "Selesaikan 3 teka-teki untuk membuka area berikutnya." }
-        if source == "Areas" { return "Area" }
-        if source == "Puzzle" { return "Teka-teki" }
-        if source == "Puzzle complete" { return "Teka-teki selesai" }
-        if source == "Ordered fruit route" { return "Rute buah berurutan" }
-        if source == "Key and gate" { return "Kunci dan gerbang" }
-        if source == "Switch gate" { return "Gerbang sakelar" }
-        if source == "Portal route" { return "Rute portal" }
-        if source == "Combined puzzle" { return "Teka-teki gabungan" }
-        if source == "Orchard Trail" { return "Jalur Kebun Buah" }
-        if source == "Moonring Ruins" { return "Reruntuhan Cincin Bulan" }
-        if source == "Flooded Garden" { return "Taman Tergenang" }
-        if source == "Ember Burrow" { return "Liang Bara" }
-        if source == "Sky Sanctuary" { return "Suaka Langit" }
-        if source == "Collect fruit in order and plan every turn." { return "Kumpulkan buah secara berurutan dan rencanakan setiap langkah." }
-        if source == "Use matching rings to reshape your route." { return "Gunakan cincin yang sama untuk mengubah rutemu." }
-        if source == "Switch stones open and close garden gates." { return "Batu sakelar membuka dan menutup gerbang taman." }
-        if source == "Plan around moving guardians." { return "Rencanakan jalan di sekitar penjaga yang bergerak." }
-        if source == "Combine every lesson to reach the summit." { return "Gabungkan semua pelajaran untuk mencapai puncak." }
-        if source == "Complete 3 puzzles in the previous area." { return "Selesaikan 3 teka-teki di area sebelumnya." }
-        if source == "Moves" { return "Langkah" }
-        if source == "Fruit left" { return "Buah tersisa" }
-        if source == "Undo" { return "Urungkan" }
-        if source == "Restart puzzle" { return "Mulai ulang teka-teki" }
-        if source == "Back to puzzles" { return "Kembali ke teka-teki" }
-        if source == "Undo move" { return "Urungkan langkah" }
+        if source == "Stage challenge" { return "Tantangan level" }
+        if source == "Challenge complete" { return "Tantangan selesai" }
+        if source == "Challenge missed" { return "Tantangan terlewat" }
+        if source == "Collect every fruit in its fixed order." { return "Kumpulkan semua buah sesuai urutan tetap." }
+        if source == "Reach the marked garden stone." { return "Capai batu taman yang ditandai." }
+        if source == "Finish without a collision." { return "Selesaikan level tanpa tabrakan." }
+        if source == "Use a matching portal." { return "Gunakan portal yang cocok." }
+        if source == "Find the key and open its gate." { return "Temukan kunci dan buka gerbangnya." }
+        if source == "Step on the switch stone." { return "Injak batu sakelar." }
     }
     if locale == "it" {
         if source == "Back" { return "Indietro" }
@@ -1193,34 +1098,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "Ripristina acquisti" }
         if source == "Refresh" { return "Aggiorna" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Il tuo forziere ti aspetta. Apri Apfelwurm per ritirare la ricompensa." }
-        if source == "Adventure" { return "Avventura" }
-        if source == "Puzzle adventure" { return "Avventura rompicapo" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "Completa 3 rompicapi per sbloccare l’area successiva." }
-        if source == "Areas" { return "Aree" }
-        if source == "Puzzle" { return "Rompicapo" }
-        if source == "Puzzle complete" { return "Rompicapo completato" }
-        if source == "Ordered fruit route" { return "Percorso di frutta ordinato" }
-        if source == "Key and gate" { return "Chiave e cancello" }
-        if source == "Switch gate" { return "Cancello a interruttore" }
-        if source == "Portal route" { return "Percorso dei portali" }
-        if source == "Combined puzzle" { return "Rompicapo combinato" }
-        if source == "Orchard Trail" { return "Sentiero del Frutteto" }
-        if source == "Moonring Ruins" { return "Rovine dell’Anello Lunare" }
-        if source == "Flooded Garden" { return "Giardino Allagato" }
-        if source == "Ember Burrow" { return "Tana delle Braci" }
-        if source == "Sky Sanctuary" { return "Santuario Celeste" }
-        if source == "Collect fruit in order and plan every turn." { return "Raccogli la frutta in ordine e pianifica ogni mossa." }
-        if source == "Use matching rings to reshape your route." { return "Usa gli anelli uguali per cambiare il percorso." }
-        if source == "Switch stones open and close garden gates." { return "Le pietre-interruttore aprono e chiudono i cancelli del giardino." }
-        if source == "Plan around moving guardians." { return "Pianifica il percorso attorno ai guardiani in movimento." }
-        if source == "Combine every lesson to reach the summit." { return "Combina ogni lezione per raggiungere la vetta." }
-        if source == "Complete 3 puzzles in the previous area." { return "Completa 3 rompicapi nell’area precedente." }
-        if source == "Moves" { return "Mosse" }
-        if source == "Fruit left" { return "Frutta rimasta" }
-        if source == "Undo" { return "Annulla" }
-        if source == "Restart puzzle" { return "Ricomincia il rompicapo" }
-        if source == "Back to puzzles" { return "Torna ai rompicapi" }
-        if source == "Undo move" { return "Annulla mossa" }
+        if source == "Stage challenge" { return "Sfida del livello" }
+        if source == "Challenge complete" { return "Sfida completata" }
+        if source == "Challenge missed" { return "Sfida mancata" }
+        if source == "Collect every fruit in its fixed order." { return "Raccogli tutti i frutti nell’ordine indicato." }
+        if source == "Reach the marked garden stone." { return "Raggiungi la pietra segnata nel giardino." }
+        if source == "Finish without a collision." { return "Completa il livello senza collisioni." }
+        if source == "Use a matching portal." { return "Usa un portale corrispondente." }
+        if source == "Find the key and open its gate." { return "Trova la chiave e apri il cancello." }
+        if source == "Step on the switch stone." { return "Calpesta la pietra-interruttore." }
     }
     if locale == "ja" {
         if source == "Back" { return "戻る" }
@@ -1395,34 +1281,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "購入を復元" }
         if source == "Refresh" { return "更新" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "報酬の宝箱が待っています。Apfelwurmを開いて受け取りましょう。" }
-        if source == "Adventure" { return "アドベンチャー" }
-        if source == "Puzzle adventure" { return "パズルアドベンチャー" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "パズルを3つクリアして次のエリアを解放しよう。" }
-        if source == "Areas" { return "エリア" }
-        if source == "Puzzle" { return "パズル" }
-        if source == "Puzzle complete" { return "パズルクリア" }
-        if source == "Ordered fruit route" { return "順番どおりのフルーツルート" }
-        if source == "Key and gate" { return "鍵とゲート" }
-        if source == "Switch gate" { return "スイッチゲート" }
-        if source == "Portal route" { return "ポータルルート" }
-        if source == "Combined puzzle" { return "複合パズル" }
-        if source == "Orchard Trail" { return "果樹園の小道" }
-        if source == "Moonring Ruins" { return "月輪の遺跡" }
-        if source == "Flooded Garden" { return "水没した庭園" }
-        if source == "Ember Burrow" { return "残り火の巣穴" }
-        if source == "Sky Sanctuary" { return "天空の聖域" }
-        if source == "Collect fruit in order and plan every turn." { return "順番にフルーツを集め、毎手を考えよう。" }
-        if source == "Use matching rings to reshape your route." { return "同じ輪を使ってルートを組み替えよう。" }
-        if source == "Switch stones open and close garden gates." { return "スイッチ石で庭園のゲートを開閉しよう。" }
-        if source == "Plan around moving guardians." { return "動く守護者を避ける道筋を考えよう。" }
-        if source == "Combine every lesson to reach the summit." { return "学んだことをすべて組み合わせて頂上を目指そう。" }
-        if source == "Complete 3 puzzles in the previous area." { return "前のエリアでパズルを3つクリアしよう。" }
-        if source == "Moves" { return "手数" }
-        if source == "Fruit left" { return "残りフルーツ" }
-        if source == "Undo" { return "元に戻す" }
-        if source == "Restart puzzle" { return "パズルをやり直す" }
-        if source == "Back to puzzles" { return "パズル一覧に戻る" }
-        if source == "Undo move" { return "1手戻す" }
+        if source == "Stage challenge" { return "ステージチャレンジ" }
+        if source == "Challenge complete" { return "チャレンジ達成" }
+        if source == "Challenge missed" { return "チャレンジ失敗" }
+        if source == "Collect every fruit in its fixed order." { return "決められた順番ですべてのフルーツを集めよう。" }
+        if source == "Reach the marked garden stone." { return "印の付いた庭石にたどり着こう。" }
+        if source == "Finish without a collision." { return "ぶつからずにステージをクリアしよう。" }
+        if source == "Use a matching portal." { return "対応するポータルを使おう。" }
+        if source == "Find the key and open its gate." { return "鍵を見つけてゲートを開けよう。" }
+        if source == "Step on the switch stone." { return "スイッチ石を踏もう。" }
     }
     if locale == "ko" {
         if source == "Back" { return "뒤로" }
@@ -1597,34 +1464,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "구매 복원" }
         if source == "Refresh" { return "새로 고침" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "보상 상자가 기다리고 있어요. Apfelwurm을 열어 받아 가세요." }
-        if source == "Adventure" { return "모험" }
-        if source == "Puzzle adventure" { return "퍼즐 모험" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "퍼즐 3개를 완료해 다음 지역을 잠금 해제하세요." }
-        if source == "Areas" { return "지역" }
-        if source == "Puzzle" { return "퍼즐" }
-        if source == "Puzzle complete" { return "퍼즐 완료" }
-        if source == "Ordered fruit route" { return "순서대로 과일 경로" }
-        if source == "Key and gate" { return "열쇠와 문" }
-        if source == "Switch gate" { return "스위치 문" }
-        if source == "Portal route" { return "포털 경로" }
-        if source == "Combined puzzle" { return "복합 퍼즐" }
-        if source == "Orchard Trail" { return "과수원 오솔길" }
-        if source == "Moonring Ruins" { return "달고리 유적" }
-        if source == "Flooded Garden" { return "물에 잠긴 정원" }
-        if source == "Ember Burrow" { return "불씨 굴" }
-        if source == "Sky Sanctuary" { return "하늘 성소" }
-        if source == "Collect fruit in order and plan every turn." { return "과일을 순서대로 모으고 매 수를 계획하세요." }
-        if source == "Use matching rings to reshape your route." { return "같은 고리를 이용해 경로를 바꾸세요." }
-        if source == "Switch stones open and close garden gates." { return "스위치 돌로 정원 문을 열고 닫으세요." }
-        if source == "Plan around moving guardians." { return "움직이는 수호자를 피해 경로를 계획하세요." }
-        if source == "Combine every lesson to reach the summit." { return "배운 모든 것을 결합해 정상에 도달하세요." }
-        if source == "Complete 3 puzzles in the previous area." { return "이전 지역에서 퍼즐 3개를 완료하세요." }
-        if source == "Moves" { return "이동 수" }
-        if source == "Fruit left" { return "남은 과일" }
-        if source == "Undo" { return "실행 취소" }
-        if source == "Restart puzzle" { return "퍼즐 다시 시작" }
-        if source == "Back to puzzles" { return "퍼즐로 돌아가기" }
-        if source == "Undo move" { return "한 수 되돌리기" }
+        if source == "Stage challenge" { return "스테이지 도전" }
+        if source == "Challenge complete" { return "도전 완료" }
+        if source == "Challenge missed" { return "도전 실패" }
+        if source == "Collect every fruit in its fixed order." { return "정해진 순서대로 모든 과일을 모으세요." }
+        if source == "Reach the marked garden stone." { return "표시된 정원 돌에 도달하세요." }
+        if source == "Finish without a collision." { return "충돌 없이 스테이지를 완료하세요." }
+        if source == "Use a matching portal." { return "짝이 맞는 포털을 사용하세요." }
+        if source == "Find the key and open its gate." { return "열쇠를 찾아 문을 여세요." }
+        if source == "Step on the switch stone." { return "스위치 돌을 밟으세요." }
     }
     if locale == "pt" {
         if source == "Back" { return "Voltar" }
@@ -1797,34 +1645,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "Restaurar compras" }
         if source == "Refresh" { return "Atualizar" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Seu baú de recompensa está esperando. Abra Apfelwurm para resgatá-lo." }
-        if source == "Adventure" { return "Aventura" }
-        if source == "Puzzle adventure" { return "Aventura de quebra-cabeças" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "Conclua 3 quebra-cabeças para desbloquear a próxima área." }
-        if source == "Areas" { return "Áreas" }
-        if source == "Puzzle" { return "Quebra-cabeça" }
-        if source == "Puzzle complete" { return "Quebra-cabeça concluído" }
-        if source == "Ordered fruit route" { return "Rota de frutas em ordem" }
-        if source == "Key and gate" { return "Chave e portão" }
-        if source == "Switch gate" { return "Portão com interruptor" }
-        if source == "Portal route" { return "Rota de portais" }
-        if source == "Combined puzzle" { return "Quebra-cabeça combinado" }
-        if source == "Orchard Trail" { return "Trilha do Pomar" }
-        if source == "Moonring Ruins" { return "Ruínas do Anel Lunar" }
-        if source == "Flooded Garden" { return "Jardim Alagado" }
-        if source == "Ember Burrow" { return "Toca das Brasas" }
-        if source == "Sky Sanctuary" { return "Santuário Celeste" }
-        if source == "Collect fruit in order and plan every turn." { return "Colete as frutas em ordem e planeje cada jogada." }
-        if source == "Use matching rings to reshape your route." { return "Use anéis iguais para mudar sua rota." }
-        if source == "Switch stones open and close garden gates." { return "As pedras-interruptor abrem e fecham os portões do jardim." }
-        if source == "Plan around moving guardians." { return "Planeje o caminho ao redor dos guardiões móveis." }
-        if source == "Combine every lesson to reach the summit." { return "Combine todas as lições para chegar ao topo." }
-        if source == "Complete 3 puzzles in the previous area." { return "Conclua 3 quebra-cabeças na área anterior." }
-        if source == "Moves" { return "Jogadas" }
-        if source == "Fruit left" { return "Frutas restantes" }
-        if source == "Undo" { return "Desfazer" }
-        if source == "Restart puzzle" { return "Reiniciar quebra-cabeça" }
-        if source == "Back to puzzles" { return "Voltar aos quebra-cabeças" }
-        if source == "Undo move" { return "Desfazer jogada" }
+        if source == "Stage challenge" { return "Desafio da fase" }
+        if source == "Challenge complete" { return "Desafio concluído" }
+        if source == "Challenge missed" { return "Desafio perdido" }
+        if source == "Collect every fruit in its fixed order." { return "Colete todas as frutas na ordem indicada." }
+        if source == "Reach the marked garden stone." { return "Alcance a pedra marcada do jardim." }
+        if source == "Finish without a collision." { return "Termine a fase sem colisões." }
+        if source == "Use a matching portal." { return "Use um portal correspondente." }
+        if source == "Find the key and open its gate." { return "Encontre a chave e abra o portão." }
+        if source == "Step on the switch stone." { return "Pise na pedra de interruptor." }
     }
     if locale == "ru" {
         if source == "Back" { return "Назад" }
@@ -1999,34 +1828,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "Восстановить покупки" }
         if source == "Refresh" { return "Обновить" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "Твой сундук с наградой ждёт. Открой Apfelwurm, чтобы забрать её." }
-        if source == "Adventure" { return "Приключение" }
-        if source == "Puzzle adventure" { return "Приключение с головоломками" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "Реши 3 головоломки, чтобы открыть следующую область." }
-        if source == "Areas" { return "Области" }
-        if source == "Puzzle" { return "Головоломка" }
-        if source == "Puzzle complete" { return "Головоломка решена" }
-        if source == "Ordered fruit route" { return "Маршрут с фруктами по порядку" }
-        if source == "Key and gate" { return "Ключ и ворота" }
-        if source == "Switch gate" { return "Ворота с переключателем" }
-        if source == "Portal route" { return "Маршрут с порталами" }
-        if source == "Combined puzzle" { return "Комбинированная головоломка" }
-        if source == "Orchard Trail" { return "Тропа Сада" }
-        if source == "Moonring Ruins" { return "Руины Лунного Кольца" }
-        if source == "Flooded Garden" { return "Затопленный Сад" }
-        if source == "Ember Burrow" { return "Угольная Нора" }
-        if source == "Sky Sanctuary" { return "Небесное Святилище" }
-        if source == "Collect fruit in order and plan every turn." { return "Собирай фрукты по порядку и планируй каждый ход." }
-        if source == "Use matching rings to reshape your route." { return "Используй одинаковые кольца, чтобы изменить маршрут." }
-        if source == "Switch stones open and close garden gates." { return "Камни-переключатели открывают и закрывают садовые ворота." }
-        if source == "Plan around moving guardians." { return "Планируй путь вокруг движущихся стражей." }
-        if source == "Combine every lesson to reach the summit." { return "Объедини все уроки, чтобы добраться до вершины." }
-        if source == "Complete 3 puzzles in the previous area." { return "Реши 3 головоломки в предыдущей области." }
-        if source == "Moves" { return "Ходы" }
-        if source == "Fruit left" { return "Осталось фруктов" }
-        if source == "Undo" { return "Отменить" }
-        if source == "Restart puzzle" { return "Начать головоломку заново" }
-        if source == "Back to puzzles" { return "Назад к головоломкам" }
-        if source == "Undo move" { return "Отменить ход" }
+        if source == "Stage challenge" { return "Испытание уровня" }
+        if source == "Challenge complete" { return "Испытание выполнено" }
+        if source == "Challenge missed" { return "Испытание не выполнено" }
+        if source == "Collect every fruit in its fixed order." { return "Соберите все фрукты в заданном порядке." }
+        if source == "Reach the marked garden stone." { return "Доберитесь до отмеченного садового камня." }
+        if source == "Finish without a collision." { return "Завершите уровень без столкновений." }
+        if source == "Use a matching portal." { return "Используйте парный портал." }
+        if source == "Find the key and open its gate." { return "Найдите ключ и откройте ворота." }
+        if source == "Step on the switch stone." { return "Наступите на камень-переключатель." }
     }
     if locale == "zh" {
         if source == "Back" { return "返回" }
@@ -2201,34 +2011,15 @@ Text :: (source: string) -> string {
         if source == "Restore purchases" { return "恢复购买" }
         if source == "Refresh" { return "刷新" }
         if source == "Your reward chest is waiting. Open Apfelwurm to collect it." { return "奖励宝箱正等着你。打开 Apfelwurm 领取吧。" }
-        if source == "Adventure" { return "冒险" }
-        if source == "Puzzle adventure" { return "谜题冒险" }
-        if source == "Complete 3 puzzles to unlock the next area." { return "完成 3 个谜题以解锁下一个区域。" }
-        if source == "Areas" { return "区域" }
-        if source == "Puzzle" { return "谜题" }
-        if source == "Puzzle complete" { return "谜题完成" }
-        if source == "Ordered fruit route" { return "顺序水果路线" }
-        if source == "Key and gate" { return "钥匙与大门" }
-        if source == "Switch gate" { return "开关门" }
-        if source == "Portal route" { return "传送门路线" }
-        if source == "Combined puzzle" { return "组合谜题" }
-        if source == "Orchard Trail" { return "果园小径" }
-        if source == "Moonring Ruins" { return "月环遗迹" }
-        if source == "Flooded Garden" { return "水漫花园" }
-        if source == "Ember Burrow" { return "余烬洞穴" }
-        if source == "Sky Sanctuary" { return "天空圣所" }
-        if source == "Collect fruit in order and plan every turn." { return "按顺序收集水果并规划每一步。" }
-        if source == "Use matching rings to reshape your route." { return "使用相同的圆环重塑路线。" }
-        if source == "Switch stones open and close garden gates." { return "开关石可以打开或关闭花园大门。" }
-        if source == "Plan around moving guardians." { return "规划路线，避开移动的守卫。" }
-        if source == "Combine every lesson to reach the summit." { return "结合所有技巧，抵达顶峰。" }
-        if source == "Complete 3 puzzles in the previous area." { return "在上一个区域完成 3 个谜题。" }
-        if source == "Moves" { return "步数" }
-        if source == "Fruit left" { return "剩余水果" }
-        if source == "Undo" { return "撤销" }
-        if source == "Restart puzzle" { return "重新开始谜题" }
-        if source == "Back to puzzles" { return "返回谜题列表" }
-        if source == "Undo move" { return "撤销一步" }
+        if source == "Stage challenge" { return "关卡挑战" }
+        if source == "Challenge complete" { return "挑战完成" }
+        if source == "Challenge missed" { return "挑战未完成" }
+        if source == "Collect every fruit in its fixed order." { return "按固定顺序收集所有水果。" }
+        if source == "Reach the marked garden stone." { return "到达有标记的花园石。" }
+        if source == "Finish without a collision." { return "不发生碰撞地完成关卡。" }
+        if source == "Use a matching portal." { return "使用配对传送门。" }
+        if source == "Find the key and open its gate." { return "找到钥匙并打开大门。" }
+        if source == "Step on the switch stone." { return "踩下开关石。" }
     }
     return source
 }

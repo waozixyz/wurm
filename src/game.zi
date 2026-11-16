@@ -104,11 +104,13 @@ Game :: struct {
     transition_ticks: s32
     random: u32
     started: bool
-    // Puzzle Adventure is isolated from campaign level/progress. Its fruit
-    // appears in a fixed authored order and the clock advances only per move.
-    adventure: bool
-    adventure_mission: s32
-    adventure_total: s32
+    // The opening campaign carries one spatial challenge on the normal board.
+    // It observes real play events and never counts moves.
+    level_apples: s32
+    challenge: s32
+    challenge_done: bool
+    challenge_failed: bool
+    challenge_marker: Point
 }
 
 Index :: (x: s64, y: s64) -> s32 { return cast(s32)(y * board_columns + x) }
@@ -134,24 +136,6 @@ Random :: (game: *Game, limit: s32) -> s32 {
     return cast(s32)((game.random >> 16) & 32767) % limit
 }
 
-// Adventure metadata uses canonical landscape cells. Turning a board forward
-// maps (x,y) to (29-y,x), so every objective and interaction stays on the
-// exact authored floor cell in portrait instead of being snapped at runtime.
-AdventureCellPoint :: (cell: s32) -> Point {
-    if cell < 0 { return Point.{-1, -1} }
-    x := cell % COLUMNS
-    y := cell / COLUMNS
-    if board_columns == ROWS { return Point.{(ROWS - 1 - y) * 16 + 8, x * 16 + 8} }
-    return Point.{x * 16 + 8, y * 16 + 8}
-}
-AdventureObjectivePoint :: (game: *Game) -> Point {
-    objective := game.adventure_total - game.apples
-    if game.adventure_mission < 0 || game.adventure_mission >= ADVENTURE_LEVEL_COUNT ||
-        objective < 0 || objective >= 6 { return Point.{-1, -1} }
-    cell := AdventureObjectiveCells[game.adventure_mission * 6 + objective]
-    return AdventureCellPoint(cell)
-}
-
 TileAt :: (game: *Game, position: Point) -> s32 {
     if position.x < 0 || position.y < 0 || position.x >= board_columns * 16 || position.y >= board_rows * 16 { return 20 }
     return cast(s32)game.board[Index(position.x / 16, position.y / 16)]
@@ -171,16 +155,11 @@ WormNear :: (game: *Game, position: Point, start: s32, distance: s32) -> bool {
 }
 SpawnApple :: (game: *Game) {
     if game.apples <= 0 { game.apple = Point.{-1, -1}; return }
-    if game.adventure {
-        game.apple = AdventureObjectivePoint(game)
-        game.apple_flash = 128
-        return
-    }
     if game.level < 50 {
         // Each objective points to a different quarter of the authored board.
         // If that cell is a wall, choose the nearest permanent floor. This is
         // deterministic across restarts and adapts to the portrait layout.
-        objective := game.adventure_total - game.apples
+        objective := game.level_apples - game.apples
         anchors_x: [6]s32 = .[3, 8, 15, 4, 14, 9]
         anchors_y: [6]s32 = .[4, 10, 5, 19, 20, 14]
         authored := game.level
@@ -301,7 +280,7 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     game.mode = MODE_PLAYING
     game.level = level
     game.apples = apples
-    game.adventure_total = apples
+    game.level_apples = apples
     game.monster_count = 0
     game.transition_ticks = 0
     for index: 0..99 { game.particles[index].life = 0 }
@@ -333,6 +312,7 @@ LoadLevelData :: (game: *Game, level: s32, now: s64, board: []u8, apples: s32, c
     Respawn(game)
     PlaceIdeas(game)
     SpawnApple(game)
+    PrepareChallenge(game)
     game.multiplier = LevelMultiplier(game)
 }
 
@@ -354,6 +334,50 @@ FEATURE_PORTALS :: 1
 FEATURE_KEY :: 2
 FEATURE_SWITCH :: 3
 FEATURE_PORTAL_ROOM :: 4
+
+CHALLENGE_NONE :: 0
+CHALLENGE_ORDERED :: 1
+CHALLENGE_LANDMARK :: 2
+CHALLENGE_CLEAN :: 3
+CHALLENGE_PORTAL :: 4
+CHALLENGE_KEY :: 5
+CHALLENGE_SWITCH :: 6
+
+CompleteChallenge :: (game: *Game, kind: s32) {
+    if game.challenge == kind && !game.challenge_failed { game.challenge_done = true }
+}
+
+// Plain opening boards alternate between an authored fruit route, a visible
+// landmark and a clean run. Boards teaching an interaction challenge that
+// interaction directly. Authored landmark cells come from the same certified
+// loops as the campaign replays, so reaching them never requires a move limit
+// or a route outside the intended garden.
+PrepareChallenge :: (game: *Game) {
+    game.challenge = CHALLENGE_NONE
+    game.challenge_done = false
+    game.challenge_failed = false
+    game.challenge_marker = Point.{-1, -1}
+    if game.level < 0 || game.level >= 50 { return }
+    if game.feature == FEATURE_PORTALS || game.feature == FEATURE_PORTAL_ROOM { game.challenge = CHALLENGE_PORTAL; return }
+    if game.feature == FEATURE_KEY { game.challenge = CHALLENGE_KEY; return }
+    if game.feature == FEATURE_SWITCH { game.challenge = CHALLENGE_SWITCH; return }
+    plain := game.level % 3
+    if plain == 0 { game.challenge = CHALLENGE_ORDERED; return }
+    if plain == 2 { game.challenge = CHALLENGE_CLEAN; return }
+    game.challenge = CHALLENGE_LANDMARK
+    orientation := ifx board_columns == ROWS then 1 else 0
+    cell := DesignedLandmarkCells[game.level * 2 + orientation]
+    marker := Point.{(cell % board_columns) * 16 + 8, (cell / board_columns) * 16 + 8}
+    if TileAt(game, marker) < 20 && !StartClearance(marker.x / 16, marker.y / 16) && !OnPortal(game, marker) {
+        game.challenge_marker = marker
+    } else if game.apple.x >= 0 {
+        // Personal layouts may replace the authored cell. Their deterministic
+        // first fruit is always a reachable objective on the actual board.
+        game.challenge_marker = game.apple
+    } else {
+        game.challenge = CHALLENGE_ORDERED
+    }
+}
 ANIMAL_CLASSIC :: 0
 // 1 was the squirrel, retired for its jittery dashes; the numbers stay.
 ANIMAL_HEDGEHOG :: 2
@@ -673,31 +697,6 @@ PlaceIdeas :: (game: *Game) {
     game.switch_stone = Point.{-1, -1}
     game.on_switch = false
     if !features_enabled { return }
-    if game.adventure {
-        mechanics := AdventureMechanics[game.adventure_mission]
-        mission := game.adventure_mission
-        gate_cell := AdventureGateCells[mission]
-        if gate_cell >= 0 {
-            first := AdventureCellPoint(gate_cell)
-            second := AdventureCellPoint(gate_cell + 1)
-            game.gate = Index(first.x / 16, first.y / 16)
-            game.gate_span = 2
-            game.gate_step = Index(second.x / 16, second.y / 16) - game.gate
-            for cell: 0..1 { game.gate_tiles[cell] = game.board[game.gate + cast(s32)cell * game.gate_step] }
-            OpenGate(game, false)
-        }
-        if (mechanics & 1) != 0 { game.key = AdventureCellPoint(AdventureKeyCells[mission]); game.feature = FEATURE_KEY }
-        if (mechanics & 2) != 0 {
-            game.switch_stone = AdventureCellPoint(AdventureSwitchCells[mission])
-            if game.feature == FEATURE_NONE { game.feature = FEATURE_SWITCH }
-        }
-        if (mechanics & 4) != 0 {
-            game.portals[0] = Portal.{AdventureCellPoint(AdventurePortalACells[mission]), AdventureCellPoint(AdventurePortalBCells[mission])}
-            game.portal_count = 1
-            if game.feature == FEATURE_NONE { game.feature = FEATURE_PORTALS }
-        }
-        return
-    }
     feature := BoardFeature(game.level)
     reached: [CELLS]bool
     if feature == FEATURE_PORTALS {
@@ -859,61 +858,18 @@ LoadLevel :: (game: *Game, level: s32, now: s64) {
     LoadLevelData(game, level, now, tiles[:], BaseApples(level), COLUMNS, ROWS, objects[:])
 }
 StartGameData :: (game: *Game, level: s32, now: s64, seed: u32, board: []u8, apples: s32, columns: s32, rows: s32, objects: []u8) {
-    game.adventure = false
     game.random = seed
     game.lives = 3
     game.score = 0
     LoadLevelData(game, level, now, board, apples, columns, rows, objects)
 }
 StartGame :: (game: *Game, level: s32, now: s64, seed: u32 = 1) {
-    game.adventure = false
     game.random = seed
     game.lives = 3
     game.score = 0
     LoadLevel(game, level, now)
 }
 
-// Start one deliberate Adventure mission. Unlike campaign play, the worm is
-// placed fully inside before input begins and time advances only when the
-// player chooses a move.
-StartAdventure :: (game: *Game, mission: s32, now: s64, portrait: bool = false) -> bool {
-    if mission < 0 || mission >= ADVENTURE_LEVEL_COUNT { return false }
-    landscape: [CELLS]u8
-    board: [CELLS]u8
-    objects: [CELLS]u8
-    for y: 0..ROWS - 1 { for x: 0..COLUMNS - 1 {
-        landscape[y * COLUMNS + x] = AdventureTile(mission, cast(s32)x, cast(s32)y)
-    } }
-    columns: s32 = COLUMNS
-    rows: s32 = ROWS
-    if portrait {
-        GuessPortrait(landscape[:], board[:])
-        columns = ROWS
-        rows = COLUMNS
-    } else { board = landscape }
-    game.random = cast(u32)(7001 + mission * 977)
-    game.lives = 1
-    game.score = 0
-    game.adventure = true
-    game.adventure_mission = mission
-    LoadLevelData(game, mission / 4 * 40, now, board[:], AdventureApples[mission], columns, rows, objects[:])
-    game.lives = 1
-    // Ten quarter-cell ticks bring the head to the first interior cell.
-    for tick: 0..9 { Tick(game) }
-    game.next_step = now + TickInterval(game.level)
-    return true
-}
-// Rebuild the deterministic deliberate-move state used by restart and undo.
-// Tests call this same routine so objective, gate, enemy and RNG restoration
-// cannot drift from the application behavior.
-ReplayAdventure :: (game: *Game, mission: s32, now: s64, portrait: bool, moves: []s32) -> bool {
-    if !StartAdventure(game, mission, now, portrait) { return false }
-    for direction: moves {
-        if game.mode != MODE_PLAYING || !ApplyDirection(game, direction) { return false }
-        for tick: 0..3 { if game.mode == MODE_PLAYING { Tick(game) } }
-    }
-    return true
-}
 // Decoration objects ride above the tiles and never block the worm.
 OBJECT_LOG :: 1;
 OBJECT_FLOWERS :: 2;
@@ -1250,7 +1206,6 @@ Tick :: (game: *Game) {
     if game.death_ticks > 0 {
         game.death_ticks -= 1
         if game.death_ticks == 0 {
-            if game.adventure { game.lives = 1; game.mode = MODE_DIED; FinishTick(game); return }
             if game.lives > 0 { game.lives -= 1 }
             if game.lives <= 0 { game.lives = 0; game.mode = MODE_DIED }
             else { Respawn(game) }
@@ -1277,6 +1232,7 @@ Tick :: (game: *Game) {
             for spark: 0..3 { AddParticle(game, from); AddParticle(game, to) }
             next = Point.{to.x + next.x - from.x, to.y + next.y - from.y}
             game.portal_wait = 5
+            CompleteChallenge(game, CHALLENGE_PORTAL)
             break
         }
     }
@@ -1287,16 +1243,20 @@ Tick :: (game: *Game) {
         game.key = Point.{-1, -1}
         OpenGate(game, true)
         AddScore(game, 2)
+        CompleteChallenge(game, CHALLENGE_KEY)
     }
     if game.switch_stone.x >= 0 {
         over := Near(next, game.switch_stone, 8)
         if over && !game.on_switch {
             OpenGate(game, !game.gate_open)
             for spark: 0..3 { AddParticle(game, game.switch_stone) }
+            CompleteChallenge(game, CHALLENGE_SWITCH)
         }
         game.on_switch = over
     }
     if game.apples == 0 && next.y < 0 {
+        if game.challenge == CHALLENGE_CLEAN && !game.challenge_failed { game.challenge_done = true }
+        CompleteChallenge(game, CHALLENGE_ORDERED)
         count := game.length
         if count > 100 { count = 100 }
         for index: 0..count - 1 {
@@ -1304,8 +1264,7 @@ Tick :: (game: *Game) {
             AddParticle(game, game.worm[segment])
         }
         AddScore(game, 5)
-        if game.adventure { game.mode = MODE_FINISHED }
-        else { game.transition_ticks = 50 }
+        game.transition_ticks = 50
         FinishTick(game)
         return
     }
@@ -1318,7 +1277,10 @@ Tick :: (game: *Game) {
     }
     if collision {
         game.death_ticks = 20
-        if game.adventure { game.mode = MODE_DIED }
+        if game.challenge == CHALLENGE_CLEAN { game.challenge_failed = true; game.challenge_done = false }
+    }
+    if !collision && game.challenge == CHALLENGE_LANDMARK && Near(next, game.challenge_marker, 10) {
+        game.challenge_done = true
     }
     if !collision && game.apples > 0 && Near(next, game.apple, 10) {
         game.apples -= 1
@@ -1326,7 +1288,7 @@ Tick :: (game: *Game) {
         game.target_length += 4
         if game.target_length > 62 { game.target_length = 62 }
         SpawnApple(game)
-        if game.apples == 0 { OpenExit(game) }
+        if game.apples == 0 { CompleteChallenge(game, CHALLENGE_ORDERED); OpenExit(game) }
         count := Random(game, 5) + 3
         for index: 0..count - 1 { AddParticle(game, next) }
     }
@@ -1341,7 +1303,6 @@ Tick :: (game: *Game) {
     FinishTick(game)
 }
 Step :: (game: *Game, now: s64) -> bool {
-    if game.adventure { return false }
     if game.mode != MODE_PLAYING || now < game.next_step { return false }
     interval := TickInterval(game.level)
     ticks := (now - game.next_step) / interval + 1

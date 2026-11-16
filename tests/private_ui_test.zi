@@ -1068,26 +1068,24 @@ SettingsLocal :: () -> bool {
     return true
 }
 
-// The distinct Adventure journey must remain visible and navigable in the
-// native app, not merely exist in engine fixtures.
-AdventureScreens :: () -> bool {
+// Opening-stage challenges live in the normal campaign briefing and HUD.
+CampaignChallenges :: () -> bool {
     SetEnv("WURM_WINDOW", "960x600")
-    SetEnv("WURM_START", "adventure")
-    if !Launch(desktop, "build", Out("adventure-ui", ".log")) { return false }
+    SetEnv("WURM_START", "play")
+    SetEnv("WURM_LEVEL", "2")
+    if !Launch(desktop, "build", Out("campaign-challenge-ui", ".log")) { return false }
     Unset("WURM_START")
-    areas: [2]string = .["Puzzle adventure", "Orchard Trail"]
-    if !Shows(areas[:], 5000) { return Fail("Adventure area journey did not open") }
+    Unset("WURM_LEVEL")
+    briefing: [2]string = .["Stage challenge", "Reach the marked garden stone."]
+    if !Shows(briefing[:], 5000) { return Fail("campaign challenge briefing did not open") }
     picture: DisplayImage
-    if !Capture("adventure-areas", *picture) { return false }
-    if !DriverPress(driver, .{.key = cast(u64)45021, .has_key = true, .enabled = true}) { return Fail("first Adventure area is not selectable") }
-    missions: [2]string = .["Orchard Trail", "Puzzle 1"]
-    if !Shows(missions[:], 5000) { return Fail("Adventure mission journey did not open") }
-    if !Capture("adventure-missions", *picture) { return false }
-    if !DriverPress(driver, .{.key = cast(u64)45221, .has_key = true, .enabled = true}) { return Fail("first Adventure puzzle is not selectable") }
+    if !Capture("campaign-challenge-briefing", *picture) { return false }
+    if !DriverPress(driver, .{.key = cast(u64)24204, .has_key = true, .enabled = true}) { return Fail("challenge stage did not start") }
     Sleep(300)
-    if !Capture("adventure-puzzle", *picture) { return false }
-    if Bright(*picture) <= 0.80 { return Fail("Adventure board artwork is missing or black") }
-    print("Private UI local test: Adventure area map, mission picker and live puzzle opened.\n")
+    live: [1]string = .["Reach the marked garden stone."]
+    if !Shows(live[:], 3000) || !Capture("campaign-challenge-live", *picture) { return false }
+    if Bright(*picture) <= 0.80 { return Fail("campaign challenge board artwork is missing or black") }
+    print("Private UI local test: normal campaign challenge briefing and live HUD opened.\n")
     return true
 }
 
@@ -1101,7 +1099,7 @@ Run :: () -> bool {
     swipe: [1]u8 = .[0]
     unused WriteRecord("controls.dat", swipe[:])
     return PlaytestLayouts() && Rotation() && Landscapes() && Gameplay() && Skins() && WormBodyGeometry() &&
-        SettingsLocal() && AdventureScreens()
+        SettingsLocal() && CampaignChallenges()
 }
 
 #program_export
@@ -1130,7 +1128,11 @@ main :: () -> s32 {
         "LP_NUM_THREADS=1", "ZIRAN_PAR_THREADS=1", "WURM_PROBE_SCENE=0"]
     for setting: fixed { VecPush(settings, setting) }
     only := EnvironmentText("WURM_UI_ONLY")
-    passed := ifx only == "skins" then Skins() && WormBodyGeometry() else ifx only == "rewards" then RewardHistory() else Run()
+    passed := false
+    if only == "skins" { passed = Skins() && WormBodyGeometry() }
+    else if only == "rewards" { passed = RewardHistory() }
+    else if only == "challenge" { passed = CampaignChallenges() }
+    else { passed = Run() }
     Stop()
     ClosePrivateDisplay(display)
     return ifx passed then 0 else 1

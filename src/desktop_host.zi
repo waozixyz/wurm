@@ -20,15 +20,14 @@ WindowSize :: () -> (width: s32, height: s32) {
 
 // WURM_START=editor opens straight into the level editor, optionally at
 // WURM_LEVEL=n (1-based), instead of the stage screen; WURM_START=rewards
-// opens the daily reward chest. WURM_START=levels or adventure opens that
-// selector directly; WURM_START=play opens level WURM_LEVEL as a disposable
-// test run. WURM_UNLOCK_ALL=1 is a non-persistent testing view: all
-// campaign and Adventure choices open without changing earned progress.
+// opens the daily reward chest. WURM_START=levels opens that selector directly;
+// WURM_START=play opens level WURM_LEVEL as a disposable test run at its
+// normal pre-level briefing.
+// WURM_UNLOCK_ALL=1 is a non-persistent all-level testing view.
 StartScreen :: () {
     if EnvironmentText("WURM_UNLOCK_ALL") == "1" { App.UnlockAllAtStartup() }
     start := EnvironmentText("WURM_START")
     if start.count > 0 && (start[0] == #char "l" || start[0] == #char "L") { App.LevelsAtStartup(); return }
-    if start.count > 0 && (start[0] == #char "a" || start[0] == #char "A") { App.AdventureAtStartup(); return }
     if start.count > 0 && (start[0] == #char "r" || start[0] == #char "R") { App.RewardsAtStartup(); return }
     if start.count > 0 && (start[0] == #char "p" || start[0] == #char "P") {
         level := EnvironmentNumber("WURM_LEVEL", 1) - 1

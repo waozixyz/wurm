@@ -114,8 +114,6 @@ Rewards :: #import, file "rewards.zi";
 
 MODE_LOCAL :: 12;
 MODE_REWARDS :: 13;
-MODE_ADVENTURE_AREAS :: 14;
-MODE_ADVENTURE_MISSIONS :: 15;
 local_round: Local.Round;
 local_players: s32 = 2;
 // Each local player's own skin and name; an empty name reads "Player N".
@@ -1297,10 +1295,20 @@ DrawPackConfirm :: (session: Session, area: Rectangle) {
     Wardrobe.poll_at = 0
 }
 
+ChallengeText :: (kind: s32) -> string {
+    if kind == CHALLENGE_LANDMARK { return Locale.Text("Reach the marked garden stone.") }
+    if kind == CHALLENGE_CLEAN { return Locale.Text("Finish without a collision.") }
+    if kind == CHALLENGE_PORTAL { return Locale.Text("Use a matching portal.") }
+    if kind == CHALLENGE_KEY { return Locale.Text("Find the key and open its gate.") }
+    if kind == CHALLENGE_SWITCH { return Locale.Text("Step on the switch stone.") }
+    return Locale.Text("Collect every fruit in its fixed order.")
+}
+challenge_notice: s32;
+
 // Pause, game over and completion use the same roomy card, with full-width
 // touch actions. Short landscape screens use the compact composition.
 Overlay :: (session: Session, area: Rectangle, title: string, message: string, score: s32 = -1) {
-    chapter := ifx game.adventure then game.adventure_mission / 4 else StageOf(game.level)
+    chapter := StageOf(game.level)
     look := JourneyLookFor(chapter)
     unused Box.Draw(session, Box.Props.{.key = 50, .bounds = area,
         .fill = Color.{look.canvas.r, look.canvas.g, look.canvas.b, 178}})
@@ -1340,7 +1348,6 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     }
     primary := ifx game.mode == MODE_PAUSED then "Resume" else "Try again"
     if game.mode == MODE_VICTORY { primary = "Play again" }
-    if game.adventure && game.mode == MODE_DIED { primary = "Undo move" }
     primary_offset: float32 = ifx game.mode == MODE_PAUSED then 176.0 else 120.0
     if Button.Draw(session, Button.Props.{.key = 57,
             .bounds = Rectangle.{card.x + 20.0, card.y + card.height - primary_offset, card.width - 40.0, 48.0},
@@ -1356,19 +1363,18 @@ Overlay :: (session: Session, area: Rectangle, title: string, message: string, s
     }
     if Button.Draw(session, Button.Props.{.key = 58,
             .bounds = Rectangle.{card.x + 20.0, card.y + card.height - 60.0, card.width - 40.0, 48.0},
-            .label = Locale.Text(ifx game.adventure then "Back to puzzles" else "Back to title"), .class_name = 11,
+            .label = Locale.Text("Back to title"), .class_name = 11,
             .tone = ButtonTone.ButtonToneNeutral}) != 0 { LeavePlay() }
 }
 
 // Keep the next board readable while its worm and enemies wait for Start.
 DrawLevelReady :: (session: Session, area: Rectangle) {
-    chapter := ifx game.adventure then game.adventure_mission / 4 else StageOf(game.level)
+    chapter := StageOf(game.level)
     look := JourneyLookFor(chapter)
     width := area.width - 32.0
-    if width > 320.0 { width = 320.0 }
-    height: float32 = ifx area.height < 180.0 then 132.0 else 164.0
-    portal_hint := MeadowPortalLevel(game.level) && game.portal_count > 0 && area.height >= 216.0
-    if portal_hint { height += 40.0 }
+    if width > 360.0 { width = 360.0 }
+    compact := area.height < 260.0
+    height: float32 = ifx compact then 184.0 else 232.0
     card := Rectangle.{area.x + (area.width - width) / 2.0, area.y + (area.height - height) / 2.0, width, height}
     overlay := OverlayWidget.Draw(session, OverlayWidget.Props.{.key = 24200,
         .bounds = card, .scrim = Color.{0, 0, 0, 64}, .dismiss_disabled = true})
@@ -1384,9 +1390,15 @@ DrawLevelReady :: (session: Session, area: Rectangle) {
     digits: [21]u8
     number := FormatInteger(cast(s64)game.level + 1, digits[:])
     CentreText(session, 24203, number, Rectangle.{card.x + 12.0, card.y + 36.0, width - 24.0, 32.0}, 28)
-    if portal_hint {
-        CentreText(session, 24205, "Matching rings teleport you.",
-            Rectangle.{card.x + 12.0, card.y + 76.0, width - 24.0, 30.0}, 13)
+    if game.challenge != CHALLENGE_NONE {
+        if !compact { CentreText(session, 24205, "Stage challenge", Rectangle.{card.x + 12.0, card.y + 76.0, width - 24.0, 22.0}, 13) }
+        challenge_y: float32 = ifx compact then 76.0 else 100.0
+        CentreText(session, 24206, ChallengeText(game.challenge),
+            Rectangle.{card.x + 18.0, card.y + challenge_y, width - 36.0, 38.0}, 14)
+    }
+    if !compact && challenge_notice != 0 {
+        CentreText(session, 24209, ifx challenge_notice == 1 then "Challenge complete" else "Challenge missed",
+            Rectangle.{card.x + 18.0, card.y + 140.0, width - 36.0, 24.0}, 14)
     }
     if Button.Draw(session, Button.Props.{.key = 24204, .id = 24204,
         .bounds = Rectangle.{card.x + 20.0, card.y + height - 64.0, width - 40.0, 48.0},
@@ -1809,7 +1821,6 @@ DrawGatePosts :: (session: Session, stage: Rectangle) {
 DrawBoard :: (session: Session, stage: Rectangle) {
     fancy_garden = true
     chapter := StageOf(game.level)
-    if game.adventure { chapter = game.adventure_mission / 4 }
     look := JourneyLookFor(chapter)
     DrawBoardFrame(session, stage, chapter)
     tiles := Sheet(chapter)
@@ -1862,6 +1873,15 @@ DrawBoard :: (session: Session, stage: Rectangle) {
             ifx game.gate_open then Color.{102, 211, 133, 255} else Color.{241, 159, 64, 255})
         Sprite(session, 12102, stage, game.switch_stone,
             Rectangle.{(ifx game.gate_open then 10.0 else 9.0) * 16.0, 64.0, 16.0, 16.0}, sprites, 22.0)
+    }
+    if game.challenge == CHALLENGE_LANDMARK && game.challenge_marker.x >= 0 {
+        marker_color := ifx game.challenge_done then Color.{102, 211, 133, 255} else Color.{255, 214, 84, 255}
+        DrawObjectAura(session, 12184, stage, game.challenge_marker, 12.0, marker_color)
+        scale := stage.width / (cast(float32)board_columns * 16.0)
+        SvgIcon.Draw(session, SvgIcon.Props.{
+            .bounds = Rectangle.{stage.x + cast(float32)game.challenge_marker.x * scale - 9.0 * scale,
+                stage.y + cast(float32)game.challenge_marker.y * scale - 9.0 * scale, 18.0 * scale, 18.0 * scale},
+            .shape = "F:M12 2L21 12L12 22L3 12ZM9 12L11 14L16 8", .color = marker_color})
     }
     if game.apples > 0 && game.apple.x >= 0 {
         DrawObjectAura(session, 1390, stage, game.apple, 10.5, Color.{238, 76, 60, 255})
@@ -1921,86 +1941,30 @@ DrawBoard :: (session: Session, stage: Rectangle) {
     }
 }
 
+DrawChallengeHud :: (session: Session, stage: Rectangle) {
+    if game.challenge == CHALLENGE_NONE || game.mode == MODE_EDITOR { return }
+    width := stage.width - 16.0
+    if width > 360.0 { width = 360.0 }
+    bounds := Rectangle.{stage.x + (stage.width - width) / 2.0, stage.y + 8.0, width, 36.0}
+    look := JourneyLookFor(StageOf(game.level))
+    unused Box.Draw(session, Box.Props.{.key = 12200, .bounds = bounds,
+        .fill = Color.{look.canvas_bottom.r, look.canvas_bottom.g, look.canvas_bottom.b, 225},
+        .border = ifx game.challenge_done then look.detail else look.accent, .radius = 18.0})
+    SvgIcon.Draw(session, SvgIcon.Props.{.bounds = Rectangle.{bounds.x + 10.0, bounds.y + 8.0, 20.0, 20.0},
+        .shape = ifx game.challenge_done then "S2rr:M5 12L10 17L20 6" else StarIcon.Shape,
+        .color = ifx game.challenge_done then look.detail else Color.{255, 214, 84, 255}})
+    GameText(session, 12201, ChallengeText(game.challenge), Rectangle.{bounds.x + 38.0, bounds.y + 7.0, bounds.width - 48.0, 22.0}, 12, true)
+}
+
 OpenStages :: () {
     BoardSize(COLUMNS, ROWS)
     test_play = false
     game.mode = MODE_STAGES
 }
 
-adventure_area: s32;
-// A puzzle can be explored for as long as the player needs. Undo rebuilds
-// from this growable direction log; there is no silent 512-move input wall.
-adventure_moves: Vec(s32);
-adventure_notice: bool;
-
-AdventureAreaName :: (area: s32) -> string {
-    if area == 1 { return Locale.Text("Moonring Ruins") }
-    if area == 2 { return Locale.Text("Flooded Garden") }
-    if area == 3 { return Locale.Text("Ember Burrow") }
-    if area == 4 { return Locale.Text("Sky Sanctuary") }
-    return Locale.Text("Orchard Trail")
-}
-AdventureAreaHint :: (area: s32) -> string {
-    if area == 1 { return Locale.Text("Use matching rings to reshape your route.") }
-    if area == 2 { return Locale.Text("Switch stones open and close garden gates.") }
-    if area == 3 { return Locale.Text("Plan around moving guardians.") }
-    if area == 4 { return Locale.Text("Combine every lesson to reach the summit.") }
-    return Locale.Text("Collect fruit in order and plan every turn.")
-}
-OpenAdventure :: () {
-    Progress.AdventureLoad()
-    adventure_notice = false
-    game.adventure = false
-    game.mode = MODE_ADVENTURE_AREAS
-    touch_steering = GameControls.GameSwipe.{}
-}
-OpenAdventureArea :: (area: s32) {
-    if !Progress.AdventureAreaOpen(area) { return }
-    adventure_area = area
-    game.adventure = false
-    game.mode = MODE_ADVENTURE_MISSIONS
-    touch_steering = GameControls.GameSwipe.{}
-}
-AdventureRebuild :: (now: s64) {
-    mission := game.adventure_mission
-    if !ReplayAdventure(*game, mission, now, game_portrait, VecSlice(adventure_moves,0,adventure_moves.count)) { OpenAdventure() }
-}
-AdventureStart :: (mission: s32, now: s64) {
-    if !Progress.AdventureMissionOpen(mission) { return }
-    test_play = unlock_everything
-    VecClear(adventure_moves)
-    adventure_notice = false
-    unused StartAdventure(*game, mission, now, game_portrait)
-    touch_steering = GameControls.GameSwipe.{}
-}
-AdventureRestart :: (now: s64) {
-    VecClear(adventure_moves)
-    AdventureRebuild(now)
-}
-AdventureUndo :: (now: s64) {
-    if adventure_moves.count > 0 { unused VecResize(adventure_moves, adventure_moves.count - 1) }
-    AdventureRebuild(now)
-}
-AdventureMove :: (direction: s32) {
-    if !game.adventure || game.mode != MODE_PLAYING { return }
-    before := game.next_direction
-    if !ApplyDirection(*game, direction) { return }
-    if !VecPush(adventure_moves, direction) { game.next_direction = before; return }
-    for tick: 0..3 { if game.mode == MODE_PLAYING { Tick(*game) } }
-}
-AdventureInput :: (key: s32) {
-    direction: s32 = -1
-    if key == 262 || key == 68 || key == 100 { direction = DIR_RIGHT }
-    else if key == 264 || key == 83 || key == 115 { direction = DIR_DOWN }
-    else if key == 263 || key == 65 || key == 97 { direction = DIR_LEFT }
-    else if key == 265 || key == 87 || key == 119 { direction = DIR_UP }
-    if direction >= 0 { AdventureMove(direction) }
-}
-
 // Play the selected layout from its own private override, published board
 // or mirror. An explicit editor mode takes precedence over window shape.
 PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, layout: s32 = -1) {
-    game.adventure = false
     touch_steering = GameControls.GameSwipe.{}
     recorded_level = -1
     board: [CELLS]u8
@@ -2020,6 +1984,7 @@ PlayBoard :: (level: s32, now: s64, seed: u32, restart: bool, layout: s32 = -1) 
     rows: s32 = ifx portrait then COLUMNS else ROWS
     if restart { LoadLevelData(*game,level,now,board[:],apples,columns,rows,objects[:]) }
     else { StartGameData(*game,level,now,seed,board[:],apples,columns,rows,objects[:]) }
+    if editor.playtest { game.challenge = CHALLENGE_NONE }
 }
 StartLevel :: (level: s32, now: s64, seed: u32) { PlayBoard(level, now, seed, false) }
 ReloadLevel :: (level: s32, now: s64) {
@@ -2031,8 +1996,7 @@ ReloadLevel :: (level: s32, now: s64) {
 // Leaving a paused or finished playtest returns to the editor; a normal game
 // returns to the stages.
 LeavePlay :: () {
-    if game.adventure { OpenAdventureArea(game.adventure_mission / 4) }
-    else if editor.playtest { EditorResume() }
+    if editor.playtest { EditorResume() }
     else { OpenStages() }
 }
 
@@ -3834,16 +3798,12 @@ continue_label: [48]u8;
             .now = cast(float64)Timer.MonotonicMilliseconds() / 1000.0, .key_pressed = key,
             .label = "Apfelwurm", .previous_label = label, .next_label = Locale.Text("Level editor")}, items[:], *portal_title)
         TitleActions(session, area)
-        footer := ifx area.width < 420.0 then (area.width - 36.0) / 2.0 else 164.0
-        footer_x := area.x + (area.width - footer * 2.0 - 12.0) / 2.0
+        footer := ifx area.width < 220.0 then area.width - 24.0 else 164.0
+        footer_x := area.x + (area.width - footer) / 2.0
         if Button.Draw(session, Button.Props.{.key = 810,
             .bounds = Rectangle.{footer_x, area.y + area.height - 56.0, footer, 40.0},
             .label = Locale.Text("Stages"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 76 || key == 108 { return 3 }
-        if Button.Draw(session, Button.Props.{.key = 812,
-            .bounds = Rectangle.{footer_x + footer + 12.0, area.y + area.height - 56.0, footer, 40.0},
-            .label = Locale.Text("Adventure"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
-            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { return 6 }
         if action == 1 { return 4 }
         if action == 0 || key == 67 || key == 99 { return ifx Progress.unlocked > 0 then 2 else 1 }
         return 0
@@ -3889,23 +3849,19 @@ DrawTitle :: (session: Session, area: Rectangle, key: s32, play_button: bool = t
     }
     Progress.Load()
     TitleActions(session, area)
-    footer_width := (area.width - 52.0) / 3.0
+    footer_width := (area.width - 36.0) / 2.0
     if footer_width > 150.0 { footer_width = 150.0 }
-    footer_x := area.x + (area.width - footer_width * 3.0 - 24.0) / 2.0
+    footer_x := area.x + (area.width - footer_width * 2.0 - 12.0) / 2.0
     if Button.Draw(session, Button.Props.{.key = 810,
             .bounds = Rectangle.{footer_x, area.y + area.height - 56.0, footer_width, 40.0},
             .label = Locale.Text("Stages"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
             .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 || key == 76 || key == 108 { return 3 }
     #if !#defined(WURM_CRAZYGAMES) {
         if Button.Draw(session, Button.Props.{.key = 811,
-                .bounds = Rectangle.{footer_x + (footer_width + 12.0) * 2.0, area.y + area.height - 56.0, footer_width, 40.0},
+                .bounds = Rectangle.{footer_x + footer_width + 12.0, area.y + area.height - 56.0, footer_width, 40.0},
                 .label = Locale.Text("Level editor"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
                 .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { return 4 }
     }
-    if Button.Draw(session, Button.Props.{.key = 812,
-            .bounds = Rectangle.{footer_x + footer_width + 12.0, area.y + area.height - 56.0, footer_width, 40.0},
-            .label = Locale.Text("Adventure"), .pill = true, .tone = ButtonTone.ButtonToneNeutral,
-            .emphasis = ButtonEmphasis.ButtonEmphasisFilled}) != 0 { return 6 }
     width := area.width - 48.0
     if width > 280.0 { width = 280.0 }
     // One main button: Continue at the furthest level reached, or Play.
@@ -3981,13 +3937,11 @@ mountains_confirm: bool;
 unlock_everything: bool;
 test_play: bool;
 levels_at_start: bool;
-adventure_at_start: bool;
 play_at_start: s32 = -1;
 UnlockAllAtStartup :: () { unlock_everything = true; Progress.open_all = true }
 LevelsAtStartup :: () { levels_at_start = true }
 // A disposable test run of LEVEL (0-based) that leaves earned progress alone.
 PlayAtStartup :: (level: s32) { play_at_start = level }
-AdventureAtStartup :: () { adventure_at_start = true }
 LevelAvailable :: (level: s32) -> bool {
     if level < 0 || level >= LEVEL_COUNT { return false }
     if unlock_everything { return true }
@@ -4128,122 +4082,6 @@ DrawStageList :: (session: Session, area: Rectangle) {
     unused End(session)
     if chosen >= 0 { level_chapter = chosen; level_scroll = 0; mountains_confirm = false }
 }
-adventure_scroll: s32;
-AdventureMechanicLabel :: (mission: s32) -> string {
-    mechanics := Designed.AdventureMechanics[mission]
-    if mechanics == 0 { return Locale.Text("Ordered fruit route") }
-    if mechanics == 1 { return Locale.Text("Key and gate") }
-    if mechanics == 2 { return Locale.Text("Switch gate") }
-    if mechanics == 4 { return Locale.Text("Portal route") }
-    return Locale.Text("Combined puzzle")
-}
-
-DrawAdventureAreas :: (session: Session, area: Rectangle) {
-    backdrop_look := JourneyLookFor(0)
-    DrawJourneyPage(session, 520000, area, 0)
-    header := Rectangle.{area.x + 8.0, area.y + 8.0, area.width - 16.0, 80.0}
-    DrawCardShadow(session, 520020, header, 16.0, backdrop_look)
-    unused Box.Draw(session, Box.Props.{.key = 520021, .bounds = header,
-        .fill = Appearance.Surface(), .border = backdrop_look.detail, .radius = 16.0})
-    if Button.Draw(session, Button.Props.{.key = 45001, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 88.0, 46.0},
-            .label = Locale.Text("Back"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenStages(); return }
-    GameText(session, 45002, Locale.Text("Puzzle adventure"), Rectangle.{area.x + 112.0, area.y + 18.0, area.width - 124.0, 32.0}, 24)
-    CentreText(session, 45003, Locale.Text("Complete 3 puzzles to unlock the next area."), Rectangle.{area.x + 16.0, area.y + 62.0, area.width - 32.0, 24.0}, 14)
-    grid := Rectangle.{area.x + 12.0, area.y + 96.0, area.width - 24.0, area.height - 108.0}
-    columns: s32 = ifx grid.width >= 820.0 then 2 else 1
-    card_width := (grid.width - cast(float32)(columns - 1) * 14.0) / cast(float32)columns
-    if card_width > 600.0 { card_width = 600.0 }
-    left := grid.x + (grid.width - card_width * cast(float32)columns - cast(float32)(columns - 1) * 14.0) / 2.0
-    card_height: float32 = 142.0
-    rows := (5 + columns - 1) / columns
-    scroller := Scroll.Draw(session, Scroll.Props.{.key = 45004, .bounds = grid,
-        .content_height = cast(s32)(cast(float32)rows * (card_height + 12.0)), .scroll_offset = adventure_scroll})
-    adventure_scroll = scroller.scroll_offset
-    if !scroller.opened { return }
-    chosen: s32 = -1
-    for index: 0..4 {
-        chapter := cast(s32)index
-        open := Progress.AdventureAreaOpen(chapter)
-        done := Progress.AdventureAreaCompleted(chapter)
-        look := JourneyLookFor(chapter)
-        key := cast(u64)(45020 + chapter * 10)
-        bounds := Rectangle.{left + cast(float32)(chapter % columns) * (card_width + 14.0),
-            scroller.content.y + cast(float32)(chapter / columns) * (card_height + 12.0), card_width, card_height}
-        DrawCardShadow(session, key + 100000, bounds, 16.0, look)
-        unused Box.Draw(session, Box.Props.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
-            .border = ifx open then look.accent else Appearance.Border(), .radius = 16.0})
-        unused Box.Draw(session, Box.Props.{.key = key + 9,
-            .bounds = Rectangle.{bounds.x, bounds.y + 16.0, 5.0, bounds.height - 32.0},
-            .fill = look.accent, .radius = 3.0})
-        if Button.Draw(session, Button.Props.{.key = key + 1, .bounds = bounds,
-                .label = Locale.Text(ifx open then AdventureAreaName(chapter) else "Locked"), .disabled = !open, .invisible = true}) != 0 { chosen = chapter }
-        unused Image.Draw(session, Image.Props.{.key = key + 2, .bounds = Rectangle.{bounds.x + 6.0, bounds.y + 6.0, 132.0, bounds.height - 12.0},
-            .asset_path = ART_STAGE_COVERS, .source = Rectangle.{0.0, cast(float32)chapter * COVER_HEIGHT, 960.0, COVER_HEIGHT},
-            .fit = Image.ImageFit.ImageFitCover, .smooth = true, .radius = 12.0,
-            .tint = ifx open then cast(u32)0xffffffff else cast(u32)0x686868ff, .alt_text = Locale.Text(AdventureAreaName(chapter))})
-        if !open { SvgIcon.Draw(session, SvgIcon.Props.{.bounds = Rectangle.{bounds.x + 52.0, bounds.y + 50.0, 38.0, 38.0}, .shape = LockIcon.Shape, .color = Color.{255,255,255,235}}) }
-        GameText(session, key + 3, ifx open then AdventureAreaName(chapter) else Locale.Text("Locked"), Rectangle.{bounds.x + 152.0, bounds.y + 18.0, bounds.width - 166.0, 28.0}, 20)
-        GameText(session, key + 4, ifx open then AdventureAreaHint(chapter) else Locale.Text("Complete 3 puzzles in the previous area."), Rectangle.{bounds.x + 152.0, bounds.y + 52.0, bounds.width - 166.0, 42.0}, 13, true)
-        digits: [21]u8
-        count: [32]u8
-        at := CopyInto(count[:], 0, FormatInteger(cast(s64)done, digits[:]))
-        at = CopyInto(count[:], at, " / 4"); count[at] = 0
-        GameText(session, key + 5, TextUntilNul(count[:]), Rectangle.{bounds.x + 152.0, bounds.y + 106.0, 90.0, 24.0}, 16, !open)
-        for dot: 0..3 {
-            unused Box.Draw(session, Box.Props.{.key = key + 200000 + cast(u64)dot,
-                .bounds = Rectangle.{bounds.x + bounds.width - 84.0 + cast(float32)dot * 17.0,
-                    bounds.y + 111.0, 10.0, 10.0},
-                .fill = ifx dot < done then look.detail else Color.{look.accent_dark.r, look.accent_dark.g, look.accent_dark.b, 90},
-                .radius = 5.0})
-        }
-    }
-    unused End(session)
-    if chosen >= 0 { OpenAdventureArea(chosen) }
-}
-
-DrawAdventureMissions :: (session: Session, area: Rectangle, now: s64) {
-    look := JourneyLookFor(adventure_area)
-    DrawJourneyPage(session, 530000, area, adventure_area)
-    header := Rectangle.{area.x + 8.0, area.y + 8.0, area.width - 16.0, 88.0}
-    DrawCardShadow(session, 530020, header, 16.0, look)
-    unused Box.Draw(session, Box.Props.{.key = 530021, .bounds = header,
-        .fill = Appearance.Surface(), .border = look.accent, .radius = 16.0})
-    if Button.Draw(session, Button.Props.{.key = 45201, .bounds = Rectangle.{area.x + 12.0, area.y + 12.0, 88.0, 46.0},
-            .label = Locale.Text("Areas"), .tone = ButtonTone.ButtonToneNeutral}) != 0 { OpenAdventure(); return }
-    GameText(session, 45202, AdventureAreaName(adventure_area), Rectangle.{area.x + 112.0, area.y + 18.0, area.width - 124.0, 32.0}, 24)
-    CentreText(session, 45203, AdventureAreaHint(adventure_area), Rectangle.{area.x + 20.0, area.y + 62.0, area.width - 40.0, 24.0}, 14)
-    if adventure_notice { CentreText(session, 45204, Locale.Text("Puzzle complete"), Rectangle.{area.x + 20.0, area.y + 90.0, area.width - 40.0, 28.0}, 18) }
-    width := area.width - 32.0
-    if width > 680.0 { width = 680.0 }
-    left := area.x + (area.width - width) / 2.0
-    top := area.y + ifx adventure_notice then 130.0 else 108.0
-    chosen: s32 = -1
-    for local: 0..3 {
-        mission := adventure_area * 4 + cast(s32)local
-        done := Progress.AdventureCompleted(mission)
-        key := cast(u64)(45220 + local * 8)
-        bounds := Rectangle.{left, top + cast(float32)local * 82.0, width, 68.0}
-        DrawCardShadow(session, key + 100000, bounds, 15.0, look)
-        unused Box.Draw(session, Box.Props.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
-            .border = ifx done then look.detail else look.accent_dark, .radius = 15.0})
-        unused Box.Draw(session, Box.Props.{.key = key + 7,
-            .bounds = Rectangle.{bounds.x + 10.0, bounds.y + 12.0, 44.0, 44.0},
-            .fill = Color.{look.accent.r, look.accent.g, look.accent.b, 95},
-            .border = look.accent, .radius = 22.0})
-        digits: [21]u8
-        label: [48]u8
-        at := CopyInto(label[:], 0, Locale.Text("Puzzle")); at = CopyInto(label[:], at, " ")
-        at = CopyInto(label[:], at, FormatInteger(local + 1, digits[:])); label[at] = 0
-        if Button.Draw(session, Button.Props.{.key = key + 1, .bounds = bounds, .label = TextUntilNul(label[:]),
-                .detail = Locale.Text(AdventureMechanicLabel(mission)), .invisible = true}) != 0 { chosen = mission }
-        GameText(session, key + 2, TextUntilNul(label[:]), Rectangle.{bounds.x + 66.0, bounds.y + 10.0, 150.0, 24.0}, 18)
-        GameText(session, key + 3, AdventureMechanicLabel(mission), Rectangle.{bounds.x + 66.0, bounds.y + 36.0, bounds.width - 124.0, 20.0}, 13, true)
-        if done { SvgIcon.Draw(session, SvgIcon.Props.{.bounds = Rectangle.{bounds.x + bounds.width - 42.0, bounds.y + 20.0, 26.0, 26.0},
-            .shape = "S2rr:M5 12L10 17L20 6", .color = ColorFromPacked(Appearance.Palette().selected)}) }
-    }
-    if chosen >= 0 { AdventureStart(chosen, now) }
-}
-
 DrawLevels :: (session: Session, area: Rectangle, now: s64) {
     if level_chapter < 0 { DrawStageList(session, area); return }
     look := JourneyLookFor(level_chapter)
@@ -4314,6 +4152,7 @@ DrawLevels :: (session: Session, area: Rectangle, now: s64) {
         current := level == Progress.unlocked
         key := cast(u64)27000 + cast(u64)level * 10
         label := LevelLabel(level)
+        challenge_done := level < Progress.CHALLENGE_LEVELS && Progress.ChallengeCompleted(level)
         DrawCardShadow(session, key + 100000, bounds, 14.0, look)
         unused Box.Draw(session, Box.Props.{.key = key, .bounds = bounds, .fill = Appearance.Surface(),
             .border = ifx current then look.detail else look.accent_dark, .radius = 14.0})
@@ -4321,7 +4160,7 @@ DrawLevels :: (session: Session, area: Rectangle, now: s64) {
             .bounds = Rectangle.{bounds.x + 6.0, bounds.y + 6.0, 4.0, bounds.height - 12.0},
             .fill = ifx current then look.detail else look.accent, .radius = 2.0})
         if Button.Draw(session, Button.Props.{.key = key + 1, .bounds = bounds, .label = ifx locked then Locale.Text("Locked") else label,
-                .detail = ifx Progress.Completed(level) then Locale.Text("Completed") else "", .disabled = locked,
+                .detail = ifx challenge_done then Locale.Text("Challenge complete") else ifx Progress.Completed(level) then Locale.Text("Completed") else "", .disabled = locked,
                 .invisible = true}) != 0 { chosen = level }
         if locked {
             SvgIcon.Draw(session, SvgIcon.Props.{.bounds = Rectangle.{bounds.x + (width - 30.0) / 2.0,
@@ -4332,6 +4171,10 @@ DrawLevels :: (session: Session, area: Rectangle, now: s64) {
                 Rectangle.{bounds.x + 8.0, bounds.y + 8.0, width - 16.0, height - 44.0},
                 level,game_portrait)
             GameText(session, key + 3, label, Rectangle.{bounds.x + 8.0, bounds.y + height - 30.0, width - 16.0, 22.0}, 15, false, true)
+            if challenge_done {
+                SvgIcon.Draw(session, SvgIcon.Props.{.bounds = Rectangle.{bounds.x + 10.0, bounds.y + height - 29.0, 18.0, 18.0},
+                    .shape = StarIcon.Shape, .color = Color.{218, 153, 45, 255}})
+            }
             if Progress.Completed(level) {
                 SvgIcon.Draw(session, SvgIcon.Props.{.bounds = Rectangle.{bounds.x + width - 28.0, bounds.y + height - 29.0, 18.0, 18.0},
                     .shape = "S2rr:M5 12L10 17L20 6", .color = look.detail})
@@ -4363,7 +4206,7 @@ ChooseControls :: (pad: bool, now: s64) {
     else { game.mode = controls_navigation.page; game.next_step = now + TickInterval(game.level) }
 }
 DrawControls :: (session: Session, area: Rectangle, now: s64) {
-    chapter := ifx game.adventure then game.adventure_mission / 4 else StageOf(game.level)
+    chapter := StageOf(game.level)
     look := JourneyLookFor(chapter)
     DrawJourneyPage(session, 230000, area, chapter)
     unused Box.Draw(session, Box.Props.{.key = 23000, .bounds = area,
@@ -4424,14 +4267,6 @@ HandleInput :: (key: s32, now: s64) {
         OpenEditorHome()
         return
     }
-    if game.mode == MODE_ADVENTURE_AREAS {
-        if key == Input.KeyEscape { OpenStages() }
-        return
-    }
-    if game.mode == MODE_ADVENTURE_MISSIONS {
-        if key == Input.KeyEscape { OpenAdventure() }
-        return
-    }
     if game.mode == MODE_LEVELS {
         if key == Input.KeyEscape {
             if level_chapter >= 0 { level_chapter = -1 }
@@ -4446,13 +4281,6 @@ HandleInput :: (key: s32, now: s64) {
         return
     }
     if game.mode == MODE_PLAYING {
-        if game.adventure {
-            if key == 82 || key == 114 { AdventureRestart(now) }
-            else if key == 85 || key == 117 || key == 90 || key == 122 { AdventureUndo(now) }
-            else if key == Input.KeyEscape { OpenAdventureArea(game.adventure_mission / 4) }
-            else { AdventureInput(key) }
-            return
-        }
         // R restarts the level as the run entered it.
         if key == 82 || key == 114 {
             if editor.playtest { ReloadLevel(game.level, now) }
@@ -4465,17 +4293,12 @@ HandleInput :: (key: s32, now: s64) {
         if game.mode == MODE_STAGES { LeavePlay() }
     } else if game.mode == MODE_READY {
         if key == Input.KeyEnter || key == 32 {
+            challenge_notice = 0
             game.mode = MODE_PLAYING
             game.next_step = now + TickInterval(game.level)
             touch_steering = GameControls.GameSwipe.{}
         } else if key == Input.KeyEscape { LeavePlay() }
     } else if game.mode == MODE_DIED {
-        if game.adventure {
-            if key == Input.KeyEnter || key == 32 || key == 85 || key == 117 || key == 90 || key == 122 { AdventureUndo(now) }
-            else if key == 82 || key == 114 { AdventureRestart(now) }
-            else if key == Input.KeyEscape { OpenAdventureArea(game.adventure_mission / 4) }
-            return
-        }
         if key == Input.KeyEnter || key == 32 {
             if editor.playtest { StartLevel(game.level, now, 1) }
             else { Play(now, true) }
@@ -4527,14 +4350,13 @@ stage_total: [24]u8;
 
 // Finger movement steers like arrow keys, without waiting for release.
 Steer :: (direction: s32) {
-    if game.adventure { AdventureMove(direction) }
-    else { unused ApplyDirection(*game, direction) }
+    unused ApplyDirection(*game, direction)
 }
 
 // One icon and one number per status chip: widths stay fixed as lives and
 // scores grow, so they cannot collide with the pause target on a phone.
 StatusChip :: (session: Session, key: u64, bounds: Rectangle, shape: string, color: Color, value: string) {
-    chapter := ifx game.adventure then game.adventure_mission / 4 else StageOf(game.level)
+    chapter := StageOf(game.level)
     look := JourneyLookFor(chapter)
     DrawCardShadow(session, key + 600000, bounds, 16.0, look)
     unused Box.Draw(session, Box.Props.{.key = key, .bounds = bounds,
@@ -4546,7 +4368,7 @@ StatusChip :: (session: Session, key: u64, bounds: Rectangle, shape: string, col
 }
 
 LivesChip :: (session: Session, bounds: Rectangle) {
-    chapter := ifx game.adventure then game.adventure_mission / 4 else StageOf(game.level)
+    chapter := StageOf(game.level)
     look := JourneyLookFor(chapter)
     DrawCardShadow(session, 617000, bounds, 16.0, look)
     unused Box.Draw(session, Box.Props.{.key = 17, .bounds = bounds,
@@ -4571,39 +4393,7 @@ LivesChip :: (session: Session, bounds: Rectangle) {
     }
 }
 
-DrawAdventureTopBar :: (session: Session, hud: Rectangle) {
-    area := game.adventure_mission / 4
-    look := JourneyLookFor(area)
-    unused Box.Draw(session, Box.Props.{.key = 45500, .bounds = hud, .fill = Appearance.Surface(), .border = look.accent_dark})
-    unused Box.Draw(session, Box.Props.{.key = 45520,
-        .bounds = Rectangle.{hud.x, hud.y + hud.height - 5.0, hud.width, 5.0},
-        .fill = look.accent, .fill_bottom = look.accent_dark, .has_fill_bottom = true})
-    narrow := hud.width < 620.0
-    digits: [21]u8
-    title: [96]u8
-    at := CopyInto(title[:], 0, Locale.Text(AdventureAreaName(area))); at = CopyInto(title[:], at, " · ")
-    at = CopyInto(title[:], at, Locale.Text("Puzzle")); at = CopyInto(title[:], at, " ")
-    at = CopyInto(title[:], at, FormatInteger(cast(s64)(game.adventure_mission % 4 + 1), digits[:])); title[at] = 0
-    GameText(session, 45501, TextUntilNul(title[:]), Rectangle.{hud.x + 12.0, hud.y + 10.0, hud.width - 196.0, 26.0}, ifx narrow then 15 else 19)
-    moves: [48]u8
-    at = CopyInto(moves[:], 0, Locale.Text("Moves")); at = CopyInto(moves[:], at, ": ")
-    at = CopyInto(moves[:], at, FormatInteger(adventure_moves.count, digits[:])); moves[at] = 0
-    fruit: [48]u8
-    at = CopyInto(fruit[:], 0, Locale.Text("Fruit left")); at = CopyInto(fruit[:], at, ": ")
-    at = CopyInto(fruit[:], at, FormatInteger(cast(s64)game.apples, digits[:])); fruit[at] = 0
-    GameText(session, 45502, TextUntilNul(moves[:]), Rectangle.{hud.x + 12.0, hud.y + ifx narrow then 52.0 else 39.0, 110.0, 22.0}, 13, true)
-    GameText(session, 45503, TextUntilNul(fruit[:]), Rectangle.{hud.x + 124.0, hud.y + ifx narrow then 52.0 else 39.0, 120.0, 22.0}, 13, true)
-    bx := hud.x + hud.width - 174.0
-    if Button.Draw(session, Button.Props.{.key = 45510, .bounds = Rectangle.{bx, hud.y + 10.0, 50.0, 42.0}, .label = Locale.Text("Undo"),
-            .icon_only = true, .icon_shape = "S2rr:M9 7L4 12L9 17M5 12H14C18 12 20 15 20 18", .disabled = adventure_moves.count == 0}) != 0 { AdventureUndo(Timer.MonotonicMilliseconds()) }
-    if Button.Draw(session, Button.Props.{.key = 45511, .bounds = Rectangle.{bx + 56.0, hud.y + 10.0, 50.0, 42.0}, .label = Locale.Text("Restart puzzle"),
-            .icon_only = true, .icon_shape = "S2rr:M6 8A8 8 0 1 1 5 15M6 8V3M6 8H11"}) != 0 { AdventureRestart(Timer.MonotonicMilliseconds()) }
-    if Button.Draw(session, Button.Props.{.key = 45512, .bounds = Rectangle.{bx + 112.0, hud.y + 10.0, 50.0, 42.0}, .label = Locale.Text("Back to puzzles"),
-            .icon_only = true, .icon_shape = "S2rr:M5 5H11V11H5ZM13 5H19V11H13ZM5 13H11V19H5ZM13 13H19V19H13Z"}) != 0 { OpenAdventureArea(area) }
-}
-
 DrawTopBar :: (session: Session, hud: Rectangle) {
-    if game.adventure { DrawAdventureTopBar(session, hud); return }
     look := JourneyLookFor(StageOf(game.level))
     unused Box.Draw(session, Box.Props.{.key = 10, .bounds = hud, .fill = Appearance.Surface(), .border = look.accent_dark})
     unused Box.Draw(session, Box.Props.{.key = 15,
@@ -4821,13 +4611,15 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
             unlock_everything = true
             requested_level = play_at_start
             StartChosenRun(now)
+            // The direct test entry uses the same deliberate challenge
+            // briefing as a campaign transition. It remains a disposable run
+            // and only Enter/Start begins its clock.
+            game.mode = MODE_READY
         }
-        else if adventure_at_start && !EditorApp() { OpenAdventure() }
         else if rewards_at_start && !EditorApp() { game.mode = MODE_REWARDS }
     } else if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY) {
         previous_mode := game.mode
-        if game.adventure { AdventureRebuild(now) }
-        else { ReloadLevel(game.level,now) }
+        ReloadLevel(game.level,now)
         game.mode = previous_mode
     }
     // The editor app has no game title: every way out of a page lands on
@@ -4857,8 +4649,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         key = Touch.ShortcutKey(frame_input, key)
         if Touch.MovementKey(key) { key = 0 }
         if turn != 0 {
-            if game.adventure { AdventureInput(turn) }
-            else { unused ApplyInput(*game, turn) }
+            unused ApplyInput(*game, turn)
         }
     } else if game.mode == MODE_PAUSED {
         key = Touch.ShortcutKey(frame_input, key)
@@ -4889,7 +4680,6 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // green icon bar across the top with the board letterboxed below it, so
     // portrait and landscape both keep their proportions.
     showing_bar := game.mode != MODE_STAGES && game.mode != MODE_LEVELS &&
-        game.mode != MODE_ADVENTURE_AREAS && game.mode != MODE_ADVENTURE_MISSIONS &&
         game.mode != MODE_SETTINGS && game.mode != MODE_SHOP && game.mode != MODE_REWARDS &&
         !(game.mode == MODE_CONTROLS && (controls_navigation.previous == MODE_STAGES || controls_navigation.previous == MODE_LEVELS)) &&
         !(game.mode == MODE_EDITOR && editor_page != EDITOR_PAGE_EDIT)
@@ -4918,13 +4708,14 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     } else { touch_steering = GameControls.GameSwipe.{} }
     lives_before := game.lives
     unused Step(*game, now)
-    if game.mode == MODE_FINISHED && game.adventure {
-        mission := game.adventure_mission
-        adventure_notice = ifx test_play then false else Progress.AdventureComplete(mission) || Progress.AdventureCompleted(mission)
-        OpenAdventureArea(mission / 4)
-    }
     // Save the next unlocked level on completion, before loading its board.
     if game.mode == MODE_FINISHED && !editor.playtest && !test_play && recorded_level != game.level {
+        challenge_notice = 0
+        if game.challenge != CHALLENGE_NONE {
+            already := Progress.ChallengeCompleted(game.level)
+            challenge_notice = ifx game.challenge_done || already then 1 else 2
+            if game.challenge_done && !already { unused Progress.ChallengeComplete(game.level) }
+        }
         Progress.Complete(game.level)
         if game.level == 159 && !Wardrobe.MountainsAvailable() {
             Progress.RecordRun(160, game.score)
@@ -4970,7 +4761,6 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         if action == 3 { OpenLevels() }
         else if action == 4 { OpenEditorHome() }
         else if action == 5 { OpenLocalSetup() }
-        else if action == 6 { OpenAdventure() }
         else if action != 0 { Play(now, action == 2) }
     } else if game.mode == MODE_SHOP {
         DrawShop(session, viewport)
@@ -4981,10 +4771,6 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         DrawRewardsModal(session, viewport)
     } else if game.mode == MODE_LEVELS {
         DrawLevels(session, viewport, now)
-    } else if game.mode == MODE_ADVENTURE_AREAS {
-        DrawAdventureAreas(session, viewport)
-    } else if game.mode == MODE_ADVENTURE_MISSIONS {
-        DrawAdventureMissions(session, viewport, now)
     } else if game.mode == MODE_CONTROLS {
         if controls_navigation.previous == MODE_STAGES || controls_navigation.previous == MODE_LEVELS { unused DrawTitle(session, viewport, 0, false) }
         else { DrawBoard(session, stage) }
@@ -4994,6 +4780,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         DrawEditor(session, area, now)
     } else {
         DrawBoard(session, stage)
+        if game.mode == MODE_PLAYING { DrawChallengeHud(session, stage) }
         if game.mode == MODE_PLAYING && !Controls.Pad() && game.death_ticks == 0 && game.transition_ticks == 0 {
             SwipeFeedback(session, SwipeFeedbackProps.{.key = 24010, .gesture = contact})
         }

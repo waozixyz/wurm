@@ -1,186 +1,117 @@
-# Campaign and puzzle-adventure redesign
+# Campaign and integrated-challenge redesign
 
-Status: implementation, local validation and the staged-scope audit are complete. The owner rejected the resized/redesigned worm in the first graphics follow-up, so its exact pre-refresh proportions are restored while the corrected visual pass concentrates on richer terrain/tile variants, stronger area palettes and clearer basic-skin colors. The corrected atlases and all 400 campaign previews are regenerated, the fresh private-display review is complete, and the final no-mode local suite passes end to end. The coherent Wurm commit and push are next.
+Status: owner correction implemented and the stable pinned release graph passes
+the focused, private-display and complete local validation gates. Release 0.2.34
+metadata and artifacts are current; the coherent release commit and push are next.
 
-## Outcome
+## Owner outcome
 
-- Replace campaign levels 1–50 with fifty deliberate spatial compositions, each with a named idea, a readable route choice, and a defined place in the teaching/difficulty curve.
-- Preserve levels 51–200 and every personal campaign override. Published layouts remain defaults only; player records keep priority.
-- Add Puzzle Adventure as a genuinely separate mode: a map of unlockable areas, authored missions, fixed objectives, deterministic interactions, and its own persistent progress. Campaign runs, custom levels, editor state, scores, lives, and completion rewards must not leak into it.
-- Keep landscape and portrait play first-class. Every campaign and adventure board needs geometry/solution evidence in both orientations.
+- Replace levels 1–50 with fifty deliberate spatial compositions, each with a
+  readable route idea and a defined place in the teaching curve.
+- Keep puzzle goals inside the normal campaign. There is no extra mode, mission
+  selector, move counter, undo system or separate input cadence.
+- Give every opening level a challenge that observes ordinary real-time play.
+  Missing it never blocks campaign progress; completing it earns a persistent
+  account-specific star.
+- Preserve levels 51–200, personal level overrides, campaign saves, editor data,
+  shader terrain and the restored classic worm proportions.
+- Keep landscape and portrait first-class, with solution evidence for every
+  opening board and challenge.
 
-## Provisional design pillars
+## Research adaptation
 
-1. **A spatial idea before difficulty.** Each board gets one memorable silhouette or route decision (courtyard, braid, switchback, loop, island chain, paired rooms), not a shuffled wall blend.
-2. **Teach, confirm, combine, rest.** A mechanic appears alone, returns in a changed spatial context, then combines with an earlier idea. Short open recovery boards separate demanding clusters.
-3. **Readable consequences.** Keys permanently open a visible gate; switches visibly change a route; matching rings connect clearly separated rooms. Adventure objectives use fixed placements rather than random apple positions.
-4. **Fair growth.** Safe turning space, entrance clearance, and a full route for the grown worm remain verified. Moving hazards arrive only after their movement can be read in safe rooms.
-5. **Meaningful unlocks.** An adventure area opens by completing the prior area's required missions. Area cards show the mechanic and completion, while locked areas state the requirement.
-6. **Two identities, not two menus.** Campaign remains flowing arcade play with lives and score. Adventure advances one deliberate cell at a time, supports undo/restart, has no lives tax, and returns to its area map after a puzzle.
-7. **Non-linear relief.** Each unlocked area offers several missions at once. Completing a required subset opens the next area, so one difficult puzzle does not stop the journey.
+The earlier research into Snakebird, Snakebird Primer, Apple Worm and A Good
+Snowman is retained only as pacing guidance: introduce an interaction alone,
+confirm it in a changed spatial setting, then combine it. Apfelwurm keeps its
+own continuous top-down play, lives, scoring and existing portal/key/switch
+rules. It does not copy gravity, pushing, layouts, one-step input or a separate
+puzzle-map structure.
 
-## Research basis and adaptation
+## Campaign pacing
 
-- [Snakebird — Noumenon Games](https://store.steampowered.com/app/357300/) describes a non-linear world map, themed zones, length gain, shape planning and teleportation. Apfelwurm adapts the non-linear themed-area structure, length-aware routing and portals, without copying gravity, pushing, lifting, layouts or assets.
-- [Snakebird Primer](https://store.steampowered.com/app/1014140/) and [Snakebird Complete — Nintendo](https://www.nintendo.com/us/store/products/snakebird-complete-switch/) establish the value of a gentler teaching island before the harder set. Apfelwurm therefore introduces each interaction alone, confirms it in a changed room, then combines it.
-- [Apple Worm — Poki](https://poki.com/en/g/apple-worm) explains the useful tension that growth can enable progress while also causing traps. Apfelwurm uses its own top-down rule set: fixed fruit order changes body length and therefore which return routes remain safe.
-- [A Good Snowman Is Hard To Build — official press page](https://agoodsnowman.com/press/) was reviewed as a reference for compact authored puzzle identity. No unsupported secret-garden or unlock claims are used.
+- 1–10: open orchards, dividers, courtyards and growth routes.
+- 11–20: matching portals, return paths and route memory.
+- 21–30: keys, gates and readable patrol timing.
+- 31–40: switches, loop-backs and the Meadow finale.
+- 41–50: Leafwood transition and deliberate mechanic combinations.
 
-These are design references only. The implementation stays within Apfelwurm's verified engine capabilities: top-down turning, growth, fixed or random fruit, gates, switches, matching portals and existing moving hazards. It does not invent gravity, bridging, pushing or lifting.
+The authored matrix in `tools/design_levels.zi` remains the source of truth for
+names, silhouettes, mechanics, teaching role, hazards and certified loops.
+`src/designed_levels.zi` is generated from it. Levels 51–200 are unchanged.
 
-## Campaign pacing draft (levels 1–50)
+## Integrated stage challenges
 
-- 1–5 — movement and space: open orchard, single divider, broad bend, courtyard, first full loop.
-- 6–10 — planning for growth: offset lanes, fork and rejoin, nested garden, broad spiral, landmark crossings.
-- 11–15 — matching rings: optional shortcut, forced crossing, return trip, two-room route, portal amid growth.
-- 16–20 — route memory: alternating rooms, false shortcut, long return, linked courts, calm mastery board.
-- 21–25 — keys and gates: key in sight, key off-route, gate-first reveal, two approach choices, key plus portal.
-- 26–30 — predictable patrols: safe observation, crossing timing, circular patrol, guarded key, recovery maze.
-- 31–35 — switches: visible toggle, loop-back toggle, switch beyond portal, timing with patrol, mixed mastery.
-- 36–40 — meadow finale: branching rooms, chained route decisions, hazard crossing, garden gauntlet, open finale.
-- 41–45 — Leafwood transition: new visual language with familiar ideas, tighter rooms, portal/key recombination.
-- 46–50 — first expert set: switch and portal interplay, guarded returns, long-body routing, multi-step finale, rest vista.
+Every first-50 stage selects exactly one goal after its normal board and
+interaction are loaded:
 
-The locked matrix records every opening level's name, silhouette/family, mechanic, teaching role, hazard count, apple route, and landscape/portrait certificate in `tools/design_levels.zi` and `src/designed_levels.zi`. The design and replay tests validate that matrix rather than maintaining a second hand-copied list here.
+- ordered fruit: collect the fixed authored fruit route;
+- landmark: reach a visible garden stone generated from the certified loop;
+- clean run: finish without a collision;
+- portal: use a matching portal;
+- key: collect the key and open its gate;
+- switch: activate the switch stone.
 
-## Puzzle Adventure draft
+The ready card explains the goal, the live board keeps it visible, and level
+cards show earned stars. Goals are event-based and never count moves. The same
+normal level completion, lives, score and next-stage flow remain in effect.
 
-Five areas, four missions each:
-
-1. **Orchard Trail** — ordered fixed fruit, keys, and route reading.
-2. **Moonring Ruins** — paired portals and return-path planning.
-3. **Flooded Garden** — switches that change accessible corridors.
-4. **Ember Burrow** — readable moving hazards combined with gates.
-5. **Sky Sanctuary** — deliberate combinations of fixed objectives, keys/switches, portals, and hazards.
-
-Adventure uses authored mission boards and mission metadata, not campaign numbering dressed as a new selector. Each mission has a fixed objective sequence and explicit interaction recipe. Input advances exactly one board cell, and an undo snapshot restores the prior deliberate move. Completing missions records only adventure completion; required completions unlock the next area. A failed, restarted or abandoned mission does not mutate campaign run data.
-
-## Content corrections after the first review
-
-- Replaced the campaign-derived Adventure layout cycle with twenty compact, purpose-built missions arranged as five themed areas of four missions.
-- Authored each mission's fixed fruit sequence, key, gate, switch, portal and hazard positions together with a short active solution route. The Adventure replays now execute those mechanics rather than validating disabled/static board geometry.
-- Added forty frozen active witnesses: every mission in landscape and portrait. The witnesses assert exact interaction coordinates, required key/switch/portal use, objective order, moving-enemy state and deterministic RNG/body state.
-- Replaced the fixed 512-entry Adventure input history with a dynamic history. The real app-entry regression plays 587 moves and then undoes successfully, proving input continues beyond the former limit.
-- Made undo/restart replay the same deterministic mission state and verify board, body, objective, gate, enemies and RNG after restoration.
-- Added branching unlock, account separation and campaign/custom/editor isolation coverage for Adventure progress.
+Challenge stars use an account-scoped `challenges.dat` record, isolated from
+campaign run state, unlocked levels, completion rewards and custom levels. On
+first load, an old 20-mission puzzle record is copied once onto stages 1–20 so
+existing owner progress is not discarded. The removed legacy record is never
+used for new writes.
 
 ## Implementation surfaces
 
-- `tools/design_levels.zi` / `src/designed_levels.zi`: explicit first-50 recipes, authored names/metadata, and generated adventure boards/metadata.
-- `src/game.zi`: adventure objective state and deterministic interactions while retaining campaign rules.
-- `src/progress.zi`: separate adventure record, load/save/unlock helpers, and account-switch isolation.
-- `src/app.zi`: title entry, area map, mission picker, adventure HUD/ready/completion flow, and orientation reload.
-- `src/locales/*.txt` / `src/localization.zi`: all new interface and objective copy in every shipped locale.
-- tests: campaign content invariants, two-orientation solution replays, interaction recipes, and save isolation.
-- README/CHANGELOG: player-facing behavior under Unreleased, with no version or release changes.
+- `tools/design_levels.zi` and `src/designed_levels.zi`: authored first-50
+  layouts plus orientation-specific landmark cells on certified loops.
+- `src/game.zi`: live challenge state and completion from actual play events.
+- `src/progress.zi`: account-scoped stars and legacy progress migration.
+- `src/app.zi`: ready/live challenge presentation and level-card stars; the
+  obsolete separate-mode routes and selectors are removed.
+- `src/locales/*.txt` and `src/localization.zi`: all challenge text translated.
+- `tests/campaign_replay.zi`: all 200 stages replay in both orientations, with
+  every opening challenge required to complete.
+- persistence, account, navigation and private-display tests cover isolation,
+  migration, status messaging and the live challenge HUD.
 
-## Graphics follow-up after owner review
+## Validation log
 
-The first implementation deliberately reused the existing renderer, which left the redesigned content looking too close to the previous game. The first attempted follow-up changed the presentation without changing authored cells, collision, solutions, save data or input bounds. Its worm resizing was rejected and is superseded by the owner correction below; the useful environment work remains:
+- `build-queue -- env LDLIBS=-lz ziran run --target=c tools/design_levels.zi`
+  regenerated the authored source and certified routes.
+- `build-queue -- ziran check --project` passed after the integrated model was
+  introduced.
+- `build-queue -- env LDLIBS=-lz ziran run --target=c tests/campaign_replay.zi -- normal 26 26`
+  passed the targeted landmark regression in landscape and portrait.
+- `build-queue -- env LDLIBS=-lz ziran run --target=c tests/run_local.zi -- engine`
+  passed: 400 campaign wins with active enemies, both orientations, all
+  first-50 challenges complete and zero lives used; progress, editor,
+  multiplayer, terrain and native/portable input tests also passed.
+- `build-queue -- env LDLIBS=-lz ziran run --locked --target=c tests/run_local.zi -- account-navigation`
+  passed on the pinned graph with zero failures. The live local dependency graph
+  was intentionally not used for release evidence because its Kryon checkout was
+  in the middle of an unrelated desktop-host edit.
+- `build-queue -- env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY -u DBUS_SESSION_BUS_ADDRESS HARMONY_DESKTOP_RECOVERY=0 WURM_UI_ONLY=challenge LDLIBS=-lz ziran run --locked --target=c tests/run_local.zi -- ui`
+  passed the focused normal-stage challenge briefing and live HUD scenario on a
+  private display.
+- The same pinned private-display command without `WURM_UI_ONLY` passed every UI
+  scenario, including editor, input, dialogs, rotation, skins and multiplayer.
+- `build-queue -- python3 tools/build_portable.py` produced the stable portable
+  game/editor bundles and download archive.
+- `build-queue -- env LDLIBS=-lz ziran run --locked --target=c tests/run_local.zi`
+  passed the complete repository suite: generated sources and art, all 400
+  active-enemy campaign wins and first-50 challenges, account and hosted paths,
+  orientation, audio, headless renders and native desktop builds.
 
-- Each of the five landscapes now owns a recognizable journey palette used across selector backgrounds, cards, frames, HUD accents and overlays.
-- Campaign and Adventure boards use a crafted inset frame, continuous materials with stronger exposed edges, sparse landscape-specific details, water glints and a clearer board boundary.
-- Fruit, keys, switches, portals and hazards use readable silhouettes and interaction auras. The rejected larger head/body and added face/gloss are not part of the corrected result.
-- Title actions sit on a coherent journey deck; stage, level, Adventure-area and mission selectors use illustrated covers, material cards, progress rails/dots and area-specific color.
-- Ready, pause, victory, settings, shop, controls, editor and local-multiplayer surfaces inherit the same frame/card language.
-- The private-display suite now captures the Adventure area map, mission picker and live puzzle in addition to its campaign/title/editor/settings/multiplayer coverage.
+## Release gate
 
-The bounded pre-edit audit inspected all 143 existing private-display PNGs in six contact sheets under `build/research/visual-review/`. Fresh display-free title and live-board renders are collected in `graphics-follow-up.png`; the landscape frame, continuous ground, stronger walls, object auras, connected worm and classic character face are all visible there. The upstream Kryon artifact-input defect found during the first fresh run was repaired, after which all 13 private-display scenarios passed and restored the stable native binaries.
-
-### Owner correction: terrain and color, not a larger worm
-
-The owner rejected the worm resizing and face/gloss redesign. The corrected pass restores the earlier head/body sizes, draw stride, sprite opacity, classic head art and local-multiplayer geometry exactly; board dimensions, on-screen cell size, camera, collision and controls remain unchanged. The connected body already present before the rejected pass stays at its earlier proportions.
-
-The graphics effort now targets the requested surfaces:
-
-- expose multiple deterministic crops from each high-resolution journey material instead of stamping one identical 32-pixel floor/wall cell across a board;
-- select those variants by board position while retaining all existing tile IDs and collision semantics;
-- enrich sparse top-down landscape details and keep every decoration non-interactive;
-- brighten the five area palettes without changing layout geometry; and
-- strengthen the companion body colors for the basic skins while preserving every skin image, identity, selection and directional transform.
-
-The complete related source-art set, all existing skin captures, the recovered references, five landscape captures and both rejected-pass closeups were inspected in three contact sheets under `build/research/visual-review/` before this correction was implemented.
-
-The corrected atlas packs nine deterministic material crops per landscape, varied smart-wall pieces, three water frames and four floor variants while keeping every stable sprite coordinate and collision tile ID. `build/research/visual-review/corrected-atlas-variants.png` records the five-area atlas review. The previous landscape, portrait and four basic-skin captures were copied to `build/research/visual-review/before/` before the fresh private-display run. The matching fresh results are collected in `after-gameplay-contact.png`, `after-skins-contact.png` and `basic-skins-before-after.png`; review confirms the earlier head, stride, body width and skin geometry in both orientations while showing richer materials and clearer basic colors.
-
-## Verification ledger
-
-- [x] Research decisions incorporated and content matrix locked.
-- [x] First 50 generated from explicit authored recipes; generated levels 51–200 are byte-stable against the previous revision.
-- [x] Campaign design test proves 50 unique concepts and both-orientation reachability.
-- [x] Campaign geometry replays solve all 200 in both orientations with authored moving hazards active; this legacy 400-board certificate disables portal/key/switch mechanics.
-- [x] Adventure engine replays solve every mission in both orientations and exercise key, switch, portal, ordered-objective, and hazard combinations.
-- [x] Adventure unlock/save tests prove campaign/custom/editor records are untouched.
-- [x] Locale generator and authored/designed-level generators are current.
-- [x] Focused native engine suite passes, including 400 hazard-active campaign geometry wins, 40 active Adventure witnesses, deterministic undo, branching progress and native/portable input integration.
-- [x] Active-mechanics campaign witnesses solve the redesigned first 50 in both orientations and prove intended portal/key/switch engagement.
-- [x] The real app-entry regression accepts 587 Adventure moves and then undoes, covering the removed 512-move cap.
-- [x] Native desktop and portable shared entries build at their stable paths; portable outputs are `build/games/wurm.zx` and `build/games/wurm-editor.zx`.
-- [x] Full local suite passes through `build-queue`.
-- [x] UI navigation is exercised on a private display with inherited desktop variables scrubbed and recovery disabled.
-- [x] Fresh private-display screenshots reviewed for the graphics follow-up, including Adventure selectors and live board.
-- [x] Parent handoff completed before commit; the owner's direct commit request superseded the earlier internal review hold.
-
-## Current local verification evidence
-
-All commands below ran through `build-queue`; GitHub CI is separate and has not been checked for this uncommitted work. The bounded native record is Harmony task log `5ca974fa260fdae85130606c63ebcec8d32b`, and this ledger keeps the review summary outside generated build output.
-
-- `build-queue -- env LDLIBS=-lz ziran run --target=c tests/run_local.zi -- engine` — passed with `game_test`, `start_clearance_test`, `meadow_test`, `campaign_design_test`, `campaign_replay`, `adventure_test`, `progress_test`, `editor_test`, `multiplayer_test`, plus native and portable input integration. Campaign replay reported 400 wins with active enemies and zero lives used; the focused first-50 certificates additionally reported 100 wins with intended portal/key/switch mechanics active. Adventure reported all 20 missions and 40 active witnesses.
-- `build-queue -- python3 tests/arcade_entry_test.py` — passed the normal, editor and hosted shared-entry paths, including the 587-move Adventure route followed by undo.
-- `build-queue -- env LDLIBS=-lz ziran run --target=c tests/run_local.zi -- account-navigation` — passed with zero account-navigation failures after building the full non-bootstrap application runtime.
-- `build-queue -- env LDLIBS=-lz ziran run --target=c tests/run_local.zi -- hosted` — passed with zero hosted-UI failures.
-- `build-queue -- python3 tools/build_portable.py` — passed; stable outputs are `build/games/wurm.zx` (40,652,050 bytes, 2026-11-15 22:40 local) and `build/games/wurm-editor.zx` (6,732,947 bytes, 2026-11-15 22:40 local), with resource manifests beside them.
-- `build-queue -- env LDLIBS=-lz ziran build desktop` — passed at Ziran `7441f9f5` and restored the native application at its stable desktop path.
-- `build-queue -- ziran check` — passed.
-- `build-queue -- env LDLIBS=-lz ziran run --target=c tools/make_art.zi` — passed and regenerated all five corrected campaign atlases at their stable paths.
-- `build-queue -- env LDLIBS=-lz ziran run --target=c tools/render_previews.zi` — passed and regenerated all 400 campaign previews at their stable paths.
-- `build-queue -- env LDLIBS=-lz ziran run --target=c tools/make_art.zi -- --check` — passed with `Five journey atlases, reference art and title mirrors verified.`
-- `build-queue -- env LDLIBS=-lz ziran run --target=c tools/render_previews.zi -- --check` — passed with all generated campaign previews matching regeneration.
-- `build-queue -- sh -c '<decoded-pixel comparison against HEAD>'` — confirmed the five corrected landscape atlases and their ARGB sources contain real changes. Six incidental generator rewrites were pixel-identical and were restored byte-for-byte, so they will not enter the feature commit.
-- `build-queue -- env LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui` — passed after the upstream Kryon artifact-input repair. It built test-driven desktop and modal editions, exercised all private-Xvfb navigation in both orientations with inherited display/session variables removed and desktop recovery disabled, then restored the normal stable desktop and modal binaries. The direct runner reported all 13 interface scenarios successful, including campaign/Adventure selection, editor, controls, skins, the semantic volume slider and multiplayer.
-- `build-queue -- python3 tests/skin_art_pixels_test.py /mnt/storage/Projects/waozixyz/modules/entity` — passed after narrowing the base-sheet comparison to the exact head/body cells shared with the profile. Chapter terrain can vary while all thirteen wardrobe identities keep identical game and leaderboard pixels.
-- `build-queue -- ziran lock` — passed and recorded the complete locally tested dependency graph.
-- `build-queue -- env LDLIBS=-lz ziran run --target=c tests/run_local.zi` — final no-mode rerun exited 0 with `Apfelwurm local tests passed; GitHub CI is separate.` It covered all 400 active-enemy campaign wins, 100 first-50 mechanics witnesses, all 40 active Adventure witnesses, persistence/input/account/hosted/art/audio/picture gates, portable packaging and both final desktop builds.
-- In the upstream Game2D dependency, `build-queue -- make test` passed native and portable navigation/control, swipe, public-import and raylib-ABI tests for the public Kryon API migration.
-
-A prior full no-mode `tests/run_local.zi` pass completed every Wurm campaign, Adventure, persistence, input, account, hosted, art, locale, audio and picture body, then its final desktop artifact publication was invalidated when the shared Ziran checkout changed revision during the provider transaction. The separately rerun account-navigation gate now passes with zero failures, the private-display UI gate passes all 13 scenarios, and a fresh native desktop build completes.
-
-One rerun exposed an uncommitted shared Ziran fuel-register experiment when the portable half of `steering_test` trapped in `SessionOpen`. The exact evidence was routed upstream; that experiment was removed and the shared tools rebuilt. The exact command `build-queue -- ziran run --project build/steering-test/test.zx` then passed. A later final no-mode run also completed every Wurm-owned gate and both final desktop builds from the corrected graphics state.
-
-## Clean-checkout reproducibility follow-up
-
-The focused `engine` and `ui` runner modes now generate and verify `build/designed` before consuming campaign fixtures. This matches the full-suite path and removes their former dependence on ignored files left by an earlier local run. Both focused commands were exercised with `build/designed` absent, `ziran.local.toml` temporarily removed, and the public locked dependency graph selected:
-
-- `build-queue -- env LDLIBS=-lz ziran run --locked --target=c tests/run_local.zi -- engine` — exited 0, regenerated byte-identical designed boards, completed 400 campaign wins and all 40 Adventure witnesses with zero failures.
-- `build-queue -- env LDLIBS=-lz ziran run --locked --target=c tests/run_local.zi -- ui` — exited 0, regenerated byte-identical designed boards, passed all 13 private-display scenarios, and restored the normal desktop binaries.
-
-The regenerated content was confirmed byte-identical to the pre-test directory, and the local override state was restored after each proof. GitHub CI remains separate from these local tests.
-
-## Browser target CI follow-up
-
-The public locked build exposed a target-selection defect that the local dependency overrides had hidden. `PLATFORM_WEB` selects Wurm and Kryon policy, but it does not select Ziran's web operating system or wasm32 data model. The browser builder now passes `--target-os web --target-cpu wasm32` while producing both saved IR and generated C. It also names the Kryon canvas entry, binds its `ProjectFrame` capability to `app:Frame`, and includes `src/app.zi`, so a clean package graph contains the application provider instead of relying on incidental imports.
-
-The CrazyGames-only carousel import is namespaced to avoid public-package symbol collisions. Pausing freezes portal, water and enemy animation as well as simulation. The browser proof moves its private pointer away from pause controls and allows only a small Canvas2D pixel-delta tolerance, while the mobile direction-pad proof compares the entire pressed arm rather than one terrain-colored pixel.
-
-Kryon's filesystem input driver is compiled only into the separate `build/web-driver` test artifact; the production `build/web` remains uninstrumented. The public Entity package is pinned to the same Kryon tree-frame revision as Wurm. The portable bridge keeps its stable value ABI but declares the frame locally with Wurm's Kryon `Session`, avoiding a second package-identity type from the older Apps host package.
-
-All commands below ran through `build-queue` against the public locked graph; the guard temporarily moved `ziran.local.toml` aside and restored it on exit:
-
-- `build-queue -- make -j1 test` in `/mnt/storage/Projects/waozixyz/modules/entity` — passed the full Entity native, portable, storage, account, reward, passkey, referral, private-display browser, formatting and profile suite.
-- `build-queue -- bash -lc 'set -euo pipefail; local_file=ziran.local.toml; backup_file=backup/ci-web-build-ziran.local.toml; test -f "$local_file"; test ! -e "$backup_file"; mv "$local_file" "$backup_file"; restore() { mv "$backup_file" "$local_file"; }; trap restore EXIT; env EMCC=/home/wao/emsdk/upstream/emscripten/emcc LDLIBS=-lz ziran run --locked --target=c tools/build_web.zi'` — built the production browser edition in `build/web`.
-- `build-queue -- bash -lc 'set -euo pipefail; local_file=ziran.local.toml; backup_file=backup/ci-web-test-ziran.local.toml; test -f "$local_file"; test ! -e "$backup_file"; mv "$local_file" "$backup_file"; restore() { mv "$backup_file" "$local_file"; }; trap restore EXIT; env LDLIBS=-lz CHROMIUM=/usr/bin/chromium EMCC=/home/wao/emsdk/upstream/emscripten/emcc ziran run --locked --target=c tests/run_local.zi -- web'` — passed production touch, pad, play, orientation, progress and level-selection coverage plus the isolated password-driver suite.
-- `build-queue -- bash -lc 'set -euo pipefail; local_file=ziran.local.toml; backup_file=backup/ci-crazygames-build-ziran.local.toml; test -f "$local_file"; test ! -e "$backup_file"; mv "$local_file" "$backup_file"; restore() { mv "$backup_file" "$local_file"; }; trap restore EXIT; env EMCC=/home/wao/emsdk/upstream/emscripten/emcc LDLIBS=-lz ziran run --locked --target=c tools/build_web.zi -- crazygames'` — built and verified the 15-file, 39,041,417-byte unpacked CrazyGames package at `work/crazygames.zip`.
-- `build-queue -- bash -lc 'set -euo pipefail; local_file=ziran.local.toml; backup_file=backup/ci-crazygames-test-ziran.local.toml; test -f "$local_file"; test ! -e "$backup_file"; mv "$local_file" "$backup_file"; restore() { mv "$backup_file" "$local_file"; }; trap restore EXIT; env LDLIBS=-lz CHROMIUM=/usr/bin/chromium ziran run --locked --target=c tests/run_local.zi -- crazygames'` — passed portal policy, nested-page, account isolation, SDK, language, mute, pause/resume, gameplay event, paid/free fallback, recovery, editor, shop and store coverage.
-- `build-queue -- bash -lc 'set -euo pipefail; local_file=ziran.local.toml; backup_file=backup/ci-web-final-suite-ziran.local.toml; test -f "$local_file"; test ! -e "$backup_file"; mv "$local_file" "$backup_file"; restore() { mv "$backup_file" "$local_file"; }; trap restore EXIT; env LDLIBS=-lz ziran run --locked --target=c tests/run_local.zi'` — exited 0 with the complete campaign, Adventure, persistence, input, account, hosted, art, audio, sharing, orientation, package and desktop-build suite, ending `Apfelwurm local tests passed; GitHub CI is separate.`
-
-The override file was restored after every guarded command. GitHub CI is separate and will not be polled after the follow-up is pushed.
-
-## CrazyGames balance-proof CI follow-up
-
-The CrazyGames store UI proof previously sampled the derived coin balance after fixed one-second sleeps. On a slower runner, the SDK buy promise had completed but the verified inventory refresh had not yet reached the rendered balance, so the first pixel hash could capture the revoked/loading value and disagree after refresh. The fixture now delays inventory by 1.4 seconds for this scenario, reproducing that timing boundary deliberately. The proof waits for the visible balance to change after verified inventory and waits for that exact balance to return after both refresh and reload.
-
-- `build-queue -- bash -lc 'set -euo pipefail; local_file=ziran.local.toml; backup_file=backup/ci-store-fix-ziran.local.toml; test -f "$local_file"; test ! -e "$backup_file"; mv "$local_file" "$backup_file"; restore() { mv "$backup_file" "$local_file"; }; trap restore EXIT; env LDLIBS=-lz CHROMIUM=/usr/bin/chromium WURM_TEST_STORE_ONLY=1 ziran run --locked --target=c tests/run_local.zi -- crazygames'` — passed the deliberately delayed real-Wasm store flow.
-- `build-queue -- bash -lc 'set -euo pipefail; local_file=ziran.local.toml; backup_file=backup/ci-crazygames-rerun-ziran.local.toml; test -f "$local_file"; test ! -e "$backup_file"; mv "$local_file" "$backup_file"; restore() { mv "$backup_file" "$local_file"; }; trap restore EXIT; env LDLIBS=-lz CHROMIUM=/usr/bin/chromium ziran run --locked --target=c tests/run_local.zi -- crazygames'` — passed the complete packaged CrazyGames portal, editor, account, gameplay and store gate.
-- `build-queue -- bash -lc 'set -euo pipefail; local_file=ziran.local.toml; backup_file=backup/ci-balance-final-suite-ziran.local.toml; test -f "$local_file"; test ! -e "$backup_file"; mv "$local_file" "$backup_file"; restore() { mv "$backup_file" "$local_file"; }; trap restore EXIT; env LDLIBS=-lz ziran run --locked --target=c tests/run_local.zi'` — exited 0 with the complete local game-and-assets suite and both final desktop builds.
-
-The override was restored after all three commands. GitHub CI remains separate and will not be polled after the fix is pushed.
+- `build-queue -- sh update_version.sh` synchronized release 0.2.34 and Android
+  version code 44 from the changelog.
+- The complete pinned no-mode suite passed again after the version change.
+- Pinned portable packaging rebuilt `build/games/wurm.zx`,
+  `build/games/wurm-editor.zx` and
+  `build/downloads/wurm-portable-v0.2.34.tar.gz`.
+- `git diff --check` passed, the local dependency override was restored, and
+  no temporary validation backup remains.
+- Commit once, push once, and leave CI/release completion to the existing
+  workflow watcher.

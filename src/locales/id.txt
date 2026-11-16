@@ -523,87 +523,30 @@ Muat ulang
 [wurm_reward_reminder]
 Peti hadiahmu menunggu. Buka Apfelwurm untuk mengambilnya.
 ---
-[wurm_adventure_0]
-Petualangan
+[wurm_challenge_0]
+Tantangan level
 ---
-[wurm_adventure_1]
-Petualangan teka-teki
+[wurm_challenge_1]
+Tantangan selesai
 ---
-[wurm_adventure_2]
-Selesaikan 3 teka-teki untuk membuka area berikutnya.
+[wurm_challenge_2]
+Tantangan terlewat
 ---
-[wurm_adventure_3]
-Area
+[wurm_challenge_3]
+Kumpulkan semua buah sesuai urutan tetap.
 ---
-[wurm_adventure_4]
-Teka-teki
+[wurm_challenge_4]
+Capai batu taman yang ditandai.
 ---
-[wurm_adventure_5]
-Teka-teki selesai
+[wurm_challenge_5]
+Selesaikan level tanpa tabrakan.
 ---
-[wurm_adventure_6]
-Rute buah berurutan
+[wurm_challenge_6]
+Gunakan portal yang cocok.
 ---
-[wurm_adventure_7]
-Kunci dan gerbang
+[wurm_challenge_7]
+Temukan kunci dan buka gerbangnya.
 ---
-[wurm_adventure_8]
-Gerbang sakelar
----
-[wurm_adventure_9]
-Rute portal
----
-[wurm_adventure_10]
-Teka-teki gabungan
----
-[wurm_adventure_11]
-Jalur Kebun Buah
----
-[wurm_adventure_12]
-Reruntuhan Cincin Bulan
----
-[wurm_adventure_13]
-Taman Tergenang
----
-[wurm_adventure_14]
-Liang Bara
----
-[wurm_adventure_15]
-Suaka Langit
----
-[wurm_adventure_16]
-Kumpulkan buah secara berurutan dan rencanakan setiap langkah.
----
-[wurm_adventure_17]
-Gunakan cincin yang sama untuk mengubah rutemu.
----
-[wurm_adventure_18]
-Batu sakelar membuka dan menutup gerbang taman.
----
-[wurm_adventure_19]
-Rencanakan jalan di sekitar penjaga yang bergerak.
----
-[wurm_adventure_20]
-Gabungkan semua pelajaran untuk mencapai puncak.
----
-[wurm_adventure_21]
-Selesaikan 3 teka-teki di area sebelumnya.
----
-[wurm_adventure_22]
-Langkah
----
-[wurm_adventure_23]
-Buah tersisa
----
-[wurm_adventure_24]
-Urungkan
----
-[wurm_adventure_25]
-Mulai ulang teka-teki
----
-[wurm_adventure_26]
-Kembali ke teka-teki
----
-[wurm_adventure_27]
-Urungkan langkah
+[wurm_challenge_8]
+Injak batu sakelar.
 ---

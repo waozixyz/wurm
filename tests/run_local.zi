@@ -103,11 +103,11 @@ InputIntegration :: () -> bool {
 
 // Existing campaign/engine suite, independent of asset builds and publishing.
 Engine :: () -> bool {
-    engine: [10]string = .["game_test", "start_clearance_test", "meadow_test", "campaign_design_test", "campaign_replay",
-        "adventure_test", "progress_test", "editor_test", "multiplayer_test", "terrain_test"]
-    folders: [10]string = .["game-test", "start-clearance-test", "meadow-test", "campaign-design-test", "campaign-replay",
-        "adventure-test", "progress-test", "editor-test", "multiplayer-test", "terrain-test"]
-    for i: 0..9 { if !Test(engine[i], folders[i], none[:], "", none[:]) { return false } }
+    engine: [9]string = .["game_test", "start_clearance_test", "meadow_test", "campaign_design_test", "campaign_replay",
+        "progress_test", "editor_test", "multiplayer_test", "terrain_test"]
+    folders: [9]string = .["game-test", "start-clearance-test", "meadow-test", "campaign-design-test", "campaign-replay",
+        "progress-test", "editor-test", "multiplayer-test", "terrain-test"]
+    for i: 0..8 { if !Test(engine[i], folders[i], none[:], "", none[:]) { return false } }
     return InputIntegration()
 }
 

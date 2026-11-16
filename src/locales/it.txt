@@ -523,87 +523,30 @@ Aggiorna
 [wurm_reward_reminder]
 Il tuo forziere ti aspetta. Apri Apfelwurm per ritirare la ricompensa.
 ---
-[wurm_adventure_0]
-Avventura
+[wurm_challenge_0]
+Sfida del livello
 ---
-[wurm_adventure_1]
-Avventura rompicapo
+[wurm_challenge_1]
+Sfida completata
 ---
-[wurm_adventure_2]
-Completa 3 rompicapi per sbloccare l’area successiva.
+[wurm_challenge_2]
+Sfida mancata
 ---
-[wurm_adventure_3]
-Aree
+[wurm_challenge_3]
+Raccogli tutti i frutti nell’ordine indicato.
 ---
-[wurm_adventure_4]
-Rompicapo
+[wurm_challenge_4]
+Raggiungi la pietra segnata nel giardino.
 ---
-[wurm_adventure_5]
-Rompicapo completato
+[wurm_challenge_5]
+Completa il livello senza collisioni.
 ---
-[wurm_adventure_6]
-Percorso di frutta ordinato
+[wurm_challenge_6]
+Usa un portale corrispondente.
 ---
-[wurm_adventure_7]
-Chiave e cancello
+[wurm_challenge_7]
+Trova la chiave e apri il cancello.
 ---
-[wurm_adventure_8]
-Cancello a interruttore
----
-[wurm_adventure_9]
-Percorso dei portali
----
-[wurm_adventure_10]
-Rompicapo combinato
----
-[wurm_adventure_11]
-Sentiero del Frutteto
----
-[wurm_adventure_12]
-Rovine dell’Anello Lunare
----
-[wurm_adventure_13]
-Giardino Allagato
----
-[wurm_adventure_14]
-Tana delle Braci
----
-[wurm_adventure_15]
-Santuario Celeste
----
-[wurm_adventure_16]
-Raccogli la frutta in ordine e pianifica ogni mossa.
----
-[wurm_adventure_17]
-Usa gli anelli uguali per cambiare il percorso.
----
-[wurm_adventure_18]
-Le pietre-interruttore aprono e chiudono i cancelli del giardino.
----
-[wurm_adventure_19]
-Pianifica il percorso attorno ai guardiani in movimento.
----
-[wurm_adventure_20]
-Combina ogni lezione per raggiungere la vetta.
----
-[wurm_adventure_21]
-Completa 3 rompicapi nell’area precedente.
----
-[wurm_adventure_22]
-Mosse
----
-[wurm_adventure_23]
-Frutta rimasta
----
-[wurm_adventure_24]
-Annulla
----
-[wurm_adventure_25]
-Ricomincia il rompicapo
----
-[wurm_adventure_26]
-Torna ai rompicapi
----
-[wurm_adventure_27]
-Annulla mossa
+[wurm_challenge_8]
+Calpesta la pietra-interruttore.
 ---

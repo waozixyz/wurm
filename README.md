@@ -66,20 +66,18 @@ Complete a level to unlock the next one.
 After a game over, **Try again** starts the furthest unlocked level with
 three lives and a fresh score.
 
-## Puzzle Adventure
+## Challenges in the journey
 
-Choose **Adventure** on the title for a separate, deliberate puzzle journey.
-Its twenty authored missions are arranged across five areas: Orchard Trail,
-Moonring Ruins, Flooded Garden, Ember Burrow and Sky Sanctuary. Each open area
-offers four puzzles; complete any three to unlock the next area, so one hard
-puzzle never blocks the whole journey.
+Every one of the first 50 normal levels has an optional spatial challenge.
+Some ask you to collect the authored fruit route in order, reach a marked
+garden stone or finish without colliding. The portal, key and switch lessons
+ask you to use that interaction while completing the level. These are normal
+real-time stages—not a separate mode, and never a move-count puzzle.
 
-Adventure advances exactly one cell per move. Fruit appears in a fixed order,
-and later areas add keys, switch gates, paired portals and moving guardians
-before the final puzzles combine them. Use **Undo** after a bad turn or
-**Restart puzzle** to begin again; Adventure never spends campaign lives or
-changes campaign score and progress. On a keyboard, **U** or **Z** undoes and
-**R** restarts. Adventure completion is saved separately for each account.
+The ready card and live board show the current goal. Completing it earns a
+star on that level card, saved separately for each account. Missing a challenge
+does not block the next level: finish the garden normally and return later for
+its star.
 
 ## Play your way
 

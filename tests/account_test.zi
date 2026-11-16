@@ -80,7 +80,7 @@ main :: () -> s32 {
     unused File.CreateDirectory("build/account-test-data")
     Expect(Custom.CustomSetRoot("build/account-test-data/"), "isolated account records")
     owners: [3]string = .["", alice, bob]
-    names: [7]string = .["run.dat", "unlocked.dat", "completed.dat", "progress-pending.dat", "adventure.dat", "wardrobe.dat", "best.dat"]
+    names: [8]string = .["run.dat", "unlocked.dat", "completed.dat", "progress-pending.dat", "challenges.dat", "adventure.dat", "wardrobe.dat", "best.dat"]
     for identity: owners {
         for name: names {
             path: Vec(u8)
@@ -97,20 +97,20 @@ main :: () -> s32 {
     Expect(run_reports == 1 && TextUntilNul(reported_run[:]) == "run 0 0", "fresh guest registers its own zero-score leaderboard row")
     Progress.Complete(99)
     Expect(Progress.Completed(99), "guest progress is retained locally")
-    Progress.AdventureLoad()
-    unused Progress.AdventureComplete(0); unused Progress.AdventureComplete(1); unused Progress.AdventureComplete(3)
-    Expect(Progress.AdventureAreaOpen(1), "guest adventure branch opens independently")
+    Progress.ChallengeLoad()
+    unused Progress.ChallengeComplete(0); unused Progress.ChallengeComplete(1); unused Progress.ChallengeComplete(3)
+    Expect(Progress.ChallengeCompleted(0) && Progress.ChallengeCompleted(3), "guest stage challenges save independently")
     Progress.RecordRun(100, 700)
     owner = alice
     remote = "{\"game\":\"wurm\",\"unlocked\":4,\"completed\":\"101\"}"
     Expect(Progress.Pump(10000), "account sign in reloads scoped progress")
     Expect(reported_run_owner == alice && TextUntilNul(reported_run[:]) == "run 0 0", "new account registers its own row without the guest's best run")
     Expect(Progress.Completed(0) && Progress.Completed(2) && !Progress.Completed(99), "remote marks merge without importing guest progress")
-    Progress.AdventureLoad()
-    Expect(!Progress.AdventureCompleted(0) && !Progress.AdventureAreaOpen(1), "sign in never imports guest adventure clears")
-    unused Progress.AdventureComplete(0); unused Progress.AdventureComplete(2); unused Progress.AdventureComplete(3)
-    unused Progress.AdventureComplete(4); unused Progress.AdventureComplete(5); unused Progress.AdventureComplete(7)
-    Expect(Progress.AdventureAreaOpen(2), "signed-in account keeps its own branching unlock path")
+    Progress.ChallengeLoad()
+    Expect(!Progress.ChallengeCompleted(0), "sign in never imports guest challenge badges")
+    unused Progress.ChallengeComplete(0); unused Progress.ChallengeComplete(2); unused Progress.ChallengeComplete(3)
+    unused Progress.ChallengeComplete(4); unused Progress.ChallengeComplete(5); unused Progress.ChallengeComplete(7)
+    Expect(Progress.ChallengeCompleted(7) && !Progress.ChallengeCompleted(1), "signed-in account keeps its own challenge pattern")
     Expect(writes == 0, "signing in never publishes the guest save")
     Expect(!Progress.Select(199), "future levels stay locked behind play")
     unused Progress.Select(2)
@@ -133,8 +133,8 @@ main :: () -> s32 {
     Progress.poll_at = 0
     Expect(Progress.Pump(20000), "switching accounts reloads the new account")
     Expect(Progress.Completed(0) && !Progress.Completed(39) && !Progress.Completed(41), "completion masks stay isolated")
-    Progress.AdventureLoad()
-    Expect(!Progress.AdventureCompleted(0) && !Progress.AdventureAreaOpen(1), "second account starts with separate adventure progress")
+    Progress.ChallengeLoad()
+    Expect(!Progress.ChallengeCompleted(0), "second account starts with separate challenge progress")
     Expect(writes == 1, "switching does not publish dirty marks under another identity")
     // An older account save has unlocks and a run, but no completion or
     // pending-sync file. It must migrate without creating completion marks.
@@ -191,10 +191,10 @@ main :: () -> s32 {
     Expect(skin_reports == 6 && Wardrobe.skin == 8 && Wardrobe.Available(8), "a claimed holiday skin remains owned and selected after restart")
     owner = alice; remote = ""; Progress.poll_at = 0
     unused Progress.Pump(3000000)
-    Progress.AdventureLoad()
-    Expect(Progress.AdventureCompleted(0) && Progress.AdventureCompleted(2) && Progress.AdventureCompleted(3) &&
-        Progress.AdventureCompleted(4) && Progress.AdventureCompleted(5) && Progress.AdventureCompleted(7) &&
-        Progress.AdventureAreaOpen(2), "switching back restores the original account's exact adventure branches")
+    Progress.ChallengeLoad()
+    Expect(Progress.ChallengeCompleted(0) && Progress.ChallengeCompleted(2) && Progress.ChallengeCompleted(3) &&
+        Progress.ChallengeCompleted(4) && Progress.ChallengeCompleted(5) && Progress.ChallengeCompleted(7) &&
+        !Progress.ChallengeCompleted(1), "switching back restores the original account's exact challenge badges")
     print("Account and wardrobe local test failures: %\n", failures)
     return failures
 }

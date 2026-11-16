@@ -523,87 +523,30 @@ Dew 충전
 [wurm_reward_reminder]
 보상 상자가 기다리고 있어요. Apfelwurm을 열어 받아 가세요.
 ---
-[wurm_adventure_0]
-모험
+[wurm_challenge_0]
+스테이지 도전
 ---
-[wurm_adventure_1]
-퍼즐 모험
+[wurm_challenge_1]
+도전 완료
 ---
-[wurm_adventure_2]
-퍼즐 3개를 완료해 다음 지역을 잠금 해제하세요.
+[wurm_challenge_2]
+도전 실패
 ---
-[wurm_adventure_3]
-지역
+[wurm_challenge_3]
+정해진 순서대로 모든 과일을 모으세요.
 ---
-[wurm_adventure_4]
-퍼즐
+[wurm_challenge_4]
+표시된 정원 돌에 도달하세요.
 ---
-[wurm_adventure_5]
-퍼즐 완료
+[wurm_challenge_5]
+충돌 없이 스테이지를 완료하세요.
 ---
-[wurm_adventure_6]
-순서대로 과일 경로
+[wurm_challenge_6]
+짝이 맞는 포털을 사용하세요.
 ---
-[wurm_adventure_7]
-열쇠와 문
+[wurm_challenge_7]
+열쇠를 찾아 문을 여세요.
 ---
-[wurm_adventure_8]
-스위치 문
----
-[wurm_adventure_9]
-포털 경로
----
-[wurm_adventure_10]
-복합 퍼즐
----
-[wurm_adventure_11]
-과수원 오솔길
----
-[wurm_adventure_12]
-달고리 유적
----
-[wurm_adventure_13]
-물에 잠긴 정원
----
-[wurm_adventure_14]
-불씨 굴
----
-[wurm_adventure_15]
-하늘 성소
----
-[wurm_adventure_16]
-과일을 순서대로 모으고 매 수를 계획하세요.
----
-[wurm_adventure_17]
-같은 고리를 이용해 경로를 바꾸세요.
----
-[wurm_adventure_18]
-스위치 돌로 정원 문을 열고 닫으세요.
----
-[wurm_adventure_19]
-움직이는 수호자를 피해 경로를 계획하세요.
----
-[wurm_adventure_20]
-배운 모든 것을 결합해 정상에 도달하세요.
----
-[wurm_adventure_21]
-이전 지역에서 퍼즐 3개를 완료하세요.
----
-[wurm_adventure_22]
-이동 수
----
-[wurm_adventure_23]
-남은 과일
----
-[wurm_adventure_24]
-실행 취소
----
-[wurm_adventure_25]
-퍼즐 다시 시작
----
-[wurm_adventure_26]
-퍼즐로 돌아가기
----
-[wurm_adventure_27]
-한 수 되돌리기
+[wurm_challenge_8]
+스위치 돌을 밟으세요.
 ---

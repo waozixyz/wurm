@@ -10,7 +10,7 @@ Expect :: (value: bool, message: string) {
 
 // A fresh process reads only what the record holds.
 Reopen :: () {
-    Progress.loaded = false; Progress.adventure_loaded = false
+    Progress.loaded = false; Progress.challenge_loaded = false
     Progress.level = 0; Progress.lives = 3; Progress.score = 0; Progress.unlocked = 0
 }
 Clear :: () {
@@ -19,6 +19,7 @@ Clear :: () {
     unused File.RemoveFile("build/progress-test-data/unlocked.dat")
     unused File.RemoveFile("build/progress-test-data/completed.dat")
     unused File.RemoveFile("build/progress-test-data/progress-pending.dat")
+    unused File.RemoveFile("build/progress-test-data/challenges.dat")
     unused File.RemoveFile("build/progress-test-data/adventure.dat")
     Reopen()
 }
@@ -105,25 +106,33 @@ main :: () -> s32 {
     Expect(Controls.WriteRecord("unlocked.dat", corrupt[:]), "write corrupt unlocked progress")
     Reopen(); Progress.Load()
     Expect(Progress.unlocked == 0, "invalid unlocked records are ignored")
-    // Adventure progress is a separate account-scoped record and opens the
-    // next area after any three of the current area's four puzzles.
+    // Normal-stage challenge badges persist separately without changing the
+    // campaign run, unlock, completion or reward bookkeeping.
     Clear()
     Expect(Progress.Begin(12, 5, 345), "create an independent campaign run")
-    Progress.AdventureLoad()
-    Expect(Progress.AdventureAreaOpen(0) && !Progress.AdventureAreaOpen(1), "only Orchard Trail starts open")
-    Expect(Progress.AdventureComplete(0) && Progress.AdventureComplete(1) && !Progress.AdventureAreaOpen(1), "two clears do not unlock an area")
-    Expect(Progress.AdventureComplete(3) && Progress.AdventureAreaOpen(1), "any three clears unlock the next area")
-    Expect(Progress.AdventureComplete(4) && Progress.AdventureComplete(6) && !Progress.AdventureAreaOpen(2),
-        "two clears on a branched area keep the following area locked")
-    Expect(Progress.AdventureComplete(7) && Progress.AdventureAreaOpen(2),
-        "any three of the four open missions unlock the following area")
-    Expect(!Progress.AdventureComplete(3), "replaying a puzzle does not duplicate progress")
-    Reopen(); Progress.Load(); Progress.AdventureLoad()
-    Expect(Progress.AdventureCompleted(0) && Progress.AdventureCompleted(1) && Progress.AdventureCompleted(3) &&
-        Progress.AdventureCompleted(4) && Progress.AdventureCompleted(6) && Progress.AdventureCompleted(7) &&
-        Progress.AdventureAreaOpen(2), "branched adventure clears and area unlocks survive restart")
+    Progress.ChallengeLoad()
+    Expect(Progress.ChallengeComplete(0) && Progress.ChallengeComplete(17) && Progress.ChallengeComplete(49),
+        "opening-stage challenges save independently")
+    Expect(!Progress.ChallengeComplete(17) && !Progress.ChallengeComplete(-1) && !Progress.ChallengeComplete(50),
+        "duplicate and out-of-range challenge badges are rejected")
+    Reopen(); Progress.Load(); Progress.ChallengeLoad()
+    Expect(Progress.ChallengeCompleted(0) && Progress.ChallengeCompleted(17) && Progress.ChallengeCompleted(49) &&
+        !Progress.ChallengeCompleted(18), "challenge badges survive restart without invented clears")
     Expect(Progress.level == 12 && Progress.lives == 5 && Progress.score == 345 && Progress.unlocked == 12,
-        "adventure clears never change the campaign run or unlock")
+        "challenge badges never change the campaign run or unlock")
+    // Migrate every old account's removed Adventure record into the matching
+    // first twenty stage badges, then prove the new record stands alone.
+    Clear()
+    legacy: [20]u8
+    legacy[0] = 1; legacy[3] = 1; legacy[19] = 1
+    Expect(Controls.WriteRecord("adventure.dat", legacy[:]), "write legacy Adventure progress")
+    Progress.ChallengeLoad()
+    Expect(Progress.ChallengeCompleted(0) && Progress.ChallengeCompleted(3) && Progress.ChallengeCompleted(19) &&
+        !Progress.ChallengeCompleted(1) && !Progress.ChallengeCompleted(20), "legacy clears map exactly onto stages 1–20")
+    unused File.RemoveFile("build/progress-test-data/adventure.dat")
+    Reopen(); Progress.ChallengeLoad()
+    Expect(Progress.ChallengeCompleted(0) && Progress.ChallengeCompleted(3) && Progress.ChallengeCompleted(19),
+        "migrated challenge badges no longer depend on the legacy record")
     print("Controls and progress local test failures: %\n", failures)
     return failures
 }

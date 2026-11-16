@@ -304,6 +304,17 @@ main :: () -> s32 {
     Draw(session, 390.0, 780.0, KeyEscape)
     Expect(App.game.mode == Game.MODE_STAGES, "Back leaves the shop")
 
+    // The seamless next-level card is the campaign's result surface: it
+    // reports whether the just-finished normal-stage challenge was earned.
+    App.StartLevel(0, 0, 1)
+    App.game.mode = Game.MODE_READY
+    App.challenge_notice = 1
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 24209, "Challenge complete"), "next-level result reports an earned challenge")
+    App.challenge_notice = 2
+    Draw(session, 390.0, 780.0)
+    Expect(HasLabel(session, 24209, "Challenge missed"), "next-level result reports a missed optional challenge")
+
     // The game's editor offers only the landscapes and levels reached.
     App.OpenEditorHome()
     Draw(session, 390.0, 780.0)
@@ -318,8 +329,8 @@ main :: () -> s32 {
     saved_dirty := Progress.dirty
     App.UnlockAllAtStartup()
     Expect(App.LevelAvailable(199) && App.EditorLevelOpen(199) && App.EditorOpenLevels(4) == Game.StageLevels(4) &&
-        Progress.AdventureAreaOpen(Progress.ADVENTURE_AREAS - 1),
-        "launch-only test access opens every campaign level and Adventure area")
+        !Progress.ChallengeCompleted(49),
+        "launch-only test access opens every campaign level without inventing a challenge badge")
     Expect(Progress.level == saved_level && Progress.lives == saved_lives && Progress.score == saved_score &&
         Progress.unlocked == saved_unlocked && Progress.dirty == saved_dirty,
         "launch-only test access does not change saved progress")

@@ -523,87 +523,30 @@ Obnovit
 [wurm_reward_reminder]
 Tvá truhla s odměnou čeká. Otevři Apfelwurm a vyzvedni si ji.
 ---
-[wurm_adventure_0]
-Dobrodružství
+[wurm_challenge_0]
+Výzva úrovně
 ---
-[wurm_adventure_1]
-Logické dobrodružství
+[wurm_challenge_1]
+Výzva splněna
 ---
-[wurm_adventure_2]
-Vyřeš 3 hádanky a odemkni další oblast.
+[wurm_challenge_2]
+Výzva nesplněna
 ---
-[wurm_adventure_3]
-Oblasti
+[wurm_challenge_3]
+Posbírej všechno ovoce v pevném pořadí.
 ---
-[wurm_adventure_4]
-Hádanka
+[wurm_challenge_4]
+Dostaň se k označenému zahradnímu kameni.
 ---
-[wurm_adventure_5]
-Hádanka dokončena
+[wurm_challenge_5]
+Dokonči úroveň bez srážky.
 ---
-[wurm_adventure_6]
-Trasa s ovocem v pořadí
+[wurm_challenge_6]
+Použij odpovídající portál.
 ---
-[wurm_adventure_7]
-Klíč a brána
+[wurm_challenge_7]
+Najdi klíč a otevři jeho bránu.
 ---
-[wurm_adventure_8]
-Spínací brána
----
-[wurm_adventure_9]
-Trasa s portály
----
-[wurm_adventure_10]
-Kombinovaná hádanka
----
-[wurm_adventure_11]
-Ovocná stezka
----
-[wurm_adventure_12]
-Ruiny měsíčních kruhů
----
-[wurm_adventure_13]
-Zatopená zahrada
----
-[wurm_adventure_14]
-Žhavá nora
----
-[wurm_adventure_15]
-Nebeská svatyně
----
-[wurm_adventure_16]
-Sbírej ovoce v pořadí a plánuj každý tah.
----
-[wurm_adventure_17]
-Použij stejné kruhy a změň svou trasu.
----
-[wurm_adventure_18]
-Spínací kameny otevírají a zavírají zahradní brány.
----
-[wurm_adventure_19]
-Plánuj cestu kolem pohybujících se strážců.
----
-[wurm_adventure_20]
-Spoj všechny lekce a dostaň se na vrchol.
----
-[wurm_adventure_21]
-Vyřeš 3 hádanky v předchozí oblasti.
----
-[wurm_adventure_22]
-Tahy
----
-[wurm_adventure_23]
-Zbývá ovoce
----
-[wurm_adventure_24]
-Vrátit
----
-[wurm_adventure_25]
-Restartovat hádanku
----
-[wurm_adventure_26]
-Zpět k hádankám
----
-[wurm_adventure_27]
-Vrátit tah
+[wurm_challenge_8]
+Stoupni na spínací kámen.
 ---

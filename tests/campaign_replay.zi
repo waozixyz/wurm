@@ -102,6 +102,9 @@ RouteGap :: (from: s32, to: s32, count: s32) -> s32 {
 }
 ReplayTarget :: (game: *Game) -> Point {
     target := ifx game.apples > 0 then Point.{game.apple.x / 16, game.apple.y / 16} else Point.{board_columns / 2, 1}
+    if game.challenge == CHALLENGE_LANDMARK && !game.challenge_done {
+        return Point.{game.challenge_marker.x / 16, game.challenge_marker.y / 16}
+    }
     if replay_expected == 1 && (replay_mechanics & 1) == 0 && game.key.x >= 0 {
         return Point.{game.key.x / 16, game.key.y / 16}
     }
@@ -317,7 +320,8 @@ Replay :: (level: s32, portrait: bool, seed: u32, route: []Point) -> bool {
             replay_deaths = 3 - game.lives
             return game.lives > 0 && game.apples == 0 &&
             (game.mode == MODE_FINISHED || game.mode == MODE_VICTORY) &&
-            (replay_mechanics & replay_expected) == replay_expected
+            (replay_mechanics & replay_expected) == replay_expected &&
+            (level >= 50 || game.challenge_done)
         }
         // The first fifty have fixed authored fruit on the certified loop.
         // Follow that witness exactly instead of taking incidental floor
@@ -469,6 +473,6 @@ main :: (argc: s32, argv: **u8) -> s32 {
             }
         }
     }
-    print("Campaign engine local test: % complete wins with active enemies; % lives used.\n", wins, deaths)
+    print("Campaign engine local test: % complete wins with active enemies and all first-50 stage challenges; % lives used.\n", wins, deaths)
     return 0
 }

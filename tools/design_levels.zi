@@ -783,128 +783,6 @@ Campaign :: () -> string {
     return ""
 }
 
-// ---- Puzzle adventure ----
-
-// Adventure is a separate authored journey: five four-puzzle areas. These
-// compact cell-authored rooms deliberately do not use the campaign's wall
-// recipes. Every interactive object and ordered fruit has an exact canonical
-// landscape cell; the engine rotates those cells for portrait play.
-ADVENTURE_LEVELS :: 20
-adventure: [ADVENTURE_LEVELS]Level;
-// Six explicit ordered objective slots per mission, packed as y * 40 + x;
-// -1 marks an unused slot.
-AdventureObjectiveCells: [120]s32 = .[
-    335, 864, -1, -1, -1, -1, 814, 305, -1, -1, -1, -1,
-    344, 255, -1, -1, -1, -1, 334, 265, -1, -1, -1, -1,
-    896, 345, 295, -1, -1, -1, 905, 374, 294, -1, -1, -1,
-    893, 346, 294, -1, -1, -1, 814, 265, 214, -1, -1, -1,
-    905, 384, 295, 225, -1, -1, 894, 374, 305, 216, -1, -1,
-    909, 505, 334, 225, -1, -1, 709, 706, 425, 254, -1, -1,
-    893, 706, 505, 335, 225, -1, 906, 854, 544, 305, 214, -1,
-    894, 825, 545, 345, 214, -1, 509, 505, 334, 225, 214, -1,
-    894, 825, 665, 345, 295, 214, 549, 706, 334, 265, 225, 214,
-    894, 825, 546, 345, 255, 214, 709, 706, 340, 337, 260, 218
-];
-
-// bit 0: key gate, bit 1: switch gate, bit 2: portals
-AdventureMechanics: [20]s32 = .[0,0,1,1,4,4,4,5,2,2,2,6,0,1,4,2,5,6,3,7];
-AdventureGateCells: [20]s32 = .[-1,-1,579,499,-1,-1,-1,339,579,499,539,739,-1,579,-1,539,579,579,579,739];
-AdventureKeyCells: [20]s32 = .[-1,-1,894,865,-1,-1,-1,894,-1,-1,-1,-1,-1,894,-1,-1,894,-1,894,709];
-AdventureSwitchCells: [20]s32 = .[-1,-1,-1,-1,-1,-1,-1,-1,854,865,909,709,-1,-1,-1,509,-1,549,345,337];
-AdventurePortalACells: [20]s32 = .[-1,-1,-1,-1,815,825,813,865,-1,-1,-1,705,-1,-1,825,-1,825,825,-1,665];
-AdventurePortalBCells: [20]s32 = .[-1,-1,-1,-1,384,374,386,465,-1,-1,-1,374,-1,-1,374,-1,374,374,-1,380];
-AdventureEnemyACells: [20]s32 = .[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,493,506,493,949,493,506,493,506];
-AdventureEnemyBCells: [20]s32 = .[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,706,693,706,693];
-AdventureMetadata :: (field: s32, index: s32) -> s32 {
-    if field == 0 { return AdventureMechanics[index] }
-    if field == 1 { return AdventureGateCells[index] }
-    if field == 2 { return AdventureKeyCells[index] }
-    if field == 3 { return AdventureSwitchCells[index] }
-    if field == 4 { return AdventurePortalACells[index] }
-    if field == 5 { return AdventurePortalBCells[index] }
-    if field == 6 { return AdventureEnemyACells[index] }
-    return AdventureEnemyBCells[index]
-}
-
-AdventureFill :: (level: *Level, tile: u8) {
-    for x: 0..39 { for y: 0..29 { level.grid[x * 30 + y] = tile } }
-}
-AdventureRect :: (level: *Level, x1: s64, y1: s64, x2: s64, y2: s64, tile: u8) {
-    for x: x1..x2 { for y: y1..y2 { level.grid[x * 30 + y] = tile } }
-}
-AdventureH :: (level: *Level, y: s64, x1: s64, x2: s64, tile: u8) { AdventureRect(level,x1,y,x2,y,tile) }
-AdventureV :: (level: *Level, x: s64, y1: s64, y2: s64, tile: u8) { AdventureRect(level,x,y1,x,y2,tile) }
-
-AdventureLayout :: (mission: s64, level: *Level) {
-    wall: u8 = ifx mission < 4 then 20 else ifx mission < 8 then 21 else ifx mission < 12 then 22 else 20
-    AdventureFill(level,wall)
-    AdventureRect(level,19,1,20,28,0)
-    if mission < 4 {
-        AdventureRect(level,12,4,27,25,0)
-        if mission == 0 { AdventureV(level,19,8,21,wall); AdventureV(level,20,8,21,wall); return }
-        if mission == 1 { AdventureH(level,18,12,18,wall); AdventureH(level,11,21,27,wall); return }
-        barrier := ifx mission == 2 then cast(s64)14 else cast(s64)12
-        AdventureH(level,barrier,12,27,wall); AdventureRect(level,19,barrier,20,barrier,0)
-        if mission == 2 { AdventureV(level,16,5,10,wall); AdventureV(level,23,18,24,wall) }
-        else { AdventureV(level,15,15,23,wall); AdventureV(level,24,5,10,wall) }
-        return
-    }
-    if mission < 8 {
-        AdventureRect(level,11,16,28,25,0); AdventureRect(level,11,4,28,13,0)
-        if mission == 4 { AdventureV(level,20,17,23,wall); AdventureV(level,19,5,11,wall) }
-        else if mission == 5 { AdventureH(level,20,12,23,wall); AdventureH(level,8,16,27,wall) }
-        else if mission == 6 { AdventureV(level,18,17,24,wall); AdventureV(level,23,5,12,wall); AdventureH(level,9,12,18,wall) }
-        else { AdventureH(level,8,11,28,wall); AdventureRect(level,19,8,20,8,0); AdventureV(level,16,17,24,wall); AdventureV(level,24,5,6,wall) }
-        return
-    }
-    if mission < 12 {
-        AdventureRect(level,10,4,29,25,0)
-        barrier := ifx mission == 9 then cast(s64)12 else ifx mission == 10 then cast(s64)13 else cast(s64)18
-        AdventureH(level,barrier,10,29,wall); AdventureRect(level,19,barrier,20,barrier,0)
-        if mission == 8 { AdventureV(level,16,5,11,wall); AdventureV(level,24,17,24,wall) }
-        else if mission == 9 { AdventureV(level,15,14,24,wall); AdventureH(level,8,21,28,wall) }
-        else if mission == 10 { AdventureV(level,26,5,10,wall) }
-        else { AdventureRect(level,28,barrier,29,barrier,0); AdventureH(level,11,10,29,wall); AdventureV(level,24,20,24,wall) }
-        return
-    }
-    AdventureRect(level,9,4,30,25,0)
-    if mission == 12 { AdventureV(level,17,7,21,wall); AdventureV(level,24,8,22,wall); AdventureH(level,14,17,24,wall); return }
-    if mission == 13 { AdventureH(level,14,9,30,wall); AdventureRect(level,19,14,20,14,0); AdventureV(level,15,16,24,wall); AdventureV(level,26,5,12,wall); return }
-    if mission == 14 { AdventureH(level,14,9,30,wall); AdventureV(level,17,16,24,wall); AdventureV(level,24,5,12,wall); return }
-    if mission == 15 { AdventureH(level,13,9,27,wall); AdventureRect(level,19,13,20,13,0); AdventureH(level,20,10,17,wall); AdventureH(level,8,23,29,wall); return }
-    if mission == 16 { AdventureH(level,14,9,30,wall); AdventureRect(level,19,14,20,14,0); AdventureV(level,15,16,24,wall); AdventureV(level,26,5,12,wall); return }
-    if mission == 17 { AdventureH(level,14,9,27,wall); AdventureRect(level,19,14,20,14,0); AdventureV(level,24,16,24,wall); return }
-    if mission == 18 { AdventureH(level,14,9,30,wall); AdventureRect(level,19,14,20,14,0); AdventureV(level,15,16,24,wall); AdventureH(level,8,22,24,wall); AdventureH(level,8,26,29,wall); return }
-    AdventureH(level,18,9,27,wall); AdventureRect(level,19,18,20,18,0)
-    AdventureH(level,11,9,30,wall); AdventureRect(level,20,11,20,11,0)
-    AdventureV(level,15,19,24,wall); AdventureV(level,26,4,10,wall)
-}
-
-AdventureCampaign :: () -> string {
-    for mission: 0..ADVENTURE_LEVELS - 1 {
-        level := *adventure[mission]
-        level.number = mission + 1
-        level.stage = mission / 4
-        level.within = mission % 4
-        level.apples = 2 + mission / 4
-        AdventureLayout(mission, level)
-        for i: 0..1199 { if level.grid[i] < 20 { level.floors += 1 } else { level.walls += 1 } }
-        enemy_a := AdventureEnemyACells[mission]
-        enemy_b := AdventureEnemyBCells[mission]
-        if enemy_a >= 0 {
-            x := enemy_a % 40; y := enemy_a / 40
-            level.grid[x * 30 + y] = cast(u8)(41 + mission % 4)
-            level.enemies += 1; level.kinds[0] = 2 + mission % 4
-        }
-        if enemy_b >= 0 {
-            x := enemy_b % 40; y := enemy_b / 40
-            level.grid[x * 30 + y] = cast(u8)(41 + (mission + 1) % 4)
-            level.enemies += 1; level.kinds[1] = 2 + (mission + 1) % 4
-        }
-    }
-    return ""
-}
-
 // ---- Output ----
 
 ALPHABET :: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -912,7 +790,6 @@ ALPHABET :: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 Encode :: () -> string {
     used: [256]bool
     for l: 0..199 { for i: 0..1199 { used[levels[l].grid[i]] = true } }
-    for l: 0..ADVENTURE_LEVELS - 1 { for i: 0..1199 { used[adventure[l].grid[i]] = true } }
     code: [256]u8
     values: Vec(u8)
     for v: 0..255 { if used[v] { code[v] = ALPHABET[values.count]; unused VecPush(values, cast(u8)v) } }
@@ -928,6 +805,41 @@ Encode :: () -> string {
     Append(*out, ALPHABET[0:values.count])
     Append(*out, "\";\nDesignedApples: [200]s32 = .[")
     for l: 0..199 { if l > 0 { Append(*out, ", ") }; BuilderPrint(*out, "%", levels[l].apples) }
+    Append(*out, "];\nDesignedLandmarkCells: [100]s32 = .[")
+    for l: 0..49 {
+        for orientation: 0..1 {
+            if l > 0 || orientation > 0 { Append(*out, ", ") }
+            route: *Vec(s64) = *cycles[l]
+            columns: s64 = 40
+            rows: s64 = 30
+            special_portrait := l == 1 && orientation == 1
+            if special_portrait {
+                route = *portrait_cycle
+                columns = 30
+                rows = 40
+            }
+            best: s64 = 0
+            best_distance: s64 = -1
+            for i: 0..route.count - 1 {
+                x := route.*[i] / 64
+                y := route.*[i] % 64
+                if orientation == 1 && !special_portrait {
+                    turned_x := 29 - y
+                    y = x
+                    x = turned_x
+                    columns = 30
+                    rows = 40
+                }
+                distance := (ifx x > columns / 2 then x - columns / 2 else columns / 2 - x) +
+                    (ifx y > rows - 2 then y - (rows - 2) else (rows - 2) - y)
+                if distance > best_distance {
+                    best = y * columns + x
+                    best_distance = distance
+                }
+            }
+            BuilderPrint(*out, "%", best)
+        }
+    }
     Append(*out, "];\n\nDesignedLevelText :: (level: s32) -> string {\n")
     for l: 0..199 {
         BuilderPrint(*out, "    if level == % { return \"", l)
@@ -939,32 +851,6 @@ Encode :: () -> string {
     Append(*out, "\" }\n    return \"\"\n}\n\nDesignedTile :: (level: s32, x: s32, y: s32) -> u8 {\n    text := DesignedLevelText(level)\n")
     Append(*out, "    code := text[x * 30 + y]\n    for index: 0..DesignedAlphabet.count - 1 {\n")
     Append(*out, "        if DesignedAlphabet[index] == code { return DesignedCodebook[index] }\n    }\n    return 20\n}\n")
-    Append(*out, "\nADVENTURE_LEVEL_COUNT :: 20;\nAdventureAreaStarts: [6]s32 = .[0, 4, 8, 12, 16, 20];\n")
-    Append(*out, "AdventureApples: [20]s32 = .[")
-    for l: 0..ADVENTURE_LEVELS - 1 { if l > 0 { Append(*out, ", ") }; BuilderPrint(*out, "%", adventure[l].apples) }
-    Append(*out, "];\nAdventureObjectiveCells: [120]s32 = .[")
-    for i: 0..119 { if i > 0 { Append(*out, ", ") }; BuilderPrint(*out, "%", AdventureObjectiveCells[i]) }
-    Append(*out, "];\n// bit 0: key gate, bit 1: switch gate, bit 2: portals\n")
-    names: [8]string = .["AdventureMechanics","AdventureGateCells","AdventureKeyCells","AdventureSwitchCells",
-        "AdventurePortalACells","AdventurePortalBCells","AdventureEnemyACells","AdventureEnemyBCells"]
-    for field: 0..7 {
-        BuilderPrint(*out, "%: [20]s32 = .[", names[field])
-        for i: 0..19 {
-            if i > 0 { Append(*out, ", ") }
-            BuilderPrint(*out, "%", AdventureMetadata(cast(s32)field,cast(s32)i))
-        }
-        Append(*out, "];\n")
-    }
-    Append(*out, "\n")
-    Append(*out, "AdventureLevelText :: (mission: s32) -> string {\n")
-    for l: 0..ADVENTURE_LEVELS - 1 {
-        BuilderPrint(*out, "    if mission == % { return \"", l)
-        for i: 0..1199 { unused VecPush(out, code[adventure[l].grid[i]]) }
-        Append(*out, "\" }\n")
-    }
-    Append(*out, "    return \"\"\n}\n\nAdventureTile :: (mission: s32, x: s32, y: s32) -> u8 {\n")
-    Append(*out, "    text := AdventureLevelText(mission)\n    if text.count != 1200 { return 20 }\n    code := text[x * 30 + y]\n")
-    Append(*out, "    for index: 0..DesignedAlphabet.count - 1 { if DesignedAlphabet[index] == code { return DesignedCodebook[index] } }\n    return 20\n}\n")
     return BuilderFinish(out)
 }
 
@@ -1034,8 +920,6 @@ main :: (argc: s32, argv: **u8) -> s32 {
     }
     problem := Campaign()
     if problem.count > 0 { return Fail(problem) }
-    problem = AdventureCampaign()
-    if problem.count > 0 { return Fail(problem) }
     source := Encode()
     cases_text, has_cases := ReadEntireFile("tests/campaign_cases.json")
     pairs: [200]s32
@@ -1083,11 +967,6 @@ main :: (argc: s32, argv: **u8) -> s32 {
     }
     unused RemoveTree("build/designed")
     if !CreateDirectories("build/designed") { return Fail("cannot create build/designed") }
-    for mission: 0..ADVENTURE_LEVELS - 1 {
-        if !WriteBoard(Path("adventure-level", mission + 1, ".dat"), adventure[mission].apples, adventure[mission].grid[:]) {
-            return Fail("cannot write adventure boards")
-        }
-    }
     manifest: Vec(u8)
     Append(*manifest, "[")
     for l: 0..199 {
