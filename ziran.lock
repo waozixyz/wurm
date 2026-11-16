@@ -90,15 +90,6 @@
       "url": "https://github.com/ziranlang/image-codec.git"
     },
     {
-      "commit": "2c56268db0b270ad53e51af9cae5dc46876a65d9",
-      "dependencies": {"curl": "p8da229d15597ab5c", "daochi_client": "p6af0b5bd9fd0cd31", "kryon": "pbb0d432304fad5c6", "monocypher": "p002f6ed23e3a3576", "oqs": "p7098ac9cd92f7e5f", "qrcode": "p0dfa70137405b096", "zlib": "p82dbc05081cd4d96"},
-      "dependency_refs": {"curl": "19b299005fbe2d895f4ad525cfdae62a2220c3ea", "daochi_client": "970d5e44b1702158cb16469892da6ff50f142427", "kryon": "b5ac5d1a303326009012d68016c1d8859b6b3a13", "monocypher": "master", "oqs": "master", "qrcode": "master", "zlib": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf"},
-      "id": "p6ab8e2a733002786",
-      "name": "Entity",
-      "ref": "2c56268db0b270ad53e51af9cae5dc46876a65d9",
-      "url": "https://github.com/waozixyz/entity.git"
-    },
-    {
       "commit": "970d5e44b1702158cb16469892da6ff50f142427",
       "dependencies": {"crypto": "pc23fbf455e97614d", "oqs": "p7098ac9cd92f7e5f"},
       "dependency_refs": {"crypto": "master", "oqs": "master"},
@@ -160,6 +151,15 @@
       "name": "webp",
       "ref": "02145a00a1f0df2a111da04a75f3fef260883897",
       "url": "https://github.com/ziranlang/webp.git"
+    },
+    {
+      "commit": "6f326b771630060cb60aff6d4471f1c132e3ba07",
+      "dependencies": {"curl": "p8da229d15597ab5c", "daochi_client": "p6af0b5bd9fd0cd31", "kryon": "pc72390654541eeac", "monocypher": "p002f6ed23e3a3576", "oqs": "p7098ac9cd92f7e5f", "qrcode": "p0dfa70137405b096", "zlib": "p82dbc05081cd4d96"},
+      "dependency_refs": {"curl": "19b299005fbe2d895f4ad525cfdae62a2220c3ea", "daochi_client": "970d5e44b1702158cb16469892da6ff50f142427", "kryon": "158fd91d5a0ad378399bb0e59193074b2e3dc6b5", "monocypher": "master", "oqs": "master", "qrcode": "master", "zlib": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf"},
+      "id": "pa7d65b4f3b4d8f57",
+      "name": "Entity",
+      "ref": "6f326b771630060cb60aff6d4471f1c132e3ba07",
+      "url": "https://github.com/waozixyz/entity.git"
     },
     {
       "commit": "54706fc6bc0cdecab7e9593974a4039cc038fca7",
@@ -260,8 +260,8 @@
     }
   ],
   "root": {
-    "dependencies": {"apps": "pb91195370ac0cb93", "crypto": "pc23fbf455e97614d", "entity": "p6ab8e2a733002786", "game2d": "p7e2abf6e63acf588", "kryon": "pc72390654541eeac", "mingcute": "pe1027b9d16704793"},
-    "dependency_refs": {"apps": "3c0a7d9e7f941381a7c07169f94240b9fe801bb8", "crypto": "master", "entity": "2c56268db0b270ad53e51af9cae5dc46876a65d9", "game2d": "a9c85df73fa1ed7af55da8a6ab3ca7d3cdf5e6a8", "kryon": "158fd91d5a0ad378399bb0e59193074b2e3dc6b5", "mingcute": "master"},
+    "dependencies": {"apps": "pb91195370ac0cb93", "crypto": "pc23fbf455e97614d", "entity": "pa7d65b4f3b4d8f57", "game2d": "p7e2abf6e63acf588", "kryon": "pc72390654541eeac", "mingcute": "pe1027b9d16704793"},
+    "dependency_refs": {"apps": "3c0a7d9e7f941381a7c07169f94240b9fe801bb8", "crypto": "master", "entity": "6f326b771630060cb60aff6d4471f1c132e3ba07", "game2d": "a9c85df73fa1ed7af55da8a6ab3ca7d3cdf5e6a8", "kryon": "158fd91d5a0ad378399bb0e59193074b2e3dc6b5", "mingcute": "master"},
     "name": "Apfelwurm"
   },
   "toolchain": {

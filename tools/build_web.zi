@@ -4,7 +4,7 @@
 // guest-only portal copy into build/crazygames/web instead and packs it as
 // work/crazygames.zip; uploading stays a person's step.
 //
-//     LDLIBS=-lz ziran run --target=c tools/build_web.zi [-- crazygames]
+//     LDLIBS=-lz ziran run --target=c tools/build_web.zi [-- crazygames|test-driver]
 #import "std/file"
 #import "std/file_tree_linux"
 #import "std/format"
@@ -18,6 +18,7 @@ StoreModel :: #import, file "../src/portal_store.zi";
 WebArt :: #import, file "../src/web_art.zi";
 
 OUT :: "build/web"
+DRIVER_OUT :: "build/web-driver"
 PORTAL_OUT :: "build/crazygames/web"
 PORTAL_ARCHIVE :: "work/crazygames.zip"
 // The one script a portal page may load from elsewhere: CrazyGames' SDK.
@@ -85,9 +86,11 @@ Steps :: (arguments: []string) -> bool {
 // The browser edition into OUT, or with PORTAL the guest copy into
 // PORTAL_OUT: no Entity profile, account libraries or link-preview picture,
 // and its art packed from a scratch folder instead of loose beside the page.
-BuildWeb :: (portal: bool) -> bool {
-    out := ifx portal then PORTAL_OUT else OUT
-    native := ifx portal then "build/crazygames" else "build/web-native"
+// DRIVER creates a separate private-test edition; the downloadable OUT never
+// carries Kryon's filesystem test driver.
+BuildWeb :: (portal: bool, driver: bool = false) -> bool {
+    out := ifx portal then PORTAL_OUT else ifx driver then DRIVER_OUT else OUT
+    native := ifx portal then "build/crazygames" else ifx driver then "build/web-driver-native" else "build/web-native"
     kryon := PackagePath("kryon")
     compiler := PackagePath("ziran")
     if kryon.count == 0 || compiler.count == 0 { return Fail("package checkouts are missing") }
@@ -103,19 +106,33 @@ BuildWeb :: (portal: bool) -> bool {
     ir := JoinPath(native, "ir")
     code := JoinPath(native, "c")
     unused RemoveTree(ir); unused RemoveTree(code)
-    if portal { unused RemoveTree(out) }
+    if portal || driver { unused RemoveTree(out) }
     if !CreateDirectories(out) || !CreateDirectories(ir) || !CreateDirectories(code) { return Fail("cannot create build folders") }
     host := JoinPath(kryon, "src/backend/canvas_run.zi")
     raster := JoinPath(kryon, "src/backend/canvas_raster.zi")
+    binding: Vec(u8)
+    BuilderPrint(*binding, "%_frame_entry:ProjectFrame=app:Frame", PathName(kryon))
+    entry: Vec(u8)
+    BuilderPrint(*entry, "%_canvas_run:main", PathName(kryon))
     emit: Vec(string)
     VecPush(emit, "ziran"); VecPush(emit, "ir")
     if Locked() { VecPush(emit, "--locked") }
-    rest: [9]string = .["--project", "--define", "PLATFORM_WEB", "--define", ifx portal then "WURM_CRAZYGAMES" else "WURM_ACCOUNTS", "-o", ir, host, raster]
+    if driver { VecPush(emit, "--define"); VecPush(emit, "KRYON_TEST_DRIVER") }
+    // PLATFORM_WEB selects application policy, not Ziran's target. Freeze the
+    // web OS and wasm32 data model in both saved IR and generated C. Name the
+    // dependency host's application capability explicitly so a clean project
+    // graph includes the Wurm frame provider as well as the canvas runner.
+    rest: [19]string = .["--project", "--target=c", "--target-os", "web", "--target-cpu", "wasm32",
+        "--define", "PLATFORM_WEB", "--define", ifx portal then "WURM_CRAZYGAMES" else "WURM_ACCOUNTS",
+        "--bind", BuilderFinish(binding), "--entry", BuilderFinish(entry), "-o", ir, host, raster, "src/app.zi"]
     for rest { VecPush(emit, it) }
     if !Steps(VecSlice(emit, 0, emit.count)) { return Fail("Ziran IR failed") }
     lower: Vec(string)
-    head: [6]string = .[JoinPath(compiler, "build/bin/zi2c"), "--define", "PLATFORM_WEB", "--root", ir, "-o"]
+    head: [9]string = .[JoinPath(compiler, "build/bin/zi2c"), "--target-os", "web", "--target-cpu", "wasm32",
+        "--define", "PLATFORM_WEB", "--root", ir]
     for head { VecPush(lower, it) }
+    if driver { VecPush(lower, "--define"); VecPush(lower, "KRYON_TEST_DRIVER") }
+    VecPush(lower, "-o")
     VecPush(lower, code)
     modules: Vec(string)
     unused ListDirectory(ir, *modules)
@@ -327,6 +344,7 @@ BuildCrazyGames :: () -> bool {
 main :: (argc: s32, argv: **u8) -> s32 {
     mode := ifx argc > 1 then TextFromCString(argv[1]) else ""
     if mode == "crazygames" { return ifx BuildCrazyGames() then 0 else 1 }
-    if mode.count > 0 { unused Fail("usage: build_web.zi [crazygames]"); return 2 }
+    if mode == "test-driver" { return ifx BuildWeb(false, true) then 0 else 1 }
+    if mode.count > 0 { unused Fail("usage: build_web.zi [crazygames|test-driver]"); return 2 }
     return ifx BuildWeb(false) then 0 else 1
 }

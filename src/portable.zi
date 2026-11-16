@@ -1,16 +1,33 @@
-#import "apps/node_types"
-#import "apps/node_app"
+Apps :: #import "apps/node_types";
+Node :: #import "apps/node_app";
 #import "kryon/geometry"
+#import "kryon/session"
 App :: #import, file "app.zi";
 Runtime :: #import "portable_runtime";
 Locale :: #import, file "localization.zi";
 host_api :: #system_library "host_api";
+
+// Keep the portable UI ABI on this app's Kryon package. Apps.AppUiFrame has
+// the same public value layout, but importing its Session would couple the
+// portable entry to whichever Kryon revision the host package was built with.
+AppUiFrame :: struct {
+    session: Session
+    width: s32
+    height: s32
+    bottom: s32
+    top: s32
+    scale: float32
+    font: s32
+    now: float64
+    dark: bool
+}
+
 ReadAppUiHost :: () -> AppUiFrame #foreign host_api;
 
 #program_export
-Main :: () -> s32 { return RunNodeApp(WurmFrame, WurmBack) }
+Main :: () -> s32 { return Node.RunNodeApp(WurmFrame, WurmBack) }
 
-WurmFrame :: (message: AppMessage) -> bool {
+WurmFrame :: (message: Apps.AppMessage) -> bool {
     Locale.SetLanguage(message.locale)
     frame := ReadAppUiHost()
     Runtime.FrameTime(frame.now)
@@ -19,7 +36,7 @@ WurmFrame :: (message: AppMessage) -> bool {
     return App.Frame(frame.session, area) == 0
 }
 
-WurmBack :: (message: AppMessage) -> bool {
+WurmBack :: (message: Apps.AppMessage) -> bool {
     Locale.SetLanguage(message.locale)
     return App.NavigateBack(Runtime.MonotonicMilliseconds())
 }

@@ -70,7 +70,7 @@ ref = "3c0a7d9e7f941381a7c07169f94240b9fe801bb8"
 
 [dependencies.entity]
 git = "https://github.com/waozixyz/entity.git"
-ref = "2c56268db0b270ad53e51af9cae5dc46876a65d9"
+ref = "6f326b771630060cb60aff6d4471f1c132e3ba07"
 
 [dependencies.crypto]
 git = "https://github.com/ziranlang/crypto.git"

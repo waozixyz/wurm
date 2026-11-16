@@ -27,7 +27,7 @@ SvgIcon :: #import "kryon/svg_icon";
 DirectionPad :: #import "kryon/direction_pad";
 GameControls :: #import "game2d/controls";
 #if #defined(WURM_CRAZYGAMES) {
-    #import "kryon/carousel";
+    Carousel :: #import "kryon/carousel";
     PortalEditor :: #import, file "portal_editor.zi";
     PortalShop :: #import, file "portal_shop.zi";
     PortalStore :: #import, file "portal_store.zi";
@@ -1768,7 +1768,7 @@ AppleFlash :: (session: Session, stage: Rectangle) {
 portal_frame: s32;
 DrawPortals :: (session: Session, stage: Rectangle) {
     if game.portal_count == 0 { return }
-    portal_frame = (portal_frame + 1) % 120
+    if game.mode != MODE_PAUSED { portal_frame = (portal_frame + 1) % 120 }
     scale := stage.width / (cast(float32)board_columns * 16.0)
     breath := cast(float32)(ifx portal_frame < 60 then portal_frame else 120 - portal_frame) / 60.0
     for pair: 0..game.portal_count - 1 {
@@ -3770,7 +3770,7 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64, input: Inpu
 // Return 1 for Play, 2 for Continue, 3 for stages, 4 for the editor.
 continue_label: [48]u8;
 #if #defined(WURM_CRAZYGAMES) {
-    portal_title: CarouselState;
+    portal_title: Carousel.CarouselState;
     // Keep the painted title at the top when a wide portal crops the grass.
     PortalTitleSource :: (area: Rectangle, art_width: float32) -> Rectangle {
         if area.width > area.height * 1.5 { return Rectangle.{0.0, 0.0, art_width, art_width * area.height / area.width} }
@@ -3787,7 +3787,7 @@ continue_label: [48]u8;
             continue_label[at] = 0
             label = TextUntilNul(continue_label[:])
         }
-        items: [2]CarouselItem = .[
+        items: [2]Carousel.CarouselItem = .[
             .{.label = "Apfelwurm", .portrait = ART_TITLE_PORTRAIT, .landscape = ART_TITLE, .source = PortalTitleSource(area, 1536.0), .action = label},
             .{.label = Locale.Text("Level editor"), .portrait = ART_EDITOR_TITLE_PORTRAIT,
                 .landscape = ART_EDITOR_TITLE, .source = PortalTitleSource(area, 768.0), .action = Locale.Text("Level editor") }]
@@ -3798,7 +3798,7 @@ continue_label: [48]u8;
                 .source = item.source, .alt_text = item.label, .fit = Image.ImageFit.ImageFitCover, .smooth = true})
             return 0
         }
-        action := Carousel(session, CarouselProps.{.key = 800, .bounds = area,
+        action := Carousel.Draw(session, Carousel.Props.{.key = 800, .bounds = area,
             .now = cast(float64)Timer.MonotonicMilliseconds() / 1000.0, .key_pressed = key,
             .label = "Apfelwurm", .previous_label = label, .next_label = Locale.Text("Level editor")}, items[:], *portal_title)
         TitleActions(session, area)
@@ -4793,8 +4793,12 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // The editor app has no game title: every way out of a page lands on
     // the editor's own title, and Back there leaves the app.
     if EditorApp() && game.mode == MODE_STAGES { OpenEditorHome() }
-    water_frame = cast(s32)((now / 130) % 3)
-    enemy_frame = cast(s32)((now / 110) % 4)
+    // Pause freezes the board as well as its simulation. Otherwise animated
+    // water and enemy art keep moving under the pause card.
+    if game.mode != MODE_PAUSED {
+        water_frame = cast(s32)((now / 130) % 3)
+        enemy_frame = cast(s32)((now / 110) % 4)
+    }
     key: s32
     #if #defined(WURM_PORTABLE) {
         key = Timer.PressedKey()

@@ -340,7 +340,10 @@ main :: (argc: s32, argv: **u8) -> s32 {
     }
     if mode == "web" {
         if !Interface("web_test", "web-test-runner", "-lm") { return Fail("browser") }
-        password: [5]string = .["python3", "-I", "tests/browser_password_test.py", "--site", "build/web"]
+        // The published browser build stays free of the filesystem test
+        // driver. Build a separate private copy for semantic account input.
+        if !Tool("build_web", "test-driver") { return Fail("browser password test build") }
+        password: [5]string = .["python3", "-I", "tests/browser_password_test.py", "--site", "build/web-driver"]
         return ifx Run(password[:], none[:]) then 0 else Fail("browser password editing")
     }
     if mode == "editor-campaign" {

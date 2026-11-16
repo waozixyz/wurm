@@ -9,7 +9,7 @@ TextField :: #import "kryon/text_field";
 #import "kryon/frame_snapshot"
 #import "kryon/pixmap"
 #import "kryon/scroll_device"
-#import "apps/node_types"
+Apps :: #import "apps/node_types";
 #import "std/text_buffer"
 #import "std/vec"
 #import "std/c_string"
@@ -25,8 +25,8 @@ Own :: #import, file "../src/own_levels.zi";
 #import "std/json_scan"
 using WidgetKind;
 
-message: AppMessage;
-frame: AppUiFrame;
+message: Apps.AppMessage;
+frame: Portable.AppUiFrame;
 profile_opens: s32;
 balance_reads: s32;
 failures: s32;
@@ -44,11 +44,11 @@ mountains_requests: s32;
 shop_refreshes: s32;
 
 #program_export
-ReadAppHost :: () -> AppMessage { return message }
+ReadAppHost :: () -> Apps.AppMessage { return message }
 #program_export
-WriteAppHost :: (value: AppMessage) { message = value }
+WriteAppHost :: (value: Apps.AppMessage) { message = value }
 #program_export
-ReadAppUiHost :: () -> AppUiFrame { return frame }
+ReadAppUiHost :: () -> Portable.AppUiFrame { return frame }
 field_input: TextField.Input;
 // Scripted input reaches the real collection/search field widget.
 #program_export
@@ -132,7 +132,7 @@ Draw :: () {
     BeginScrollFrame(frame.session, Vector2.{pointer.x, pointer.y}, pointer.pressed,
         pointer.down, pointer.released, 0.0, frame.now)
     Expect(cast(s32)BeginFrame(frame.session, 1, Rectangle.{0.0, 0.0, cast(float32)frame.width, cast(float32)frame.height}) == 0, "start hosted frame")
-    message.action = APP_FRAME
+    message.action = Apps.APP_FRAME
     unused Portable.Main()
     Expect(message.succeeded && cast(s32)EndFrame(frame.session) == 0, "hosted frame accepted")
 }
@@ -462,7 +462,7 @@ LevelTransitions :: () {
 #program_export
 main :: () -> s32 {
     NameFields()
-    message.abi = MODULE_ABI
+    message.abi = Apps.MODULE_ABI
     message.locale = "en"
     frame.session = SessionOpen()
     frame.top = 56
@@ -475,19 +475,19 @@ main :: () -> s32 {
         Expect(Find("Back") < 0 && Find("Profile") < 0 && Find("123") < 0, "host owns title navigation and account controls")
         Expect(balance_reads == 0, "hosted title does not duplicate the host wallet")
         Expect(TextUntilNul(Progress.owner[:]) == host_account, "game uses the enclosing host account")
-        message.action = APP_BACK
+        message.action = Apps.APP_BACK
         unused Portable.Main()
         Expect(!message.succeeded, "title Back is left to the enclosing host")
         Click("Settings")
         Expect(Find("Back") >= 0, "settings retains its in-game Back")
-        message.action = APP_BACK
+        message.action = Apps.APP_BACK
         unused Portable.Main()
         Expect(message.succeeded, "settings Back returns inside the game")
         Draw()
         Click("Shop")
         Expect(Find("Buy") >= 0, "shop remains available inside a host")
         MountainsShop()
-        message.action = APP_BACK
+        message.action = Apps.APP_BACK
         unused Portable.Main()
         Expect(message.succeeded, "shop Back returns inside the game")
         Draw()
@@ -516,7 +516,7 @@ main :: () -> s32 {
         Click("Start level")
         Expect(App.game.mode == Game.MODE_PLAYING, "hosted Start level button starts play")
         App.game.mode = Game.MODE_READY
-        message.action = APP_BACK
+        message.action = Apps.APP_BACK
         unused Portable.Main()
         Expect(message.succeeded && App.game.mode == Game.MODE_STAGES, "hosted Back leaves the preview inside the game")
         App.StartLevel(10, 0, 1)
