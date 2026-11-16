@@ -1,8 +1,7 @@
 // The shader terrain: board classes and gate posts, rounded signed
 // distances, both material programs within Kryon's instruction limit, the
 // painted material pack, and rendering. A gate-sized change re-renders only
-// its window and must match a full render; time-sliced work must finish
-// with the same picture as an immediate render.
+// its window and must match a full render.
 #import "kryon/shader"
 #import "std/vec"
 Custom :: #import, file "../src/custom_levels.zi";
@@ -21,7 +20,6 @@ Expect :: (value: bool, message: string) {
 
 full: Terrain.TerrainRenderer;
 patched: Terrain.TerrainRenderer;
-sliced: Terrain.TerrainRenderer;
 
 Classes :: () {
     Expect(Field.TerrainClass(0) == Field.TERRAIN_FLOOR, "floor tile")
@@ -103,15 +101,6 @@ Rendering :: () {
     Expect(Terrain.TerrainUpdate(*full, opened[:], 40, 30, 3, 12, true), "the full board re-renders for comparison")
     Expect(Difference(*full, *patched) <= 2, "a window update matches a full render")
     Expect(!Terrain.TerrainUpdate(*patched, opened[:], 40, 30, 3, 12, true), "an unchanged board does no work")
-    // Time-sliced preparation reaches the same picture.
-    Expect(Terrain.TerrainRequest(*sliced, opened[:], 40, 30, 3, 12, true), "a sliced request")
-    slices := 0
-    while sliced.stage != Terrain.STAGE_IDLE && slices < 100000 {
-        unused Terrain.TerrainStep(*sliced, 1)
-        slices += 1
-    }
-    Expect(sliced.ready && slices > 4, "sliced preparation finishes over several steps")
-    Expect(Difference(*full, *sliced) <= 2, "sliced preparation matches an immediate render")
     // Every landscape renders.
     for area: 0..4 {
         Custom.DefaultBoard(cast(s32)area * 40 + 7, board[:], area % 2 == 1)
@@ -130,8 +119,7 @@ main :: () -> s32 {
     Rendering()
     Terrain.TerrainFree(*full)
     Terrain.TerrainFree(*patched)
-    Terrain.TerrainFree(*sliced)
     if failures > 0 { print("terrain_test: % failures\n", failures); return 1 }
-    print("terrain_test: classes, distances, programs, materials, window and sliced renders passed\n")
+    print("terrain_test: classes, distances, programs, materials and window renders passed\n")
     return 0
 }

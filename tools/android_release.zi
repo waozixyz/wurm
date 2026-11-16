@@ -188,10 +188,8 @@ VerifyApk :: (apk: string, edition: string) -> string {
     edition_problem := VerifyEdition(bytes, edition, false)
     unused Need(edition_problem.count == 0, edition_problem)
     Libraries(bytes, "lib/")
-    art: [17]string = .["garden.png", "forest.png", "forest-canopy.png", "forest-canopy-portrait.png",
-        "meadow.png", "leafwood.png", "pinewood.png", "lake.png", "mountains.png",
-        "campaign-meadow.png", "campaign-leafwood.png", "campaign-pinewood.png",
-        "campaign-lake.png", "campaign-mountains.png", "stage-covers.png", "title.png", "title-portrait.png"]
+    art: [6]string = .["sprites.png", "terrain-materials.png", "terrain-materials.bin", "stage-covers.png",
+        "title.png", "title-portrait.png"]
     for art { unused SameAsFile(bytes, JoinPath("assets/assets/art", it), JoinPath("assets/art", it)) }
     previews: Vec(string)
     unused ListDirectory("assets/art/campaign-previews", *previews)

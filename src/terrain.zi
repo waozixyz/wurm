@@ -2,8 +2,9 @@
 // the relief pass lights heaped hedges, stones and ground, and the colour
 // pass lays each landscape's painted materials, water and shore over it.
 // The desktop runs them on the GPU when one is available; every other
-// target runs the same programs on the CPU, a few milliseconds per frame.
-// A changed gate, entrance or exit re-renders only the cells around it.
+// target runs the same programs on the CPU. A board is rendered whole
+// before it is first shown; a changed gate, entrance or exit re-renders
+// only the cells around it.
 #import "kryon/shader"
 #import "kryon/scene"
 #import "kryon/scene_render"
@@ -11,9 +12,6 @@
 #import "std/vec"
 #if #defined(WURM_TERRAIN_GPU) {
     #import "kryon/scene_gpu"
-}
-#if !#defined(WURM_PORTABLE) {
-    Timer :: #import "std/timer_linux";
 }
 Field :: #import, file "terrain_field.zi";
 Texture :: #import, file "terrain_texture.zi";
@@ -23,8 +21,6 @@ Shader :: #import, file "terrain_shader.zi";
 
 // Cells around a change whose shadow, occlusion or rounding can differ.
 UPDATE_MARGIN :: 2;
-// More changed cells than this during a full render mean a new board.
-FOLLOW_UP_CELLS :: 40;
 // Board cells one repeat of each painted material spans; halves keep the
 // resampled tile a whole number of pixels at even cell sizes.
 FLOOR_TILE :: 5.0;
@@ -38,30 +34,12 @@ Material :: struct {
     relief: Texture.TerrainTexture
 }
 
-// Work left for the current board, done a slice at a time so no frame
-// stalls: materials, distances, the field, then shader bands.
-STAGE_IDLE :: 0;
-STAGE_MATERIALS :: 1;
-STAGE_DISTANCES :: 2;
-STAGE_FIELD :: 3;
-STAGE_SHADE :: 4;
-
 TerrainRenderer :: struct {
-    // `image` is complete for `cells` when `ready`; a gate or exit change
-    // keeps it shown while its window re-renders.
+    // `image` is complete for `cells` when `ready`.
     ready: bool
     area: s32
     cell: s32
-    gate_posts: bool
     cells: Field.TerrainCells
-    stage: s32
-    full: bool
-    x0: s32; y0: s32; x1: s32; y1: s32   // the job's cells
-    cursor: s32                            // next row or material
-    band: s32                              // pixel rows per shader band
-    band_time: s64                         // nanoseconds a band should take, or 0 for all
-    follow_up: bool                        // cells changed during a full render
-    follow_x0: s32; follow_y0: s32; follow_x1: s32; follow_y1: s32
     distances: Field.TerrainDistances
     field: Field.TerrainField
     pack: Materials.MaterialPack
@@ -98,115 +76,54 @@ TerrainFree :: (r: *TerrainRenderer) {
     }
     RenderSceneRelease()
     r.ready = false
-    r.stage = STAGE_IDLE
     r.texture_cell = 0
     r.program_cell = 0
 }
 
-// Whether the painted materials are available; without them the board
-// keeps its classic tiles.
-TerrainAvailable :: (r: *TerrainRenderer) -> bool { return Materials.LoadMaterials(*r.pack) }
-
-// Asks for BOARD's terrain. CELL is the pixels per board cell; AREA picks
-// the landscape. A new board, landscape or size starts a full render; a
+// Brings the picture up to date with BOARD before it is shown. Returns
+// true when its pixels changed. CELL is the pixels per board cell; AREA
+// picks the landscape. A new board, landscape or size renders whole; a
 // few changed cells re-render just their surroundings.
-TerrainRequest :: (r: *TerrainRenderer, board: []u8, columns: s32, rows: s32, area: s32, cell: s32,
+TerrainUpdate :: (r: *TerrainRenderer, board: []u8, columns: s32, rows: s32, area: s32, cell: s32,
     gate_posts: bool) -> bool {
     if columns <= 0 || rows <= 0 || columns * rows > Field.MAX_CELLS || cell < 4 || cell % 2 != 0 ||
         board.count < columns * rows || !Materials.LoadMaterials(*r.pack) { return false }
     cells := Field.TerrainCellsFrom(board, columns, rows, gate_posts)
-    resized := r.area != area || r.cell != cell || r.cells.columns != columns || r.cells.rows != rows
-    if !resized && (r.ready || r.stage != STAGE_IDLE) && Field.SameCells(*cells, *r.cells) { return true }
-    changed: s32 = 0
-    for at: 0..columns * rows - 1 { if cells.classes[at] != r.cells.classes[at] { changed += 1 } }
-    if resized || (!r.ready && r.stage == STAGE_IDLE) || (r.full && r.stage != STAGE_IDLE && changed > FOLLOW_UP_CELLS) {
-        // A different board: start over.
-        r.cells = cells
-        r.area = area
-        r.cell = cell
-        r.ready = false
-        r.full = true
-        r.x0 = 0; r.y0 = 0; r.x1 = columns; r.y1 = rows
-        r.stage = STAGE_MATERIALS
-        r.cursor = 0
-        r.follow_up = false
-        return true
-    }
-    x0 := columns
-    y0 := rows
-    x1: s32 = 0
-    y1: s32 = 0
-    for y: 0..rows - 1 {
-        for x: 0..columns - 1 {
-            at := y * columns + x
-            if cells.classes[at] == r.cells.classes[at] { continue }
-            if cast(s32)x < x0 { x0 = cast(s32)x }
-            if cast(s32)y < y0 { y0 = cast(s32)y }
-            if cast(s32)x + 1 > x1 { x1 = cast(s32)x + 1 }
-            if cast(s32)y + 1 > y1 { y1 = cast(s32)y + 1 }
+    full := !r.ready || r.area != area || r.cell != cell || r.cells.columns != columns || r.cells.rows != rows
+    if !full && Field.SameCells(*cells, *r.cells) { return false }
+    x0: s32 = 0
+    y0: s32 = 0
+    x1 := columns
+    y1 := rows
+    if !full {
+        x0 = columns; y0 = rows; x1 = 0; y1 = 0
+        for y: 0..rows - 1 {
+            for x: 0..columns - 1 {
+                at := y * columns + x
+                if cells.classes[at] == r.cells.classes[at] { continue }
+                if cast(s32)x < x0 { x0 = cast(s32)x }
+                if cast(s32)y < y0 { y0 = cast(s32)y }
+                if cast(s32)x + 1 > x1 { x1 = cast(s32)x + 1 }
+                if cast(s32)y + 1 > y1 { y1 = cast(s32)y + 1 }
+            }
         }
-    }
-    x0 = ifx x0 > UPDATE_MARGIN then x0 - UPDATE_MARGIN else 0
-    y0 = ifx y0 > UPDATE_MARGIN then y0 - UPDATE_MARGIN else 0
-    x1 = ifx x1 + UPDATE_MARGIN < columns then x1 + UPDATE_MARGIN else columns
-    y1 = ifx y1 + UPDATE_MARGIN < rows then y1 + UPDATE_MARGIN else rows
-    // A full render in progress finishes first; the change follows it.
-    if r.full && r.stage != STAGE_IDLE {
-        if r.follow_up {
-            if r.follow_x0 < x0 { x0 = r.follow_x0 }
-            if r.follow_y0 < y0 { y0 = r.follow_y0 }
-            if r.follow_x1 > x1 { x1 = r.follow_x1 }
-            if r.follow_y1 > y1 { y1 = r.follow_y1 }
-        }
-        r.cells = cells
-        r.follow_up = true
-        r.follow_x0 = x0; r.follow_y0 = y0; r.follow_x1 = x1; r.follow_y1 = y1
-        return true
-    }
-    // A window already in progress grows to cover the new change too.
-    if r.stage != STAGE_IDLE {
-        if r.x0 < x0 { x0 = r.x0 }
-        if r.y0 < y0 { y0 = r.y0 }
-        if r.x1 > x1 { x1 = r.x1 }
-        if r.y1 > y1 { y1 = r.y1 }
+        x0 = ifx x0 > UPDATE_MARGIN then x0 - UPDATE_MARGIN else 0
+        y0 = ifx y0 > UPDATE_MARGIN then y0 - UPDATE_MARGIN else 0
+        x1 = ifx x1 + UPDATE_MARGIN < columns then x1 + UPDATE_MARGIN else columns
+        y1 = ifx y1 + UPDATE_MARGIN < rows then y1 + UPDATE_MARGIN else rows
     }
     r.cells = cells
-    r.full = false
-    r.x0 = x0; r.y0 = y0; r.x1 = x1; r.y1 = y1
-    r.stage = STAGE_DISTANCES
-    r.cursor = y0
-    return true
-}
-
-// Advances the current job for about BUDGET nanoseconds (at least one
-// slice), or to the end when BUDGET is negative. Small window updates
-// always finish at once so a gate never lags behind play. Returns true
-// when the picture's pixels changed and it is complete.
-TerrainStep :: (r: *TerrainRenderer, budget: s64) -> bool {
-    if r.stage == STAGE_IDLE { return false }
-    start := Clock()
-    small := !r.full && (r.x1 - r.x0) * (r.y1 - r.y0) <= 120
-    // Each band has a fixed setup cost, so bands fill half the budget.
-    r.band_time = ifx budget < 0 || small then cast(s64)0 else budget / 2
-    while r.stage != STAGE_IDLE {
-        if !Slice(r) {
-            r.stage = STAGE_IDLE
-            r.ready = false
-            return false
-        }
-        if r.stage == STAGE_IDLE { break }
-        if budget >= 0 && !small && Clock() - start >= budget { return false }
-    }
+    r.area = area
+    r.cell = cell
+    r.ready = false
+    if full && !Prepare(r) { return false }
+    Field.ComputeDistances(*r.cells, *r.distances, x0, y0, x1, y1)
+    Field.SoftenWater(*r.distances, x0, y0, x1, y1)
+    Field.FieldPaint(*r.field, *r.cells, *r.distances, area, x0 * cell, y0 * cell, x1 * cell, y1 * cell)
+    if !RenderPasses(r, x0 * cell, y0 * cell, x1 * cell, y1 * cell) { return false }
     r.ready = true
     r.revision += 1
     return true
-}
-
-// Requests BOARD and finishes it now.
-TerrainUpdate :: (r: *TerrainRenderer, board: []u8, columns: s32, rows: s32, area: s32, cell: s32,
-    gate_posts: bool) -> bool {
-    if !TerrainRequest(r, board, columns, rows, area, cell, gate_posts) { return false }
-    return TerrainStep(r, -1)
 }
 
 #scope_file
@@ -217,99 +134,31 @@ Allocate :: (image: *Image, width: s32, height: s32) -> bool {
     return VecResize(image.pixels, cast(s64)width * height * 4)
 }
 
-Clock :: () -> s64 {
-    #if #defined(WURM_PORTABLE) {
-        return 0
-    } else {
-        return Timer.MonotonicNanoseconds()
-    }
-}
-
-// One bounded piece of the current job. False when it cannot be done.
-Slice :: (r: *TerrainRenderer) -> bool {
+// Materials, programs and pictures for a new board, landscape or size.
+Prepare :: (r: *TerrainRenderer) -> bool {
     cell := r.cell
     columns := r.cells.columns
     rows := r.cells.rows
-    if r.stage == STAGE_MATERIALS {
-        if r.cursor < Materials.MATERIAL_KINDS {
-            if r.texture_area != r.area || r.texture_cell != cell {
-                kind := r.cursor
-                tiles: [Materials.MATERIAL_KINDS]float64 = .[FLOOR_TILE, WALL_TILE, STONE_TILE, WATER_TILE]
-                // Paint already carries its own shading, so its relief stays
-                // gentle; floors and water keep less fine contrast than walls.
-                strength: [Materials.MATERIAL_KINDS]float64 = .[2.5, 4.5, 4.0, 0.0]
-                contrast: [Materials.MATERIAL_KINDS]float64 = .[0.55, 0.85, 0.85, 0.5]
-                if !Materials.MaterialTile(*r.pack, r.area, kind, cast(s32)(tiles[kind] * cast(float64)cell), strength[kind],
-                    contrast[kind], *r.materials[kind].albedo, *r.materials[kind].relief) { return false }
-                if kind == Materials.MATERIAL_KINDS - 1 { r.texture_area = r.area; r.texture_cell = cell }
-            }
-            r.cursor += 1
-            return true
+    if r.texture_area != r.area || r.texture_cell != cell {
+        tiles: [Materials.MATERIAL_KINDS]float64 = .[FLOOR_TILE, WALL_TILE, STONE_TILE, WATER_TILE]
+        // Paint already carries its own shading, so its relief stays gentle;
+        // floors and water keep less fine contrast than walls.
+        strength: [Materials.MATERIAL_KINDS]float64 = .[2.5, 4.5, 4.0, 0.0]
+        contrast: [Materials.MATERIAL_KINDS]float64 = .[0.55, 0.85, 0.85, 0.5]
+        for kind: 0..Materials.MATERIAL_KINDS - 1 {
+            if !Materials.MaterialTile(*r.pack, r.area, cast(s32)kind, cast(s32)(tiles[kind] * cast(float64)cell), strength[kind],
+                contrast[kind], *r.materials[kind].albedo, *r.materials[kind].relief) { return false }
         }
-        if !Texture.BoardTexture(r.area, cell, columns, rows, *r.board) { return false }
-        if r.program_cell != cell {
-            if !Shader.ReliefProgram(*r.relief, cast(float64)cell).ok || !Shader.ColourProgram(*r.colour, cast(float64)cell).ok { return false }
-            r.program_cell = cell
-        }
-        if !Field.DistancesAllocate(*r.cells, *r.distances) || !Field.FieldAllocate(*r.field, columns, rows, cell) ||
-            !Allocate(*r.light, r.field.width, r.field.height) || !Allocate(*r.image, r.field.width, r.field.height) { return false }
-        r.stage = STAGE_DISTANCES
-        r.cursor = r.y0
-        return true
+        r.texture_area = r.area
+        r.texture_cell = cell
     }
-    if r.stage == STAGE_DISTANCES {
-        if r.cursor < r.y1 {
-            next := ifx r.cursor + 4 < r.y1 then r.cursor + 4 else r.y1
-            Field.ComputeDistances(*r.cells, *r.distances, r.x0, r.cursor, r.x1, next)
-            r.cursor = next
-            return true
-        }
-        Field.SoftenWater(*r.distances, r.x0, r.y0, r.x1, r.y1)
-        r.stage = STAGE_FIELD
-        r.cursor = r.y0
-        return true
+    if !Texture.BoardTexture(r.area, cell, columns, rows, *r.board) { return false }
+    if r.program_cell != cell {
+        if !Shader.ReliefProgram(*r.relief, cast(float64)cell).ok || !Shader.ColourProgram(*r.colour, cast(float64)cell).ok { return false }
+        r.program_cell = cell
     }
-    if r.stage == STAGE_FIELD {
-        next := ifx r.cursor + 2 < r.y1 then r.cursor + 2 else r.y1
-        Field.FieldPaint(*r.field, *r.cells, *r.distances, r.area, r.x0 * cell, r.cursor * cell, r.x1 * cell, next * cell)
-        r.cursor = next
-        if r.cursor >= r.y1 {
-            r.stage = STAGE_SHADE
-            r.cursor = r.y0 * cell
-            if r.band < 4 { r.band = cell }
-        }
-        return true
-    }
-    // CPU bands adapt their height to the time they should take. Each GPU
-    // render uploads every input picture, so once the GPU has drawn a band
-    // it draws the rest of the window at once.
-    top := r.cursor
-    whole := r.band_time == 0 || r.accelerated
-    bottom := ifx whole then r.y1 * cell else top + r.band
-    if bottom > r.y1 * cell { bottom = r.y1 * cell }
-    started := Clock()
-    if !RenderPasses(r, r.x0 * cell, top, r.x1 * cell, bottom) { return false }
-    spent := Clock() - started
-    if spent > 0 && r.band_time > 0 {
-        band := cast(s64)(bottom - top) * r.band_time / spent
-        if band < cast(s64)cell { band = cast(s64)cell }
-        if band > 4096 { band = 4096 }
-        r.band = cast(s32)band
-    }
-    r.cursor = bottom
-    if r.cursor >= r.y1 * cell {
-        r.stage = STAGE_IDLE
-        if r.follow_up {
-            // The picture is whole; now redraw what changed meanwhile.
-            r.follow_up = false
-            r.ready = true
-            r.full = false
-            r.x0 = r.follow_x0; r.y0 = r.follow_y0; r.x1 = r.follow_x1; r.y1 = r.follow_y1
-            r.stage = STAGE_DISTANCES
-            r.cursor = r.y0
-        }
-    }
-    return true
+    return Field.DistancesAllocate(*r.cells, *r.distances) && Field.FieldAllocate(*r.field, columns, rows, cell) &&
+        Allocate(*r.light, r.field.width, r.field.height) && Allocate(*r.image, r.field.width, r.field.height)
 }
 
 Scale :: (columns: float64, rows: float64, tile: float64) -> ShaderValue { return .{columns / tile, rows / tile, 0.0, 0.0} }

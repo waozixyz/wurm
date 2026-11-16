@@ -249,28 +249,32 @@ launched from `build/`.
 The title uses detailed sunlit storybook art, and the tiles and creatures use clean cartoon
 art generated with the built-in image tool. Source atlases live in
 `assets/art-source`; their prompts are recorded in `assets/art/title.json`.
-`tools/make_art.zi` crops and packs those cells into the landscape
-sheets without changing gameplay tile IDs or collision rules. It also writes
-the display-free `.argb` mirrors. Run it with `--check` to verify the packed
-art matches its sources. `assets/art-source/journey-terrain.png` supplies
-the five landscape materials; its built-in image-generation prompt is recorded
-in `assets/art/title.json`. `make_art` also packs each landscape's floor,
-wall, stone and water cell, made seamless, into
-`assets/art/terrain-materials.bin` for the terrain shaders.
+`tools/make_art.zi` crops and packs the sprite cells into
+`assets/art/sprites.png` without changing gameplay tile IDs or collision
+rules. It also writes the display-free `.argb` mirrors. Run it with
+`--check` to verify the packed art matches its sources.
+`assets/art-source/journey-terrain.png` supplies the five landscape
+materials; its built-in image-generation prompt is recorded in
+`assets/art/title.json`. `make_art` makes each landscape's floor, wall,
+stone and water cell seamless and writes them twice: as
+`assets/art/terrain-materials.bin` for the terrain shaders and as the
+`assets/art/terrain-materials.png` swatches the editor's brushes and the
+portable tiles draw.
 
 Boards are painted by two Kryon material shaders (`src/terrain_shader.zi`):
 a relief pass lights the rounded hedge, stone and water field
 (`src/terrain_field.zi`) and the materials' relief, and a colour pass lays
 the painted materials, water depth and shore over that light. The desktop
 build (`tools/build_desktop.zi`) defines `WURM_TERRAIN_GPU` and runs them on
-the GPU through `kryon/scene_gpu`, falling back to the CPU. Android and the
-browser run the same programs on the CPU a few milliseconds per frame; the
-classic tiles show until a new board fades in, and a gate, entrance or exit
-re-renders only its surroundings. Portable Arcade bundles cannot create
-pictures at run time and keep the classic tiles. `tools/render_previews.zi`
-renders the level previews with the same shaders and stores them as
-96-colour palette pictures. `WURM_START=play WURM_LEVEL=n` opens level n as
-a disposable test run, which the private-display captures use. The same golden orange worm and red apples appear
+the GPU through `kryon/scene_gpu`, falling back to the CPU; Android and the
+browser run the same programs on the CPU. A board is rendered whole before
+its first frame, and a gate, entrance or exit re-renders only its
+surroundings. Portable Arcade bundles cannot create pictures at run time
+and lay the same seamless swatches as tiles (`src/terrain_tiles.zi`).
+`tools/render_previews.zi` renders the level previews with the same shaders
+and stores them as 96-colour palette pictures. `WURM_START=play
+WURM_LEVEL=n` opens level n as a disposable test run, which the
+private-display captures use. The same golden orange worm and red apples appear
 throughout the journey. `assets/sounds/sounds.json` records the OpenRouter model and prompt
 of every sound. The current acoustic garden score was AI-generated with
 Lyria; it is not the recovered original MIDI. Garden, factory and space now

@@ -38,9 +38,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     stages: [5]string = .["meadow", "leafwood", "pinewood", "lake", "mountains"]
     changed: s32
     for stage: 0..4 {
-        name: Vec(u8)
-        BuilderPrint(*name, "campaign-%", stages[stage])
-        sheet := Art(BuilderFinish(name))
+        sheet := Art("sprites")
         if !ImageValid(*sheet) { print("tools/render_previews: art is missing\n"); return 1 }
         // Creatures keep their sheet art, shrunk to one painted cell.
         creatures := ResizeLanczos(*sheet, sheet.width * PAINT / 32, sheet.height * PAINT / 32)

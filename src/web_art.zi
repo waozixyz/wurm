@@ -16,9 +16,7 @@ Drawn :: (folder: string, name: string) -> bool {
         for stages { if TextHasPrefix(name, it) { return true } }
         return false
     }
-    pictures: [19]string = .["campaign-meadow.png", "campaign-leafwood.png", "campaign-pinewood.png",
-        "campaign-lake.png", "campaign-mountains.png", "forest-canopy.png", "forest-canopy-portrait.png",
-        "title.png", "title-portrait.png", "ground-meadow.png", "water-field.png",
+    pictures: [12]string = .["sprites.png", "terrain-materials.png", "title.png", "title-portrait.png",
         "skins.png", "special-skins.png", "reward-skins.png", "editor-title-small.png",
         "editor-title-portrait-small.png", "stage-covers.png", "reward-icons.png", "title-icons.png"]
     for pictures { if it == name { return true } }

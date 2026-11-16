@@ -1,6 +1,7 @@
 // Presents the shader-rendered terrain as one picture under the board's
-// sprites, with gentle glints that drift across open water. Portable
-// bundles cannot create pictures at run time and keep the classic tiles.
+// sprites, with gentle glints that drift across open water. A board is
+// rendered whole before its first frame. Portable bundles cannot create
+// pictures at run time and draw terrain_tiles.zi's material tiles.
 #import "kryon/session"
 #import "kryon/geometry"
 #import "kryon/drawing_props"
@@ -16,8 +17,9 @@ picture_slot: s32;
 picture_epoch: u64;
 uploaded: s32 = -1;
 
-// Pixels per board cell: about the board's size on screen, even, and kept
-// while a window is only nudged so resizing does not re-render each frame.
+// Pixels per board cell: about the board's size on screen, even. A picture
+// that is already at least nearly that fine is kept, so resizing a window
+// or drawing the board smaller does not render it again.
 CellFor :: (stage_width: float32, columns: s32) -> s32 {
     limit: s32 = 32
     #if #defined(ANDROID_BUILD) {
@@ -30,41 +32,19 @@ CellFor :: (stage_width: float32, columns: s32) -> s32 {
     want += want % 2
     if want < 12 { want = 12 }
     if want > limit { want = limit }
-    if renderer.ready && renderer.cell >= want - 4 && renderer.cell <= want + 4 && renderer.cell <= limit { return renderer.cell }
+    if renderer.ready && renderer.cell >= want - 4 && renderer.cell <= limit { return renderer.cell }
     return want
 }
 
-// Frames a newly finished board takes to fade in over the classic tiles.
-FADE_FRAMES :: 12;
-shown_frames: s32;
-
-// Prepares BOARD's terrain, working a few milliseconds per frame, and
-// returns how opaque its picture is (0 hides it: draw the classic tiles;
-// below 1 it is fading in over them).
-PrepareTerrain :: (session: Session, stage: Rectangle, board: []u8, columns: s32, rows: s32,
-    area: s32, gate_posts: bool) -> float32 {
-    if !Terrain.TerrainAvailable(*renderer) { return 0.0 }
-    if !Terrain.TerrainRequest(*renderer, board, columns, rows, area, CellFor(stage.width, columns), gate_posts) { return 0.0 }
-    was_ready := renderer.ready
-    budget: s64 = 6000000
-    #if #defined(WURM_TERRAIN_GPU) {
-        budget = 10000000
-    }
-    unused Terrain.TerrainStep(*renderer, budget)
-    if !renderer.ready { shown_frames = 0; return 0.0 }
-    if !was_ready { shown_frames = 0 }
-    if !Upload(session) { return 0.0 }
-    if shown_frames < FADE_FRAMES { shown_frames += 1 }
-    t := cast(float32)shown_frames / cast(float32)FADE_FRAMES
-    return t * t * (3.0 - 2.0 * t)
-}
-
-// Draws the prepared picture at OPACITY.
-DrawTerrain :: (session: Session, key: u64, stage: Rectangle, opacity: float32) {
-    if picture.id == cast(u32)0 || opacity <= 0.0 { return }
-    alpha := cast(u32)(opacity * 255.0 + 0.5)
+// Draws BOARD's terrain into STAGE, rendering what changed first. False
+// when the shaders or their materials are unavailable.
+DrawTerrain :: (session: Session, key: u64, stage: Rectangle, board: []u8, columns: s32, rows: s32,
+    area: s32, gate_posts: bool) -> bool {
+    unused Terrain.TerrainUpdate(*renderer, board, columns, rows, area, CellFor(stage.width, columns), gate_posts)
+    if !renderer.ready || !Upload(session) { return false }
     unused Image.Draw(session, Image.Props.{.key = key, .texture = picture, .bounds = stage, .smooth = true,
-        .tint = cast(u32)0xffffff00 | alpha, .alt_text = "Board terrain"})
+        .alt_text = "Board terrain"})
+    return true
 }
 
 // Keeps the session's picture in step with the renderer's latest pixels.

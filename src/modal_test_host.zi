@@ -132,20 +132,6 @@ main :: () -> s32 {
     if Number("WURM_PROBE_PROGRESS", 0) != 0 { return ProgressProbe(session) }
     App.StartLevel(Number("WURM_PROBE_LEVEL", 0), Timer.MonotonicMilliseconds(), 1)
     state: *Game = *App.game
-    // Behavioural adjacency cases: internal joins never receive borders,
-    // while an unlike material keeps its own exposed edge.
-    walls: [CELLS]u8
-    walls[Index(5, 5)] = 20
-    if App.WallEdges(walls[:], 5, 5, 20) != 15 { return 10 }
-    walls[Index(4, 5)] = 20
-    walls[Index(6, 5)] = 20
-    if App.WallEdges(walls[:], 5, 5, 20) != 10 { return 11 }
-    walls[Index(5, 4)] = 21
-    if App.WallEdges(walls[:], 5, 5, 20) != 10 { return 12 }
-    walls[Index(5, 4)] = 20
-    if App.WallEdges(walls[:], 5, 5, 20) != 8 { return 13 }
-    walls[Index(5, 6)] = 20
-    if App.WallEdges(walls[:], 5, 5, 20) != 0 { return 14 }
     state.mode = Number("WURM_PROBE_MODE", 2)
     state.score = 1234
     if state.mode == 3 { state.lives = 0 }

@@ -95,6 +95,7 @@ EditorApp :: () -> bool {
     TreeInput :: #import "kryon/tree_input";
     TerrainView :: #import, file "terrain_view.zi";
 }
+TerrainTiles :: #import, file "terrain_tiles.zi";
 #import "std/number_text"
 #import "std/text_buffer"
 #import, file "game.zi";
@@ -127,18 +128,11 @@ reward_until: s64;
 
 #if #defined(WURM_PORTABLE) {
     #if #defined(WURM_EDITOR_APP) {
-        ART_MEADOW :: "assets/wurm-editor/art/campaign-meadow.png";
-        ART_LEAFWOOD :: "assets/wurm-editor/art/campaign-leafwood.png";
-        ART_PINEWOOD :: "assets/wurm-editor/art/campaign-pinewood.png";
-        ART_LAKE :: "assets/wurm-editor/art/campaign-lake.png";
-        ART_MOUNTAINS :: "assets/wurm-editor/art/campaign-mountains.png";
-        ART_CANOPY :: "assets/wurm-editor/art/forest-canopy.png";
-        ART_CANOPY_PORTRAIT :: "assets/wurm-editor/art/forest-canopy-portrait.png";
+        ART_SPRITES :: "assets/wurm-editor/art/sprites.png";
         ART_TITLE :: "assets/wurm-editor/art/title.png";
         ART_TITLE_PORTRAIT :: "assets/wurm-editor/art/title-portrait.png";
         ART_PREVIEWS :: "assets/wurm-editor/art/campaign-previews/";
-        ART_GROUND :: "assets/wurm-editor/art/ground-meadow.png";
-        ART_WATER :: "assets/wurm-editor/art/water-field.png";
+        ART_TERRAIN :: "assets/wurm-editor/art/terrain-materials.png";
         ART_SKINS :: "assets/wurm-editor/art/skins.png";
         ART_SPECIAL_SKINS :: "assets/wurm-editor/art/special-skins.png";
         ART_REWARD_SKINS :: "assets/wurm-editor/art/reward-skins.png";
@@ -148,18 +142,11 @@ reward_until: s64;
         ART_REWARD_ICONS :: "assets/wurm-editor/art/reward-icons.png";
         ART_TITLE_ICONS :: "assets/wurm-editor/art/title-icons.png";
     } else {
-        ART_MEADOW :: "assets/wurm/art/campaign-meadow.png";
-        ART_LEAFWOOD :: "assets/wurm/art/campaign-leafwood.png";
-        ART_PINEWOOD :: "assets/wurm/art/campaign-pinewood.png";
-        ART_LAKE :: "assets/wurm/art/campaign-lake.png";
-        ART_MOUNTAINS :: "assets/wurm/art/campaign-mountains.png";
-        ART_CANOPY :: "assets/wurm/art/forest-canopy.png";
-        ART_CANOPY_PORTRAIT :: "assets/wurm/art/forest-canopy-portrait.png";
+        ART_SPRITES :: "assets/wurm/art/sprites.png";
         ART_TITLE :: "assets/wurm/art/title.png";
         ART_TITLE_PORTRAIT :: "assets/wurm/art/title-portrait.png";
         ART_PREVIEWS :: "assets/wurm/art/campaign-previews/";
-        ART_GROUND :: "assets/wurm/art/ground-meadow.png";
-        ART_WATER :: "assets/wurm/art/water-field.png";
+        ART_TERRAIN :: "assets/wurm/art/terrain-materials.png";
         ART_SKINS :: "assets/wurm/art/skins.png";
         ART_SPECIAL_SKINS :: "assets/wurm/art/special-skins.png";
         ART_REWARD_SKINS :: "assets/wurm/art/reward-skins.png";
@@ -170,18 +157,11 @@ reward_until: s64;
         ART_TITLE_ICONS :: "assets/wurm/art/title-icons.png";
     }
 } else {
-    ART_MEADOW :: "assets/art/campaign-meadow.png";
-    ART_LEAFWOOD :: "assets/art/campaign-leafwood.png";
-    ART_PINEWOOD :: "assets/art/campaign-pinewood.png";
-    ART_LAKE :: "assets/art/campaign-lake.png";
-    ART_MOUNTAINS :: "assets/art/campaign-mountains.png";
-    ART_CANOPY :: "assets/art/forest-canopy.png";
-    ART_CANOPY_PORTRAIT :: "assets/art/forest-canopy-portrait.png";
+    ART_SPRITES :: "assets/art/sprites.png";
     ART_TITLE :: "assets/art/title.png";
     ART_TITLE_PORTRAIT :: "assets/art/title-portrait.png";
     ART_PREVIEWS :: "assets/art/campaign-previews/";
-    ART_GROUND :: "assets/art/ground-meadow.png";
-    ART_WATER :: "assets/art/water-field.png";
+    ART_TERRAIN :: "assets/art/terrain-materials.png";
     ART_SKINS :: "assets/art/skins.png";
     ART_SPECIAL_SKINS :: "assets/art/special-skins.png";
     ART_REWARD_SKINS :: "assets/art/reward-skins.png";
@@ -281,16 +261,9 @@ StageKey :: (stage: s32) -> string {
     return "meadow-"
 }
 
-// Terrain keeps the stable 20-column tile coordinates; every landscape
-// shares the same orange worm and apples.
+// The sprite sheet keeps the stable 20-column, 16-unit cell coordinates
+// at twice that size; every landscape shares the worm, fruit and creatures.
 SHEET_SCALE :: 2.0;
-Sheet :: (stage: s32) -> string {
-    if stage == 1 { return ART_LEAFWOOD }
-    if stage == 2 { return ART_PINEWOOD }
-    if stage == 3 { return ART_LAKE }
-    if stage == 4 { return ART_MOUNTAINS }
-    return ART_MEADOW
-}
 preview_path: [64]u8;
 PreviewPath :: (stage: s32, number: s32, portrait: bool = false) -> string {
     digits: [16]u8
@@ -808,7 +781,7 @@ CharacterPreview :: (session: Session, key: u64, bounds: Rectangle, id: s32) {
 Character :: (session: Session, key: u64, bounds: Rectangle, id: s32, head: bool, direction: s32 = 2, alpha: u8 = 255, clip: Rectangle = .{}) {
     if id == 0 {
         column := ifx head then direction else 4
-        Picture(session, key, Sheet(0), bounds,
+        Picture(session, key, ART_SPRITES, bounds,
             Rectangle.{cast(float32)column * 16.0, 48.0, 16.0, 16.0}, alpha)
         return
     }
@@ -1483,25 +1456,12 @@ DrawWormTube :: (session: Session, base_key: u64, stage: Rectangle, points: []Po
         cast(u8)(cast(float32)alpha * 0.19), scale, -5.0, -2.2, -2.8)
 }
 
-// Garden-only dressage: animated water frames and grass floor variants,
-// both chosen per frame and per cell so boards feel alive without any
-// change to the level data.
-water_frame: s32;
+// Animation frames chosen from the clock, frozen while paused: enemy art
+// and the glints drifting on water.
 enemy_frame: s32;
 glint_frame: s32;
-fancy_garden: bool;
-GRASS_TILES :: 9;
 
 Snap :: (value: float32) -> float32 { return cast(float32)cast(s32)(value + 0.5) }
-
-// Shared bounds keep neighbouring textures and their outside edges aligned.
-TileBounds :: (stage: Rectangle, x: s32, y: s32) -> Rectangle {
-    scale := stage.width / (cast(float32)board_columns * 16.0)
-    left := Snap(stage.x + cast(float32)x * 16.0 * scale)
-    top := Snap(stage.y + cast(float32)y * 16.0 * scale)
-    return Rectangle.{left, top, Snap(stage.x + cast(float32)(x + 1) * 16.0 * scale) - left,
-        Snap(stage.y + cast(float32)(y + 1) * 16.0 * scale) - top}
-}
 
 DrawBoardFrame :: (session: Session, stage: Rectangle, chapter: s32) {
     look := JourneyLookFor(chapter)
@@ -1533,225 +1493,11 @@ DrawObjectAura :: (session: Session, key: u64, stage: Rectangle, at: Point, size
         .radius = inner})
 }
 
-DrawTerrainDetail :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, chapter: s32) {
-    kind := tile & 127
-    bounds := TileBounds(stage, x, y)
-    // Sparse top-down marks break up repeated cells without changing a tile's
-    // collision, authored identity, camera size or readable route.
-    hash := (x * 47 + y * 83 + chapter * 29) % 101
-    if kind == 22 {
-        if hash % 5 != 0 { return }
-        wave := bounds.width * 0.55
-        if wave < 2.0 { wave = 2.0 }
-        unused Box.Draw(session, Box.Props.{.key = key,
-            .bounds = Rectangle.{bounds.x + bounds.width * 0.16,
-                bounds.y + bounds.height * (0.30 + cast(float32)((x + water_frame) % 3) * 0.16), wave, 1.0},
-            .fill = Color.{194, 239, 225, 125}, .radius = 1.0})
-        return
-    }
-    if WallMaterial(tile) != 0 || hash > 18 { return }
-    size := bounds.width * 0.09
-    if size < 1.0 { size = 1.0 }
-    cx := bounds.x + bounds.width * (0.28 + cast(float32)(hash % 4) * 0.13)
-    cy := bounds.y + bounds.height * (0.30 + cast(float32)(hash % 3) * 0.16)
-    if chapter == 0 {
-        // Buttercups and small clover tufts keep the meadow bright.
-        if hash % 2 == 0 {
-            for petal: 0..3 {
-                px := cx + (ifx petal % 2 == 0 then -size else size) * 0.52
-                py := cy + (ifx petal < 2 then -size else size) * 0.52
-                unused Box.Draw(session, Box.Props.{.key = key + cast(u64)petal,
-                    .bounds = Rectangle.{px - size * 0.52, py - size * 0.52, size * 1.04, size * 1.04},
-                    .fill = Color.{248, 239, 178, 178}, .radius = size * 0.52})
-            }
-            unused Box.Draw(session, Box.Props.{.key = key + 4,
-                .bounds = Rectangle.{cx - size * 0.42, cy - size * 0.42, size * 0.84, size * 0.84},
-                .fill = Color.{239, 177, 47, 220}, .radius = size * 0.42})
-        } else {
-            for blade: 0..2 {
-                unused Box.Draw(session, Box.Props.{.key = key + cast(u64)blade,
-                    .bounds = Rectangle.{cx + cast(float32)(blade - 1) * size * 0.58,
-                        cy - size * (0.7 + cast(float32)(blade % 2) * 0.35),
-                        size * 0.34, size * (1.4 + cast(float32)(blade % 2) * 0.35)},
-                    .fill = Color.{55, 126, 56, 160}, .radius = size * 0.17})
-            }
-        }
-    } else if chapter == 1 {
-        // Leaf pairs and the occasional warm forest-floor seed.
-        unused Box.Draw(session, Box.Props.{.key = key,
-            .bounds = Rectangle.{cx - size * 1.35, cy - size * 0.55, size * 1.55, size * 0.92},
-            .fill = Color.{69, 137, 69, 170}, .radius = size * 0.46})
-        unused Box.Draw(session, Box.Props.{.key = key + 1,
-            .bounds = Rectangle.{cx - size * 0.12, cy - size * 0.22, size * 1.45, size * 0.88},
-            .fill = Color.{139, 174, 73, 170}, .radius = size * 0.44})
-        unused Box.Draw(session, Box.Props.{.key = key + 2,
-            .bounds = Rectangle.{cx - size * 0.18, cy - size * 0.18, size * 0.36, size * 1.35},
-            .fill = Color.{101, 78, 44, 170}, .radius = size * 0.18})
-    } else if chapter == 2 {
-        // Pine needles and cones read as a different forest at a glance.
-        for needle: 0..2 {
-            unused Box.Draw(session, Box.Props.{.key = key + cast(u64)needle,
-                .bounds = Rectangle.{cx - size * 1.2 + cast(float32)needle * size * 0.78,
-                    cy - size * (0.48 + cast(float32)(needle % 2) * 0.45),
-                    size * 0.28, size * (1.55 + cast(float32)(needle % 2) * 0.40)},
-                .fill = Color.{46, 99, 66, 165}, .radius = size * 0.14})
-        }
-        if hash % 3 == 0 {
-            unused Box.Draw(session, Box.Props.{.key = key + 4,
-                .bounds = Rectangle.{cx + size * 0.55, cy - size * 0.12, size * 1.05, size * 1.45},
-                .fill = Color.{139, 93, 49, 190}, .border = Color.{82, 61, 38, 170}, .radius = size * 0.48})
-        }
-    } else if chapter == 3 {
-        // Reeds and smooth pebbles carry the shoreline onto dry cells.
-        for reed: 0..2 {
-            unused Box.Draw(session, Box.Props.{.key = key + cast(u64)reed,
-                .bounds = Rectangle.{cx + cast(float32)(reed - 1) * size * 0.72,
-                    cy - size * (0.9 + cast(float32)(reed % 2) * 0.45), size * 0.25,
-                    size * (1.8 + cast(float32)(reed % 2) * 0.45)},
-                .fill = Color.{47, 131, 116, 155}, .radius = size * 0.12})
-        }
-        unused Box.Draw(session, Box.Props.{.key = key + 4,
-            .bounds = Rectangle.{cx - size * 1.10, cy + size * 0.72, size * 1.15, size * 0.62},
-            .fill = Color.{128, 159, 143, 150}, .radius = size * 0.31})
-    } else {
-        // Angular chips and frost crosses suit the high mountain floor.
-        unused Box.Draw(session, Box.Props.{.key = key,
-            .bounds = Rectangle.{cx - size * 1.15, cy - size * 0.38, size * 1.05, size * 0.78},
-            .fill = Color.{123, 129, 139, 170}, .radius = size * 0.20})
-        unused Box.Draw(session, Box.Props.{.key = key + 1,
-            .bounds = Rectangle.{cx + size * 0.18, cy - size * 0.78, size * 0.82, size * 0.62},
-            .fill = Color.{188, 192, 194, 165}, .radius = size * 0.18})
-        if hash % 2 == 0 {
-            unused Box.Draw(session, Box.Props.{.key = key + 2,
-                .bounds = Rectangle.{cx - size * 0.12, cy - size * 1.05, size * 0.24, size * 2.10},
-                .fill = Color.{239, 241, 230, 145}, .radius = size * 0.12})
-            unused Box.Draw(session, Box.Props.{.key = key + 3,
-                .bounds = Rectangle.{cx - size * 1.05, cy - size * 0.12, size * 2.10, size * 0.24},
-                .fill = Color.{239, 241, 230, 145}, .radius = size * 0.12})
-        }
-    }
-}
-
 WallMaterial :: (tile: s32) -> s32 {
     value := tile & 127
     if value == 20 || (value >= 50 && value <= 58) { return 20 }
     if value == 21 || value == 22 { return value }
     return 0
-}
-
-// Only exposed edges have an outline. Equal touching materials share one
-// continuous surface, including corners and walls painted in the editor.
-WallEdges :: (board: []u8, x: s32, y: s32, tile: s32) -> s32 {
-    material := WallMaterial(tile)
-    if material == 0 { return 0 }
-    mask: s32
-    for side: 0..3 {
-        nx := x
-        ny := y
-        if side == 0 { nx -= 1 }
-        else if side == 1 { ny -= 1 }
-        else if side == 2 { nx += 1 }
-        else { ny += 1 }
-        if !Inside(nx, ny) || WallMaterial(cast(s32)board[Index(nx, ny)]) != material {
-            mask |= 1 << cast(s32)side
-        }
-    }
-    return mask
-}
-
-DrawWallEdges :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, board: []u8) {
-    mask := WallEdges(board, x, y, tile)
-    if mask == 0 { return }
-    bounds := TileBounds(stage, x, y)
-    edge := Snap(stage.width / (cast(float32)board_columns * 16.0) * 2.0)
-    if edge < 1.0 { edge = 1.0 }
-    material := WallMaterial(tile)
-    dark := Color.{31, 76, 42, 255}
-    light := Color.{94, 143, 67, 255}
-    if material == 21 { dark = Color.{82, 83, 75, 255}; light = Color.{176, 174, 153, 255} }
-    else if material == 22 { dark = Color.{36, 105, 113, 255}; light = Color.{110, 190, 177, 255} }
-    for side: 0..3 {
-        if (mask & (1 << cast(s32)side)) == 0 { continue }
-        line := bounds
-        if side == 0 { line.width = edge }
-        else if side == 1 { line.height = edge }
-        else if side == 2 { line.x += line.width - edge; line.width = edge }
-        else { line.y += line.height - edge; line.height = edge }
-        unused Box.Draw(session, Box.Props.{.key = 20000 + key * 4 + cast(u64)side, .bounds = line,
-            .fill = ifx side < 2 then light else dark})
-        if side >= 2 {
-            shade := line
-            if side == 2 { shade.x -= edge; shade.width += edge }
-            else { shade.y -= edge; shade.height += edge }
-            unused Box.Draw(session, Box.Props.{.key = 90000 + key * 4 + cast(u64)side, .bounds = shade,
-                .fill = Color.{dark.r, dark.g, dark.b, 72}})
-        }
-    }
-}
-
-// Tile edges land on whole pixels, so scaled neighbours meet without seams.
-MeadowGround :: (session: Session, key: u64, bounds: Rectangle, x: s32, y: s32) {
-    width := 1448.0 / cast(float32)board_columns
-    height := 1086.0 / cast(float32)board_rows
-    unused Image.Draw(session, Image.Props.{.key = key, .asset_path = ART_GROUND, .bounds = bounds,
-        .source = Rectangle.{cast(float32)x * width, cast(float32)y * height, width, height},
-        .smooth = true, .alt_text = "Continuous meadow ground"})
-}
-Tile :: (session: Session, key: u64, stage: Rectangle, x: s32, y: s32, tile: s32, sheet: string) {
-    bounds := TileBounds(stage, x, y)
-    kind := tile & 127
-    if kind == 22 {
-        // One field spans the board. Touching water cells sample touching
-        // regions, so painting a lake never repeats a shoreline per tile.
-        width := 1448.0 / cast(float32)board_columns
-        height := 1086.0 / cast(float32)board_rows
-        unused Image.Draw(session, Image.Props.{.key = key, .asset_path = ART_WATER, .bounds = bounds,
-            .source = Rectangle.{cast(float32)x * width,cast(float32)y * height,width,height},
-            .smooth = true, .alt_text = "Continuous water"})
-        return
-    }
-    if kind >= 40 && kind <= 45 {
-        if sheet == Sheet(0) { MeadowGround(session, key, bounds, x, y) }
-        else { Picture(session, key, sheet, bounds, Rectangle.{0.0, 0.0, 16.0, 16.0}) }
-        column := kind - 40
-        if kind == 40 { column = 6 + enemy_frame }
-        Picture(session, key + 1000000, sheet, bounds, Rectangle.{cast(float32)column * 16.0, 32.0, 16.0, 16.0})
-        return
-    }
-    if sheet == Sheet(0) && (kind == 0 || kind == 3 || kind == 4 || kind == 5 || kind == 6 ||
-        kind == 15 || kind == 16 || kind == 17 || kind == 19) {
-        MeadowGround(session, key, bounds, x, y)
-        return
-    }
-    if WallMaterial(tile) == 20 && sheet == Sheet(1) {
-        // Sample one continuous forest field in board coordinates. Turning
-        // the board also turns the field, so every shared tile edge matches.
-        canopy := ifx board_columns == ROWS then ART_CANOPY_PORTRAIT else ART_CANOPY
-        unused Image.Draw(session, Image.Props.{.key = key, .asset_path = canopy, .bounds = bounds,
-            .source = Rectangle.{cast(float32)x * 16.0 * SHEET_SCALE, cast(float32)y * 16.0 * SHEET_SCALE,
-                16.0 * SHEET_SCALE, 16.0 * SHEET_SCALE},
-            .smooth = true, .alt_text = "Forest wall"})
-        return
-    }
-    if WallMaterial(tile) == 20 {
-        wall_columns: [8]s32 = .[0, 3, 4, 5, 6, 7, 8, 9]
-        variant := (x * 11 + y * 17) % cast(s32)wall_columns.count
-        Picture(session, key, sheet, bounds,
-            Rectangle.{cast(float32)wall_columns[variant] * 16.0, 16.0, 16.0, 16.0})
-        return
-    }
-    source := Rectangle.{cast(float32)(tile % 20) * 16.0,
-        cast(float32)(tile / 20) * 16.0, 16.0, 16.0}
-    if fancy_garden {
-        if tile == 22 {
-            source = Rectangle.{cast(float32)(water_frame % 3) * 16.0, 176.0, 16.0, 16.0}
-        } else if tile == 0 || tile == 3 || tile == 4 || tile == 5 ||
-            tile == 6 || tile == 15 || tile == 16 || tile == 17 || tile == 19 {
-            variant := (x * 7 + y * 13) % 4
-            source = Rectangle.{cast(float32)(4 + variant) * 16.0, 176.0, 16.0, 16.0}
-        }
-    }
-    Picture(session, key, sheet, bounds, source)
 }
 
 // The live board scaled to fit inside an area: 640x480 in landscape, the
@@ -1803,53 +1549,26 @@ DrawPortals :: (session: Session, stage: Rectangle) {
     }
 }
 
-// Stone posts mark each open gate throughout the journey. Their tiles and the
-// centre opening keep their existing collision data and width.
-DrawGatePosts :: (session: Session, stage: Rectangle) {
-    half := board_columns / 2
-    for gate: 0..1 {
-        row := ifx gate == 0 then board_rows - 1 else 0
-        centre := game.board[Index(half, row)]
-        if centre >= 20 && centre < 128 { continue }
-        for side: 0..1 {
-            column := half - 1 + cast(s32)side * 2
-            Tile(session, 11000 + cast(u64)gate * 2 + cast(u64)side, stage, column, row, 21, Sheet(0))
-        }
+// A board's terrain: the shader-lit picture, rendered whole before its
+// first frame, or the painted material tiles where pictures cannot be made
+// at run time. Gate posts beside an open entrance or exit are part of it
+// when GATE_POSTS.
+DrawLandscape :: (session: Session, key: u64, stage: Rectangle, board: []u8, columns: s32, rows: s32,
+    area: s32, gate_posts: bool) {
+    #if !#defined(WURM_PORTABLE) {
+        if TerrainView.DrawTerrain(session, key, stage, board, columns, rows, area, gate_posts) { return }
     }
+    TerrainTiles.DrawMaterialTiles(session, key, stage, ART_TERRAIN, board, columns, rows, area, gate_posts)
 }
 
 DrawBoard :: (session: Session, stage: Rectangle) {
-    fancy_garden = true
     chapter := StageOf(game.level)
     look := JourneyLookFor(chapter)
     DrawBoardFrame(session, stage, chapter)
-    tiles := Sheet(chapter)
-    sprites := tiles
-    // Shader-lit terrain where the target can show run-time pictures; its
-    // gate posts are part of the landscape. Otherwise the classic tiles.
-    shaded: float32 = 0.0
+    sprites := ART_SPRITES
+    DrawLandscape(session, 100, stage, game.board[:], board_columns, board_rows, chapter, true)
     #if !#defined(WURM_PORTABLE) {
-        shaded = TerrainView.PrepareTerrain(session, stage, game.board[:], board_columns, board_rows, chapter, true)
-    }
-    if shaded < 1.0 {
-        for y: 0..board_rows - 1 {
-            for x: 0..board_columns - 1 {
-                at := Index(x, y)
-                Tile(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
-                    cast(s32)(game.board[at] & 127), tiles)
-                DrawWallEdges(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
-                    cast(s32)game.board[at], game.board[:])
-                DrawTerrainDetail(session, 800000 + cast(u64)at * 8, stage, cast(s32)x, cast(s32)y,
-                    cast(s32)game.board[at], chapter)
-            }
-        }
-    }
-    if shaded < 1.0 { DrawGatePosts(session, stage) }
-    #if !#defined(WURM_PORTABLE) {
-        if shaded > 0.0 {
-            TerrainView.DrawTerrain(session, 94, stage, shaded)
-            TerrainView.DrawWaterGlints(session, 96000, stage, glint_frame)
-        }
+        TerrainView.DrawWaterGlints(session, 96000, stage, glint_frame)
     }
     // A final inset line unifies irregular edge tiles and keeps the board
     // readable against every surrounding screen.
@@ -2217,17 +1936,12 @@ EditorSetApples :: (delta: s32) {
     editor.dirty = true
 }
 
-// One palette swatch: the brush value it selects and its sheet art.
+// One palette swatch: the brush value it selects and, for creatures, its
+// sheet art. Terrain brushes show their painted material.
 PaletteEntry :: struct { brush: s32; source_x: float32; source_y: float32 }
-floor_entries: [3]PaletteEntry = PaletteEntry.[
-    PaletteEntry.{.brush = 0, .source_x = 0.0, .source_y = 0.0},
-    PaletteEntry.{.brush = 1, .source_x = 16.0, .source_y = 0.0},
-    PaletteEntry.{.brush = 2, .source_x = 32.0, .source_y = 0.0}];
-wall_entries: [4]PaletteEntry = PaletteEntry.[
-    PaletteEntry.{.brush = BRUSH_SMART_WALL, .source_x = 160.0, .source_y = 32.0},
-    PaletteEntry.{.brush = 20, .source_x = 0.0, .source_y = 16.0},
-    PaletteEntry.{.brush = 21, .source_x = 16.0, .source_y = 16.0},
-    PaletteEntry.{.brush = 22, .source_x = 32.0, .source_y = 16.0}];
+floor_entries: [1]PaletteEntry = PaletteEntry.[PaletteEntry.{.brush = 0}];
+wall_entries: [4]PaletteEntry = PaletteEntry.[PaletteEntry.{.brush = BRUSH_SMART_WALL},
+    PaletteEntry.{.brush = 20}, PaletteEntry.{.brush = 21}, PaletteEntry.{.brush = 22}];
 enemy_entries: [6]PaletteEntry = .[
     PaletteEntry.{.brush = 40, .source_x = 96.0, .source_y = 32.0},
     PaletteEntry.{.brush = 41, .source_x = 16.0, .source_y = 32.0},
@@ -2235,9 +1949,33 @@ enemy_entries: [6]PaletteEntry = .[
     PaletteEntry.{.brush = 43, .source_x = 48.0, .source_y = 32.0},
     PaletteEntry.{.brush = 44, .source_x = 64.0, .source_y = 32.0},
     PaletteEntry.{.brush = 45, .source_x = 80.0, .source_y = 32.0}];
+// The painted material a terrain brush lays: floor, wall, stone or water,
+// or -1 for a creature.
+BrushMaterial :: (brush: s32) -> s32 {
+    if brush >= 40 && brush <= 45 { return -1 }
+    if brush == 21 { return 2 }
+    if brush == 22 { return 3 }
+    if brush >= 20 { return 1 }
+    return 0
+}
+
+// A brush's picture: its material in AREA's landscape, or a creature's art.
+DrawBrush :: (session: Session, key: u64, bounds: Rectangle, brush: s32, area: s32, sheet: string) {
+    material := BrushMaterial(brush)
+    if material >= 0 {
+        TerrainTiles.DrawMaterialSwatch(session, key, ART_TERRAIN, bounds, area, material)
+        return
+    }
+    for entry: enemy_entries {
+        if entry.brush == brush {
+            Picture(session, key, sheet, bounds, Rectangle.{entry.source_x, entry.source_y, 16.0, 16.0})
+        }
+    }
+}
+
 // One titled run of palette swatches. Returns the content cursor below it.
 DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32, label: string,
-                    entries: []PaletteEntry, tiles: string,
+                    entries: []PaletteEntry, tiles: string, area: s32,
                     pointer_x: float32, pointer_y: float32, pointer_pressed: bool) -> s32 {
     TextLine(session, key, label, Rectangle.{content.x, content.y + cast(float32)cursor, content.width, 22.0}, 13)
     count := cast(s32)entries.count
@@ -2251,8 +1989,7 @@ DrawPalettePart :: (session: Session, key: u64, content: Rectangle, cursor: s32,
         selected := editor.brush == value
         unused Box.Draw(session, Box.Props.{.key = key + 10 + cast(u64)index, .bounds = bounds,
             .fill = ifx selected then Color.{46, 125, 74, 235} else Color.{255, 255, 255, 30}, .radius = 6.0})
-        Picture(session, key + 80 + cast(u64)index, tiles, Rectangle.{bounds.x + 1.0, bounds.y + 1.0, 32.0, 32.0},
-            Rectangle.{entries[index].source_x, entries[index].source_y, 16.0, 16.0})
+        DrawBrush(session, key + 80 + cast(u64)index, Rectangle.{bounds.x + 1.0, bounds.y + 1.0, 32.0, 32.0}, value, area, tiles)
     }
     rows := (count + 5) / 6
     return cursor + 26 + rows * 38 + 10
@@ -3212,8 +2949,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     if editor_page == EDITOR_PAGE_COMMUNITY { DrawEditorCommunity(session, area, now); return }
     if editor.browsing { DrawLevelBrowser(session, area); return }
     stage_of_level := StageOf(editor.level)
-    fancy_garden = true
-    tiles := Sheet(stage_of_level)
+    tiles := ART_SPRITES
     panel := Rectangle.{area.x + area.width - EDITOR_PANEL_WIDTH, area.y, EDITOR_PANEL_WIDTH, area.height}
     canvas := Rectangle.{area.x, area.y, area.width - EDITOR_PANEL_WIDTH, area.height}
     // The board keeps whatever orientation EditorLoad or EditorTurn last set.
@@ -3256,16 +2992,11 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
         }
     }
 
+    DrawLandscape(session, 5000, stage, editor.board[:], board_columns, board_rows, stage_of_level, false)
     for y: 0..board_rows - 1 {
         for x: 0..board_columns - 1 {
             at := Index(x, y)
-            raw := cast(s32)editor.board[at]
-            kind := (raw & 127) - 39
-            tile := raw & 127
-            if kind >= 1 && kind <= 6 { tile = 0 }
-            Tile(session, 5000 + cast(u64)at, stage, cast(s32)x, cast(s32)y, tile, tiles)
-            DrawWallEdges(session, 5000 + cast(u64)at, stage, cast(s32)x, cast(s32)y, tile, editor.board[:])
-            DrawTerrainDetail(session, 850000 + cast(u64)at * 2, stage, cast(s32)x, cast(s32)y, tile, stage_of_level)
+            kind := cast(s32)(editor.board[at] & 127) - 39
             if kind >= 1 && kind <= 6 {
                 Sprite(session, 6200 + cast(u64)at, stage, Point.{cast(s32)x * 16 + 8, cast(s32)y * 16 + 8},
                     Rectangle.{cast(float32)(kind - 1) * 16.0, 32.0, 16.0, 16.0}, tiles)
@@ -3310,8 +3041,7 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     }
     unused Box.Draw(session, Box.Props.{.key = 8208, .bounds = Rectangle.{panel.x + 8.0, panel.y + 34.0, 40.0, 40.0},
         .fill = Color.{255, 255, 255, 30}, .radius = 8.0})
-    Picture(session, 8209, tiles, Rectangle.{panel.x + 9.0, panel.y + 35.0, 38.0, 38.0},
-        Rectangle.{cast(float32)(editor.brush % 20) * 16.0, cast(float32)(editor.brush / 20) * 16.0, 16.0, 16.0})
+    DrawBrush(session, 8209, Rectangle.{panel.x + 9.0, panel.y + 35.0, 38.0, 38.0}, editor.brush, stage_of_level, tiles)
     TextLine(session, 8210, "BRUSH", Rectangle.{panel.x + 56.0, panel.y + 34.0, 70.0, 18.0}, 13)
     brush_text := FormatInteger(cast(s64)editor.brush, brush_digits[:])
     TextLine(session, 8211, brush_text, Rectangle.{panel.x + 56.0, panel.y + 54.0, 40.0, 18.0}, 13)
@@ -3336,11 +3066,11 @@ DrawEditor :: (session: Session, area: Rectangle, now: s64) {
     editor.palette_scroll = palette.scroll_offset
     if palette.opened {
         palette_press := pointer.pressed && Input.PointInBounds(pointer.x,pointer.y,inner)
-        cursor := DrawPalettePart(session, 8300, palette.content, 6, "FLOOR", floor_entries[:], tiles,
+        cursor := DrawPalettePart(session, 8300, palette.content, 6, "FLOOR", floor_entries[:], tiles, stage_of_level,
             pointer.x, pointer.y, palette_press)
-        cursor = DrawPalettePart(session, 8400, palette.content, cursor, "OBSTACLES", wall_entries[:], tiles,
+        cursor = DrawPalettePart(session, 8400, palette.content, cursor, "OBSTACLES", wall_entries[:], tiles, stage_of_level,
             pointer.x, pointer.y, palette_press)
-        cursor = DrawPalettePart(session, 8500, palette.content, cursor, "ENEMIES", enemy_entries[:], tiles,
+        cursor = DrawPalettePart(session, 8500, palette.content, cursor, "ENEMIES", enemy_entries[:], tiles, stage_of_level,
             pointer.x, pointer.y, palette_press)
         unused End(session)
     }
@@ -3607,7 +3337,7 @@ DrawLocalPiece :: (session: Session, key: u64, stage: Rectangle, at: Point, id: 
         return
     }
     source := Rectangle.{cast(float32)(ifx head then direction else 4) * 32.0, 96.0, 32.0, 32.0}
-    unused Image.Draw(session, Image.Props.{.key = key, .asset_path = Sheet(0), .bounds = bounds,
+    unused Image.Draw(session, Image.Props.{.key = key, .asset_path = ART_SPRITES, .bounds = bounds,
         .source = source, .tint = LocalColour(id), .smooth = true, .alt_text = Locale.Text("Player")})
 }
 DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64, input: Input.FrameInputSnapshot) {
@@ -3709,27 +3439,11 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64, input: Inpu
             local_board[y * COLUMNS + x] = cast(u8)tile
         }
     }
-    local_shaded: float32 = 0.0
-    #if !#defined(WURM_PORTABLE) {
-        local_shaded = TerrainView.PrepareTerrain(session, stage, local_board[:], COLUMNS, ROWS, 0, false)
-    }
-    if local_shaded < 1.0 {
-        for y: 0..ROWS - 1 {
-            for x: 0..COLUMNS - 1 {
-                tile := cast(s32)local_board[y * COLUMNS + x]
-                Tile(session, cast(u64)(31200 + y * COLUMNS + x), stage, cast(s32)x, cast(s32)y, tile, Sheet(0))
-                DrawTerrainDetail(session, cast(u64)(910000 + (y * COLUMNS + x) * 8), stage,
-                    cast(s32)x, cast(s32)y, tile, 0)
-            }
-        }
-    }
-    #if !#defined(WURM_PORTABLE) {
-        if local_shaded > 0.0 { TerrainView.DrawTerrain(session, 31195, stage, local_shaded) }
-    }
+    DrawLandscape(session, 31200, stage, local_board[:], COLUMNS, ROWS, 0, false)
     unused Box.Draw(session, Box.Props.{.key = 32990, .bounds = stage,
         .border = local_look.paper, .radius = 2.0})
     DrawObjectAura(session, 32992, stage, local_round.apple, 10.5, Color.{238, 76, 60, 255})
-    Sprite(session, 33000, stage, local_round.apple, Rectangle.{0.0,112.0,16.0,16.0}, Sheet(0), 23.0)
+    Sprite(session, 33000, stage, local_round.apple, Rectangle.{0.0,112.0,16.0,16.0}, ART_SPRITES, 23.0)
     for id: 0..local_round.count - 1 {
         player := *local_round.players[id]
         if !player.alive { continue }
@@ -4234,7 +3948,7 @@ DrawControls :: (session: Session, area: Rectangle, now: s64) {
         if side > tile.width - 16.0 { side = tile.width - 16.0 }
         square := Rectangle.{tile.x + (tile.width - side) / 2.0, tile.y + (art_height - side) / 2.0, side, side}
         if choice == 0 {
-            Picture(session, 23020, Sheet(0), square, Rectangle.{0.0, 48.0, 16.0, 16.0})
+            Picture(session, 23020, ART_SPRITES, square, Rectangle.{0.0, 48.0, 16.0, 16.0})
             SvgIcon.Draw(session, SvgIcon.Props.{.bounds = Rectangle.{square.x + side * 0.4, square.y + side * 0.35, side * 0.65, side * 0.65},
                 .shape = FingerSwipe.Shape, .color = Appearance.Surface()})
         } else {
@@ -4628,7 +4342,6 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     // Pause freezes the board as well as its simulation. Otherwise animated
     // water and enemy art keep moving under the pause card.
     if game.mode != MODE_PAUSED {
-        water_frame = cast(s32)((now / 130) % 3)
         enemy_frame = cast(s32)((now / 110) % 4)
         glint_frame = cast(s32)((now / 33) % 1000000)
     }

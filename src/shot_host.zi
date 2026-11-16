@@ -57,32 +57,14 @@ ReadPicture :: (binary: string) -> (pixels: Vec(u32), width: s32, height: s32) {
 main :: () -> s32 {
     // Keep the owned image buffers in this scope while the raster host
     // borrows them. Full-size title pixels preserve desktop crop coordinates.
-    garden, garden_w, garden_h := ReadPicture("assets/art/garden.argb")
-    campaign_meadow, campaign_meadow_w, campaign_meadow_h := ReadPicture("assets/art/campaign-meadow.argb")
-    campaign_leafwood, campaign_leafwood_w, campaign_leafwood_h := ReadPicture("assets/art/campaign-leafwood.argb")
-    campaign_pinewood, campaign_pinewood_w, campaign_pinewood_h := ReadPicture("assets/art/campaign-pinewood.argb")
-    campaign_lake, campaign_lake_w, campaign_lake_h := ReadPicture("assets/art/campaign-lake.argb")
-    campaign_mountains, campaign_mountains_w, campaign_mountains_h := ReadPicture("assets/art/campaign-mountains.argb")
+    sprites, sprites_w, sprites_h := ReadPicture("assets/art/sprites.argb")
     stage_covers, stage_covers_w, stage_covers_h := ReadPicture("assets/art/stage-covers.argb")
     title, title_w, title_h := ReadPicture("assets/art/title.argb")
     title_portrait, title_portrait_w, title_portrait_h := ReadPicture("assets/art/title-portrait.argb")
-    forest_canopy, forest_canopy_w, forest_canopy_h := ReadPicture("assets/art/forest-canopy.argb")
-    forest_canopy_portrait, forest_canopy_portrait_w, forest_canopy_portrait_h := ReadPicture("assets/art/forest-canopy-portrait.argb")
-    ground, ground_w, ground_h := ReadPicture("assets/art/ground-meadow.argb")
-    water, water_w, water_h := ReadPicture("assets/art/water-field.argb")
-    if !PixmapSetImage(12, "assets/art/water-field.png", water_w, water_h, VecSlice(water, 0, water.count)) { return 1 }
-    if !PixmapSetImage(11, "assets/art/ground-meadow.png", ground_w, ground_h, VecSlice(ground, 0, ground.count)) { return 1 }
-    if !PixmapSetImage(0, "assets/art/garden.png", garden_w, garden_h, VecSlice(garden, 0, garden.count)) ||
-        !PixmapSetImage(1, "assets/art/campaign-meadow.png", campaign_meadow_w, campaign_meadow_h, VecSlice(campaign_meadow, 0, campaign_meadow.count)) ||
-        !PixmapSetImage(2, "assets/art/campaign-leafwood.png", campaign_leafwood_w, campaign_leafwood_h, VecSlice(campaign_leafwood, 0, campaign_leafwood.count)) ||
-        !PixmapSetImage(3, "assets/art/campaign-pinewood.png", campaign_pinewood_w, campaign_pinewood_h, VecSlice(campaign_pinewood, 0, campaign_pinewood.count)) ||
-        !PixmapSetImage(4, "assets/art/campaign-lake.png", campaign_lake_w, campaign_lake_h, VecSlice(campaign_lake, 0, campaign_lake.count)) ||
-        !PixmapSetImage(5, "assets/art/campaign-mountains.png", campaign_mountains_w, campaign_mountains_h, VecSlice(campaign_mountains, 0, campaign_mountains.count)) ||
-        !PixmapSetImage(6, "assets/art/stage-covers.png", stage_covers_w, stage_covers_h, VecSlice(stage_covers, 0, stage_covers.count)) ||
-        !PixmapSetImage(7, "assets/art/title.png", title_w, title_h, VecSlice(title, 0, title.count)) ||
-        !PixmapSetImage(8, "assets/art/title-portrait.png", title_portrait_w, title_portrait_h, VecSlice(title_portrait, 0, title_portrait.count)) ||
-        !PixmapSetImage(9, "assets/art/forest-canopy.png", forest_canopy_w, forest_canopy_h, VecSlice(forest_canopy, 0, forest_canopy.count)) ||
-        !PixmapSetImage(10, "assets/art/forest-canopy-portrait.png", forest_canopy_portrait_w, forest_canopy_portrait_h, VecSlice(forest_canopy_portrait, 0, forest_canopy_portrait.count)) { return 1 }
+    if !PixmapSetImage(0, "assets/art/sprites.png", sprites_w, sprites_h, VecSlice(sprites, 0, sprites.count)) ||
+        !PixmapSetImage(1, "assets/art/stage-covers.png", stage_covers_w, stage_covers_h, VecSlice(stage_covers, 0, stage_covers.count)) ||
+        !PixmapSetImage(2, "assets/art/title.png", title_w, title_h, VecSlice(title, 0, title.count)) ||
+        !PixmapSetImage(3, "assets/art/title-portrait.png", title_portrait_w, title_portrait_h, VecSlice(title_portrait, 0, title_portrait.count)) { return 1 }
     level := cast(s32)EnvironmentNumber("WORM_SHOT_LEVEL", 0)
     if level > 0 {
         Game.StartGame(*App.game, level - 1, 0)

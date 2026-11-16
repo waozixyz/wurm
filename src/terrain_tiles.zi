@@ -1,0 +1,87 @@
+// The terrain without shaders, for portable bundles that cannot create
+// pictures at run time: the same seamless painted materials the shaders
+// light, laid continuously across the board with soft shadows under
+// hedges and stones. tools/make_art.zi writes the materials picture as a
+// grid of 128-pixel swatches, one column per material and one row per
+// landscape.
+#import "kryon/session"
+#import "kryon/geometry"
+#import "kryon/drawing_props"
+Image :: #import "kryon/image";
+Box :: #import "kryon/box";
+Field :: #import, file "terrain_field.zi";
+
+SWATCH :: 128.0;
+// Board cells one swatch spans.
+SWATCH_CELLS :: 4;
+
+MaterialOf :: (class: u8) -> s32 {
+    if class == Field.TERRAIN_HEDGE { return 1 }
+    if class == Field.TERRAIN_STONE { return 2 }
+    if class == Field.TERRAIN_WATER { return 3 }
+    return 0
+}
+
+CellBounds :: (stage: Rectangle, columns: s32, rows: s32, x: s32, y: s32) -> Rectangle {
+    w := stage.width / cast(float32)columns
+    h := stage.height / cast(float32)rows
+    left := Snap(stage.x + cast(float32)x * w)
+    top := Snap(stage.y + cast(float32)y * h)
+    return Rectangle.{left, top, Snap(stage.x + cast(float32)(x + 1) * w) - left, Snap(stage.y + cast(float32)(y + 1) * h) - top}
+}
+Snap :: (value: float32) -> float32 { return cast(float32)cast(s32)(value + 0.5) }
+
+// One cell of material KIND, cut from where it lies in the repeating swatch.
+Swatch :: (session: Session, key: u64, asset: string, bounds: Rectangle, area: s32, kind: s32, x: s32, y: s32) {
+    step := SWATCH / cast(float32)SWATCH_CELLS
+    unused Image.Draw(session, Image.Props.{.key = key, .asset_path = asset, .bounds = bounds,
+        .source = Rectangle.{cast(float32)kind * SWATCH + cast(float32)(x % SWATCH_CELLS) * step,
+            cast(float32)area * SWATCH + cast(float32)(y % SWATCH_CELLS) * step, step, step},
+        .smooth = true, .alt_text = "Board terrain"})
+}
+
+// Draws BOARD's terrain into STAGE from the materials picture ASSET. KEY
+// and the 2000 keys after it (and those 760000 and 780000 above it) belong
+// to this board.
+DrawMaterialTiles :: (session: Session, key: u64, stage: Rectangle, asset: string, board: []u8,
+    columns: s32, rows: s32, area: s32, gate_posts: bool) {
+    cells := Field.TerrainCellsFrom(board, columns, rows, gate_posts)
+    for y: 0..rows - 1 {
+        for x: 0..columns - 1 {
+            at := y * columns + x
+            kind := MaterialOf(cells.classes[at])
+            ground := ifx kind == 3 then kind else 0
+            Swatch(session, key + cast(u64)at, asset, CellBounds(stage, columns, rows, cast(s32)x, cast(s32)y),
+                area, ground, cast(s32)x, cast(s32)y)
+        }
+    }
+    // Raised hedges and stones throw a soft shadow down and to the right.
+    for y: 0..rows - 1 {
+        for x: 0..columns - 1 {
+            at := y * columns + x
+            kind := MaterialOf(cells.classes[at])
+            if kind != 1 && kind != 2 { continue }
+            bounds := CellBounds(stage, columns, rows, cast(s32)x, cast(s32)y)
+            unused Box.Draw(session, Box.Props.{.key = key + 760000 + cast(u64)at,
+                .bounds = Rectangle.{bounds.x + bounds.width * 0.22, bounds.y + bounds.height * 0.28, bounds.width, bounds.height},
+                .fill = Color.{12, 24, 14, 70}, .radius = bounds.width * 0.3})
+        }
+    }
+    for y: 0..rows - 1 {
+        for x: 0..columns - 1 {
+            at := y * columns + x
+            kind := MaterialOf(cells.classes[at])
+            if kind != 1 && kind != 2 { continue }
+            Swatch(session, key + 780000 + cast(u64)at, asset, CellBounds(stage, columns, rows, cast(s32)x, cast(s32)y),
+                area, kind, cast(s32)x, cast(s32)y)
+        }
+    }
+}
+
+// A palette swatch of material KIND for the editor.
+DrawMaterialSwatch :: (session: Session, key: u64, asset: string, bounds: Rectangle, area: s32, kind: s32) {
+    unused Image.Draw(session, Image.Props.{.key = key, .asset_path = asset, .bounds = bounds,
+        .source = Rectangle.{cast(float32)kind * SWATCH + SWATCH * 0.25, cast(float32)area * SWATCH + SWATCH * 0.25,
+            SWATCH * 0.5, SWATCH * 0.5},
+        .smooth = true, .alt_text = "Terrain brush"})
+}

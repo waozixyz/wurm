@@ -1,7 +1,8 @@
-// Fits the generated cartoon atlases in assets/art-source to the game's
-// stable tile and sprite coordinates. This only crops, resizes and packs that
-// art; all gameplay tile IDs and collision rules stay unchanged. With --check
-// the committed atlases and their .argb mirrors must already match.
+// Fits the generated cartoon art in assets/art-source to the game's stable
+// sprite coordinates and packs the terrain shaders' painted materials. This
+// only crops, resizes and packs that art; all gameplay tile IDs and
+// collision rules stay unchanged. With --check the committed pictures and
+// their .argb mirrors must already match.
 //
 //     LDLIBS=-lz ziran run --target=c tools/make_art.zi -- [--check]
 #import "std/file"
@@ -55,7 +56,6 @@ Cell :: (image: *Image, columns: s32, rows: s32, index: s32) -> Image {
 
 // The source sheets, and the worm head profile at tile size.
 Sources :: struct {
-    terrain: Image
     sprites: Image
     worm: Image
     details: Image
@@ -65,33 +65,7 @@ Sources :: struct {
     profile: Image
 }
 
-Terrain :: (sources: *Sources, index: s32) -> Image { return Cell(*sources.terrain, 4, 3, index) }
 Detail :: (sources: *Sources, index: s32) -> Image { return Cell(*sources.details, 2, 1, index) }
-JourneyCell :: (sources: *Sources, index: s32) -> Image { return Cell(*sources.journey, 4, 5, index) }
-
-// The generated journey source has much more material detail than a single
-// 32-pixel crop can show. Take deterministic windows from inside one source
-// cell so the stable tile IDs expose a coherent family of floor and wall
-// variants instead of repeating one stamp across an entire board.
-JourneyCellVariant :: (sources: *Sources, index: s32, variant: s32) -> Image {
-    columns: s32 = 4
-    rows: s32 = 5
-    cell_width := cast(float64)sources.journey.width / cast(float64)columns
-    cell_height := cast(float64)sources.journey.height / cast(float64)rows
-    cell_x := index % columns
-    cell_y := index / columns
-    inset_x := cell_width * 0.09
-    inset_y := cell_height * 0.09
-    window_width := cell_width * 0.82
-    window_height := cell_height * 0.82
-    column := variant % 3
-    row := (variant / 3) % 3
-    x0 := cast(float64)cell_x * cell_width + inset_x * cast(float64)column
-    y0 := cast(float64)cell_y * cell_height + inset_y * cast(float64)row
-    part := CropImage(*sources.journey, Round(x0), Round(y0),
-        Round(x0 + window_width), Round(y0 + window_height))
-    return ResizeLanczos(*part, CELL, CELL)
-}
 
 // Sprite cells, with the worm's seven cells replacing the old worm and the
 // four head turns: left, up, right and down, the engine's directions.
@@ -149,37 +123,11 @@ DetailOrSprite :: (sources: *Sources, index: s32) -> Image {
     return Sprite(sources, index)
 }
 
-Build :: (forest: bool, sources: *Sources) -> Image {
+// The sprite sheet: gates, the worm, fruit, effects, decorations and,
+// added in main, the creatures of every landscape. Terrain is painted by
+// the shaders from the material pack instead.
+Build :: (sources: *Sources) -> Image {
     sheet := NewImage(640, 480)
-    grass: s32 = ifx forest then 8 else 0
-    variation: s32 = ifx forest then 9 else 1
-    hedge: s32 = ifx forest then 10 else 4
-    trunk: s32 = ifx forest then 11 else 5
-    for tile: 0..19 {
-        source := ifx tile == 1 then cast(s32)2 else ifx tile == 2 then cast(s32)3 else grass
-        if forest && tile == 1 { source = 9 }
-        cell := Terrain(sources, source)
-        Place(*sheet, *cell, cast(s32)tile, 0)
-    }
-    for tile: 0..19 {
-        source := ifx tile == 2 then cast(s32)6 else ifx tile == 1 then trunk else hedge
-        cell := Terrain(sources, source)
-        Place(*sheet, *cell, cast(s32)tile, 1)
-    }
-    // Smart hedge edges retain grass on the open sides of a painted wall.
-    lawn := Terrain(sources, grass)
-    boxes: [16]s32 = .[0, 0, 32, 3, 29, 0, 32, 32, 0, 29, 32, 32, 0, 0, 3, 32]
-    for piece: 0..8 {
-        cell := Terrain(sources, hedge)
-        edges: [4]bool = .[piece == 1 || piece == 5 || piece == 6, piece == 2 || piece == 5 || piece == 7,
-            piece == 3 || piece == 7 || piece == 8, piece == 4 || piece == 6 || piece == 8]
-        for edge: 0..3 {
-            if !edges[edge] { continue }
-            strip := CropImage(*lawn, boxes[edge * 4], boxes[edge * 4 + 1], boxes[edge * 4 + 2], boxes[edge * 4 + 3])
-            PasteImage(*cell, *strip, boxes[edge * 4], boxes[edge * 4 + 1])
-        }
-        Place(*sheet, *cell, cast(s32)(10 + piece), 2)
-    }
     exit := Sprite(sources, 8)
     gate := Sprite(sources, 9)
     gate_right := RotateRight(*gate)
@@ -208,49 +156,12 @@ Build :: (forest: bool, sources: *Sources) -> Image {
         PasteImage(*burst, *grown, (CELL - grow) / 2, (CELL - grow) / 2)
         Place(*sheet, *burst, cast(s32)frame, 10)
     }
-    for frame: 0..2 {
-        water := Terrain(sources, cast(s32)(6 + frame % 2))
-        Place(*sheet, *water, cast(s32)frame, 11)
-    }
-    for variant: 0..3 {
-        floor := Terrain(sources, ifx variant == 3 then variation else grass)
-        Place(*sheet, *floor, cast(s32)(4 + variant), 11)
-    }
     row: [8]s32 = .[13, 11, 12, 14, 15, 15, -1, -2]
     for column: 0..7 {
         index := row[column]
         cell := DetailOrSprite(sources, index)
         if column == 5 { flipped := FlipLeftRight(*cell); Place(*sheet, *flipped, 5, 13) }
         else { Place(*sheet, *cell, cast(s32)column, 13) }
-    }
-    return sheet
-}
-
-// Generated terrain on the existing collision and sprite coordinates.
-Journey :: (base: *Image, sources: *Sources, row: s32) -> Image {
-    sheet := CopyImage(base)
-    floor_index := row * 4
-    wall_index := row * 4 + 1
-    stone := JourneyCell(sources, row * 4 + 2)
-    water := JourneyCell(sources, row * 4 + 3)
-    for tile: 0..19 {
-        floor := JourneyCellVariant(sources, floor_index, cast(s32)(tile % 9))
-        PasteImage(*sheet, *floor, cast(s32)tile * CELL, 0)
-        wall := JourneyCellVariant(sources, wall_index, cast(s32)(tile % 9))
-        PasteImage(*sheet, ifx tile == 1 then *stone else ifx tile == 2 then *water else *wall,
-            cast(s32)tile * CELL, CELL)
-    }
-    for piece: 0..8 {
-        wall := JourneyCellVariant(sources, wall_index, cast(s32)piece)
-        PasteImage(*sheet, *wall, cast(s32)(10 + piece) * CELL, 2 * CELL)
-    }
-    for frame: 0..2 {
-        water_variant := JourneyCellVariant(sources, row * 4 + 3, cast(s32)(frame * 4))
-        PasteImage(*sheet, *water_variant, cast(s32)frame * CELL, 11 * CELL)
-    }
-    for variant: 0..3 {
-        floor := JourneyCellVariant(sources, floor_index, cast(s32)(variant * 2))
-        PasteImage(*sheet, *floor, cast(s32)(4 + variant) * CELL, 11 * CELL)
     }
     return sheet
 }
@@ -311,12 +222,11 @@ Root :: (value: float64) -> float64 {
     return guess
 }
 
-// assets/art/terrain-materials.bin: "WTM1", the swatch size as four
-// little-endian bytes, then 5 landscapes x 4 materials of RGB rows.
-MaterialPack :: (sources: *Sources) -> string {
-    bytes: Vec(u8)
-    Append(*bytes, "WTM1")
-    for shift: 0..3 { unused VecPush(bytes, cast(u8)((MATERIAL_SIZE >> cast(s32)(shift * 8)) & 255)) }
+// Every landscape's floor, wall, stone and water swatch, one column per
+// material and one row per landscape: assets/art/terrain-materials.png,
+// which the portable tiles and the editor's brushes draw.
+MaterialSwatches :: (sources: *Sources) -> Image {
+    swatches := NewImage(MATERIAL_SIZE * 4, MATERIAL_SIZE * 5, 0, 0, 0, 255)
     columns: s32 = 4
     rows: s32 = 5
     width := cast(float64)sources.journey.width / cast(float64)columns
@@ -329,11 +239,44 @@ MaterialPack :: (sources: *Sources) -> string {
             Round(cast(float64)(x + 1) * width) - 3, Round(cast(float64)(y + 1) * height) - 3)
         sized := ResizeLanczos(*part, MATERIAL_SIZE, MATERIAL_SIZE)
         tile := Seamless(*sized)
-        for i: 0..cast(s64)MATERIAL_SIZE * MATERIAL_SIZE - 1 {
-            for c: 0..2 { unused VecPush(bytes, tile.pixels[i * 4 + c]) }
+        PasteImage(*swatches, *tile, x * MATERIAL_SIZE, y * MATERIAL_SIZE)
+    }
+    return swatches
+}
+
+// assets/art/terrain-materials.bin, which the shaders read: "WTM1", the
+// swatch size as four little-endian bytes, then 5 landscapes x 4 materials
+// of RGB rows.
+MaterialPack :: (swatches: *Image) -> string {
+    bytes: Vec(u8)
+    Append(*bytes, "WTM1")
+    for shift: 0..3 { unused VecPush(bytes, cast(u8)((MATERIAL_SIZE >> cast(s32)(shift * 8)) & 255)) }
+    for index: 0..19 {
+        left := (cast(s32)index % 4) * MATERIAL_SIZE
+        top := (cast(s32)index / 4) * MATERIAL_SIZE
+        for y: 0..MATERIAL_SIZE - 1 {
+            for x: 0..MATERIAL_SIZE - 1 {
+                at := (cast(s64)(top + cast(s32)y) * swatches.width + left + cast(s32)x) * 4
+                for c: 0..2 { unused VecPush(bytes, swatches.pixels[at + c]) }
+            }
         }
     }
     return BuilderFinish(bytes)
+}
+
+// Writes assets/art/NAME.png alone, or checks it.
+SavePicture :: (image: *Image, name: string) {
+    path: Vec(u8)
+    BuilderPrint(*path, "assets/art/%.png", name)
+    png := BuilderFinish(path)
+    if checking {
+        committed := ReadPNGFile(png)
+        same := ImageValid(*committed) && committed.width == image.width && committed.height == image.height
+        if same { for i: 0..image.pixels.count - 1 { if committed.pixels[i] != image.pixels[i] { same = false; break } } }
+        if !same { print("tools/make_art: % does not match regeneration\n", name); problems += 1 }
+        return
+    }
+    if !WritePNGFile(png, image, false) { print("tools/make_art: cannot write %\n", name); problems += 1 }
 }
 
 TransparentSomewhere :: (image: *Image) -> bool {
@@ -344,8 +287,6 @@ TransparentSomewhere :: (image: *Image) -> bool {
 #program_export
 main :: (argc: s32, argv: **u8) -> s32 {
     checking = argc > 1 && TextFromCString(argv[1]) == "--check"
-    water := Load("water-field")
-    Save(*water, "water-field")
     // The mouth is on the leading edge, viewed from above. One profile turns
     // to the engine's four directions. Its 30-pixel thumbnail is a direct
     // Lanczos resize of the visible part.
@@ -361,47 +302,35 @@ main :: (argc: s32, argv: **u8) -> s32 {
     small := ResizeLanczos(*visible, width, height)
     profile := NewImage(CELL, CELL)
     PasteImage(*profile, *small, (CELL - width) / 2, (CELL - height) / 2)
-    terrain := Load("terrain"); sprites := Load("sprites"); worm := Load("worm"); details := Load("details")
+    sprites := Load("sprites"); worm := Load("worm"); details := Load("details")
     journey := Load("journey-terrain"); fire := Load("fire"); creatures := Load("journey-creatures")
-    sources := Sources.{terrain, sprites, worm, details, journey, fire, creatures, profile}
-    if !Square(*sources.terrain, 4, 3) || !Square(*sources.sprites, 4, 4) || !Square(*sources.worm, 4, 4) ||
+    sources := Sources.{sprites, worm, details, journey, fire, creatures, profile}
+    if !Square(*sources.sprites, 4, 4) || !Square(*sources.worm, 4, 4) ||
        !Square(*sources.details, 2, 1) || !Square(*sources.journey, 4, 5) || !Square(*sources.fire, 2, 2) ||
        !Square(*sources.creatures, 4, 3) { return Fail("an art source is missing or not square") }
     if !TransparentSomewhere(*sources.sprites) { return Fail("sprite alpha missing") }
     if !TransparentSomewhere(*sources.fire) || !TransparentSomewhere(*sources.creatures) { return Fail("creature alpha missing") }
-    garden := Build(false, *sources)
-    forest := Build(true, *sources)
-    Save(*garden, "garden")
-    Save(*forest, "forest")
-    stages: [5]string = .["meadow", "leafwood", "pinewood", "lake", "mountains"]
-    for row: 0..4 {
-        sheet := Journey(*garden, *sources, cast(s32)row)
-        Save(*sheet, stages[row])
+    // Row two: the first fire frame, gates, the stone and fire frames. Row
+    // four: squirrel, hedgehog, frog and rolling stone frames, then the key,
+    // the switch stone off and on, and the gate across and down.
+    sheet := Build(*sources)
+    first_fire := Cell(*sources.fire, 2, 2, 0)
+    PasteImage(*sheet, *first_fire, 0, 2 * CELL)
+    for frame: 0..3 {
+        flame := Cell(*sources.fire, 2, 2, cast(s32)frame)
+        PasteImage(*sheet, *flame, cast(s32)(6 + frame) * CELL, 2 * CELL)
     }
-    // New campaign sheets use distinct paths, so an open editor keeps the
-    // previous campaign and its cached art while development runs.
-    // Row four: squirrel, hedgehog, frog and rolling stone frames, then the
-    // key, the switch stone off and on, and the gate across and down.
-    for row: 0..4 {
-        sheet := Journey(*garden, *sources, cast(s32)row)
-        first_fire := Cell(*sources.fire, 2, 2, 0)
-        PasteImage(*sheet, *first_fire, 0, 2 * CELL)
-        for frame: 0..3 {
-            flame := Cell(*sources.fire, 2, 2, cast(s32)frame)
-            PasteImage(*sheet, *flame, cast(s32)(6 + frame) * CELL, 2 * CELL)
-        }
-        for column: 0..11 {
-            creature := Cell(*sources.creatures, 4, 3, cast(s32)column)
-            PasteImage(*sheet, *creature, cast(s32)column * CELL, 4 * CELL)
-        }
-        last := Cell(*sources.creatures, 4, 3, 11)
-        down := RotateLeft(*last)
-        PasteImage(*sheet, *down, 12 * CELL, 4 * CELL)
-        name: Vec(u8)
-        BuilderPrint(*name, "campaign-%", stages[row])
-        Save(*sheet, BuilderFinish(name))
+    for column: 0..11 {
+        creature := Cell(*sources.creatures, 4, 3, cast(s32)column)
+        PasteImage(*sheet, *creature, cast(s32)column * CELL, 4 * CELL)
     }
-    pack := MaterialPack(*sources)
+    last := Cell(*sources.creatures, 4, 3, 11)
+    down := RotateLeft(*last)
+    PasteImage(*sheet, *down, 12 * CELL, 4 * CELL)
+    Save(*sheet, "sprites")
+    swatches := MaterialSwatches(*sources)
+    SavePicture(*swatches, "terrain-materials")
+    pack := MaterialPack(*swatches)
     if checking {
         committed, found := ReadEntireFile("assets/art/terrain-materials.bin")
         if !found || committed != pack { print("tools/make_art: terrain-materials.bin does not match\n"); problems += 1 }
@@ -409,12 +338,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     covers_source := Load("stage-covers")
     covers := ResizeLanczos(*covers_source, 960, 1600)
     Save(*covers, "stage-covers")
-    canopy_source := Load("forest-canopy")
-    canopy := ResizeLanczos(*canopy_source, 40 * CELL, 30 * CELL)
-    Save(*canopy, "forest-canopy")
-    turned := RotateRight(*canopy)
-    Save(*turned, "forest-canopy-portrait")
-    mirrors: [3]string = .["title", "title-portrait", "ground-meadow"]
+    mirrors: [2]string = .["title", "title-portrait"]
     for name: mirrors {
         path: Vec(u8)
         BuilderPrint(*path, "assets/art/%.png", name)
@@ -426,6 +350,6 @@ main :: (argc: s32, argv: **u8) -> s32 {
         } else if !WriteEntireFile(ArgbPath(name), Mirror(*image)) { return Fail(name) }
     }
     if problems > 0 { return 1 }
-    print("Five journey atlases, terrain materials, reference art and title mirrors %.\n", ifx checking then "verified" else "packed")
+    print("Sprite sheet, terrain materials, reference art and title mirrors %.\n", ifx checking then "verified" else "packed")
     return 0
 }

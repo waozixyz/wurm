@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Give every opening key and switch lesson a visible interior gate that protects a useful garden area, with its control in a reachable court instead of locking only the exit.
+- Show the shader-lit terrain from a board's very first frame: the old tile textures no longer flash before it. The editor, its brushes and local multiplayer use the same terrain, Arcade lays the same painted materials as tiles, and the old tile art is gone.
 
 ## [0.2.34] - 2026-11-16
 
