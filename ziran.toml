@@ -7,11 +7,11 @@ tool = "kryon"
 
 [toolchain]
 git = "https://github.com/ziranlang/ziran.git"
-ref = "0e91eb43bd665f02db86eb9b9cdd875b5436a066"
+ref = "4fdd16d21ebae1cca8e140cad137980e9543a925"
 
 [dependencies.kryon]
 git = "https://github.com/kryonlabs/kryon.git"
-ref = "b5ac5d1a303326009012d68016c1d8859b6b3a13"
+ref = "158fd91d5a0ad378399bb0e59193074b2e3dc6b5"
 
 [install]
 bin = "wurm"
