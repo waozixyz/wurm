@@ -277,8 +277,11 @@ Play :: () -> bool {
 // The whole canvas as one number, to tell motion from stillness.
 CANVAS_HASH :: "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let h=0;for(let i=0;i<p.length;i+=12)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()"
 PAD_FRAME :: "(()=>{const c=document.getElementById('canvas');window.__wurmPadFrame=new Uint8ClampedArray(c.getContext('2d').getImageData(0,0,c.width,c.height).data);return true})()"
-PAUSE_FRAME :: "(()=>{const c=document.getElementById('canvas');window.__wurmPauseFrame=new Uint8ClampedArray(c.getContext('2d').getImageData(0,0,c.width,c.height).data);return true})()"
-PAUSE_STABLE :: "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data,q=window.__wurmPauseFrame;if(!q||q.length!==p.length)return false;let changed=0,total=0;for(let i=0;i<p.length;i+=4){const d=Math.abs(p[i]-q[i])+Math.abs(p[i+1]-q[i+1])+Math.abs(p[i+2]-q[i+2]);total+=d;if(d>24)changed++;if(changed>80||total>12000)return false}return true})()"
+PAUSE_FRAME :: "(()=>{const c=document.getElementById('canvas');window.__wurmPauseFrame=new Uint8ClampedArray(c.getContext('2d').getImageData(0,0,c.width,c.height).data);window.__wurmPauseStableAt=performance.now();return true})()"
+// CI can take longer than a fixed sleep to finish the pause-card transition.
+// Keep sampling until the canvas has stayed still for a sustained interval;
+// moving gameplay cannot pass because each changed frame restarts the clock.
+PAUSE_STABLE :: "(()=>{const c=document.getElementById('canvas'),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data,q=window.__wurmPauseFrame;if(!q||q.length!==p.length)return false;let changed=0,total=0;for(let i=0;i<p.length;i+=4){const d=Math.abs(p[i]-q[i])+Math.abs(p[i+1]-q[i+1])+Math.abs(p[i+2]-q[i+2]);total+=d;if(d>24)changed++}if(changed>80||total>12000){window.__wurmPauseFrame=new Uint8ClampedArray(p);window.__wurmPauseStableAt=performance.now();return false}return performance.now()-window.__wurmPauseStableAt>=600})()"
 
 // At this fixture's 907x510 viewport the title's gold lettering is above
 // Play. Runtime/FS readiness alone can precede the first interactive frame.
@@ -644,16 +647,14 @@ Portal :: (root: string) -> bool {
     if !BrowserEvaluate(browser, "window.__portalSettings({muteAudio:false}),true") { return false }
     if !Until("__wurmAudible()") { return Fail("the player's sound did not return after the portal's mute") }
     if !Key(" ", 32) { return false }
+    if !Until(GameplayEnds("gameplayStop")) { return Fail("the pause was not reported to the SDK") }
     // The earlier Play click lands over the pause card's Controls button.
     // Move this private test pointer onto inert canvas before comparing full
     // frames, so its hover transition is not mistaken for game simulation.
     if !BrowserMouse(browser, "mouseMoved", 8.0, 500.0, 0.0) { return false }
-    Pause(300)
-    paused := BrowserNumber(browser, CANVAS_HASH, -1.0)
     if !BrowserEvaluate(browser, PAUSE_FRAME) { return false }
-    Pause(600)
-    if !True(PAUSE_STABLE) { return Fail("Space did not pause") }
-    if !True(GameplayEnds("gameplayStop")) { return Fail("the pause was not reported to the SDK") }
+    if !Until(PAUSE_STABLE) { return Fail("Space did not pause") }
+    paused := BrowserNumber(browser, CANVAS_HASH, -1.0)
     if !Key(" ", 32) { return false }
     Pause(450)
     if BrowserNumber(browser, CANVAS_HASH, -1.0) == paused { return Fail("Space did not resume") }
