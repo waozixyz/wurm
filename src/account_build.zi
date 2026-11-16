@@ -186,6 +186,9 @@ BuildAccountProgram :: (source: string, root: string, entry: string, output: str
     for head { VecPush(arguments, it) }
     if Locked() { VecPush(arguments, "--locked") }
     if root.count > 0 { VecPush(arguments, "--root"); VecPush(arguments, root) }
+    // The desktop game runs its terrain shaders on the GPU when it can.
+    gpu := source == "src/desktop_host.zi"
+    if gpu { VecPush(arguments, "--define"); VecPush(arguments, "WURM_TERRAIN_GPU") }
     rest: [10]string = .["--target=c", "--define", "PLATFORM_DESKTOP", "--define", "WURM_ACCOUNTS", "--entry", entry, "-o", output, source]
     for rest { VecPush(arguments, it) }
     out1, generated := Step(VecSlice(arguments, 0, arguments.count), false, no_extra[:])
@@ -218,6 +221,10 @@ BuildAccountProgram :: (source: string, root: string, entry: string, output: str
     }
     link: [5]string = .["-lX11", "-l:libcurl.so.4", "-lm", "-lpthread", "-lz"]
     for link { VecPush(compile, it) }
+    if gpu {
+        graphics: [3]string = .["-lEGL", "-lGLESv2", "-lGLX"]
+        for graphics { VecPush(compile, it) }
+    }
     candidate := JoinPath(output, "program.new")
     VecPush(compile, "-o")
     VecPush(compile, candidate)

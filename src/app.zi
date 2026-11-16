@@ -93,6 +93,7 @@ EditorApp :: () -> bool {
 #if !#defined(WURM_PORTABLE) {
     ScrollDevice :: #import "kryon/scroll_device";
     TreeInput :: #import "kryon/tree_input";
+    TerrainView :: #import, file "terrain_view.zi";
 }
 #import "std/number_text"
 #import "std/text_buffer"
@@ -1475,6 +1476,7 @@ DrawWormTube :: (session: Session, base_key: u64, stage: Rectangle, points: []Po
 // change to the level data.
 water_frame: s32;
 enemy_frame: s32;
+glint_frame: s32;
 fancy_garden: bool;
 GRASS_TILES :: 9;
 
@@ -1812,22 +1814,36 @@ DrawBoard :: (session: Session, stage: Rectangle) {
     DrawBoardFrame(session, stage, chapter)
     tiles := Sheet(chapter)
     sprites := tiles
-    for y: 0..board_rows - 1 {
-        for x: 0..board_columns - 1 {
-            at := Index(x, y)
-            Tile(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
-                cast(s32)(game.board[at] & 127), tiles)
-            DrawWallEdges(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
-                cast(s32)game.board[at], game.board[:])
-            DrawTerrainDetail(session, 800000 + cast(u64)at * 8, stage, cast(s32)x, cast(s32)y,
-                cast(s32)game.board[at], chapter)
+    // Shader-lit terrain where the target can show run-time pictures; its
+    // gate posts are part of the landscape. Otherwise the classic tiles.
+    shaded: float32 = 0.0
+    #if !#defined(WURM_PORTABLE) {
+        shaded = TerrainView.PrepareTerrain(session, stage, game.board[:], board_columns, board_rows, chapter, true)
+    }
+    if shaded < 1.0 {
+        for y: 0..board_rows - 1 {
+            for x: 0..board_columns - 1 {
+                at := Index(x, y)
+                Tile(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
+                    cast(s32)(game.board[at] & 127), tiles)
+                DrawWallEdges(session, 100 + cast(u64)at, stage, cast(s32)x, cast(s32)y,
+                    cast(s32)game.board[at], game.board[:])
+                DrawTerrainDetail(session, 800000 + cast(u64)at * 8, stage, cast(s32)x, cast(s32)y,
+                    cast(s32)game.board[at], chapter)
+            }
+        }
+    }
+    if shaded < 1.0 { DrawGatePosts(session, stage) }
+    #if !#defined(WURM_PORTABLE) {
+        if shaded > 0.0 {
+            TerrainView.DrawTerrain(session, 94, stage, shaded)
+            TerrainView.DrawWaterGlints(session, 96000, stage, glint_frame)
         }
     }
     // A final inset line unifies irregular edge tiles and keeps the board
     // readable against every surrounding screen.
     unused Box.Draw(session, Box.Props.{.key = 93, .bounds = stage,
         .border = Color.{look.paper.r, look.paper.g, look.paper.b, 180}, .radius = 2.0})
-    DrawGatePosts(session, stage)
     DrawPortals(session, stage)
     // A closed gate, the key that opens it or the switch stone that flips it.
     if game.gate >= 0 && !game.gate_open {
@@ -3712,6 +3728,7 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64, input: Inpu
     stage := BoardIn(Rectangle.{area.x, area.y + 72.0, area.width, area.height - 72.0})
     local_look := JourneyLookFor(0)
     DrawBoardFrame(session, stage, 0)
+    local_board: [COLUMNS * ROWS]u8
     for y: 0..ROWS - 1 {
         for x: 0..COLUMNS - 1 {
             tile: s32 = ifx x == 0 || x == COLUMNS - 1 || y == 0 || y == ROWS - 1 then 20 else 0
@@ -3725,10 +3742,25 @@ DrawLocal :: (session: Session, area: Rectangle, key: s32, now: s64, input: Inpu
                     }
                 }
             }
-            Tile(session, cast(u64)(31200 + y * COLUMNS + x), stage, cast(s32)x, cast(s32)y, tile, Sheet(0))
-            DrawTerrainDetail(session, cast(u64)(910000 + (y * COLUMNS + x) * 8), stage,
-                cast(s32)x, cast(s32)y, tile, 0)
+            local_board[y * COLUMNS + x] = cast(u8)tile
         }
+    }
+    local_shaded: float32 = 0.0
+    #if !#defined(WURM_PORTABLE) {
+        local_shaded = TerrainView.PrepareTerrain(session, stage, local_board[:], COLUMNS, ROWS, 0, false)
+    }
+    if local_shaded < 1.0 {
+        for y: 0..ROWS - 1 {
+            for x: 0..COLUMNS - 1 {
+                tile := cast(s32)local_board[y * COLUMNS + x]
+                Tile(session, cast(u64)(31200 + y * COLUMNS + x), stage, cast(s32)x, cast(s32)y, tile, Sheet(0))
+                DrawTerrainDetail(session, cast(u64)(910000 + (y * COLUMNS + x) * 8), stage,
+                    cast(s32)x, cast(s32)y, tile, 0)
+            }
+        }
+    }
+    #if !#defined(WURM_PORTABLE) {
+        if local_shaded > 0.0 { TerrainView.DrawTerrain(session, 31195, stage, local_shaded) }
     }
     unused Box.Draw(session, Box.Props.{.key = 32990, .bounds = stage,
         .border = local_look.paper, .radius = 2.0})
@@ -3950,8 +3982,11 @@ unlock_everything: bool;
 test_play: bool;
 levels_at_start: bool;
 adventure_at_start: bool;
+play_at_start: s32 = -1;
 UnlockAllAtStartup :: () { unlock_everything = true; Progress.open_all = true }
 LevelsAtStartup :: () { levels_at_start = true }
+// A disposable test run of LEVEL (0-based) that leaves earned progress alone.
+PlayAtStartup :: (level: s32) { play_at_start = level }
 AdventureAtStartup :: () { adventure_at_start = true }
 LevelAvailable :: (level: s32) -> bool {
     if level < 0 || level >= LEVEL_COUNT { return false }
@@ -4782,6 +4817,11 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         game.started = true
         OpenStages()
         if levels_at_start && !EditorApp() { OpenLevels() }
+        else if play_at_start >= 0 && play_at_start < LEVEL_COUNT && !EditorApp() {
+            unlock_everything = true
+            requested_level = play_at_start
+            StartChosenRun(now)
+        }
         else if adventure_at_start && !EditorApp() { OpenAdventure() }
         else if rewards_at_start && !EditorApp() { game.mode = MODE_REWARDS }
     } else if was_portrait != game_portrait && !editor.playtest && (game.mode == MODE_PLAYING || game.mode == MODE_PAUSED || game.mode == MODE_READY) {
@@ -4798,6 +4838,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
     if game.mode != MODE_PAUSED {
         water_frame = cast(s32)((now / 130) % 3)
         enemy_frame = cast(s32)((now / 110) % 4)
+        glint_frame = cast(s32)((now / 33) % 1000000)
     }
     key: s32
     #if #defined(WURM_PORTABLE) {

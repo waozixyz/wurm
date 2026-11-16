@@ -1,0 +1,134 @@
+// Board-aligned variation for the terrain shaders, synthesised from the
+// same deterministic hashes on every target: broad colour patches, the
+// soft two-tone cell pattern and the light that falls through leaves.
+#import "std/vec"
+
+// Square tiles use SIZE for both sides; the board texture sets HEIGHT.
+TerrainTexture :: struct {
+    size: s32
+    height: s32
+    pixels: Vec(u8)
+}
+
+TextureFree :: (t: *TerrainTexture) { VecFree(t.pixels); t.size = 0; t.height = 0 }
+
+Wrap :: (v: s32, size: s32) -> s32 {
+    r := v % size
+    return ifx r < 0 then r + size else r
+}
+
+Hash :: (x: s32, y: s32, seed: s32) -> u32 {
+    h := cast(u32)x * cast(u32)374761393 + cast(u32)y * cast(u32)668265263 + cast(u32)seed * cast(u32)2246822519
+    h = (h ^ (h >> 13)) * cast(u32)1274126177
+    return h ^ (h >> 16)
+}
+Unit :: (x: s32, y: s32, seed: s32) -> float64 { return cast(float64)(Hash(x, y, seed) % cast(u32)65521) / 65521.0 }
+
+FloorCell :: (v: float64) -> s32 {
+    i := cast(s32)v
+    if cast(float64)i > v { i -= 1 }
+    return i
+}
+
+// Smooth value noise with `cells` lattice steps across the tile, so it wraps.
+ValueNoise :: (x: float64, y: float64, cells: s32, seed: s32) -> float64 {
+    gx := x * cast(float64)cells
+    gy := y * cast(float64)cells
+    ix := FloorCell(gx)
+    iy := FloorCell(gy)
+    fx := gx - cast(float64)ix
+    fy := gy - cast(float64)iy
+    ux := fx * fx * (3.0 - 2.0 * fx)
+    uy := fy * fy * (3.0 - 2.0 * fy)
+    a := Unit(Wrap(ix, cells), Wrap(iy, cells), seed)
+    b := Unit(Wrap(ix + 1, cells), Wrap(iy, cells), seed)
+    c := Unit(Wrap(ix, cells), Wrap(iy + 1, cells), seed)
+    d := Unit(Wrap(ix + 1, cells), Wrap(iy + 1, cells), seed)
+    top := a + (b - a) * ux
+    return top + (c + (d - c) * ux - top) * uy
+}
+Fractal :: (x: float64, y: float64, cells: s32, octaves: s32, seed: s32) -> float64 {
+    sum := 0.0
+    weight := 0.5
+    total := 0.0
+    step := cells
+    for octave: 0..octaves - 1 {
+        sum += ValueNoise(x, y, step, seed + cast(s32)octave * 31) * weight
+        total += weight
+        weight *= 0.5
+        step *= 2
+    }
+    return sum / total
+}
+
+Byte :: (value: float64) -> u8 {
+    v := value * 255.0 + 0.5
+    if v <= 0.0 { return 0 }
+    if v >= 255.0 { return 255 }
+    return cast(u8)cast(s32)v
+}
+
+// Sun flecks through a canopy in the woods, slow cloud shade elsewhere.
+Dapple :: (u: float64, v: float64, area: s32, seed: s32) -> float64 {
+    if area == 1 || area == 2 {
+        n := Fractal(u, v, 16, 3, seed)
+        t := (n - 0.48) * 5.0
+        if t < 0.0 { t = 0.0 }; if t > 1.0 { t = 1.0 }
+        return 0.4 + 0.32 * t * t * (3.0 - 2.0 * t)
+    }
+    return 0.5 + (Fractal(u, v, 3, 2, seed) - 0.5) * 0.35
+}
+
+// Board-aligned broad variation, `cell` pixels per board cell: colour
+// patches, the soft two-tone cell pattern that helps count steps, and the
+// light that falls through leaves (0.5 is open sky). It never repeats.
+BoardTexture :: (area: s32, cell: s32, columns: s32, rows: s32, texture: *TerrainTexture) -> bool {
+    width := columns * cell
+    height := rows * cell
+    texture.size = width
+    texture.height = height
+    if !VecResize(texture.pixels, cast(s64)width * height * 4) { return false }
+    seed: s32 = 3000 + area * 71
+    // Noise is evaluated four times per cell and interpolated per pixel.
+    grid_w := columns * 4 + 1
+    grid_h := rows * 4 + 1
+    patch: Vec(float32)
+    mottle: Vec(float32)
+    defer VecFree(patch)
+    defer VecFree(mottle)
+    if !VecResize(patch, cast(s64)grid_w * grid_h) || !VecResize(mottle, cast(s64)grid_w * grid_h) { return false }
+    span := cast(float64)(ifx columns > rows then columns else rows)
+    for gy: 0..grid_h - 1 {
+        for gx: 0..grid_w - 1 {
+            u := cast(float64)gx / 4.0 / span
+            v := cast(float64)gy / 4.0 / span
+            at := cast(s64)gy * grid_w + gx
+            patch[at] = cast(float32)Fractal(u, v, 5, 3, seed)
+            mottle[at] = cast(float32)Dapple(u, v, area, seed + 17)
+        }
+    }
+    inverse := 4.0 / cast(float64)cell
+    for y: 0..height - 1 {
+        fy := (cast(float64)y + 0.5) * inverse
+        iy := FloorCell(fy)
+        ty := fy - cast(float64)iy
+        if iy > grid_h - 2 { iy = grid_h - 2 }
+        for x: 0..width - 1 {
+            fx := (cast(float64)x + 0.5) * inverse
+            ix := FloorCell(fx)
+            tx := fx - cast(float64)ix
+            if ix > grid_w - 2 { ix = grid_w - 2 }
+            at := cast(s64)iy * grid_w + ix
+            p0 := cast(float64)patch[at] + (cast(float64)patch[at + 1] - cast(float64)patch[at]) * tx
+            p1 := cast(float64)patch[at + grid_w] + (cast(float64)patch[at + grid_w + 1] - cast(float64)patch[at + grid_w]) * tx
+            m0 := cast(float64)mottle[at] + (cast(float64)mottle[at + 1] - cast(float64)mottle[at]) * tx
+            m1 := cast(float64)mottle[at + grid_w] + (cast(float64)mottle[at + grid_w + 1] - cast(float64)mottle[at + grid_w]) * tx
+            out := (cast(s64)y * width + x) * 4
+            texture.pixels[out] = Byte(p0 + (p1 - p0) * ty)
+            texture.pixels[out + 1] = ifx ((x / cell) + (y / cell)) % 2 == 0 then cast(u8)255 else cast(u8)0
+            texture.pixels[out + 2] = Byte(m0 + (m1 - m0) * ty)
+            texture.pixels[out + 3] = 255
+        }
+    }
+    return true
+}

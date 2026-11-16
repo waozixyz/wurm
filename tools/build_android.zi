@@ -246,7 +246,9 @@ main :: (argc: s32, argv: **u8) -> s32 {
     }
     // Personal edits never become release assets; the base campaign is compiled.
     unused RemoveTree(JoinPath(destination, "assets/campaign-levels"))
+    // The terrain shaders' painted materials travel beside the pictures.
     if !CopyMatching("assets/art", JoinPath(destination, "assets/art"), ".png") ||
+       !CopyFile("assets/art/terrain-materials.bin", JoinPath(destination, "assets/art/terrain-materials.bin")) ||
        !CopyMatching("assets/sounds", JoinPath(destination, "assets/sounds"), ".pcm") ||
        !CopyMatching("assets/levels", JoinPath(destination, "assets/levels"), ".dat") { return Fail("cannot package the assets") }
     gradle_properties := "org.gradle.daemon=false\norg.gradle.parallel=false\norg.gradle.workers.max=1\norg.gradle.jvmargs=-Xmx1024m -Dfile.encoding=UTF-8\n"

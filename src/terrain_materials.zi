@@ -1,0 +1,163 @@
+// The painted terrain materials the shaders light: each landscape's floor,
+// wall, stone and water, made seamless by tools/make_art.zi and stored in
+// assets/art/terrain-materials.bin. Each is resampled once per board
+// resolution, with a relief picture of slopes derived from its shading.
+#import "std/vec"
+#import "std/text"
+#if #defined(ANDROID_BUILD) {
+    Assets :: #import "kryon/app_asset";
+} else {
+    File :: #import "std/file_linux";
+}
+Texture :: #import, file "terrain_texture.zi";
+
+MATERIAL_FLOOR :: 0;
+MATERIAL_WALL :: 1;
+MATERIAL_STONE :: 2;
+MATERIAL_WATER :: 3;
+MATERIAL_PATH :: "assets/art/terrain-materials.bin";
+MATERIAL_AREAS :: 5;
+MATERIAL_KINDS :: 4;
+
+MaterialPack :: struct {
+    size: s32
+    pixels: Vec(u8)
+    loaded: bool
+    failed: bool
+}
+
+// Reads the pack once. A missing or malformed file leaves the terrain to
+// the classic tiles.
+LoadMaterials :: (pack: *MaterialPack) -> bool {
+    if pack.loaded { return true }
+    if pack.failed { return false }
+    pack.failed = true
+    #if #defined(ANDROID_BUILD) {
+        data := Assets.ReadAppAsset(MATERIAL_PATH)
+        defer Assets.FreeAppAsset(data)
+        return Accept(pack, data)
+    } else {
+        file := File.OpenRead(MATERIAL_PATH)
+        if !file.valid { return false }
+        count := File.FileSize(file)
+        bytes: Vec(u8)
+        defer VecFree(bytes)
+        complete := count >= 8 && count <= 64 * 1024 * 1024 && VecResize(bytes, count) && File.ReadAt(file, bytes[:], 0) == count
+        unused File.CloseFile(file)
+        return complete && Accept(pack, TextView(bytes[:]))
+    }
+}
+
+#scope_file
+Accept :: (pack: *MaterialPack, data: string) -> bool {
+    if data.count < 8 || data[0] != cast(u8)87 || data[1] != cast(u8)84 || data[2] != cast(u8)77 || data[3] != cast(u8)49 { return false }
+    size := cast(s32)data[4] | (cast(s32)data[5] << 8) | (cast(s32)data[6] << 16) | (cast(s32)data[7] << 24)
+    if size < 8 || size > 1024 { return false }
+    bytes := cast(s64)size * size * 3 * MATERIAL_AREAS * MATERIAL_KINDS
+    if data.count != 8 + bytes || !VecResize(pack.pixels, bytes) { return false }
+    for at: 0..bytes - 1 { pack.pixels[at] = data[8 + at] }
+    pack.size = size
+    pack.loaded = true
+    pack.failed = false
+    return true
+}
+#scope_export
+
+// Writes the material resampled to SIDE x SIDE pixels as sRGB RGBA into
+// ALBEDO, and its relief (0.5 + slope x / 2, 0.5 + slope y / 2, shade) into
+// RELIEF. Filtering wraps, so both stay seamless. CONTRAST scales the
+// paint's detail about its average colour: broad surfaces stay calm.
+MaterialTile :: (pack: *MaterialPack, area: s32, kind: s32, side: s32, strength: float64, contrast: float64,
+    albedo: *Texture.TerrainTexture, relief: *Texture.TerrainTexture) -> bool {
+    if !pack.loaded || side < 4 { return false }
+    source := pack.size
+    first := (cast(s64)(area * MATERIAL_KINDS + kind)) * source * source * 3
+    // Separable tent filter, widened when shrinking so detail averages
+    // instead of aliasing.
+    across: Vec(float32)
+    defer VecFree(across)
+    if !VecResize(across, cast(s64)side * source * 3) { return false }
+    mean: [3]float64
+    for at: 0..cast(s64)source * source - 1 { for c: 0..2 { mean[c] += cast(float64)pack.pixels[first + at * 3 + c] } }
+    for c: 0..2 { mean[c] /= cast(float64)source * cast(float64)source }
+    ratio := cast(float64)source / cast(float64)side
+    radius := ifx ratio > 1.0 then ratio else 1.0
+    for y: 0..source - 1 {
+        for x: 0..side - 1 {
+            centre := (cast(float64)x + 0.5) * ratio - 0.5
+            sum: [3]float64
+            total := 0.0
+            for tap: Floor(centre - radius)..Floor(centre + radius) + 1 {
+                d := (cast(float64)tap - centre) / radius
+                w := 1.0 - (ifx d < 0.0 then -d else d)
+                if w <= 0.0 { continue }
+                at := first + (cast(s64)y * source + Texture.Wrap(cast(s32)tap, source)) * 3
+                for c: 0..2 { sum[c] += w * cast(float64)pack.pixels[at + c] }
+                total += w
+            }
+            for c: 0..2 { across[(cast(s64)y * side + x) * 3 + c] = cast(float32)(sum[c] / total) }
+        }
+    }
+    albedo.size = side
+    albedo.height = side
+    relief.size = side
+    relief.height = side
+    count := cast(s64)side * side
+    if !VecResize(albedo.pixels, count * 4) || !VecResize(relief.pixels, count * 4) { return false }
+    shade: Vec(float32)
+    defer VecFree(shade)
+    if !VecResize(shade, count) { return false }
+    for y: 0..side - 1 {
+        centre := (cast(float64)y + 0.5) * ratio - 0.5
+        for x: 0..side - 1 {
+            sum: [3]float64
+            total := 0.0
+            for tap: Floor(centre - radius)..Floor(centre + radius) + 1 {
+                d := (cast(float64)tap - centre) / radius
+                w := 1.0 - (ifx d < 0.0 then -d else d)
+                if w <= 0.0 { continue }
+                at := (cast(s64)Texture.Wrap(cast(s32)tap, source) * side + x) * 3
+                for c: 0..2 { sum[c] += w * cast(float64)across[at + c] }
+                total += w
+            }
+            out := (cast(s64)y * side + x) * 4
+            for c: 0..2 { albedo.pixels[out + c] = Texture.Byte((mean[c] + (sum[c] / total - mean[c]) * contrast) / 255.0) }
+            albedo.pixels[out + 3] = 255
+            shade[cast(s64)y * side + x] = cast(float32)((0.3 * sum[0] + 0.55 * sum[1] + 0.15 * sum[2]) / total / 255.0)
+        }
+    }
+    // Brighter paint stands higher; a light blur keeps slopes from sparkling.
+    smooth: Vec(float32)
+    defer VecFree(smooth)
+    if !VecResize(smooth, count) { return false }
+    for y: 0..side - 1 {
+        for x: 0..side - 1 {
+            sum: float32 = 0.0
+            for dy: -1..1 {
+                for dx: -1..1 { sum += shade[cast(s64)Texture.Wrap(cast(s32)y + cast(s32)dy, side) * side + Texture.Wrap(cast(s32)x + cast(s32)dx, side)] }
+            }
+            smooth[cast(s64)y * side + x] = sum / 9.0
+        }
+    }
+    for y: 0..side - 1 {
+        for x: 0..side - 1 {
+            left := smooth[cast(s64)y * side + Texture.Wrap(cast(s32)x - 1, side)]
+            right := smooth[cast(s64)y * side + Texture.Wrap(cast(s32)x + 1, side)]
+            up := smooth[cast(s64)Texture.Wrap(cast(s32)y - 1, side) * side + x]
+            down := smooth[cast(s64)Texture.Wrap(cast(s32)y + 1, side) * side + x]
+            out := (cast(s64)y * side + x) * 4
+            relief.pixels[out] = Texture.Byte(0.5 + cast(float64)(right - left) * strength)
+            relief.pixels[out + 1] = Texture.Byte(0.5 + cast(float64)(down - up) * strength)
+            relief.pixels[out + 2] = Texture.Byte(cast(float64)shade[cast(s64)y * side + x])
+            relief.pixels[out + 3] = 255
+        }
+    }
+    return true
+}
+
+#scope_file
+Floor :: (v: float64) -> s32 {
+    i := cast(s32)v
+    if cast(float64)i > v { i -= 1 }
+    return i
+}

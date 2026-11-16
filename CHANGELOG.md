@@ -6,6 +6,7 @@
 - Add Puzzle Adventure: twenty deliberate move-by-move missions across five unlockable areas, with fixed objectives, undo/restart and separate saved progress.
 - Refresh the journey presentation with illustrated landscape cards, crafted board frames, richer terrain/material variants, clearer walls and objectives, restored classic worm proportions, and stronger basic-skin colors.
 - Prevent buffered turns at the next level’s entrance from causing an immediate death.
+- Paint every board with real shader-lit terrain: each landscape's painted grass, leaves, pines, rock and water are lit by two Kryon material shaders with rounded raised hedges and stones, soft shadows and contact shading, sun flecks under the trees, deep water with a foam line and wet shore, and drifting glints. The desktop runs the shaders on the GPU when one is available; other editions run the same shaders a few milliseconds per frame, Arcade keeps the classic tiles, and level previews use the new terrain. Tile sizes, collision and the worm are unchanged.
 
 ## [0.2.33] - 2026-11-07
 

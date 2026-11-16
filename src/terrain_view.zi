@@ -1,0 +1,126 @@
+// Presents the shader-rendered terrain as one picture under the board's
+// sprites, with gentle glints that drift across open water. Portable
+// bundles cannot create pictures at run time and keep the classic tiles.
+#import "kryon/session"
+#import "kryon/geometry"
+#import "kryon/drawing_props"
+#import "kryon/bitmap_image"
+Image :: #import "kryon/image";
+Box :: #import "kryon/box";
+Terrain :: #import, file "terrain.zi";
+Field :: #import, file "terrain_field.zi";
+
+renderer: Terrain.TerrainRenderer;
+picture: Texture2D;
+picture_slot: s32;
+picture_epoch: u64;
+uploaded: s32 = -1;
+
+// Pixels per board cell: about the board's size on screen, even, and kept
+// while a window is only nudged so resizing does not re-render each frame.
+CellFor :: (stage_width: float32, columns: s32) -> s32 {
+    limit: s32 = 32
+    #if #defined(ANDROID_BUILD) {
+        limit = 24
+    }
+    #if #defined(PLATFORM_WEB) {
+        limit = 20
+    }
+    want := cast(s32)(stage_width / cast(float32)columns + 1.0)
+    want += want % 2
+    if want < 12 { want = 12 }
+    if want > limit { want = limit }
+    if renderer.ready && renderer.cell >= want - 4 && renderer.cell <= want + 4 && renderer.cell <= limit { return renderer.cell }
+    return want
+}
+
+// Frames a newly finished board takes to fade in over the classic tiles.
+FADE_FRAMES :: 12;
+shown_frames: s32;
+
+// Prepares BOARD's terrain, working a few milliseconds per frame, and
+// returns how opaque its picture is (0 hides it: draw the classic tiles;
+// below 1 it is fading in over them).
+PrepareTerrain :: (session: Session, stage: Rectangle, board: []u8, columns: s32, rows: s32,
+    area: s32, gate_posts: bool) -> float32 {
+    if !Terrain.TerrainAvailable(*renderer) { return 0.0 }
+    if !Terrain.TerrainRequest(*renderer, board, columns, rows, area, CellFor(stage.width, columns), gate_posts) { return 0.0 }
+    was_ready := renderer.ready
+    budget: s64 = 6000000
+    #if #defined(WURM_TERRAIN_GPU) {
+        budget = 10000000
+    }
+    unused Terrain.TerrainStep(*renderer, budget)
+    if !renderer.ready { shown_frames = 0; return 0.0 }
+    if !was_ready { shown_frames = 0 }
+    if !Upload(session) { return 0.0 }
+    if shown_frames < FADE_FRAMES { shown_frames += 1 }
+    t := cast(float32)shown_frames / cast(float32)FADE_FRAMES
+    return t * t * (3.0 - 2.0 * t)
+}
+
+// Draws the prepared picture at OPACITY.
+DrawTerrain :: (session: Session, key: u64, stage: Rectangle, opacity: float32) {
+    if picture.id == cast(u32)0 || opacity <= 0.0 { return }
+    alpha := cast(u32)(opacity * 255.0 + 0.5)
+    unused Image.Draw(session, Image.Props.{.key = key, .texture = picture, .bounds = stage, .smooth = true,
+        .tint = cast(u32)0xffffff00 | alpha, .alt_text = "Board terrain"})
+}
+
+// Keeps the session's picture in step with the renderer's latest pixels.
+Upload :: (session: Session) -> bool {
+    width := renderer.image.width
+    height := renderer.image.height
+    same_session := picture_slot == session.slot && picture_epoch == session.epoch
+    if picture.id == cast(u32)0 || !same_session || picture.width != width || picture.height != height {
+        if picture.id != cast(u32)0 && same_session { BitmapImageRelease(session, picture) }
+        picture = BitmapImageCreate(session, width, height, renderer.image.pixels[:])
+        picture_slot = session.slot
+        picture_epoch = session.epoch
+        uploaded = renderer.revision
+    } else if uploaded != renderer.revision {
+        if !BitmapImageUpdate(session, picture, renderer.image.pixels[:]) {
+            picture = BitmapImageCreate(session, width, height, renderer.image.pixels[:])
+        }
+        uploaded = renderer.revision
+    }
+    return picture.id != cast(u32)0
+}
+
+// Sun glints on water away from the shore: a few soft points that swell
+// and fade on their own slow cycles. FRAME advances once per drawn frame.
+DrawWaterGlints :: (session: Session, key: u64, stage: Rectangle, frame: s32) {
+    if !renderer.ready { return }
+    cells := *renderer.cells
+    scale := stage.width / cast(float32)cells.columns
+    count: u64 = 0
+    for y: 1..cells.rows - 2 {
+        for x: 1..cells.columns - 2 {
+            at := y * cells.columns + x
+            if cells.classes[at] != Field.TERRAIN_WATER { continue }
+            if cells.classes[at - 1] != Field.TERRAIN_WATER || cells.classes[at + 1] != Field.TERRAIN_WATER ||
+                cells.classes[at - cells.columns] != Field.TERRAIN_WATER || cells.classes[at + cells.columns] != Field.TERRAIN_WATER { continue }
+            seed := Field.Hash(cast(s32)x, cast(s32)y, 77)
+            if seed % 3 != 0 { continue }
+            period := 150 + seed % 120
+            phase := (frame + seed % period) % period
+            if phase >= 60 { continue }
+            // A smooth rise and fall over sixty frames.
+            t := cast(float32)phase / 60.0
+            glow := t * (1.0 - t) * 4.0
+            drift := cast(float32)phase / 60.0 * 0.18
+            cx := stage.x + (cast(float32)x + 0.2 + 0.6 * cast(float32)(seed % 97) / 97.0 + drift) * scale
+            cy := stage.y + (cast(float32)y + 0.2 + 0.6 * cast(float32)((seed / 97) % 89) / 89.0) * scale
+            length := scale * (0.16 + 0.12 * glow)
+            thick := scale * 0.05 + 1.0
+            unused Box.Draw(session, Box.Props.{.key = key + count * 2,
+                .bounds = Rectangle.{cx - length * 0.5, cy - thick * 0.5, length, thick},
+                .fill = Color.{236, 250, 255, cast(u8)(170.0 * glow)}, .radius = thick * 0.5})
+            unused Box.Draw(session, Box.Props.{.key = key + count * 2 + 1,
+                .bounds = Rectangle.{cx - thick * 0.6, cy - thick * 0.6, thick * 1.2, thick * 1.2},
+                .fill = Color.{255, 255, 255, cast(u8)(200.0 * glow)}, .radius = thick * 0.6})
+            count += 1
+            if count >= 60 { return }
+        }
+    }
+}

@@ -41,11 +41,13 @@ appearing together. Every board has a verified route in landscape and portrait.
 Levels 51–200 keep their established layouts, while personal editor layouts
 continue to take priority over every published default.
 
-Each landscape now carries its own illustrated journey cards, palette and a
-larger family of floor, wall and decorative material variants. Framed
-playfields, continuous ground and water, stronger wall edges and glowing
-objectives keep routes readable without changing tile size, collision or
-solutions. The worm retains its classic proportions and skin silhouettes;
+Each landscape carries its own illustrated journey cards and palette, and
+its boards are painted by real terrain shaders: meadow grass, woodland
+litter, pine crowns, lakeshore sand, rock and water are lit with rounded,
+raised hedges and stones that cast soft shadows, sun flecks under the
+trees, deep water with a foam line and wet shore, and glints drifting on
+the water. Routes stay readable and tile size, collision and solutions are
+unchanged. The worm retains its classic proportions and skin silhouettes;
 the basic color skins use clearer, richer companion colors.
 
 Press **Play** and you are straight in the game. The levels follow one after

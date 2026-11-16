@@ -1,0 +1,44 @@
+// Each landscape's light and the tints that settle its painted materials
+// into one palette. Tints and light are linear RGB.
+#import "kryon/shader"
+
+Tint :: struct { r: float64; g: float64; b: float64; }
+TerrainLook :: struct {
+    floor: Tint
+    wall: Tint
+    stone: Tint
+    shallow: Tint      // multiplies the painted water at the shore
+    deep: Tint         // and where it is deepest
+    foam: Tint
+    sun: Tint          // light on a surface facing the sun
+    sky: Tint          // light in full shade
+}
+
+// Meadow, Leafwood, Pinewood, Lake, Mountains.
+TerrainLookFor :: (area: s32) -> TerrainLook {
+    if area == 1 {
+        return .{.floor = Tint.{0.86, 0.88, 0.8}, .wall = Tint.{0.82, 0.88, 0.76}, .stone = Tint.{0.9, 0.95, 0.9},
+            .shallow = Tint.{0.8, 0.86, 0.86}, .deep = Tint.{0.32, 0.45, 0.52}, .foam = Tint.{0.74, 0.82, 0.78},
+            .sun = Tint.{1.28, 1.16, 0.94}, .sky = Tint.{0.36, 0.43, 0.48}}
+    }
+    if area == 2 {
+        return .{.floor = Tint.{0.9, 0.88, 0.82}, .wall = Tint.{0.88, 0.95, 0.92}, .stone = Tint.{0.92, 0.94, 0.96},
+            .shallow = Tint.{0.8, 0.86, 0.88}, .deep = Tint.{0.3, 0.4, 0.5}, .foam = Tint.{0.72, 0.8, 0.82},
+            .sun = Tint.{1.24, 1.16, 1.0}, .sky = Tint.{0.36, 0.42, 0.5}}
+    }
+    if area == 3 {
+        return .{.floor = Tint.{0.88, 0.85, 0.8}, .wall = Tint.{0.9, 0.92, 0.86}, .stone = Tint.{0.9, 0.9, 0.9},
+            .shallow = Tint.{0.78, 0.86, 0.9}, .deep = Tint.{0.3, 0.44, 0.6}, .foam = Tint.{0.84, 0.9, 0.9},
+            .sun = Tint.{1.22, 1.17, 1.04}, .sky = Tint.{0.4, 0.48, 0.6}}
+    }
+    if area == 4 {
+        return .{.floor = Tint.{0.86, 0.86, 0.84}, .wall = Tint.{0.92, 0.92, 0.95}, .stone = Tint.{0.82, 0.83, 0.86},
+            .shallow = Tint.{0.8, 0.86, 0.92}, .deep = Tint.{0.32, 0.44, 0.6}, .foam = Tint.{0.86, 0.92, 0.95},
+            .sun = Tint.{1.22, 1.2, 1.14}, .sky = Tint.{0.4, 0.47, 0.62}}
+    }
+    return .{.floor = Tint.{0.72, 0.8, 0.72}, .wall = Tint.{0.86, 0.94, 0.84}, .stone = Tint.{0.9, 0.9, 0.88},
+        .shallow = Tint.{0.8, 0.87, 0.88}, .deep = Tint.{0.34, 0.46, 0.58}, .foam = Tint.{0.82, 0.88, 0.84},
+        .sun = Tint.{1.26, 1.18, 0.98}, .sky = Tint.{0.38, 0.46, 0.58}}
+}
+
+Value :: (tint: Tint) -> ShaderValue { return .{tint.r, tint.g, tint.b, 1.0} }

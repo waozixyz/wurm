@@ -1,0 +1,417 @@
+// Shader-rendered terrain. Two Kryon material programs paint the board:
+// the relief pass lights heaped hedges, stones and ground, and the colour
+// pass lays each landscape's painted materials, water and shore over it.
+// The desktop runs them on the GPU when one is available; every other
+// target runs the same programs on the CPU, a few milliseconds per frame.
+// A changed gate, entrance or exit re-renders only the cells around it.
+#import "kryon/shader"
+#import "kryon/scene"
+#import "kryon/scene_render"
+#import "std/image"
+#import "std/vec"
+#if #defined(WURM_TERRAIN_GPU) {
+    #import "kryon/scene_gpu"
+}
+#if !#defined(WURM_PORTABLE) {
+    Timer :: #import "std/timer_linux";
+}
+Field :: #import, file "terrain_field.zi";
+Texture :: #import, file "terrain_texture.zi";
+Materials :: #import, file "terrain_materials.zi";
+Look :: #import, file "terrain_look.zi";
+Shader :: #import, file "terrain_shader.zi";
+
+// Cells around a change whose shadow, occlusion or rounding can differ.
+UPDATE_MARGIN :: 2;
+// More changed cells than this during a full render mean a new board.
+FOLLOW_UP_CELLS :: 40;
+// Board cells one repeat of each painted material spans; halves keep the
+// resampled tile a whole number of pixels at even cell sizes.
+FLOOR_TILE :: 5.0;
+WALL_TILE :: 3.0;
+STONE_TILE :: 3.0;
+WATER_TILE :: 5.0;
+
+// One painted material at the board's resolution and its relief.
+Material :: struct {
+    albedo: Texture.TerrainTexture
+    relief: Texture.TerrainTexture
+}
+
+// Work left for the current board, done a slice at a time so no frame
+// stalls: materials, distances, the field, then shader bands.
+STAGE_IDLE :: 0;
+STAGE_MATERIALS :: 1;
+STAGE_DISTANCES :: 2;
+STAGE_FIELD :: 3;
+STAGE_SHADE :: 4;
+
+TerrainRenderer :: struct {
+    // `image` is complete for `cells` when `ready`; a gate or exit change
+    // keeps it shown while its window re-renders.
+    ready: bool
+    area: s32
+    cell: s32
+    gate_posts: bool
+    cells: Field.TerrainCells
+    stage: s32
+    full: bool
+    x0: s32; y0: s32; x1: s32; y1: s32   // the job's cells
+    cursor: s32                            // next row or material
+    band: s32                              // pixel rows per shader band
+    band_time: s64                         // nanoseconds a band should take, or 0 for all
+    follow_up: bool                        // cells changed during a full render
+    follow_x0: s32; follow_y0: s32; follow_x1: s32; follow_y1: s32
+    distances: Field.TerrainDistances
+    field: Field.TerrainField
+    pack: Materials.MaterialPack
+    materials: [Materials.MATERIAL_KINDS]Material
+    board: Texture.TerrainTexture
+    texture_area: s32
+    texture_cell: s32
+    relief: ShaderProgram
+    colour: ShaderProgram
+    program_cell: s32
+    light: Image
+    image: Image
+    window: Image
+    revision: s32
+    accelerated: bool
+}
+#if #defined(WURM_TERRAIN_GPU) {
+    // One retained GPU context for the process, owned by the frame thread.
+    terrain_gpu: SceneGpuContext;
+}
+
+TerrainFree :: (r: *TerrainRenderer) {
+    Field.DistancesFree(*r.distances)
+    Field.FieldFree(*r.field)
+    for kind: 0..Materials.MATERIAL_KINDS - 1 {
+        Texture.TextureFree(*r.materials[kind].albedo)
+        Texture.TextureFree(*r.materials[kind].relief)
+    }
+    Texture.TextureFree(*r.board)
+    ShaderFree(*r.relief); ShaderFree(*r.colour)
+    VecFree(r.light.pixels); VecFree(r.image.pixels); VecFree(r.window.pixels)
+    #if #defined(WURM_TERRAIN_GPU) {
+        SceneGpuRelease(*terrain_gpu)
+    }
+    RenderSceneRelease()
+    r.ready = false
+    r.stage = STAGE_IDLE
+    r.texture_cell = 0
+    r.program_cell = 0
+}
+
+// Whether the painted materials are available; without them the board
+// keeps its classic tiles.
+TerrainAvailable :: (r: *TerrainRenderer) -> bool { return Materials.LoadMaterials(*r.pack) }
+
+// Asks for BOARD's terrain. CELL is the pixels per board cell; AREA picks
+// the landscape. A new board, landscape or size starts a full render; a
+// few changed cells re-render just their surroundings.
+TerrainRequest :: (r: *TerrainRenderer, board: []u8, columns: s32, rows: s32, area: s32, cell: s32,
+    gate_posts: bool) -> bool {
+    if columns <= 0 || rows <= 0 || columns * rows > Field.MAX_CELLS || cell < 4 || cell % 2 != 0 ||
+        board.count < columns * rows || !Materials.LoadMaterials(*r.pack) { return false }
+    cells := Field.TerrainCellsFrom(board, columns, rows, gate_posts)
+    resized := r.area != area || r.cell != cell || r.cells.columns != columns || r.cells.rows != rows
+    if !resized && (r.ready || r.stage != STAGE_IDLE) && Field.SameCells(*cells, *r.cells) { return true }
+    changed: s32 = 0
+    for at: 0..columns * rows - 1 { if cells.classes[at] != r.cells.classes[at] { changed += 1 } }
+    if resized || (!r.ready && r.stage == STAGE_IDLE) || (r.full && r.stage != STAGE_IDLE && changed > FOLLOW_UP_CELLS) {
+        // A different board: start over.
+        r.cells = cells
+        r.area = area
+        r.cell = cell
+        r.ready = false
+        r.full = true
+        r.x0 = 0; r.y0 = 0; r.x1 = columns; r.y1 = rows
+        r.stage = STAGE_MATERIALS
+        r.cursor = 0
+        r.follow_up = false
+        return true
+    }
+    x0 := columns
+    y0 := rows
+    x1: s32 = 0
+    y1: s32 = 0
+    for y: 0..rows - 1 {
+        for x: 0..columns - 1 {
+            at := y * columns + x
+            if cells.classes[at] == r.cells.classes[at] { continue }
+            if cast(s32)x < x0 { x0 = cast(s32)x }
+            if cast(s32)y < y0 { y0 = cast(s32)y }
+            if cast(s32)x + 1 > x1 { x1 = cast(s32)x + 1 }
+            if cast(s32)y + 1 > y1 { y1 = cast(s32)y + 1 }
+        }
+    }
+    x0 = ifx x0 > UPDATE_MARGIN then x0 - UPDATE_MARGIN else 0
+    y0 = ifx y0 > UPDATE_MARGIN then y0 - UPDATE_MARGIN else 0
+    x1 = ifx x1 + UPDATE_MARGIN < columns then x1 + UPDATE_MARGIN else columns
+    y1 = ifx y1 + UPDATE_MARGIN < rows then y1 + UPDATE_MARGIN else rows
+    // A full render in progress finishes first; the change follows it.
+    if r.full && r.stage != STAGE_IDLE {
+        if r.follow_up {
+            if r.follow_x0 < x0 { x0 = r.follow_x0 }
+            if r.follow_y0 < y0 { y0 = r.follow_y0 }
+            if r.follow_x1 > x1 { x1 = r.follow_x1 }
+            if r.follow_y1 > y1 { y1 = r.follow_y1 }
+        }
+        r.cells = cells
+        r.follow_up = true
+        r.follow_x0 = x0; r.follow_y0 = y0; r.follow_x1 = x1; r.follow_y1 = y1
+        return true
+    }
+    // A window already in progress grows to cover the new change too.
+    if r.stage != STAGE_IDLE {
+        if r.x0 < x0 { x0 = r.x0 }
+        if r.y0 < y0 { y0 = r.y0 }
+        if r.x1 > x1 { x1 = r.x1 }
+        if r.y1 > y1 { y1 = r.y1 }
+    }
+    r.cells = cells
+    r.full = false
+    r.x0 = x0; r.y0 = y0; r.x1 = x1; r.y1 = y1
+    r.stage = STAGE_DISTANCES
+    r.cursor = y0
+    return true
+}
+
+// Advances the current job for about BUDGET nanoseconds (at least one
+// slice), or to the end when BUDGET is negative. Small window updates
+// always finish at once so a gate never lags behind play. Returns true
+// when the picture's pixels changed and it is complete.
+TerrainStep :: (r: *TerrainRenderer, budget: s64) -> bool {
+    if r.stage == STAGE_IDLE { return false }
+    start := Clock()
+    small := !r.full && (r.x1 - r.x0) * (r.y1 - r.y0) <= 120
+    // Each band has a fixed setup cost, so bands fill half the budget.
+    r.band_time = ifx budget < 0 || small then cast(s64)0 else budget / 2
+    while r.stage != STAGE_IDLE {
+        if !Slice(r) {
+            r.stage = STAGE_IDLE
+            r.ready = false
+            return false
+        }
+        if r.stage == STAGE_IDLE { break }
+        if budget >= 0 && !small && Clock() - start >= budget { return false }
+    }
+    r.ready = true
+    r.revision += 1
+    return true
+}
+
+// Requests BOARD and finishes it now.
+TerrainUpdate :: (r: *TerrainRenderer, board: []u8, columns: s32, rows: s32, area: s32, cell: s32,
+    gate_posts: bool) -> bool {
+    if !TerrainRequest(r, board, columns, rows, area, cell, gate_posts) { return false }
+    return TerrainStep(r, -1)
+}
+
+#scope_file
+
+Allocate :: (image: *Image, width: s32, height: s32) -> bool {
+    image.width = width
+    image.height = height
+    return VecResize(image.pixels, cast(s64)width * height * 4)
+}
+
+Clock :: () -> s64 {
+    #if #defined(WURM_PORTABLE) {
+        return 0
+    } else {
+        return Timer.MonotonicNanoseconds()
+    }
+}
+
+// One bounded piece of the current job. False when it cannot be done.
+Slice :: (r: *TerrainRenderer) -> bool {
+    cell := r.cell
+    columns := r.cells.columns
+    rows := r.cells.rows
+    if r.stage == STAGE_MATERIALS {
+        if r.cursor < Materials.MATERIAL_KINDS {
+            if r.texture_area != r.area || r.texture_cell != cell {
+                kind := r.cursor
+                tiles: [Materials.MATERIAL_KINDS]float64 = .[FLOOR_TILE, WALL_TILE, STONE_TILE, WATER_TILE]
+                // Paint already carries its own shading, so its relief stays
+                // gentle; floors and water keep less fine contrast than walls.
+                strength: [Materials.MATERIAL_KINDS]float64 = .[2.5, 4.5, 4.0, 0.0]
+                contrast: [Materials.MATERIAL_KINDS]float64 = .[0.55, 0.85, 0.85, 0.5]
+                if !Materials.MaterialTile(*r.pack, r.area, kind, cast(s32)(tiles[kind] * cast(float64)cell), strength[kind],
+                    contrast[kind], *r.materials[kind].albedo, *r.materials[kind].relief) { return false }
+                if kind == Materials.MATERIAL_KINDS - 1 { r.texture_area = r.area; r.texture_cell = cell }
+            }
+            r.cursor += 1
+            return true
+        }
+        if !Texture.BoardTexture(r.area, cell, columns, rows, *r.board) { return false }
+        if r.program_cell != cell {
+            if !Shader.ReliefProgram(*r.relief, cast(float64)cell).ok || !Shader.ColourProgram(*r.colour, cast(float64)cell).ok { return false }
+            r.program_cell = cell
+        }
+        if !Field.DistancesAllocate(*r.cells, *r.distances) || !Field.FieldAllocate(*r.field, columns, rows, cell) ||
+            !Allocate(*r.light, r.field.width, r.field.height) || !Allocate(*r.image, r.field.width, r.field.height) { return false }
+        r.stage = STAGE_DISTANCES
+        r.cursor = r.y0
+        return true
+    }
+    if r.stage == STAGE_DISTANCES {
+        if r.cursor < r.y1 {
+            next := ifx r.cursor + 4 < r.y1 then r.cursor + 4 else r.y1
+            Field.ComputeDistances(*r.cells, *r.distances, r.x0, r.cursor, r.x1, next)
+            r.cursor = next
+            return true
+        }
+        Field.SoftenWater(*r.distances, r.x0, r.y0, r.x1, r.y1)
+        r.stage = STAGE_FIELD
+        r.cursor = r.y0
+        return true
+    }
+    if r.stage == STAGE_FIELD {
+        next := ifx r.cursor + 2 < r.y1 then r.cursor + 2 else r.y1
+        Field.FieldPaint(*r.field, *r.cells, *r.distances, r.area, r.x0 * cell, r.cursor * cell, r.x1 * cell, next * cell)
+        r.cursor = next
+        if r.cursor >= r.y1 {
+            r.stage = STAGE_SHADE
+            r.cursor = r.y0 * cell
+            if r.band < 4 { r.band = cell }
+        }
+        return true
+    }
+    // CPU bands adapt their height to the time they should take. Each GPU
+    // render uploads every input picture, so once the GPU has drawn a band
+    // it draws the rest of the window at once.
+    top := r.cursor
+    whole := r.band_time == 0 || r.accelerated
+    bottom := ifx whole then r.y1 * cell else top + r.band
+    if bottom > r.y1 * cell { bottom = r.y1 * cell }
+    started := Clock()
+    if !RenderPasses(r, r.x0 * cell, top, r.x1 * cell, bottom) { return false }
+    spent := Clock() - started
+    if spent > 0 && r.band_time > 0 {
+        band := cast(s64)(bottom - top) * r.band_time / spent
+        if band < cast(s64)cell { band = cast(s64)cell }
+        if band > 4096 { band = 4096 }
+        r.band = cast(s32)band
+    }
+    r.cursor = bottom
+    if r.cursor >= r.y1 * cell {
+        r.stage = STAGE_IDLE
+        if r.follow_up {
+            // The picture is whole; now redraw what changed meanwhile.
+            r.follow_up = false
+            r.ready = true
+            r.full = false
+            r.x0 = r.follow_x0; r.y0 = r.follow_y0; r.x1 = r.follow_x1; r.y1 = r.follow_y1
+            r.stage = STAGE_DISTANCES
+            r.cursor = r.y0
+        }
+    }
+    return true
+}
+
+Scale :: (columns: float64, rows: float64, tile: float64) -> ShaderValue { return .{columns / tile, rows / tile, 0.0, 0.0} }
+
+Uniforms :: (r: *TerrainRenderer, values: []ShaderValue) {
+    look := Look.TerrainLookFor(r.area)
+    columns := cast(float64)r.cells.columns
+    rows := cast(float64)r.cells.rows
+    values[Shader.UNIFORM_FLOOR_SCALE] = Scale(columns, rows, FLOOR_TILE)
+    values[Shader.UNIFORM_WALL_SCALE] = Scale(columns, rows, WALL_TILE)
+    values[Shader.UNIFORM_STONE_SCALE] = Scale(columns, rows, STONE_TILE)
+    values[Shader.UNIFORM_WATER_SCALE] = Scale(columns, rows, WATER_TILE)
+    // The sun stands to the upper left: shadows fall right and down. UV
+    // V grows upwards, so a step towards the top of the board is positive.
+    values[Shader.UNIFORM_SHADOW_OFFSET] = .{-0.3 / columns, 0.36 / rows, 0.0, 0.0}
+    values[Shader.UNIFORM_LIGHT] = .{-0.4664, -0.5442, 0.6974, 0.0}
+    values[Shader.UNIFORM_SUN] = Look.Value(look.sun)
+    values[Shader.UNIFORM_SKY] = Look.Value(look.sky)
+    values[Shader.UNIFORM_FLOOR_TINT] = Look.Value(look.floor)
+    values[Shader.UNIFORM_WALL_TINT] = Look.Value(look.wall)
+    values[Shader.UNIFORM_STONE_TINT] = Look.Value(look.stone)
+    values[Shader.UNIFORM_SHALLOW] = Look.Value(look.shallow)
+    values[Shader.UNIFORM_DEEP] = Look.Value(look.deep)
+    values[Shader.UNIFORM_FOAM] = Look.Value(look.foam)
+}
+
+Repeating :: (t: *Texture.TerrainTexture) -> ShaderSampler {
+    return .{width = t.size, height = t.height, pixels = t.pixels[:], repeat = true}
+}
+
+RenderPasses :: (r: *TerrainRenderer, x0: s32, y0: s32, x1: s32, y1: s32) -> bool {
+    uniforms: [16]ShaderValue
+    Uniforms(r, uniforms[:])
+    width := r.field.width
+    height := r.field.height
+    board := ShaderSampler.{width = r.board.size, height = r.board.height, pixels = r.board.pixels[:]}
+    masks := ShaderSampler.{width = width, height = height, pixels = r.field.masks[:]}
+    relief: [6]ShaderSampler
+    relief[Shader.RELIEF_SHAPE] = .{width = width, height = height, pixels = r.field.shape[:]}
+    relief[Shader.RELIEF_MASKS] = masks
+    relief[Shader.RELIEF_BOARD] = board
+    relief[Shader.RELIEF_FLOOR] = Repeating(*r.materials[Materials.MATERIAL_FLOOR].relief)
+    relief[Shader.RELIEF_WALL] = Repeating(*r.materials[Materials.MATERIAL_WALL].relief)
+    relief[Shader.RELIEF_STONE] = Repeating(*r.materials[Materials.MATERIAL_STONE].relief)
+    if !RenderPass(r, *r.relief, uniforms[:], relief[:], x0, y0, x1, y1, *r.light) { return false }
+    colour: [7]ShaderSampler
+    colour[Shader.COLOUR_MASKS] = masks
+    colour[Shader.COLOUR_BOARD] = board
+    colour[Shader.COLOUR_LIGHT] = .{width = width, height = height, pixels = r.light.pixels[:]}
+    colour[Shader.COLOUR_FLOOR] = Repeating(*r.materials[Materials.MATERIAL_FLOOR].albedo)
+    colour[Shader.COLOUR_WALL] = Repeating(*r.materials[Materials.MATERIAL_WALL].albedo)
+    colour[Shader.COLOUR_STONE] = Repeating(*r.materials[Materials.MATERIAL_STONE].albedo)
+    colour[Shader.COLOUR_WATER] = Repeating(*r.materials[Materials.MATERIAL_WATER].albedo)
+    return RenderPass(r, *r.colour, uniforms[:], colour[:], x0, y0, x1, y1, *r.image)
+}
+
+// Renders the window of the board's 2x2 plane through an orthographic
+// camera cropped to exactly those pixels, then copies it into TARGET.
+RenderPass :: (r: *TerrainRenderer, program: *ShaderProgram, uniforms: []ShaderValue, samplers: []ShaderSampler,
+    x0: s32, y0: s32, x1: s32, y1: s32, target: *Image) -> bool {
+    scene: Scene
+    SceneInit(*scene)
+    defer SceneFree(*scene)
+    material := UnlitMaterial(.{255, 255, 255, 255})
+    material.exact_color = true
+    material.shader = program
+    material.shader_uniforms = uniforms
+    material.shader_samplers = samplers
+    unused Plane(*scene, 2.0, 2.0, material)
+    width := cast(float64)target.width
+    height := cast(float64)target.height
+    camera := OrthographicCamera(-1.0 + 2.0 * cast(float64)x0 / width, -1.0 + 2.0 * cast(float64)x1 / width,
+        1.0 - 2.0 * cast(float64)y0 / height, 1.0 - 2.0 * cast(float64)y1 / height, 0.1, 10.0)
+    camera.position = .{0.0, 0.0, 3.0}
+    camera.target = .{0.0, 0.0, 0.0}
+    if !Allocate(*r.window, x1 - x0, y1 - y0) { return false }
+    ok := false
+    #if #defined(WURM_TERRAIN_GPU) {
+        // Kryon's GPU host binds a sampler picture it uploads mid-draw to
+        // the previous sampler's unit. A one-pixel draw first uploads every
+        // changed picture, so the real draw only binds them.
+        primer: Image
+        primer.width = 1
+        primer.height = 1
+        defer VecFree(primer.pixels)
+        pixel := OrthographicCamera(camera.left, camera.left + 2.0 / width, camera.top, camera.top - 2.0 / height, 0.1, 10.0)
+        pixel.position = camera.position
+        pixel.target = camera.target
+        unused SceneGpuRenderOrCPU(*terrain_gpu, *scene, pixel, *primer)
+        frame := SceneGpuRenderOrCPU(*terrain_gpu, *scene, camera, *r.window)
+        ok = frame.ok
+        r.accelerated = frame.accelerated
+    } else {
+        ok = RenderScene(*scene, camera, *r.window)
+        r.accelerated = false
+    }
+    if !ok { return false }
+    span := cast(s64)(x1 - x0) * 4
+    for y: y0..y1 - 1 {
+        from := cast(s64)(y - y0) * span
+        to := (cast(s64)y * target.width + x0) * 4
+        for i: 0..span - 1 { target.pixels[to + i] = r.window.pixels[from + i] }
+    }
+    return true
+}

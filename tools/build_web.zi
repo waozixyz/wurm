@@ -170,9 +170,10 @@ BuildWeb :: (portal: bool, driver: bool = false) -> bool {
     emcc := EnvironmentText("EMCC")
     if emcc.count == 0 { emcc = JoinPath(EnvironmentText("HOME"), "emsdk/upstream/emscripten/emcc") }
     packager := JoinPath(PathParent(ResolvePath(emcc)), "tools/file_packager.py")
-    // Pages limits each file: artwork and previews are separate asset bundles.
+    // Pages limits each file: artwork, previews and the terrain shaders'
+    // painted materials are separate asset bundles.
     preloads: Vec(u8)
-    names: [3]string = .["art", "previews", "sounds"]
+    names: [4]string = .["art", "previews", "sounds", "terrain"]
     for name: names {
         source := ResolvePath(art)
         virtual := "/assets/art"
@@ -182,6 +183,9 @@ BuildWeb :: (portal: bool, driver: bool = false) -> bool {
         } else if name == "sounds" {
             source = ResolvePath(sounds)
             virtual = "/assets/sounds"
+        } else if name == "terrain" {
+            source = ResolvePath("assets/art/terrain-materials.bin")
+            virtual = "/assets/art/terrain-materials.bin"
         }
         mapping: Vec(u8)
         BuilderPrint(*mapping, "%@%", source, virtual)
@@ -230,7 +234,7 @@ BuildWeb :: (portal: bool, driver: bool = false) -> bool {
     }
     VecPush(link, "-o"); VecPush(link, JoinPath(out, "game.js"))
     if !Steps(VecSlice(link, 0, link.count)) { return Fail("emcc failed") }
-    packs: [4]string = .["game.data", "art.data", "previews.data", "sounds.data"]
+    packs: [5]string = .["game.data", "art.data", "previews.data", "sounds.data", "terrain.data"]
     for packs {
         info := PathStatus(JoinPath(out, it))
         if !portal && info.size > 25 * 1024 * 1024 { return Fail(JoinPath(it, "exceeds the Pages limit")) }

@@ -1,0 +1,137 @@
+// The shader terrain: board classes and gate posts, rounded signed
+// distances, both material programs within Kryon's instruction limit, the
+// painted material pack, and rendering. A gate-sized change re-renders only
+// its window and must match a full render; time-sliced work must finish
+// with the same picture as an immediate render.
+#import "kryon/shader"
+#import "std/vec"
+Custom :: #import, file "../src/custom_levels.zi";
+Field :: #import, file "../src/terrain_field.zi";
+Shader :: #import, file "../src/terrain_shader.zi";
+Materials :: #import, file "../src/terrain_materials.zi";
+Terrain :: #import, file "../src/terrain.zi";
+
+failures: s32;
+Expect :: (value: bool, message: string) {
+    if !value {
+        print("FAIL: %\n", message)
+        failures += 1
+    }
+}
+
+full: Terrain.TerrainRenderer;
+patched: Terrain.TerrainRenderer;
+sliced: Terrain.TerrainRenderer;
+
+Classes :: () {
+    Expect(Field.TerrainClass(0) == Field.TERRAIN_FLOOR, "floor tile")
+    Expect(Field.TerrainClass(20) == Field.TERRAIN_HEDGE, "hedge tile")
+    Expect(Field.TerrainClass(55) == Field.TERRAIN_HEDGE, "smart hedge piece")
+    Expect(Field.TerrainClass(21) == Field.TERRAIN_STONE, "stone tile")
+    Expect(Field.TerrainClass(22) == Field.TERRAIN_WATER, "water tile")
+    Expect(Field.TerrainClass(42) == Field.TERRAIN_FLOOR, "creature marker stands on floor")
+    Expect(Field.TerrainClass(128 | 20) == Field.TERRAIN_HEDGE, "a false wall still looks like hedge")
+    board: [1200]u8
+    for at: 0..1199 { board[at] = 20 }
+    board[20] = 0
+    cells := Field.TerrainCellsFrom(board[:], 40, 30, true)
+    Expect(cells.classes[19] == Field.TERRAIN_STONE && cells.classes[21] == Field.TERRAIN_STONE, "posts beside an open exit")
+    Expect(cells.classes[29 * 40 + 19] == Field.TERRAIN_HEDGE, "no posts beside a closed entrance")
+    plain := Field.TerrainCellsFrom(board[:], 40, 30, false)
+    Expect(plain.classes[19] == Field.TERRAIN_HEDGE, "posts only when asked")
+}
+
+Distances :: () {
+    board: [1200]u8
+    for at: 0..1199 { board[at] = 0 }
+    board[10 * 40 + 10] = 21
+    cells := Field.TerrainCellsFrom(board[:], 40, 30, false)
+    centre := Field.SignedDistance(*cells, 10.5, 10.5, Field.IS_STONE, Field.STONE_ROUND, Field.STONE_REACH)
+    edge := Field.SignedDistance(*cells, 11.0, 10.5, Field.IS_STONE, Field.STONE_ROUND, Field.STONE_REACH)
+    outside := Field.SignedDistance(*cells, 12.0, 10.5, Field.IS_STONE, Field.STONE_ROUND, Field.STONE_REACH)
+    corner := Field.SignedDistance(*cells, 10.03, 10.03, Field.IS_STONE, Field.STONE_ROUND, Field.STONE_REACH)
+    Expect(centre > 0.45 && centre <= 0.5, "inside a lone stone")
+    Expect(edge > -0.01 && edge < 0.01, "on a stone's side")
+    Expect(outside < -0.99, "a cell away from a lone stone")
+    Expect(corner < 0.0, "a lone stone's corners are rounded away")
+}
+
+Programs :: () {
+    relief: ShaderProgram
+    colour: ShaderProgram
+    sizes: [4]float64 = .[10.0, 16.0, 24.0, 32.0]
+    for size: sizes {
+        a := Shader.ReliefProgram(*relief, size)
+        b := Shader.ColourProgram(*colour, size)
+        Expect(a.ok && relief.count <= SHADER_INSTRUCTIONS, "relief program compiles")
+        Expect(b.ok && colour.count <= SHADER_INSTRUCTIONS, "colour program compiles")
+        Expect(relief.sampler_count == 6 && colour.sampler_count == 7, "sampler layouts")
+    }
+}
+
+Pack :: () {
+    pack: Materials.MaterialPack
+    Expect(Materials.LoadMaterials(*pack), "the painted material pack loads")
+    Expect(pack.size == 128 && pack.pixels.count == 128 * 128 * 3 * 20, "five landscapes of four materials")
+}
+
+Difference :: (a: *Terrain.TerrainRenderer, b: *Terrain.TerrainRenderer) -> s32 {
+    if a.image.width != b.image.width || a.image.height != b.image.height { return 255 }
+    worst: s32 = 0
+    for at: 0..a.image.pixels.count - 1 {
+        d := cast(s32)a.image.pixels[at] - cast(s32)b.image.pixels[at]
+        if d < 0 { d = -d }
+        if d > worst { worst = d }
+    }
+    return worst
+}
+
+Rendering :: () {
+    board: [1200]u8
+    // Lake level 10 has water, posts and hedges; level 45 stones.
+    Custom.DefaultBoard(129, board[:], false)
+    Expect(Terrain.TerrainUpdate(*full, board[:], 40, 30, 3, 12, true), "a full render")
+    Expect(full.ready && full.image.width == 480 && full.image.height == 360, "picture size")
+    opaque := true
+    for at: 0..cast(s64)full.image.width * full.image.height - 1 { if full.image.pixels[at * 4 + 3] != 255 { opaque = false } }
+    Expect(opaque, "the terrain is opaque")
+    // Open the exit after the first render: only its window re-renders.
+    Expect(Terrain.TerrainUpdate(*patched, board[:], 40, 30, 3, 12, true), "the closed-exit render")
+    opened := board
+    opened[20] = 0
+    Expect(Terrain.TerrainUpdate(*patched, opened[:], 40, 30, 3, 12, true), "the exit window re-renders")
+    Expect(Terrain.TerrainUpdate(*full, opened[:], 40, 30, 3, 12, true), "the full board re-renders for comparison")
+    Expect(Difference(*full, *patched) <= 2, "a window update matches a full render")
+    Expect(!Terrain.TerrainUpdate(*patched, opened[:], 40, 30, 3, 12, true), "an unchanged board does no work")
+    // Time-sliced preparation reaches the same picture.
+    Expect(Terrain.TerrainRequest(*sliced, opened[:], 40, 30, 3, 12, true), "a sliced request")
+    slices := 0
+    while sliced.stage != Terrain.STAGE_IDLE && slices < 100000 {
+        unused Terrain.TerrainStep(*sliced, 1)
+        slices += 1
+    }
+    Expect(sliced.ready && slices > 4, "sliced preparation finishes over several steps")
+    Expect(Difference(*full, *sliced) <= 2, "sliced preparation matches an immediate render")
+    // Every landscape renders.
+    for area: 0..4 {
+        Custom.DefaultBoard(cast(s32)area * 40 + 7, board[:], area % 2 == 1)
+        columns: s32 = ifx area % 2 == 1 then 30 else 40
+        rows: s32 = ifx area % 2 == 1 then 40 else 30
+        Expect(Terrain.TerrainUpdate(*full, board[:], columns, rows, cast(s32)area, 8, true) && full.ready, "each landscape renders")
+    }
+}
+
+#program_export
+main :: () -> s32 {
+    Classes()
+    Distances()
+    Programs()
+    Pack()
+    Rendering()
+    Terrain.TerrainFree(*full)
+    Terrain.TerrainFree(*patched)
+    Terrain.TerrainFree(*sliced)
+    if failures > 0 { print("terrain_test: % failures\n", failures); return 1 }
+    print("terrain_test: classes, distances, programs, materials, window and sliced renders passed\n")
+    return 0
+}

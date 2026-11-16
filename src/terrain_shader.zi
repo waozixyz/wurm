@@ -1,0 +1,293 @@
+// Terrain material programs for Kryon's portable shader machine. The same
+// programs run on the CPU everywhere and as GLSL on the desktop GPU.
+//
+// Programs are written as single-assignment values (`Tex`, `Mul`, `Mix`...)
+// and then given machine registers by last use, so the material code reads
+// like a fragment shader instead of hand-numbered registers.
+#import "kryon/shader"
+
+// Relief pass samplers.
+RELIEF_SHAPE :: 0;   // solid slope x, slope y, contact occlusion
+RELIEF_MASKS :: 1;   // hedge, stone and water signed distance
+RELIEF_BOARD :: 2;   // board-aligned patches, cell tone and leaf light
+RELIEF_FLOOR :: 3;   // material relief: slope x, slope y, shade
+RELIEF_WALL :: 4;
+RELIEF_STONE :: 5;
+// Colour pass samplers.
+COLOUR_MASKS :: 0;
+COLOUR_BOARD :: 1;
+COLOUR_LIGHT :: 2;   // the relief pass output
+COLOUR_FLOOR :: 3;   // painted materials, sRGB
+COLOUR_WALL :: 4;
+COLOUR_STONE :: 5;
+COLOUR_WATER :: 6;
+
+// Uniform slots. Colours and tints are linear RGB with alpha 1.
+UNIFORM_FLOOR_SCALE :: 0;
+UNIFORM_WALL_SCALE :: 1;
+UNIFORM_STONE_SCALE :: 2;
+UNIFORM_WATER_SCALE :: 3;
+UNIFORM_SHADOW_OFFSET :: 4;
+UNIFORM_LIGHT :: 5;
+UNIFORM_SUN :: 6;
+UNIFORM_SKY :: 7;
+UNIFORM_FLOOR_TINT :: 8;
+UNIFORM_WALL_TINT :: 9;
+UNIFORM_STONE_TINT :: 10;
+UNIFORM_SHALLOW :: 11;
+UNIFORM_DEEP :: 12;
+UNIFORM_FOAM :: 13;
+
+// Values handed to the builder are virtual s32 numbers; 0..3 are the inputs.
+INPUT_UV :: 3;
+MAX_VALUES :: 256;
+
+ShaderBuild :: struct {
+    code: [MAX_VALUES]ShaderInstruction
+    count: s32
+    values: s32
+    literals: [MAX_VALUES]ShaderValue
+    literal_values: [MAX_VALUES]s32
+    literal_count: s32
+    failed: bool
+}
+
+BuildStart :: (b: *ShaderBuild) {
+    b.count = 0
+    b.values = 4
+    b.literal_count = 0
+    b.failed = false
+}
+
+Emit :: (b: *ShaderBuild, instruction: ShaderInstruction) -> s32 {
+    if b.count >= MAX_VALUES || b.values >= MAX_VALUES { b.failed = true; return 0 }
+    at := b.count
+    b.code[at] = instruction
+    b.code[at].dest = b.values
+    b.count += 1
+    b.values += 1
+    return b.code[at].dest
+}
+
+Lit :: (b: *ShaderBuild, x: float64, y: float64, z: float64, w: float64) -> s32 {
+    value := ShaderValue.{x, y, z, w}
+    for at: 0..b.literal_count - 1 {
+        old := b.literals[at]
+        if old.x == x && old.y == y && old.z == z && old.w == w { return b.literal_values[at] }
+    }
+    made := Emit(b, .{op = .ShaderLiteral, value = value})
+    if b.literal_count < MAX_VALUES {
+        b.literals[b.literal_count] = value
+        b.literal_values[b.literal_count] = made
+        b.literal_count += 1
+    }
+    return made
+}
+Splat :: (b: *ShaderBuild, v: float64) -> s32 { return Lit(b, v, v, v, v) }
+Uni :: (b: *ShaderBuild, slot: s32) -> s32 { return Emit(b, .{op = .ShaderUniform, slot = slot}) }
+Tex :: (b: *ShaderBuild, slot: s32, at: s32) -> s32 { return Emit(b, .{op = .ShaderSample, a = at, slot = slot}) }
+Add :: (b: *ShaderBuild, x: s32, y: s32) -> s32 { return Emit(b, .{op = .ShaderAdd, a = x, b = y}) }
+Sub :: (b: *ShaderBuild, x: s32, y: s32) -> s32 { return Emit(b, .{op = .ShaderSubtract, a = x, b = y}) }
+Mul :: (b: *ShaderBuild, x: s32, y: s32) -> s32 { return Emit(b, .{op = .ShaderMultiply, a = x, b = y}) }
+Min :: (b: *ShaderBuild, x: s32, y: s32) -> s32 { return Emit(b, .{op = .ShaderMin, a = x, b = y}) }
+Max :: (b: *ShaderBuild, x: s32, y: s32) -> s32 { return Emit(b, .{op = .ShaderMax, a = x, b = y}) }
+Dot :: (b: *ShaderBuild, x: s32, y: s32) -> s32 { return Emit(b, .{op = .ShaderDot, a = x, b = y}) }
+Normalize :: (b: *ShaderBuild, x: s32) -> s32 { return Emit(b, .{op = .ShaderNormalize, a = x}) }
+// A where C is 0, B where C is 1, per lane.
+Mix :: (b: *ShaderBuild, x: s32, y: s32, t: s32) -> s32 {
+    return Emit(b, .{op = .ShaderMix, a = x, b = y, c = t})
+}
+// x * scale + offset, both splatted literals.
+Affine :: (b: *ShaderBuild, x: s32, scale: float64, offset: float64) -> s32 {
+    return Add(b, Mul(b, x, Splat(b, scale)), Splat(b, offset))
+}
+Saturate :: (b: *ShaderBuild, x: s32) -> s32 {
+    return Min(b, Max(b, x, Splat(b, 0.0)), Splat(b, 1.0))
+}
+// clamp(x * scale + offset, 0, 1): a ramp with a chosen edge and width.
+Ramp :: (b: *ShaderBuild, x: s32, scale: float64, offset: float64) -> s32 {
+    return Saturate(b, Affine(b, x, scale, offset))
+}
+// One lane of a sample, repeated across all four lanes.
+Lane :: (b: *ShaderBuild, x: s32, lane: s32) -> s32 {
+    return Dot(b, x, Lit(b, ifx lane == 0 then 1.0 else 0.0, ifx lane == 1 then 1.0 else 0.0,
+        ifx lane == 2 then 1.0 else 0.0, 0.0))
+}
+
+// Assigns machine registers 4..31 by last use and compiles the result.
+BuildFinish :: (b: *ShaderBuild, output: s32, program: *ShaderProgram) -> ShaderDiagnostic {
+    if b.failed || b.count + 1 > SHADER_INSTRUCTIONS { return .{false, -1, "terrain shader is too long"} }
+    last: [MAX_VALUES]s32
+    for at: 0..MAX_VALUES - 1 { last[at] = -1 }
+    for at: 0..b.count - 1 {
+        i := b.code[at]
+        if i.op != .ShaderLiteral && i.op != .ShaderUniform { last[i.a] = cast(s32)at }
+        if i.op == .ShaderAdd || i.op == .ShaderSubtract || i.op == .ShaderMultiply || i.op == .ShaderMin ||
+            i.op == .ShaderMax || i.op == .ShaderDot || i.op == .ShaderMix { last[i.b] = cast(s32)at }
+        if i.op == .ShaderMix { last[i.c] = cast(s32)at }
+    }
+    last[output] = b.count
+    physical: [MAX_VALUES]s32
+    for at: 0..3 { physical[at] = cast(s32)at }
+    busy: [SHADER_REGISTERS]bool
+    code: [SHADER_INSTRUCTIONS]ShaderInstruction
+    for at: 0..b.count - 1 {
+        i := b.code[at]
+        if i.op != .ShaderLiteral && i.op != .ShaderUniform { i.a = physical[i.a] }
+        if i.op == .ShaderAdd || i.op == .ShaderSubtract || i.op == .ShaderMultiply || i.op == .ShaderMin ||
+            i.op == .ShaderMax || i.op == .ShaderDot || i.op == .ShaderMix { i.b = physical[i.b] }
+        if i.op == .ShaderMix { i.c = physical[i.c] }
+        // Sources read before the destination is written, so registers whose
+        // last use is this instruction may hold its result.
+        source := b.code[at]
+        if source.op != .ShaderLiteral && source.op != .ShaderUniform { Release(busy[:], physical[:], last[:], source.a, cast(s32)at) }
+        if source.op == .ShaderAdd || source.op == .ShaderSubtract || source.op == .ShaderMultiply ||
+            source.op == .ShaderMin || source.op == .ShaderMax || source.op == .ShaderDot || source.op == .ShaderMix {
+            Release(busy[:], physical[:], last[:], source.b, cast(s32)at)
+        }
+        if source.op == .ShaderMix { Release(busy[:], physical[:], last[:], source.c, cast(s32)at) }
+        register: s32 = -1
+        for r: 4..SHADER_REGISTERS - 1 { if !busy[r] { register = cast(s32)r; break } }
+        if register < 0 { return .{false, cast(s32)at, "terrain shader needs more registers"} }
+        busy[register] = true
+        physical[source.dest] = register
+        i.dest = register
+        code[at] = i
+        if last[source.dest] < 0 { busy[register] = false }
+    }
+    code[b.count] = .{op = .ShaderOutput, a = physical[output]}
+    return ShaderCompile(program, code[0:b.count + 1])
+}
+
+#scope_file
+Release :: (busy: []bool, physical: []s32, last: []s32, value: s32, at: s32) {
+    if value >= 4 && last[value] == at { busy[physical[value]] = false }
+}
+#scope_export
+
+// The relief pass: surface normals from the board's heaped height field
+// and the painted materials' relief, sun and sky light, the shadow each
+// raised hedge or stone casts, contact occlusion beside them and sun
+// flecks under the trees. `pixels` is the board's pixels per cell.
+ReliefProgram :: (program: *ShaderProgram, pixels: float64) -> ShaderDiagnostic {
+    b: ShaderBuild
+    BuildStart(*b)
+    uv: s32 = INPUT_UV
+    shape := Tex(*b, RELIEF_SHAPE, uv)
+    masks := Tex(*b, RELIEF_MASKS, uv)
+    board := Tex(*b, RELIEF_BOARD, uv)
+    floor_at := Mul(*b, uv, Uni(*b, UNIFORM_FLOOR_SCALE))
+    floor_a := Tex(*b, RELIEF_FLOOR, floor_at)
+    floor_b := Tex(*b, RELIEF_FLOOR, Mirrored(*b, floor_at))
+    wall_detail := Tex(*b, RELIEF_WALL, Mul(*b, uv, Uni(*b, UNIFORM_WALL_SCALE)))
+    stone_detail := Tex(*b, RELIEF_STONE, Mul(*b, uv, Uni(*b, UNIFORM_STONE_SCALE)))
+    shifted := Tex(*b, RELIEF_MASKS, Add(*b, uv, Uni(*b, UNIFORM_SHADOW_OFFSET)))
+    cover := Coverage(*b, masks, Lane(*b, wall_detail, 2), pixels)
+    hedge := Lane(*b, cover, 0)
+    stone := Lane(*b, cover, 1)
+    water := Lane(*b, cover, 2)
+    tones := Ramps(*b, board, .{2.0, 0.0, 2.0, 0.0}, .{-0.5, 0.0, 0.0, 0.0})
+    patch := Lane(*b, tones, 0)
+    one := Splat(*b, 1.0)
+    open_ground := Sub(*b, one, Max(*b, hedge, stone))
+    // Shape slopes are stored as 0.5 + slope * 0.1 per cell; material slopes
+    // as 0.5 + slope / 2. A normal is (-dx, -dy, 1) before normalising.
+    base := Add(*b, Mul(*b, shape, Lit(*b, -10.0, -10.0, 0.0, 0.0)), Lit(*b, 5.0, 5.0, 1.0, 0.0))
+    detail := Mix(*b, floor_a, floor_b, patch)
+    detail = Mix(*b, detail, wall_detail, hedge)
+    detail = Mix(*b, detail, stone_detail, stone)
+    detail = Add(*b, Mul(*b, detail, Lit(*b, -2.0, -2.0, 0.0, 0.0)), Lit(*b, 1.0, 1.0, 0.0, 0.0))
+    // Water is calm: its surface keeps none of the bed's grain.
+    detail = Mul(*b, detail, Sub(*b, one, water))
+    normal := Normalize(*b, Add(*b, base, detail))
+    diffuse := Max(*b, Dot(*b, normal, Uni(*b, UNIFORM_LIGHT)), Splat(*b, 0.0))
+    // The offset sample finds a raised surface between this point and the sun.
+    caster := Max(*b, Lane(*b, shifted, 0), Lane(*b, shifted, 1))
+    shadow := Mul(*b, Ramp(*b, caster, 4.0, -1.5), open_ground)
+    occlusion := Mul(*b, Lane(*b, shape, 2), open_ground)
+    // Leaves overhead let the sun through in flecks (0.5 is open sky).
+    flecks := Mul(*b, Lane(*b, board, 2), Splat(*b, 2.0))
+    sunlit := Mul(*b, Mul(*b, diffuse, Affine(*b, shadow, -0.8, 1.0)), flecks)
+    light := Mix(*b, Uni(*b, UNIFORM_SKY), Uni(*b, UNIFORM_SUN), sunlit)
+    light = Mul(*b, light, Affine(*b, occlusion, -0.55, 1.0))
+    // Halved so bright sun survives the 8-bit hand-over to the colour pass.
+    alpha := Lit(*b, 0.0, 0.0, 0.0, 1.0)
+    return BuildFinish(*b, Mix(*b, Mul(*b, light, Splat(*b, 0.5)), alpha, alpha), program)
+}
+
+// The same floor seen mirrored and shifted; blending the two by broad
+// patches hides the painted tile's repeat.
+Mirrored :: (b: *ShaderBuild, at: s32) -> s32 {
+    return Add(b, Mul(b, at, Lit(b, -1.0, 1.0, 0.0, 0.0)), Lit(b, 0.37, 0.61, 0.0, 0.0))
+}
+
+// Coverage of hedge, stone and water with one-pixel edges; leaf shade
+// breaks the hedge outline by a tenth of a cell. Masks store hedge and
+// stone as 0.5 + distance / 2 and water as 0.25 + distance * 0.375.
+Coverage :: (b: *ShaderBuild, masks: s32, leaf: s32, pixels: float64) -> s32 {
+    sharp := pixels * 2.0
+    wet := pixels * 2.67
+    ragged := Mul(b, Mul(b, leaf, Splat(b, 0.16 * sharp)), Lit(b, 1.0, 0.0, 0.0, 0.0))
+    return Saturate(b, Add(b, Add(b, Mul(b, masks, Lit(b, sharp, sharp, wet, 0.0)),
+        Lit(b, 0.5 - 0.58 * sharp, 0.5 - 0.5 * sharp, 0.5 - 0.25 * wet, 0.0)), ragged))
+}
+
+// Per-lane clamp(x * scale + offset, 0, 1): up to four ramps in one step.
+Ramps :: (b: *ShaderBuild, x: s32, scale: ShaderValue, offset: ShaderValue) -> s32 {
+    return Saturate(b, Add(b, Mul(b, x, Lit(b, scale.x, scale.y, scale.z, scale.w)), Lit(b, offset.x, offset.y, offset.z, offset.w)))
+}
+
+// sRGB paint to roughly linear light.
+Paint :: (b: *ShaderBuild, x: s32) -> s32 { return Mul(b, x, x) }
+
+// The colour pass: the painted materials blended across the board, broad
+// patches and the soft cell pattern, water depth, foam and wet shore,
+// hedges darkening at their foot, then the relief light.
+ColourProgram :: (program: *ShaderProgram, pixels: float64) -> ShaderDiagnostic {
+    b: ShaderBuild
+    BuildStart(*b)
+    uv: s32 = INPUT_UV
+    masks := Tex(*b, COLOUR_MASKS, uv)
+    board := Tex(*b, COLOUR_BOARD, uv)
+    relief := Tex(*b, COLOUR_LIGHT, uv)
+    floor_at := Mul(*b, uv, Uni(*b, UNIFORM_FLOOR_SCALE))
+    floor_a := Tex(*b, COLOUR_FLOOR, floor_at)
+    floor_b := Tex(*b, COLOUR_FLOOR, Mirrored(*b, floor_at))
+    wall := Tex(*b, COLOUR_WALL, Mul(*b, uv, Uni(*b, UNIFORM_WALL_SCALE)))
+    stone_paint := Tex(*b, COLOUR_STONE, Mul(*b, uv, Uni(*b, UNIFORM_STONE_SCALE)))
+    water_paint := Tex(*b, COLOUR_WATER, Mul(*b, uv, Uni(*b, UNIFORM_WATER_SCALE)))
+    leaf := Dot(*b, wall, Lit(*b, 0.3, 0.55, 0.15, 0.0))
+    cover := Coverage(*b, masks, leaf, pixels)
+    hedge := Lane(*b, cover, 0)
+    stone := Lane(*b, cover, 1)
+    water := Lane(*b, cover, 2)
+    // Hedge foot shade and water depth from the same distances.
+    inner := Ramps(*b, masks, .{2.4, 0.0, 3.2, 0.0}, .{-1.2, 0.0, -0.8, 0.0})
+    foot := Lane(*b, inner, 0)
+    depth := Lane(*b, inner, 2)
+    // A thin foam line inside the shore and damp ground just outside it.
+    shore := Ramps(*b, Lane(*b, masks, 2), .{-22.0, 4.0, 0.0, 0.0}, .{6.3, -0.3, 0.0, 0.0})
+    foam := Lane(*b, shore, 0)
+    damp := Lane(*b, shore, 1)
+    tones := Ramps(*b, board, .{2.0, 1.0, 0.0, 0.0}, .{-0.5, 0.0, 0.0, 0.0})
+    patch := Lane(*b, tones, 0)
+    checker := Lane(*b, tones, 1)
+    ground := Mul(*b, Paint(*b, Mix(*b, floor_a, floor_b, patch)), Uni(*b, UNIFORM_FLOOR_TINT))
+    ground = Mul(*b, ground, Affine(*b, checker, 0.1, 0.95))
+    ground = Mul(*b, ground, Affine(*b, damp, -0.35, 1.0))
+    foliage := Mul(*b, Paint(*b, wall), Uni(*b, UNIFORM_WALL_TINT))
+    foliage = Mul(*b, foliage, Affine(*b, foot, 0.5, 0.5))
+    rock := Mul(*b, Paint(*b, stone_paint), Uni(*b, UNIFORM_STONE_TINT))
+    // Water deepens away from the shore; a broken foam line rings it.
+    pool := Mul(*b, Paint(*b, water_paint), Mix(*b, Uni(*b, UNIFORM_SHALLOW), Uni(*b, UNIFORM_DEEP), depth))
+    froth := Mul(*b, foam, Affine(*b, leaf, 0.55, 0.0))
+    pool = Mix(*b, pool, Uni(*b, UNIFORM_FOAM), froth)
+    colour := Mix(*b, ground, pool, water)
+    colour = Mix(*b, colour, rock, stone)
+    colour = Mix(*b, colour, foliage, hedge)
+    // The relief pass stored half its light in sRGB bytes; squaring is close
+    // enough to linear for light.
+    lit := Mul(*b, colour, Mul(*b, Paint(*b, relief), Splat(*b, 2.0)))
+    alpha := Lit(*b, 0.0, 0.0, 0.0, 1.0)
+    return BuildFinish(*b, Mix(*b, lit, alpha, alpha), program)
+}
