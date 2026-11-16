@@ -115,3 +115,39 @@ used for new writes.
   no temporary validation backup remains.
 - Commit once, push once, and leave CI/release completion to the existing
   workflow watcher.
+
+## Post-release playtest follow-up
+
+Owner playtesting found a key lesson whose gate had no clear spatial purpose.
+The cause was systemic: first-50 key and switch boards tried the top-exit lock
+fallback before looking for an interior doorway. That kept the mechanic
+technically paired, but the key appeared to have no gate worth opening.
+
+- Key/switch lessons now author a four-cell interior doorway and a readable
+  entrance-side control court in `tools/design_levels.zi`.
+- Runtime placement uses that interior doorway first. The exit fallback remains
+  only for a player's incompatible personal edit and is forbidden on published
+  campaign boards by the new test.
+- Switch stones open their gate permanently. Re-crossing a control no longer
+  closes the doorway through a grown worm and strands its body on both sides.
+- `tests/campaign_mechanics_test.zi` loads all 200 published stages in landscape
+  and portrait and rejects orphaned keys, gates, switches, portals, unreachable
+  controls or challenge targets, useless portal pairs, and gates that reveal no
+  meaningful region.
+- Baseline: 32 invalid boards (16 lessons in two orientations). After the
+  authoring fix: zero invalid boards across all 400 runtime layouts.
+- The shader terrain renderer's campaign previews are regenerated after the
+  level source changes so packaged artwork matches these authored boards.
+- This follow-up remains in Unreleased and does not start another numeric
+  release. Release 0.2.34 publication remains owned by its existing workflow.
+
+Local validation completed during the follow-up:
+
+- The level generator consistency check verifies all 200 safe-loop
+  certificates.
+- The mechanic audit reports zero invalid boards and zero invariant failures
+  across all 200 stages in both orientations (400 runtime layouts).
+- The opening replay completes all 100 first-50 landscape/portrait witnesses
+  with active mechanics and enemies, zero deaths, and every challenge met.
+- The integrated engine suite completes all 400 campaign replays with zero
+  deaths and passes progress, editor, multiplayer, terrain, and input tests.

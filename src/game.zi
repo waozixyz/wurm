@@ -719,12 +719,11 @@ PlaceIdeas :: (game: *Game) {
         return
     }
     if game.level < 50 {
-        // Opening lessons preserve their authored interior route and put the
-        // visible lock at the destination. This makes the taught key/switch
-        // mandatory without splicing a procedural wall through the designed
-        // composition. Later campaign boards keep the original interior-gate
-        // placement below.
-        if PlaceBarrierGate(game, feature, reached[:]) || PlaceGate(game, feature, reached[:]) { game.feature = feature; return }
+        // Opening lessons use an interior doorway first: the key or switch
+        // must reveal a useful part of the authored garden. The edge fallback
+        // is retained only for personal layouts that replaced that doorway;
+        // every published opening board is verified to avoid it.
+        if PlaceGate(game, feature, reached[:]) || PlaceBarrierGate(game, feature, reached[:]) { game.feature = feature; return }
         if PlacePortals(game, 1, reached[:], false) { game.feature = FEATURE_PORTALS }
         return
     }
@@ -1248,7 +1247,10 @@ Tick :: (game: *Game) {
     if game.switch_stone.x >= 0 {
         over := Near(next, game.switch_stone, 8)
         if over && !game.on_switch {
-            OpenGate(game, !game.gate_open)
+            // A lesson switch is a safe, persistent opener. Closing the gate
+            // again when a longer worm crosses the stone can trap its body on
+            // both sides of the doorway and turn the taught route unwinnable.
+            OpenGate(game, true)
             for spark: 0..3 { AddParticle(game, game.switch_stone) }
             CompleteChallenge(game, CHALLENGE_SWITCH)
         }

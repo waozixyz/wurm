@@ -196,7 +196,8 @@ main :: () -> s32 {
     game.next_direction = DIR_UP
     Tick(*game)
     Expect(game.key.x < 0 && game.gate_open && game.board[game.gate] == game.gate_tiles[0], "the key opens its gate")
-    // A switch stone flips its gate each time the head arrives on it.
+    // A switch stone opens its gate permanently, including when the route
+    // brings the head over the control again later.
     StartGame(*game, switch_level, 0)
     game.apples = 3
     stone := game.switch_stone
@@ -211,7 +212,7 @@ main :: () -> s32 {
     Expect(game.gate_open && game.on_switch == false, "it stays open as the head moves on")
     game.worm[0] = Point.{stone.x, stone.y + 8}
     Tick(*game)
-    Expect(!game.gate_open && game.board[game.gate] == 20, "arriving again closes it")
+    Expect(game.gate_open && game.board[game.gate] == game.gate_tiles[0], "arriving again keeps it safely open")
     // A head stepping into a ring comes out of its partner.
     StartGame(*game, portal_level, 0)
     portal := game.portals[0]

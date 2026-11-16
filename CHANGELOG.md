@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Give every opening key and switch lesson a visible interior gate that protects a useful garden area, with its control in a reachable court instead of locking only the exit.
+
 ## [0.2.34] - 2026-11-16
 
 - Replace campaign levels 1–50 with authored gardens that teach route planning, growth, portals, keys, switches and readable patrols in a paced progression.

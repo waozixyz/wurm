@@ -646,6 +646,37 @@ FirstFiftyFeature :: (number: s64) -> s32 {
     ]
     return features[number - 1]
 }
+
+// Key and switch lessons contain a deliberate four-cell doorway through an
+// interior divider. The two macro cells keep the certified growth loop whole,
+// while closing all four runtime cells makes the gate separate two useful
+// garden regions in landscape and in the quarter-turned portrait layout.
+OpeningGateLayout :: (number: s64, walls: *Walls) {
+    feature := FirstFiftyFeature(number)
+    if feature != 2 && feature != 3 { return }
+    tile: u8 = ifx number <= 40 then 20 else 21
+    // Rows 6 and 7 carry the designer's permanent left/right safety gates;
+    // a lesson divider there would inherit extra edge openings.
+    divider_rows: [4]s64 = .[4, 5, 8, 9]
+    divider_y := divider_rows[(number / 5) % 4]
+    doorway_x := 3 + (number * 3) % 10
+    WallH(walls, divider_y, 0, MW - 1, tile)
+    for dx: 0..1 {
+        // Keep a clean approach on each side even when the level's own motif
+        // crossed this divider before the interaction was added.
+        Pop(walls, Key(doorway_x + dx, divider_y - 1))
+        Pop(walls, Key(doorway_x + dx, divider_y))
+        Pop(walls, Key(doorway_x + dx, divider_y + 1))
+    }
+    // A three-by-three macro court on the entrance side gives the control a
+    // readable home away from both the spawn and its gate. Put it opposite
+    // the doorway so collecting it asks the player to explore first.
+    court_x: s64 = ifx doorway_x < 9 then 13 else 2
+    court_y := divider_y + 2
+    for x: court_x..court_x + 2 {
+        for y: court_y..court_y + 2 { Pop(walls, Key(x, y)) }
+    }
+}
 FirstFiftyMechanic :: (number: s64) -> string {
     feature := FirstFiftyFeature(number)
     if feature == 1 { return "matching-portals" }
@@ -674,6 +705,7 @@ Campaign :: () -> string {
             for attempt: 0..attempts - 1 {
                 if number <= 50 {
                     FirstFiftyLayout(number, *walls)
+                    OpeningGateLayout(number, *walls)
                     JoinFloor(*walls)
                     source = references[(number - 1) % REFERENCE_COUNT]
                     accent = references[(number * 7 + 11) % REFERENCE_COUNT]

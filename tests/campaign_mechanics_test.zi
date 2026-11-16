@@ -1,0 +1,135 @@
+// Every published campaign board must give each interactive mechanic a clear,
+// reachable purpose. This runs the actual runtime placement in both layouts;
+// metadata alone cannot hide an orphaned key, gate, switch, portal or challenge.
+#import, file "../src/game.zi";
+Custom :: #import, file "../src/custom_levels.zi";
+
+failures: s32;
+invalid_boards: s32;
+board_failed: bool;
+
+Expect :: (value: bool, message: string, level: s32, portrait: bool) {
+    if value { return }
+    print("FAIL: level % %: %\n", level + 1, ifx portrait then "portrait" else "landscape", message)
+    failures += 1
+    board_failed = true
+}
+
+Reach :: (game: *Game, reached: []bool) -> s32 {
+    return FloodFrom(game, Index(board_columns / 2, board_rows - 2), -1, reached)
+}
+
+CheckGate :: (game: *Game, level: s32, portrait: bool) {
+    key := game.feature == FEATURE_KEY
+    stone := game.feature == FEATURE_SWITCH
+    Expect(key || stone, "a gate has no matching key or switch", level, portrait)
+    Expect(game.gate >= 0 && game.gate_span > 0, "the key or switch has no gate", level, portrait)
+    if game.gate < 0 || game.gate_span <= 0 { return }
+    for part: 0..game.gate_span - 1 {
+        cell := game.gate + cast(s32)part * game.gate_step
+        Expect(cell >= 0 && cell < CELLS && game.board[cell] >= 20 && game.board[cell] < 128,
+            "a closed gate cell is not solid", level, portrait)
+    }
+    Expect(game.portal_count == 0, "a gate lesson also carries unrelated portals", level, portrait)
+    if key {
+        Expect(game.key.x >= 0 && game.switch_stone.x < 0, "a key gate has the wrong control", level, portrait)
+    } else {
+        Expect(game.switch_stone.x >= 0 && game.key.x < 0, "a switch gate has the wrong control", level, portrait)
+    }
+    control := ifx key then game.key else game.switch_stone
+    if control.x < 0 { return }
+    closed: [CELLS]bool
+    near := Reach(game, closed[:])
+    at := Index(control.x / 16, control.y / 16)
+    Expect(at >= 0 && at < CELLS && closed[at], "the gate control cannot be reached before the gate", level, portrait)
+    opened := game.*
+    OpenGate(*opened, true)
+    all: [CELLS]bool
+    whole := Reach(*opened, all[:])
+    // A lock on the top exit adds only one cell. A real authored gate must
+    // reveal a useful garden region, so the interaction changes the route.
+    Expect(whole - near >= 16, "the gate guards no meaningful garden space", level, portrait)
+}
+
+CheckPortals :: (game: *Game, level: s32, portrait: bool) {
+    Expect(game.portal_count > 0, "a portal lesson has no portal pair", level, portrait)
+    Expect(game.gate < 0 && game.key.x < 0 && game.switch_stone.x < 0,
+        "a portal lesson carries an unrelated gate control", level, portrait)
+    reached: [CELLS]bool
+    unused Reach(game, reached[:])
+    for pair: 0..game.portal_count - 1 {
+        portal := game.portals[pair]
+        a := Index(portal.a.x / 16, portal.a.y / 16)
+        b := Index(portal.b.x / 16, portal.b.y / 16)
+        Expect(a >= 0 && a < CELLS && b >= 0 && b < CELLS && a != b,
+            "a portal pair does not have two distinct board cells", level, portrait)
+        Expect(TileAt(game, portal.a) < 20 && TileAt(game, portal.b) < 20,
+            "a portal endpoint is not on reachable floor", level, portrait)
+        Expect(CellsApart(a, b) >= 12, "a portal pair is too close to be a useful shortcut", level, portrait)
+        if game.feature == FEATURE_PORTAL_ROOM {
+            Expect(reached[a] != reached[b], "a portal room does not connect separated spaces", level, portrait)
+        }
+    }
+}
+
+CheckChallenge :: (game: *Game, level: s32, portrait: bool) {
+    if level >= 50 {
+        Expect(game.challenge == CHALLENGE_NONE, "a later stage carries an opening-only challenge", level, portrait)
+        return
+    }
+    Expect(game.challenge != CHALLENGE_NONE, "the opening stage has no challenge", level, portrait)
+    if game.challenge == CHALLENGE_KEY {
+        Expect(game.feature == FEATURE_KEY && game.key.x >= 0 && game.gate >= 0,
+            "the key challenge refers to a missing key or gate", level, portrait)
+    } else if game.challenge == CHALLENGE_SWITCH {
+        Expect(game.feature == FEATURE_SWITCH && game.switch_stone.x >= 0 && game.gate >= 0,
+            "the switch challenge refers to a missing switch or gate", level, portrait)
+    } else if game.challenge == CHALLENGE_PORTAL {
+        Expect((game.feature == FEATURE_PORTALS || game.feature == FEATURE_PORTAL_ROOM) && game.portal_count > 0,
+            "the portal challenge refers to missing rings", level, portrait)
+    } else if game.challenge == CHALLENGE_LANDMARK {
+        reached: [CELLS]bool
+        unused Reach(game, reached[:])
+        marker := Index(game.challenge_marker.x / 16, game.challenge_marker.y / 16)
+        Expect(game.challenge_marker.x >= 0 && marker >= 0 && marker < CELLS && reached[marker],
+            "the landmark challenge cannot be reached", level, portrait)
+    }
+}
+
+CheckBoard :: (level: s32, portrait: bool) {
+    board_failed = false
+    board: [CELLS]u8
+    objects: [CELLS]u8
+    Custom.DefaultBoard(level, board[:], portrait)
+    Custom.PublishedObjects(level, objects[:], portrait)
+    columns: s32 = ifx portrait then ROWS else COLUMNS
+    rows: s32 = ifx portrait then COLUMNS else ROWS
+    game: Game
+    StartGameData(*game, level, 0, cast(u32)(level * 65537 + 1), board[:],
+        Custom.PublishedApples(level, portrait), columns, rows, objects[:])
+
+    expected := BoardFeature(level)
+    if level < 50 {
+        Expect(game.feature == expected, "the runtime mechanic does not match the authored lesson", level, portrait)
+    }
+    if game.feature == FEATURE_KEY || game.feature == FEATURE_SWITCH { CheckGate(*game, level, portrait) }
+    else if game.feature == FEATURE_PORTALS || game.feature == FEATURE_PORTAL_ROOM { CheckPortals(*game, level, portrait) }
+    else {
+        Expect(game.gate < 0 && game.key.x < 0 && game.switch_stone.x < 0 && game.portal_count == 0,
+            "a plain stage contains an orphaned mechanic", level, portrait)
+    }
+    CheckChallenge(*game, level, portrait)
+    if board_failed { invalid_boards += 1 }
+}
+
+#program_export
+main :: () -> s32 {
+    for level: 0..LEVEL_COUNT - 1 {
+        CheckBoard(cast(s32)level, false)
+        CheckBoard(cast(s32)level, true)
+    }
+    BoardSize(COLUMNS, ROWS)
+    print("Campaign mechanic local test: % invalid boards and % invariant failures across % stages in both orientations.\n",
+        invalid_boards, failures, LEVEL_COUNT)
+    return ifx failures == 0 then 0 else 1
+}

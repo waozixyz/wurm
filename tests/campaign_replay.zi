@@ -14,6 +14,7 @@ OpeningReverse: [100]s32 = .[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 OpeningSeed :: (level: s32, orientation: s32) -> u32 {
     if level == 30 && orientation == 0 { return 1974030 }
     if level == 33 && orientation == 0 { return 2162722 }
+    if level == 33 && orientation == 1 { return 2170641 }
     if level == 34 && orientation == 1 { return 2236178 }
     if level == 42 && orientation == 0 { return 2760474 }
     if level == 43 && orientation == 0 { return 2826011 }
@@ -21,17 +22,20 @@ OpeningSeed :: (level: s32, orientation: s32) -> u32 {
     if level == 45 && orientation == 1 { return 2965004 }
     if level == 46 && orientation == 0 { return 3014703 }
     if level == 46 && orientation == 1 { return 3022622 }
-    if level == 49 && orientation == 1 { return 3227152 }
+    if level == 49 && orientation == 0 { return 3250909 }
+    if level == 49 && orientation == 1 { return 3290504 }
     return OpeningSeeds[level * 2 + orientation]
 }
 OpeningDirection :: (level: s32, orientation: s32) -> s32 {
     if level == 30 && orientation == 0 { return 1 }
     if level == 33 && orientation == 0 { return 0 }
+    if level == 33 && orientation == 1 { return 1 }
     if level == 34 && orientation == 1 { return 1 }
     if level == 42 && orientation == 0 { return 1 }
     if level == 43 && orientation == 0 { return 1 }
     if level == 44 && orientation == 0 { return 0 }
     if level == 46 && orientation == 1 { return 1 }
+    if level == 49 && orientation == 0 { return 1 }
     return OpeningReverse[level * 2 + orientation]
 }
 libc :: #system_library "libc";
