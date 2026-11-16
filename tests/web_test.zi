@@ -335,6 +335,19 @@ SDK_STUB :: "window.__scores=[];window.__portal=[];if(!sessionStorage.getItem('w
 // SDK fixture only; no hidden app state.
 STORE_STUB :: "// Private browser SDK/data seams only. No game variables or exports.\nwindow.__storeCalls=[];window.__storeBuys=[];\nlet publicStore;\nconst mappings=[{kind:'skin',skinId:1,sku:'sample-skin',purchaseId:'sample-explicit-skin'},{kind:'skin',skinId:2,sku:'sample-free',purchaseId:'sample-explicit-free'},{kind:'skin',skinId:3,sku:'sample-missing',purchaseId:'sample-explicit-missing'},{kind:'mountains',sku:'sample-mountains',purchaseId:'sample-explicit-mountains'},{kind:'coins',sku:'sample-pack',purchaseId:'sample-explicit-pack',packCoins:1000,cumulativeInventory:true}];\nObject.defineProperty(window,'WurmPortalStoreConfig',{configurable:true,get(){return sessionStorage.getItem('shop-fixture')==='1'?{version:1,sandbox:false,products:mappings}:publicStore},set(v){publicStore=v}});\nif(window.CrazyGames){\n if(sessionStorage.getItem('shop-fixture')==='1')CrazyGames.SDK.user.systemInfo.locale='en-US';\n const account=()=>sessionStorage.getItem('wurm-account')||'guest';\n const invkey=()=> 'shop-inventory:'+account();\n const inventory=()=>JSON.parse(sessionStorage.getItem(invkey())||'[]');\n CrazyGames.SDK.store={get isAvailable(){return sessionStorage.getItem('shop-unsupported')!=='1'},setSandbox(value){if(value)throw Error('production sandbox must be false')},\n getCatalogItems({offset}){__storeCalls.push(['catalog',account(),offset]);if(sessionStorage.getItem('shop-catalog-error'))return Promise.reject({code:'catalogFetchFailed'});const currency=sessionStorage.getItem('shop-currency')||'USD';return Promise.resolve({hasMore:false,items:mappings.map((p,i)=>({sku:p.sku,name:'Sample '+p.kind,description:'Local fixture only',imageUrl:'',isFree:i===1,canBeBought:true,price:i===2?null:{amount:currency==='EUR'?'3.49':'4.99',amountWithoutDiscount:'4.99',currency}}))})},\n getPlayerInventory({offset}){__storeCalls.push(['inventory',account(),offset]);return Promise.resolve({items:inventory().slice(offset,offset+50)})},\n buyItem(id){__storeBuys.push(id);let buys=JSON.parse(sessionStorage.getItem('shop-buys')||'[]');buys.push(id);sessionStorage.setItem('shop-buys',JSON.stringify(buys));const mode=sessionStorage.getItem('shop-buy-mode');if(mode==='cancel')return Promise.reject({code:'purchaseCancelled'});if(mode!=='pending'){const p=mappings.find(p=>p.purchaseId===id);if(!p)return Promise.reject({code:'invalidArgument'});const all=inventory(),old=all.find(x=>x.sku===p.sku);if(old)old.quantity+=1;else all.push({sku:p.sku,quantity:p.kind==='coins'?1:null});sessionStorage.setItem(invkey(),JSON.stringify(all))}return Promise.resolve({itemId:id})},consumeItem(){throw Error('must never consume')}\n };\n}\n"
 
+// Optional latency around the public inventory fixture. Tests turn it on only
+// while proving that verified balance rendering follows completion, not a
+// fixed sleep that happens to be long enough on one runner.
+STORE_DELAY_STUB :: #string JS
+if (window.CrazyGames && CrazyGames.SDK.store) {
+  const inventory = CrazyGames.SDK.store.getPlayerInventory.bind(CrazyGames.SDK.store);
+  CrazyGames.SDK.store.getPlayerInventory = options => {
+    const result = inventory(options), delay = Number(sessionStorage.getItem('shop-inventory-delay') || 0);
+    return delay > 0 ? result.then(page => new Promise(resolve => setTimeout(() => resolve(page), delay))) : result;
+  };
+}
+JS;
+
 // Public fixture only. Decrypt the actual Progress.Report submission after
 // loading the SDK best record; subsequent calls exercise queue/error glue.
 PortalResults :: () -> bool {
@@ -476,6 +489,12 @@ ShopHash :: (x: s32, y: s32, width: s32, height: s32) -> float64 {
     BuilderPrint(*expression,"(()=>{const p=document.getElementById('canvas').getContext('2d').getImageData(%,%,%,%).data;let h=0;for(let i=0;i<p.length;i+=4)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h})()",x,y,width,height)
     return BrowserNumber(browser,BuilderFinish(expression),-1.0)
 }
+ShopHashWait :: (x: s32, y: s32, width: s32, height: s32, expected: s64, equal: bool) -> bool {
+    expression: Vec(u8)
+    comparison := ifx equal then "===" else "!=="
+    BuilderPrint(*expression,"(()=>{const p=document.getElementById('canvas').getContext('2d').getImageData(%,%,%,%).data;let h=0;for(let i=0;i<p.length;i+=4)h=(Math.imul(h,31)+p[i]+p[i+1]*3+p[i+2]*7)>>>0;return h% %})()",x,y,width,height,comparison,expected)
+    return Until(BuilderFinish(expression))
+}
 ShopReady :: () -> bool {
     if !Until("__storeCalls.filter(x=>x[0]==='inventory').length>0") { return Fail("Wasm runtime did not read inventory") }
     Pause(700)
@@ -517,14 +536,18 @@ PortalShopUI :: () -> bool {
     Pause(1000)
     if !Click(400,365) || !ShopShot("owned-mountains") || !Click(580,362) || !Until(CloudRunIs("[160,3,0,0,0,0]")) { return Fail("verified Mountains did not open its chapter") }
     // Counted pack inventory derives a stable total; no consume or client grant.
-    if !Reload() || !ShopReady() || !Click(50,50) || !Click(570,180) || !Click(580,316) || !Click(400,310) { return false }
+    if !Reload() || !ShopReady() || !Click(50,50) || !Click(570,180) { return false }
+    before_pack := cast(s64)ShopHash(20,72,140,32)
+    // Make verified inventory slower than the old fixed one-second sleep.
+    // The visible balance must follow completion, not runner speed.
+    if !BrowserEvaluate(browser,"sessionStorage.setItem('shop-inventory-delay','1400');true") || !Click(580,316) || !Click(400,310) { return false }
     if !Until("__storeBuys.includes('sample-explicit-pack')") { return Fail("coin pack did not use explicit ID") }
-    Pause(1000)
+    if !ShopHashWait(20,72,140,32,before_pack,false) { return Fail("verified pack did not update derived balance") }
     if !Click(400,365) || !ShopShot("coin-pack-owned") { return false }
-    balance := ShopHash(20,72,140,32)
+    balance := cast(s64)ShopHash(20,72,140,32)
     if !Click(740,88) { return false }
-    Pause(1000)
-    if ShopHash(20,72,140,32) != balance || !Reload() || !ShopReady() || !Click(50,50) || ShopHash(20,72,140,32) != balance { return Fail("pack refresh/reload changed derived balance") }
+    if !ShopHashWait(20,72,140,32,balance,true) || !Reload() || !ShopReady() || !Click(50,50) || !ShopHashWait(20,72,140,32,balance,true) { return Fail("pack refresh/reload changed derived balance") }
+    if !BrowserEvaluate(browser,"sessionStorage.removeItem('shop-inventory-delay');true") { return false }
     // Portrait keeps all tabs and Restore available. Scroll real coin skin 9
     // into view in landscape; strict SDK Data failure must roll back spending.
     if !Viewport(450,800,true) { return false }
@@ -560,7 +583,9 @@ Portal :: (root: string) -> bool {
     if !BrowserOpen(browser, profile) { return Fail("the private Chromium did not start") }
     audio := AUDIO_OBSERVER
     if !BrowserCall(browser, "Page.enable", "{}") || !BrowserCall(browser, "Runtime.enable", "{}") { return false }
-    if !BrowserScriptOnLoad(browser, audio) || !BrowserScriptOnLoad(browser, SDK_STUB) || !BrowserScriptOnLoad(browser, STORE_STUB) || !Viewport(907, 510, false) { return false }
+    if !BrowserScriptOnLoad(browser, audio) || !BrowserScriptOnLoad(browser, SDK_STUB) ||
+        !BrowserScriptOnLoad(browser, STORE_STUB) || !BrowserScriptOnLoad(browser, STORE_DELAY_STUB) ||
+        !Viewport(907, 510, false) { return false }
     if !BrowserCall(browser, "Network.enable", "{}") || !BrowserCall(browser, "Network.setBlockedURLs", "{\"urls\":[\"*sdk.crazygames.com*\",\"https://*\"]}") { return false }
     if !BrowserCall(browser, "Page.navigate", BrowserParams1("url", url)) { return false }
     if !Until(LOADED) || !Until("(()=>{try{return Module.FS.stat('/kryon-apps').mode>0}catch{return false}})()") { return Fail("the portal copy did not open") }
