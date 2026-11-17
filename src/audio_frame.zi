@@ -1,62 +1,53 @@
-// One owner for this native app. Scope ends at every Frame return; voices
-// survive until the owning session closes or the process host disposes it.
-#import "kryon/media_audio_host"
+// Wurm owns one device for the process; a frame only scopes access to it.
 #import "kryon/session"
-#if #defined(PLATFORM_WEB) || #defined(ANDROID_BUILD) {
-    #import "kryon/media_audio_raylib"
-}
-#if #defined(ANDROID_BUILD) {
-    Assets :: #import "kryon/app_asset";
-    borrowed: string;
-} else {
-    #import "std/file"
-    cached_assets: [7]string;
-}
-owner: MediaAudioOwner;
-installed: bool;
-paths: [7]string = .["assets/sounds/start.wav", "assets/sounds/pickup.wav", "assets/sounds/lose.wav", "assets/sounds/exit.wav",
-    "assets/sounds/garden.ogg", "assets/sounds/factory.ogg", "assets/sounds/space.ogg"];
-Allowed :: (path: string) -> bool {
-    for paths { if it == path { return true } }
-    return false
-}
-Read :: (context: *void, path: string) -> string {
-    unused context
-    if !Allowed(path) { return "" }
-    #if #defined(ANDROID_BUILD) {
-        Assets.FreeAppAsset(borrowed)
-        borrowed = Assets.ReadAppAsset(path)
-        return borrowed
-    } else {
-        file := OpenRead(path)
-        if !file.valid { return "" }
-        defer CloseFile(file)
-        size := FileSize(file)
-        if size <= 0 || size > MEDIA_AUDIO_ASSET_LIMIT { return "" }
-        for index: 0..6 {
-            if paths[index] != path { continue }
-            if cached_assets[index] == "" {
-                bytes, ok := ReadEntireFile(path)
-                if !ok { return "" }
-                cached_assets[index] = bytes
-            }
-            return cached_assets[index]
-        }
-        return ""
+#import "std/audio_decode_wav"
+Sink :: #import "std/audio_sink";
+#if #defined(PLATFORM_WEB) {
+    #import "std/web"
+    gesture: s32;
+    Gesture :: (data: s32, first: s32, second: s32, third: s32) {
+        unused data; unused first; unused second; unused third
+        unused Sink.AudioSinkResume()
     }
 }
+enabled: bool;
+active: bool;
+Enable :: () { enabled = true }
 Begin :: (session: Session) {
+    unused session
     #if #defined(PLATFORM_WEB) || #defined(ANDROID_BUILD) {
-        if !installed { MediaAudioUseRaylib(); installed = true }
+        enabled = true
     }
-    MediaAudioBegin(*owner, session, Allowed, Read, null)
-    MediaAudioOwnerTick(*owner)
-}
-End :: () {
-    MediaAudioEnd()
-    #if #defined(ANDROID_BUILD) {
-        Assets.FreeAppAsset(borrowed)
-        borrowed = ""
+    active = true
+    if !enabled { return }
+    unused Sink.AudioSinkOpen()
+    #if #defined(PLATFORM_WEB) {
+        if gesture == 0 {
+            scope := WebScope(); defer WebEnd(scope)
+            gesture = WebFunction(Gesture, 0)
+            unused WebCall2(WebGlobal, WebName("addEventListener"), WebText("pointerdown"), WebObject(gesture))
+            unused WebCall2(WebGlobal, WebName("addEventListener"), WebText("keydown"), WebObject(gesture))
+        }
     }
 }
-Close :: () { MediaAudioOwnerClose(*owner) }
+Ready :: () -> bool {
+    if !active || !enabled { return false }
+    unused Sink.AudioSinkOpen()
+    #if #defined(PLATFORM_WEB) {
+        return Sink.AudioSinkRunning()
+    }
+    return Sink.AudioSinkReady()
+}
+End :: () { active = false }
+Close :: () {
+    #if #defined(PLATFORM_WEB) {
+        if gesture != 0 {
+            scope := WebScope(); defer WebEnd(scope)
+            unused WebCall2(WebGlobal, WebName("removeEventListener"), WebText("pointerdown"), WebObject(gesture))
+            unused WebCall2(WebGlobal, WebName("removeEventListener"), WebText("keydown"), WebObject(gesture))
+            WebRelease(gesture); gesture = 0
+        }
+    }
+    Sink.AudioSinkClose()
+    active = false
+}

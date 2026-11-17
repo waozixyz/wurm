@@ -7,11 +7,11 @@ tool = "kryon"
 
 [toolchain]
 git = "https://github.com/ziranlang/ziran.git"
-ref = "4fdd16d21ebae1cca8e140cad137980e9543a925"
+ref = "dd0aff6424490d1dcda7b417d1207c4799fcef7c"
 
 [dependencies.kryon]
 git = "https://github.com/kryonlabs/kryon.git"
-ref = "158fd91d5a0ad378399bb0e59193074b2e3dc6b5"
+ref = "9052a642a0de97e160bcdfd952d0766d0f4737fc"
 
 [install]
 bin = "wurm"
@@ -21,7 +21,7 @@ default_profile = "desktop"
 entry = "src/app.zi"
 
 [tool.kryon.profiles.desktop]
-native_artifacts = "kryon:renderer-raylib"
+native_artifacts = "kryon:renderer-desktop"
 native_platform = "linux-x86_64-gnu"
 backend = "desktop"
 library = "SDL2"
@@ -66,11 +66,11 @@ ref = "master"
 
 [dependencies.apps]
 git = "https://github.com/waozixyz/apps.git"
-ref = "3c0a7d9e7f941381a7c07169f94240b9fe801bb8"
+ref = "ea3a850c6bbfb242aa01b1066e5be1444a36497a"
 
 [dependencies.entity]
 git = "https://github.com/waozixyz/entity.git"
-ref = "6f326b771630060cb60aff6d4471f1c132e3ba07"
+ref = "2ecc9d2c82da131be5938fafa95a9caaa1d36710"
 
 [dependencies.crypto]
 git = "https://github.com/ziranlang/crypto.git"
@@ -78,4 +78,4 @@ ref = "master"
 
 [dependencies.game2d]
 git = "https://github.com/kryonlabs/game2d.git"
-ref = "a9c85df73fa1ed7af55da8a6ab3ca7d3cdf5e6a8"
+ref = "5b8cfc539714f2e643b73a24d3c10157a6034752"

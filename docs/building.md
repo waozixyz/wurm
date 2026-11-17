@@ -187,7 +187,9 @@ runs `tests/private_ui_test.zi`, which additionally exercises the real desktop b
 its own verified Xvfb server. It checks all three dialogs in 320x568 portrait
 and 640x360 landscape, including their primary and Back to title actions.
 It never uses the owner's desktop. The audio
-test uses SDL's dummy drivers and verifies that all effects and scores mix.
+tests verify deterministic effects and score mixing. `tests/run_local.zi -- audio`
+also runs real SDL playback on a private dummy device and WebAudio in private
+headless Chromium, covering play, pause, seek, loops, volume and frame persistence.
 
 The Android debug APK is written to `build/android/`. Use `--abi armeabi-v7a`
 for the development Moto, and `--verification` for the separate
@@ -284,7 +286,12 @@ and blend over 4.8 seconds instead of cutting or rewinding. The Ready screen
 keeps the score playing between levels, with the start cue reserved for Start.
 Loop reads wrap without padding silence, and the native mixer buffers enough
 audio to tolerate slower phone frames. The browser uses the same pieces and
-fade timing. The packed Arcade host continues to supply its own background
+fade timing. Native and browser editions use `std/audio` with the platform sink:
+SDL on desktop, AAudio/OpenSL ES on Android and WebAudio in the browser. Device
+opening is asynchronous on native platforms; browser playback starts after a
+trusted pointer or keyboard gesture. Browser sound packs contain WAV from the
+same PCM recordings, decoded by the standard mixer. Desktop image and audio
+codecs come from `kryon:renderer-desktop`. The packed Arcade host continues to supply its own background
 audio and receives the game's effects.
 
 ## Recover the assets again

@@ -1,41 +1,42 @@
-// Wurm owns the mixer; the current app owner owns the bounded PCM stream.
-#import "kryon/media_audio"
+// The score submits bounded PCM blocks to the standard audio mixer.
+Mixer :: #import "std/audio";
+Frame :: #import, file "audio_frame.zi";
 #import "kryon/session"
-#import "std/text_buffer"
-session: Session;
-Bind :: (value: Session) { session = value }
-Available :: () -> bool {
-    result := MediaAudio(session, MediaAudioCommand.{.operation = .Capabilities})
-    return result.code == .Ok && (result.capabilities & cast(u32)8) != 0
+// The score's PCM boundary also admits a deterministic sink in local tests.
+CanOpen :: #type () -> bool;
+OpenStream :: #type () -> u32;
+StreamReady :: #type (device: u32) -> bool;
+SubmitBlock :: #type (device: u32, samples: []s16) -> bool;
+ClearStream :: #type (device: u32) -> void;
+PcmSink :: struct {
+    available: CanOpen
+    open: OpenStream
+    ready: StreamReady
+    submit: SubmitBlock
+    clear: ClearStream
 }
+session: Session;
+voice: Mixer.AudioVoice = .{-1, 0};
+Bind :: (value: Session) {
+    if value.slot != session.slot || value.epoch != session.epoch { Close() }
+    session = value
+}
+Available :: () -> bool { return Frame.Ready() }
+Valid :: (device: u32) -> bool { return device != 0 && Mixer.AudioState(voice) != .Unloaded }
 Open :: () -> u32 {
-    result := MediaAudio(session, MediaAudioCommand.{.operation = .CreateStream, .voice = 1,
-        .format = .S16LE, .sample_rate = 22050, .channels = 1, .frames_per_block = 2048, .gain = 1.0})
-    if result.code != .Ok { return 0 }
-    result = MediaAudio(session, MediaAudioCommand.{.operation = .Play, .voice = 1})
-    if result.code == .Ok { return 1 }
-    unused MediaAudio(session, MediaAudioCommand.{.operation = .Unload, .voice = 1})
+    voice = Mixer.AudioOpenStream(22050, 1, 2048)
+    if voice.slot < 0 { return 0 }
+    if Mixer.AudioPlay(voice) { return 1 }
+    Close()
     return 0
 }
-Ready :: (device: u32) -> bool {
-    if device == 0 { return false }
-    result := MediaAudio(session, MediaAudioCommand.{.operation = .Status, .voice = 1})
-    return result.code == .Ok && result.writable
-}
+Ready :: (device: u32) -> bool { return Valid(device) && Mixer.AudioState(voice) == .Playing && Mixer.AudioStreamWritable(voice) }
 Submit :: (device: u32, samples: []s16) -> bool {
-    if device == 0 || samples.count != 2048 { return false }
-    // Encode explicitly, including NULs, independently of host endianness.
-    bytes: [4096]u8
-    for at: 0..2047 {
-        value := cast(u16)samples[at]
-        bytes[at * 2] = cast(u8)(value & 255)
-        bytes[at * 2 + 1] = cast(u8)(value >> 8)
-    }
-    result := MediaAudio(session, MediaAudioCommand.{.operation = .SubmitStream, .voice = 1, .pcm = TextView(bytes[:])})
-    return result.code == .Ok
+    return Valid(device) && samples.count == 2048 && Mixer.AudioStreamSubmit(voice, samples)
 }
 Clear :: (device: u32) {
-    if device == 0 { return }
-    unused MediaAudio(session, MediaAudioCommand.{.operation = .Stop, .voice = 1})
-    unused MediaAudio(session, MediaAudioCommand.{.operation = .Play, .voice = 1})
+    if !Valid(device) { return }
+    Mixer.AudioStop(voice)
+    unused Mixer.AudioPlay(voice)
 }
+Close :: () { Mixer.AudioUnload(voice); voice = .{-1, 0} }

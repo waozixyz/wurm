@@ -1,8 +1,8 @@
 Audio :: #import, file "../src/audio.zi";
+Output :: #import, file "../src/audio_output.zi";
 Volume :: #import, file "../src/audio_volume.zi";
 Score :: #import, file "../src/audio_score.zi";
 File :: #import "std/file_linux";
-#import "kryon/media_audio"
 #import "kryon/session"
 queued: u32;
 reject: bool;
@@ -10,27 +10,31 @@ accepted: s32;
 copy: [4096]u8;
 Clear :: (device: u32) { unused device; queued = 0 }
 Queued :: (device: u32) -> u32 { unused device; return queued }
-Provider :: (context: *void, session: Session, command: MediaAudioCommand) -> MediaAudioResult {
-    unused context; unused session
-    if command.operation == .Capabilities { return .{.code = .Ok, .capabilities = 8} }
-    if command.operation == .Status { return .{.code = .Ok, .state = .Playing, .writable = queued < 8192} }
-    if command.operation == .SubmitStream {
-        if command.pcm.count != 4096 { return .{.code = .Invalid} }
-        if reject { return .{.code = .Backpressure} }
-        for at: 0..4095 { copy[at] = command.pcm[at] }
-        accepted += 1
-        queued += 4096
+Available :: () -> bool { return true }
+Open :: () -> u32 { return 1 }
+Ready :: (device: u32) -> bool { unused device; return queued < 8192 }
+Submit :: (device: u32, samples: []s16) -> bool {
+    unused device
+    if samples.count != 2048 || reject { return false }
+    for at: 0..2047 {
+        value := cast(u16)samples[at]
+        copy[at * 2] = cast(u8)(value & 255)
+        copy[at * 2 + 1] = cast(u8)(value >> 8)
     }
-    if command.operation == .Stop || command.operation == .Play { queued = 0 }
-    return .{.code = .Ok}
+    accepted += 1
+    queued += 4096
+    return true
 }
 
 #program_export
 main :: () -> s32 {
     session := SessionOpen()
     defer SessionClose(session)
-    MediaAudioScopeBegin(Provider, null)
-    defer MediaAudioScopeEnd()
+    Audio.sink.available = Available
+    Audio.sink.open = Open
+    Audio.sink.ready = Ready
+    Audio.sink.submit = Submit
+    Audio.sink.clear = Clear
     Audio.Bind(session)
     Audio.EnsureAudio()
     if Audio.device == 0 { return 2 }

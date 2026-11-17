@@ -1,9 +1,11 @@
 #import "android_run"
+App :: #import "app";
 
-// Apfelwurm: the Android entry. raylib's NativeActivity backend calls this C
-// main; the canonical host loop in android_run drives the app's Frame.
+// Apfelwurm's NativeActivity entry. The canonical android_run host loop
+// drives the app's Frame.
 #program_export
 main :: (argc: s32, argv: **u8) -> s32 {
+    defer App.CloseAudio()
     unused argc
     unused argv
     return AndroidRunMain()

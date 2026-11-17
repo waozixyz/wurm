@@ -1,5 +1,7 @@
 // Shared asset voices follow the same calm playlist and phrase-length fades as PCM.
-#import "kryon/media_audio"
+Mixer :: #import "std/audio";
+Frame :: #import, file "audio_frame.zi";
+#import "std/file"
 #import "kryon/session"
 #import, file "audio_volume.zi";
 #import, file "audio_score.zi";
@@ -11,17 +13,17 @@ silenced: bool;
 volume: s32 = 100;
 session: Session;
 loaded: [7]bool;
+voices: [7]Mixer.AudioVoice;
+Read :: (path: string) -> string { bytes, ok := ReadEntireFile(path); return ifx ok then bytes else "" }
+Close :: () {
+    for index: 0..6 { if loaded[index] { Mixer.AudioUnload(voices[index]) }; loaded[index] = false }
+    ready = false; was_playing = false; music_incoming = 0; music_gain = 0.0
+}
 Bind :: (value: Session) {
     if session.slot != value.slot || session.epoch != value.epoch {
-        for index: 0..6 { loaded[index] = false }
-        was_playing = false
-        music_incoming = 0
-        music_gain = 0.0
+        Close()
     }
     session = value
-}
-Voice :: (index: s32, operation: MediaAudioOperation) -> MediaAudioResult {
-    return MediaAudio(session, MediaAudioCommand.{.operation = operation, .voice = index + 1})
 }
 music_current: s32 = 1;
 music_incoming: s32;
@@ -43,8 +45,7 @@ ApplyVolume :: () {
             else if index == music_incoming + 3 { gain *= 0.4 * music_gain }
             else { gain = 0.0 }
         }
-        unused MediaAudio(session, MediaAudioCommand.{.operation = .Gain, .voice = cast(s32)index + 1,
-            .gain = ifx muted || silenced then 0.0 else cast(float32)gain})
+        if loaded[index] { Mixer.AudioSetGain(voices[index], ifx muted || silenced then 0.0 else cast(float32)gain) }
     }
 }
 SetVolume :: (value: s32) {
@@ -54,31 +55,24 @@ SetVolume :: (value: s32) {
 }
 Ensure :: () {
     paths: [7]string = .["assets/sounds/start.wav", "assets/sounds/pickup.wav", "assets/sounds/lose.wav", "assets/sounds/exit.wav",
-        "assets/sounds/garden.ogg", "assets/sounds/factory.ogg", "assets/sounds/space.ogg"]
-    capabilities := MediaAudio(session, MediaAudioCommand.{.operation = .Capabilities})
-    if capabilities.code != .Ok || (capabilities.capabilities & cast(u32)55) != 55 { ready = false; return }
+        "assets/sounds/garden.wav", "assets/sounds/factory.wav", "assets/sounds/space.wav"]
+    if !Frame.Ready() { ready = false; return }
     ready = true
     for index: 0..6 {
-        if loaded[index] && Voice(cast(s32)index, .Status).code == .Missing {
-            loaded[index] = false
-            was_playing = false
-            music_incoming = 0
-            music_gain = 0.0
-        }
         if !loaded[index] {
-            result := MediaAudio(session, MediaAudioCommand.{.operation = .Load, .voice = cast(s32)index + 1,
-                .asset = paths[index], .music = index >= 4, .gain = 0.0})
-            loaded[index] = result.code == .Ok
+            voices[index] = Mixer.AudioLoad(Read(paths[index]), index >= 4)
+            loaded[index] = voices[index].slot >= 0
+            if loaded[index] { Mixer.AudioSetGain(voices[index], 0.0) }
         }
         if !loaded[index] { ready = false }
     }
     ApplyVolume()
 }
 Play :: (index: s32) -> bool {
-    status := Voice(index, .Status)
-    if status.code != .Ok { return false }
-    if status.state == .Paused { return Voice(index, .Resume).code == .Ok }
-    return MediaAudio(session, MediaAudioCommand.{.operation = .Play, .voice = index + 1, .looping = index >= 4}).code == .Ok
+    if !loaded[index] { return false }
+    if Mixer.AudioState(voices[index]) == .Paused { Mixer.AudioResume(voices[index]); return true }
+    Mixer.AudioSetLooping(voices[index], index >= 4)
+    return Mixer.AudioPlay(voices[index])
 }
 ApplyMute :: () { ApplyVolume() }
 ToggleMute :: () {
@@ -87,8 +81,8 @@ ToggleMute :: () {
     ApplyMute()
 }
 MusicTime :: (track: s32) -> float64 {
-    result := Voice(track + 3, .Status)
-    return ifx result.code == .Ok && result.has_position then result.position_seconds else -1.0
+    index := track + 3
+    return ifx loaded[index] then Mixer.AudioPosition(voices[index]) else -1.0
 }
 RequestMusic :: (track: s32) {
     if track == music_requested { return }
@@ -104,7 +98,7 @@ PumpMusic :: () {
     if music_incoming == 0 && ((music_requested != music_current && time >= music_change_at) || (duration > 0.0 && duration - time <= fading)) {
         if music_requested == music_current { music_requested = NextMusic(music_current) }
         music_incoming = music_requested
-        unused Voice(music_incoming + 3, .Stop)
+        Mixer.AudioStop(voices[music_incoming + 3])
         if !Play(music_incoming + 3) { music_incoming = 0; return }
     }
     if music_incoming != 0 {
@@ -112,7 +106,7 @@ PumpMusic :: () {
         if incoming_time < 0.0 { return }
         fraction := incoming_time / fading
         if fraction >= 1.0 {
-            unused Voice(music_current + 3, .Pause)
+            Mixer.AudioPause(voices[music_current + 3])
             music_current = music_incoming
             music_incoming = 0
             music_gain = 0.0
@@ -133,8 +127,8 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
         if music_incoming != 0 && !Play(music_incoming + 3) { return }
     }
     if !playing && was_playing {
-        if Voice(music_current + 3, .Pause).code != .Ok { return }
-        if music_incoming != 0 && Voice(music_incoming + 3, .Pause).code != .Ok { return }
+        Mixer.AudioPause(voices[music_current + 3])
+        if music_incoming != 0 { Mixer.AudioPause(voices[music_incoming + 3]) }
     }
     if playing {
         if !was_playing || level / 4 != previous_level / 4 { RequestMusic(MusicForLevel(level)) }
@@ -146,7 +140,7 @@ UpdateAudio :: (playing: bool, level: s32, apples: s32, death: s32, transition: 
     else if playing && active && death > previous_death { effect = 2 }
     else if playing && active && transition > previous_transition { effect = 3 }
     if effect >= 0 && !muted && !silenced {
-        unused Voice(effect, .Stop)
+        Mixer.AudioStop(voices[effect])
         unused Play(effect)
     }
     was_playing = playing

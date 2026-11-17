@@ -75,7 +75,7 @@ Test :: (name: string, output: string, defines: []string, link: string, environm
     VecPush(arguments, folder)
     VecPush(arguments, BuilderFinish(source))
     libraries: Vec(u8)
-    BuilderPrint(*libraries, "LDLIBS=%", link)
+    BuilderPrint(*libraries, "LDLIBS=% -lSDL2 -lpthread", link)
     flags: [1]string = .[BuilderFinish(libraries)]
     if !Ziran(VecSlice(arguments, 0, arguments.count), flags[:]) { return false }
     program: [2]string = .[JoinPath(folder, name), argument]

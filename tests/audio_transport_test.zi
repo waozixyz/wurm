@@ -1,131 +1,146 @@
-// Wurm policies exercised through the actual shared native/browser provider.
-#import "kryon/media_audio"
-#import "kryon/media_audio_host"
-#import "kryon/media_audio_raylib"
-#import "kryon/session"
+// Exercise the game's standard mixer and real platform sink on disposable hosts.
+Mixer :: #import "std/audio";
+#import "std/audio_decode_wav"
 #import "std/file"
-wave: string;
+#import "kryon/session"
+Frame :: #import, file "../src/audio_frame.zi";
 #if #defined(PLATFORM_WEB) {
-    Music :: #import, file "../src/web_audio.zi";
-    #import "kryon/canvas_audio_host"
     #import "std/web"
-    ogg: string;
-    Read :: (context: *void, path: string) -> string {
-        unused context
-        return ifx path.count > 4 && path[path.count-4:path.count] == ".ogg" then ogg else wave
-    }
+    Music :: #import, file "../src/web_audio.zi";
+    Wait :: (milliseconds: s32) { WebSleep(milliseconds) }
 } else {
+    #import "std/timer_linux"
     Audio :: #import, file "../src/audio.zi";
-    Cues :: #import, file "../src/portable_audio.zi";
-    Read :: (context: *void, path: string) -> string { unused context; unused path; return wave }
+    Output :: #import, file "../src/audio_output.zi";
+    Wait :: (milliseconds: s32) { unused SleepMilliseconds(milliseconds) }
 }
-Allowed :: (path: string) -> bool { unused path; return true }
-Call :: (session: Session, operation: MediaAudioOperation, voice: s32 = 1) -> MediaAudioResult {
-    return MediaAudio(session, MediaAudioCommand.{.operation = operation, .voice = voice})
+wave: string;
+
+Gain :: () -> bool {
+    voice := Mixer.AudioLoad(wave, false)
+    if voice.slot < 0 { return false }
+    defer Mixer.AudioUnload(voice)
+    Mixer.AudioSetGain(voice, 0.25)
+    if !Mixer.AudioPlay(voice) { return false }
+    samples: [128]float32
+    Mixer.AudioRender(samples[:], 64)
+    // The fixture is constant 8192 PCM16: quarter gain is 0.0625 on both sides.
+    for sample: samples { if sample < 0.0624 || sample > 0.0626 { return false } }
+    return true
+}
+Transport :: () -> s32 {
+    voice := Mixer.AudioLoad(wave, true)
+    if voice.slot < 0 { return 40 }
+    defer Mixer.AudioUnload(voice)
+    if Mixer.AudioLength(voice) != 3.0 || !Mixer.AudioPlay(voice) { return 41 }
+    Wait(100)
+    if Mixer.AudioState(voice) != .Playing || Mixer.AudioPosition(voice) <= 0.0 { return 42 }
+    if !Mixer.AudioSeek(voice, 0.5) || Mixer.AudioState(voice) != .Playing { return 43 }
+    Wait(60)
+    if Mixer.AudioPosition(voice) <= 0.5 { return 44 }
+    Mixer.AudioPause(voice)
+    if !Mixer.AudioSeek(voice, 2.0) || Mixer.AudioState(voice) != .Paused { return 45 }
+    paused := Mixer.AudioPosition(voice)
+    Wait(100)
+    if paused != 2.0 || Mixer.AudioPosition(voice) != paused { return 46 }
+    // Invalid seeks leave the paused voice unchanged.
+    if Mixer.AudioSeek(voice, -1.0) || Mixer.AudioSeek(voice, 4.0) || Mixer.AudioPosition(voice) != paused { return 47 }
+    Mixer.AudioResume(voice)
+    Wait(100)
+    if Mixer.AudioPosition(voice) <= paused { return 48 }
+    Mixer.AudioSetLooping(voice, true)
+    if !Mixer.AudioSeek(voice, 2.98) { return 49 }
+    Wait(150)
+    if Mixer.AudioState(voice) != .Playing || Mixer.AudioPosition(voice) >= 1.0 { return 50 }
+    Mixer.AudioSetLooping(voice, false)
+    if !Mixer.AudioSeek(voice, 2.95) { return 51 }
+    Wait(150)
+    if Mixer.AudioState(voice) != .Finished { return 52 }
+    if !Mixer.AudioSeek(voice, 1.0) || Mixer.AudioState(voice) != .Paused { return 53 }
+    Mixer.AudioResume(voice)
+    Wait(100)
+    if Mixer.AudioPosition(voice) <= 1.0 { return 54 }
+    Mixer.AudioStop(voice)
+    if Mixer.AudioState(voice) != .Stopped || !Mixer.AudioPlay(voice) || Mixer.AudioPosition(voice) >= 0.5 { return 55 }
+    return 0
 }
 #program_export
 main :: () -> s32 {
-    MediaAudioUseRaylib()
+    path := "work/audio-transport-test/tone.wav"
+    #if #defined(PLATFORM_WEB) {
+        path = "tone.wav"
+    }
+    bytes, ok := ReadEntireFile(path)
+    if !ok { return 1 }
+    wave = bytes
+    if !Gain() { return 2 }
     session := SessionOpen()
     defer SessionClose(session)
-    owner: MediaAudioOwner
-    defer MediaAudioOwnerClose(*owner)
-    MediaAudioBegin(*owner, session, Allowed, Read, null)
-    defer MediaAudioEnd()
+    Frame.Enable()
+    Frame.Begin(session)
+    defer Frame.Close()
     #if #defined(PLATFORM_WEB) {
-        // The browser embeds fixture bytes at its root.
-        browser_wave, browser_ok := ReadEntireFile("tone.wav")
-        if !browser_ok { return 1 }
-        wave = browser_wave
-        song, found := ReadEntireFile("tone.ogg")
-        if !found { return 2 }
-        ogg = song
         Music.Bind(session)
+        defer Music.Close()
         Music.UpdateAudio(true, 0, 4, 0, 0)
         if Music.was_playing { return 3 }
         WebSet(WebGlobal, WebName("audioTestPhase"), WebText("gesture"))
-        for attempt: 0..299 { if AudioHostState() == 1 { break }; WebSleep(10) }
-        if AudioHostState() != 1 { return 4 }
-        Music.UpdateAudio(true, 0, 4, 0, 0)
-        if !Music.was_playing { return 5 }
-        WebSleep(250)
+        for attempt: 0..299 {
+            Music.UpdateAudio(true, 0, 4, 0, 0)
+            if Music.was_playing { break }
+            Wait(10)
+        }
+        if !Music.was_playing { return 4 }
         Music.RequestMusic(2)
         Music.music_change_at = 0.0
         Music.PumpMusic()
-        if Music.music_incoming != 2 { return 6 }
-        WebSleep(150)
+        if Music.music_incoming != 2 { return 5 }
+        Wait(150)
         Music.PumpMusic()
-        if Music.music_gain <= 0.0 { return 7 }
+        if Music.music_gain <= 0.0 { return 6 }
         Music.UpdateAudio(false, 0, 4, 0, 0)
         outgoing := Music.MusicTime(1)
         incoming := Music.MusicTime(2)
-        if outgoing <= 0.0 || incoming <= 0.0 { return 8 }
-        if Call(session, .Status, 5).state != .Paused || Call(session, .Status, 6).state != .Paused { return 9 }
-        WebSleep(150)
-        if Music.MusicTime(1) != outgoing || Music.MusicTime(2) != incoming { return 10 }
+        Wait(150)
+        if Music.MusicTime(1) != outgoing || Music.MusicTime(2) != incoming { return 7 }
         Music.UpdateAudio(true, 0, 4, 0, 0)
-        WebSleep(150)
-        if Music.MusicTime(1) <= outgoing || Music.MusicTime(2) <= incoming { return 11 }
+        Wait(100)
+        if Music.MusicTime(1) <= outgoing || Music.MusicTime(2) <= incoming { return 8 }
         Music.ToggleMute()
         before := Music.MusicTime(2)
-        WebSleep(100)
-        if Music.MusicTime(2) <= before { return 12 }
-        MediaAudioEnd()
-        MediaAudioBegin(*owner, session, Allowed, Read, null)
-        if Call(session, .Status, 6).state != .Playing { return 13 }
-        MediaAudioOwnerClose(*owner)
-        MediaAudioBegin(*owner, session, Allowed, Read, null)
+        Wait(100)
+        if Music.MusicTime(2) <= before { return 9 }
+        Frame.End(); Frame.Begin(session)
+        if Mixer.AudioState(Music.voices[5]) != .Playing { return 10 }
+        Music.Close()
         Music.UpdateAudio(true, 0, 4, 0, 0)
-        if !Music.was_playing || Music.music_incoming != 0 { return 14 }
+        if !Music.was_playing || Music.music_incoming != 0 { return 11 }
     } else {
-        bytes, ok := ReadEntireFile("work/audio-transport-test/tone.wav")
-        if !ok { return 1 }
-        wave = bytes
+        for attempt: 0..299 {
+            if Frame.Ready() { break }
+            Wait(10)
+        }
+        if !Frame.Ready() { return 20 }
         Audio.Bind(session)
+        defer Audio.Close()
         Audio.UpdateAudio(true, 0, 4, 0, 0)
-        if Audio.device == 0 || Audio.music[Audio.music_current].position == 0 { return 20 }
-        status := Call(session, .Status)
-        if status.code != .Ok || status.state != .Playing || status.has_position { return 21 }
-        if Call(session, .Pause).code != .Ok || Call(session, .Status).writable { return 22 }
-        if Call(session, .Resume).code != .Ok { return 23 }
-        MediaAudioEnd()
-        MediaAudioBegin(*owner, session, Allowed, Read, null)
-        if Call(session, .Status).state != .Playing { return 24 }
+        if Audio.device == 0 || Audio.music[Audio.music_current].position == 0 { return 21 }
+        Mixer.AudioPause(Output.voice)
+        if Output.Ready(Audio.device) || Mixer.AudioState(Output.voice) != .Paused { return 22 }
+        Mixer.AudioResume(Output.voice)
+        Frame.End(); Frame.Begin(session)
+        if Mixer.AudioState(Output.voice) != .Playing { return 23 }
         Audio.ToggleMute()
-        if !Audio.muted { return 25 }
-        MediaAudioOwnerClose(*owner)
-        MediaAudioBegin(*owner, session, Allowed, Read, null)
-        Audio.Bind(session)
-        if Audio.device != 0 || Audio.pending_block { return 26 }
+        if !Audio.muted { return 24 }
+        stale := Output.voice
+        Audio.Close()
+        if Mixer.AudioState(stale) != .Unloaded { return 25 }
         Audio.ToggleMute()
         Audio.UpdateAudio(true, 0, 4, 0, 0)
-        if Audio.device == 0 || Call(session, .Status).state != .Playing { return 27 }
-        Audio.CloseMusic()
-        MediaAudioOwnerClose(*owner)
-        MediaAudioBegin(*owner, session, Allowed, Read, null)
-        Cues.Bind(session)
-        if !Cues.CanSetVolume() { return 30 }
-        Cues.SetVolume(25)
-        Cues.UpdateAudio(true, 0, 4, 0, 0)
-        if Call(session, .Status, 1).state != .Playing || owner.voices[0].gain != 0.25 { return 31 }
-        Cues.UpdateAudio(true, 0, 3, 0, 0)
-        if Call(session, .Status, 2).state != .Playing || owner.voices[1].gain != 0.25 { return 32 }
-        Cues.ToggleMute()
-        if owner.voices[0].gain != 0.0 || owner.voices[1].gain != 0.0 { return 33 }
-        Cues.UpdateAudio(true, 0, 3, 1, 0)
-        if Call(session, .Status, 3).code != .Missing { return 34 }
-        Cues.ToggleMute()
-        Cues.UpdateAudio(true, 0, 3, 2, 0)
-        if Call(session, .Status, 3).state != .Playing { return 35 }
-        MediaAudioEnd()
-        MediaAudioBegin(*owner, session, Allowed, Read, null)
-        if Call(session, .Status, 3).state != .Playing { return 36 }
-        MediaAudioOwnerClose(*owner)
-        MediaAudioBegin(*owner, session, Allowed, Read, null)
-        if Call(session, .Status, 3).code != .Missing { return 37 }
-        Cues.UpdateAudio(true, 1, 3, 2, 0)
-        if Call(session, .Status, 1).state != .Playing { return 38 }
+        if Audio.device == 0 || Mixer.AudioState(Output.voice) != .Playing { return 26 }
     }
-    print("Wurm actual shared audio transport local tests passed.\n")
+    transport := Transport()
+    if transport != 0 { print("Audio transport failed: %\n", transport); return transport }
+    print("Wurm standard audio: play, pause, seek, loop, volume and frame persistence passed.\n")
     return 0
 }

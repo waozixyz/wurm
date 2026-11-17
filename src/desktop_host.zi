@@ -6,7 +6,7 @@ DesktopLoop :: #import "kryon/desktop_loop";
 #import "std/environment_linux"
 #import "std/number_text"
 App :: #import "app";
-#import "kryon/media_audio_raylib"
+AudioFrame :: #import "audio_frame";
 
 // The window size WURM_WINDOW asks for, when both sides are at least 240.
 WindowSize :: () -> (width: s32, height: s32) {
@@ -47,7 +47,7 @@ main :: () -> s32 {
         print("Apfelwurm could not find assets/art/title.png beside the game or its parent directory.\n")
         return 1
     }
-    MediaAudioUseRaylib()
+    AudioFrame.Enable()
     defer { App.CloseAudio() }
     StartScreen()
     width, height := WindowSize()

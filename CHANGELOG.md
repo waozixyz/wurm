@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Use Ziran’s standard audio mixer and SDL, Android and WebAudio sinks, preserving music transitions and volume while testing playback, pause, seek and loop behavior. Take desktop codecs from Kryon’s desktop artifact.
+
 - Give every opening key and switch lesson a visible interior gate that protects a useful garden area, with its control in a reachable court instead of locking only the exit.
 - Show the shader-lit terrain from a board's very first frame: the old tile textures no longer flash before it. The editor, its brushes and local multiplayer use the same terrain, Arcade lays the same painted materials as tiles, and the old tile art is gone.
 

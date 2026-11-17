@@ -148,12 +148,12 @@ main :: (argc: s32, argv: **u8) -> s32 {
     version_code: Vec(u8)
     BuilderPrint(*version_code, "%", cast(s64)code.value)
     code_text := BuilderFinish(version_code)
-    kryon := PackagePath("kryon"); ziran := PackagePath("ziran"); raylib := PackagePath("raylib")
-    webp := PackagePath("libwebp")
+    kryon := PackagePath("kryon"); ziran := PackagePath("ziran")
+    webp := PackagePath("libwebp"); avif := PackagePath("libavif"); aom := PackagePath("libaom")
     monocypher := PackagePath("monocypher"); liboqs := PackagePath("liboqs")
     profile := BuildProfile()
     if profile.count == 0 || kryon.count == 0 { return Fail("the Profile bundle or packages failed") }
-    if webp.count == 0 { return Fail("the WebP package failed") }
+    if webp.count == 0 || avif.count == 0 || aom.count == 0 { return Fail("the image codec packages failed") }
     scaffold: [11]string = .["python3", JoinPath(kryon, "scripts/android_scaffold.py"), "--root", ResolvePath("."),
         "--name", "Apfelwurm", "--package", "xyz.waozi.wurm", "--activity", "MainActivity", "--kryon"]
     scaffold_all: Vec(string)
@@ -169,21 +169,16 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !WriteEntireFile("droid/app/src/main/java/xyz/waozi/wurm/MainActivity.java", activity) { return Fail("cannot write the activity") }
     // The install ID may differ while the Java/JNI activity remains the same.
     gradle_path := "droid/app/build.gradle"
-    gradle, has_gradle := ReadEntireFile(gradle_path)
-    if !has_gradle { return Fail("the scaffold has no build.gradle") }
+    // Rebuild generated configuration from the pinned templates on each run.
+    // Scaffolding alone preserves obsolete renderer and codec settings.
+    gradle, has_gradle := ReadEntireFile(JoinPath(kryon, "templates/droid/droid/app/build.gradle"))
+    if !has_gradle { return Fail("Kryon has no Android Gradle template") }
+    gradle = TextReplace(gradle, "__PACKAGE__", "xyz.waozi.wurm")
     gradle = TextReplace(gradle, "applicationId 'xyz.waozi.wurm'", "applicationId (project.findProperty('app.installId') ?: 'xyz.waozi.wurm')")
     gradle = ReplaceNumber(gradle, "versionCode ", code_text)
     gradle = ReplaceQuoted(gradle, "versionName '", "'", version)
     // "Continue as @name" between waozi apps, in every edition.
     gradle = TextReplace(gradle, "android {\n", "apply from: new File(kryonDir, 'templates/android-account-handoff.gradle')\n\nandroid {\n")
-    // Scaffolding preserves older app files. Apply the existing shared edition
-    // hook there too, once, with Google dependencies confined to Google Play.
-    if !TextContains(gradle, "templates/android-gplay.gradle") {
-        migrated: Vec(u8)
-        Append(*migrated, gradle)
-        Append(*migrated, "\nif ((project.findProperty('app.edition') ?: 'direct') == 'gplay') {\n    apply from: new File(kryonDir, 'templates/android-gplay.gradle')\n}\n")
-        gradle = BuilderFinish(migrated)
-    }
     if !WriteEntireFile(gradle_path, gradle) { return Fail("cannot write build.gradle") }
     manifest_path := "droid/app/src/main/AndroidManifest.xml"
     manifest, has_manifest := ReadEntireFile(manifest_path)
@@ -217,8 +212,9 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !InstallIcon() { return Fail("cannot write the launcher icon") }
     // The account provider uses the same native cryptography on both ABIs.
     cmake_path := "droid/app/src/main/cpp/CMakeLists.txt"
-    cmake, has_cmake := ReadEntireFile(cmake_path)
-    if !has_cmake { return Fail("the scaffold has no CMakeLists.txt") }
+    cmake, has_cmake := ReadEntireFile(JoinPath(kryon, "templates/droid/droid/app/src/main/cpp/CMakeLists.txt"))
+    if !has_cmake { return Fail("Kryon has no Android CMake template") }
+    cmake = TextReplace(cmake, "__CMAKE_NAME__", "Apfelwurm")
     defines := TextFind(cmake, "set(APP_ZIRAN_DEFINES --define ANDROID_BUILD")
     if defines >= 0 {
         close := TextFind(cmake, ")", defines)
@@ -229,8 +225,6 @@ main :: (argc: s32, argv: **u8) -> s32 {
         Append(*out, cmake[close + 1:cmake.count])
         cmake = BuilderFinish(out)
     }
-    marker := TextFind(cmake, "\n# Apfelwurm account libraries\n")
-    if marker >= 0 { cmake = cmake[0:marker] }
     accounts: Vec(u8)
     Append(*accounts, cmake)
     Append(*accounts, "\n# Apfelwurm account libraries\nset(OQS_BUILD_ONLY_LIB ON CACHE BOOL \"\" FORCE)\nset(OQS_USE_OPENSSL OFF CACHE BOOL \"\" FORCE)\n")
@@ -238,7 +232,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     Append(*accounts, "set(OQS_MINIMAL_BUILD \"SIG_ml_dsa_44;KEM_ml_kem_768\" CACHE STRING \"\" FORCE)\n")
     BuilderPrint(*accounts, "add_subdirectory(\"%\" \"${CMAKE_BINARY_DIR}/account-oqs\" EXCLUDE_FROM_ALL)\n", liboqs)
     BuilderPrint(*accounts, "target_sources(main PRIVATE \"%/src/monocypher.c\" \"%/src/optional/monocypher-ed25519.c\")\n", monocypher, monocypher)
-    BuilderPrint(*accounts, "target_include_directories(main PRIVATE \"%/src\")\ntarget_link_libraries(main oqs)\n", monocypher)
+    BuilderPrint(*accounts, "target_include_directories(main PRIVATE \"%/src\")\ntarget_link_libraries(main PRIVATE oqs)\n", monocypher)
     if !WriteEntireFile(cmake_path, BuilderFinish(accounts)) { return Fail("cannot write CMakeLists.txt") }
     destination := "droid/app/src/main/assets"
     if !CreateDirectories(JoinPath(destination, "assets")) || !CopyFile(profile, JoinPath(destination, "assets/entity.zx")) {
@@ -264,8 +258,9 @@ main :: (argc: s32, argv: **u8) -> s32 {
     for i: 0..6 { VecPush(command, start[i]) }
     pairs: Vec(string)
     VecPush(pairs, Pair("-Pkryon.dir", kryon)); VecPush(pairs, Pair("-Pziran.dir", ziran))
-    VecPush(pairs, Pair("-Praylib.dir", JoinPath(raylib, "src"))); VecPush(pairs, Pair("-Papp.abis", abis))
+    VecPush(pairs, Pair("-Papp.abis", abis))
     VecPush(pairs, Pair("-Pwebp.dir", webp))
+    VecPush(pairs, Pair("-Pavif.dir", avif)); VecPush(pairs, Pair("-Paom.dir", aom))
     VecPush(pairs, ifx edition == "gplay" then "-Papp.minSdk=23" else "-Papp.minSdk=21")
     VecPush(pairs, "-Papp.codegen=c99"); VecPush(pairs, Pair("-Papp.edition", edition))
     VecPush(pairs, Pair("-Pandroid.aapt2FromMavenOverride", aapt))
@@ -273,8 +268,8 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if edition == "gplay" { VecPush(pairs, "-Pandroid.useAndroidX=true") }
     VecPush(pairs, Pair("-Papp.installId", ifx verification then "xyz.waozi.wurm.verification" else "xyz.waozi.wurm"))
     for i: 0..pairs.count - 1 { VecPush(command, pairs[i]) }
-    // Older scaffolds use Kryon's compatibility environment fallback.
-    sdk_settings: [3]string = .[Pair("ANDROID_SDK_ROOT", sdk), Pair("ANDROID_HOME", sdk), Pair("KRYON_ANDROID_WEBP_DIR", webp)]
+    // Source generation binds Frame using the resolved Kryon package identity.
+    sdk_settings: [3]string = .[Pair("ANDROID_SDK_ROOT", sdk), Pair("ANDROID_HOME", sdk), Pair("ZIRAN_PACKAGE_ID", PathName(kryon))]
     out2, built := Step(VecSlice(command, 0, command.count), false, sdk_settings[:])
     if !built { return Fail("Gradle failed") }
     unused CreateDirectories("build/android")

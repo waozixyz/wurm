@@ -71,7 +71,7 @@ Input :: #import "kryon/input_protocol";
 }
 #if !#defined(WURM_PORTABLE) {
     AudioFrame :: #import, file "audio_frame.zi";
-    CloseAudio :: () { AudioFrame.Close() }
+    CloseAudio :: () { Audio.Close(); AudioFrame.Close() }
 }
 // A computer steers with its keyboard; only touch editions offer swipe
 // or the on-screen direction pad.
@@ -4384,7 +4384,7 @@ Frame :: (session: Session, viewport: Rectangle) -> s32 {
         if !NavigateBack(now) {
             #if #defined(ANDROID_BUILD) {
                 // The Android host finishes the activity for unused Back.
-                unused KeyboardSend(session, key)
+                unused TreeInput.KeyboardSend(session, key)
             }
         }
     } else { HandleInput(key, now) }

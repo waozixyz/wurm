@@ -1,5 +1,4 @@
-// Wurm score, phrase scheduler and mixer over shared MediaAudio PCM.
-#import "kryon/media_audio"
+// Wurm score, phrase scheduler and mixer over the standard PCM stream.
 #import "kryon/session"
 File :: #import "std/file_linux";
 Output :: #import, file "audio_output.zi";
@@ -8,6 +7,8 @@ Output :: #import, file "audio_output.zi";
 #if #defined(ANDROID_BUILD) {
     Assets :: #import "kryon/app_asset";
 }
+
+sink: Output.PcmSink;
 
 Effect :: struct { bytes: [65536]u8; count: s32; position: s32; playing: bool; }
 device: u32;
@@ -33,18 +34,20 @@ music_samples: [4096]u8;
 mixed: [2048]s16;
 pending_block: bool;
 Bind :: (session: Session) {
-    if device != 0 {
-        status := MediaAudio(session, MediaAudioCommand.{.operation = .Status, .voice = 1})
-        if status.code == .Missing || status.code == .Denied {
-            device = 0
-            attempted = false
-            pending_block = false
-            CloseMusic()
-            for index: 0..3 { effects[index].playing = false }
-            was_playing = false
-        }
-    }
     Output.Bind(session)
+    if device != 0 && !Output.Valid(device) {
+        device = 0
+        attempted = false
+        pending_block = false
+        CloseMusic()
+        for index: 0..3 { effects[index].playing = false }
+        was_playing = false
+    }
+}
+Close :: () {
+    Output.Close()
+    CloseMusic()
+    device = 0; attempted = false; pending_block = false; was_playing = false
 }
 previous_level: s32 = -1;
 previous_apples: s32;
@@ -199,9 +202,16 @@ CloseMusic :: () {
 }
 
 EnsureAudio :: () {
+    if sink.available == null {
+        sink.available = Output.Available
+        sink.open = Output.Open
+        sink.ready = Output.Ready
+        sink.submit = Output.Submit
+        sink.clear = Output.Clear
+    }
     // Display-free pixmap verification never opens a real audio device.
-    if attempted || !Output.Available() { return }
-    device = Output.Open()
+    if attempted || !sink.available() { return }
+    device = sink.open()
     if device == 0 { return }
     attempted = true
     LoadEffect(0, "assets/sounds/start.pcm")
@@ -217,7 +227,7 @@ PlayEffect :: (index: s32) {
 
 ClearOutput :: () {
     pending_block = false
-    Output.Clear(device)
+    sink.clear(device)
 }
 
 ToggleMute :: () {
@@ -227,9 +237,9 @@ ToggleMute :: () {
 
 PumpAudio :: () {
     if device == 0 || muted { return }
-    while Output.Ready(device) {
+    while sink.ready(device) {
         if pending_block {
-            if !Output.Submit(device, mixed[:]) { pending_block = true; return }
+            if !sink.submit(device, mixed[:]) { pending_block = true; return }
             pending_block = false
             continue
         }
@@ -247,7 +257,7 @@ PumpAudio :: () {
             }
             mixed[index] = VolumeSample(value,volume)
         }
-        if !Output.Submit(device, mixed[:]) { pending_block = true; return }
+        if !sink.submit(device, mixed[:]) { pending_block = true; return }
     }
 }
 

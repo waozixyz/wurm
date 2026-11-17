@@ -214,7 +214,7 @@ BuildAccountProgram :: (source: string, root: string, entry: string, output: str
     words := TextSplit(TextTrim(system), " ")
     for i: 0..words.count - 1 { if words[i].count > 0 { VecPush(compile, words[i]) } }
     if source == "src/desktop_host.zi" {
-        artifact_command: [7]string = .["ziran", "pkg", "artifact", "kryon:renderer-raylib", "--platform", "linux-x86_64-gnu", "--locked"]
+        artifact_command: [7]string = .["ziran", "pkg", "artifact", "kryon:renderer-desktop", "--platform", "linux-x86_64-gnu", "--locked"]
         artifact_output, artifact_ok := Step(artifact_command[0:ifx Locked() then 7 else 6], true, no_extra[:])
         if !artifact_ok { return false }
         if !RendererArguments(TextTrim(artifact_output), *compile) { return false }

@@ -3,13 +3,14 @@ H :: #import, file "hosted_test.zi";
 App :: #import, file "../src/app.zi";
 Game :: #import, file "../src/game.zi";
 Runtime :: #import, file "../src/portable_runtime.zi";
-#import "apps/node_types"
+Portable :: #import, file "../src/portable.zi";
+Apps :: #import "apps/node_types";
 #import "kryon/session"
 #import "std/text_buffer"
 
 #program_export
 main :: () -> s32 {
-    H.message.abi = MODULE_ABI
+    H.message.abi = Apps.MODULE_ABI
     H.message.locale = "en"
     H.frame.session = SessionOpen()
     H.frame.now = 1.0
