@@ -64,12 +64,7 @@ def main():
 
     compiler_root = package('ziran')
     compiler = compiler_root / 'build/bin/ziran'
-    kryon = package('kryon')
-    paths = [str(ROOT / 'src'), 'kryon=' + str(kryon / 'src/ui'),
-             'kryon=' + str(kryon / 'src/backend'), str(kryon / 'src/ui'),
-             'std=' + str(compiler_root / 'std'), str(compiler_root / 'std')]
     dependencies = {name: package(name) for name in ('apps', 'entity', 'game2d', 'mingcute')}
-    paths += [name + '=' + str(path / 'src') for name, path in dependencies.items()]
     source_files = sorted((ROOT / 'src').rglob('*.zi')) + [ROOT / 'catalog.json', ROOT / 'editor/catalog.json']
     source_hashes = {str(path.relative_to(ROOT)): digest(path) for path in source_files}
     tool = ROOT / 'build/portable-assets'
@@ -133,9 +128,7 @@ def main():
                     blocks.append(heading + '\n' + '\n'.join(lines[lines.index(heading) + 1:]).rstrip() + '\n---\n')
             (locale_dir / locale.name).write_text(''.join(blocks))
         bundle = OUT / (name + '.zx')
-        command = [compiler, 'bundle', '--root', ROOT / 'src', '--module-path', generated]
-        for path in paths:
-            command += ['--module-path', path]
+        command = [compiler, 'bundle', '--project', '--root', ROOT / 'src', '--module-path', generated]
         for define in dict.fromkeys(descriptor['build_defines'] + ['KRYON_HOSTED_UI']):
             command += ['--define', define]
         command += ['--asset-dir', 'assets=' + str(stage / 'assets'), '--entry', descriptor['entry'],

@@ -16,17 +16,10 @@ def main():
     def package(name):
         return Path(subprocess.check_output(['ziran', 'pkg', 'path', name], env=env, text=True).strip())
     compiler = package('ziran')
-    kryon = package('kryon')
-    paths = [str(ROOT / 'tests'), str(ROOT / 'src'),
-             'kryon=' + str(kryon / 'src/ui'), 'kryon=' + str(kryon / 'src/backend'),
-             str(kryon / 'src/ui'), 'std=' + str(compiler / 'std'), str(compiler / 'std')]
-    paths += [name + '=' + str(package(name) / 'src') for name in ('apps', 'mingcute', 'entity', 'game2d')]
     for entry, editor in (('arcade_entry_test', False), ('arcade_entry_test', True), ('hosted_test', False)):
         out = ROOT / 'build/arcade-entry-test'
-        command = [str(compiler / 'build/bin/ziran'), 'build', '--root', str(ROOT / 'src'),
+        command = [str(compiler / 'build/bin/ziran'), 'build', '--project', '--module-path', str(ROOT / 'tests'), '--root', str(ROOT / 'src'),
                    '--define', 'WURM_PORTABLE', '--target=c', '--entry', entry + ':main', '--exe', '-o', str(out)]
-        for path in paths:
-            command += ['--module-path', path]
         if editor:
             command += ['--define', 'WURM_EDITOR_APP']
         command += ['tests/' + entry + '.zi']
