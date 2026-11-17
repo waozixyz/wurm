@@ -205,7 +205,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
     if !InstallBackupRules() { return Fail("cannot write the backup rules") }
     manifest = WithoutCleartext(manifest)
     if verification {
-        // The Moto fixture connects only to its private localhost Daochi node.
+        // The Moto fixture connects only to its private localhost Mesh node.
         manifest = ReplaceFirst(manifest, "    <application", "    <application android:usesCleartextTraffic=\"true\"")
     }
     if !WriteEntireFile(manifest_path, manifest) { return Fail("cannot write the manifest") }

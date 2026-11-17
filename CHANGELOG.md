@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Use Mesh naming and its canonical local referral fixture for browser tests.
+
 - Use Ziran’s standard audio mixer and SDL, Android and WebAudio sinks, preserving music transitions and volume while testing playback, pause, seek and loop behavior. Take desktop codecs from Kryon’s desktop artifact.
 
 - Give every opening key and switch lesson a visible interior gate that protects a useful garden area, with its control in a reachable court instead of locking only the exit.

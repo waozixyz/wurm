@@ -1,4 +1,4 @@
-"""Default compiled Wurm web host against disposable signed Daochi accounts.
+"""Default compiled Wurm web host against disposable signed Mesh accounts.
 
 Run after tools/build_web.zi, through build-queue. Reuses the canonical Dew
 CDP/HTTP fixture transport; every profile and fixture lives in Wurm work/.
@@ -22,7 +22,7 @@ from web_site_test import Handler as SharedHandler, driver
 
 transport.ROOT = ROOT / 'work/referral-host'
 shared.ROOT = ROOT / 'work/referral-host'
-shared.BACKEND = PROJECTS / 'kryonlabs/daochi'
+shared.BACKEND = PROJECTS / 'ziranlang/mesh'
 class Browser(transport.Browser):
     def __enter__(self):
         # Chromium singleton sockets need a path shorter than 108 bytes.
