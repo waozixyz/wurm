@@ -1,7 +1,8 @@
 // Exercises the account build on its own verified private Xvfb display with a
 // private profile: title actions, levels, settings and appearance, the
 // leaderboard, the skin shop's sign-in and the shared Profile, in portrait
-// and landscape. Build build/account-desktop/wurm first.
+// and landscape. tests/run_local.zi -- account-ui builds
+// build/account-desktop/wurm with Kryon's test driver first.
 #import "kryon/private_display"
 #import "kryon/test_driver_client"
 #import "std/file"
@@ -92,15 +93,17 @@ Orientation :: (size: string, version: string) -> bool {
         if !ActionIcon("Shop", 8.0, 8.0, 20.0, 20.0) { return Fail("shop action is missing", size) }
     }
     if !Press("Stages") || !Show("Meadow") { return Fail("no stage selector", size) }
-    if !Press("Meadow") || !Show("Level board preview") { return Fail("no level selector", size) }
-    maps: s32
+    if !Press("Meadow") || !Show("Choose level") { return Fail("no level selector", size) }
+    // A new profile can open its first level, a wide card with its board,
+    // and the rest stay locked.
+    first := false
     locked := false
     for i: 0..driver.nodes.count - 1 {
         node := driver.nodes[i]
-        if node.label == "Level board preview" { maps += 1; if node.width < 120.0 { maps += 100 } }
+        if node.label == "Level 1" && node.enabled && node.width >= 120.0 { first = true }
         if node.label == "Locked" && !node.enabled { locked = true }
     }
-    if maps != 1 { return Fail("one wide level board preview", size) }
+    if !first { return Fail("the first level must be a wide open card", size) }
     if !locked { return Fail("locked levels must be disabled", size) }
     unused SleepMilliseconds(500)
     if !Capture("levels", size, *image) { return false }

@@ -85,9 +85,7 @@ jobs:
       - name: Build and exercise the shared account interface
         env:
           LDLIBS: -lz
-        run: |
-          ziran run --target=c tools/build_desktop.zi
-          ziran run --target=c tests/run_local.zi -- account-ui
+        run: ziran run --target=c tests/run_local.zi -- account-ui
       - name: Build and play the browser edition
         env:
           LDLIBS: -lz

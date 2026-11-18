@@ -189,6 +189,8 @@ BuildAccountProgram :: (source: string, root: string, entry: string, output: str
     // The desktop game runs its terrain shaders on the GPU when it can.
     gpu := source == "src/desktop_host.zi"
     if gpu { VecPush(arguments, "--define"); VecPush(arguments, "WURM_TERRAIN_GPU") }
+    // Private UI tests set KRYON_TEST_DRIVER; a plain build leaves the driver out.
+    if EnvironmentText("KRYON_TEST_DRIVER").count > 0 { VecPush(arguments, "--define"); VecPush(arguments, "KRYON_TEST_DRIVER") }
     rest: [10]string = .["--target=c", "--define", "PLATFORM_DESKTOP", "--define", "WURM_ACCOUNTS", "--entry", entry, "-o", output, source]
     for rest { VecPush(arguments, it) }
     out1, generated := Step(VecSlice(arguments, 0, arguments.count), false, no_extra[:])

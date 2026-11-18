@@ -179,6 +179,12 @@ main :: (argc: s32, argv: **u8) -> s32 {
     gradle = ReplaceQuoted(gradle, "versionName '", "'", version)
     // "Continue as @name" between waozi apps, in every edition.
     gradle = TextReplace(gradle, "android {\n", "apply from: new File(kryonDir, 'templates/android-account-handoff.gradle')\n\nandroid {\n")
+    // The game ships only libmain.so. Without a target list Gradle builds
+    // every executable the codec sources define, such as libaom's aomenc,
+    // which 32-bit Android below API 24 cannot compile.
+    edition_argument := "'-DAPP_EDITION=' + appEdition\n            }"
+    if TextFind(gradle, edition_argument) < 0 { return Fail("Kryon's Gradle template has no CMake arguments to extend") }
+    gradle = TextReplace(gradle, edition_argument, "'-DAPP_EDITION=' + appEdition\n                targets 'main'\n            }")
     if !WriteEntireFile(gradle_path, gradle) { return Fail("cannot write build.gradle") }
     manifest_path := "droid/app/src/main/AndroidManifest.xml"
     manifest, has_manifest := ReadEntireFile(manifest_path)

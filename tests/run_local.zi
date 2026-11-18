@@ -8,9 +8,9 @@
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- rewards | reward-reminder-android
 //     LDLIBS=-lz ziran run --target=c tests/run_local.zi -- ui | account-ui | web | crazygames | editor-campaign
 //
-// ui builds its driven desktop editions, runs them in private Xvfb and then
-// restores normal desktop binaries. Build account and web editions first for
-// account-ui and web.
+// ui and account-ui build their driven desktop editions, run them in private
+// Xvfb and then restore normal desktop binaries. Build the web edition first
+// for web.
 // store-rewards runs focused native SDK wallet tests and normal rewards regression.
 // store-runtime runs native store/config/rewards and private async SDK fixtures.
 // crazygames checks the portal policy and plays work/crazygames.zip, unpacked
@@ -264,6 +264,18 @@ PrivateUI :: () -> bool {
     return tested && restored_desktop && restored_modal
 }
 
+// The same for the account build at build/account-desktop/wurm: build it
+// with Kryon's test driver for its UI test, then rebuild the normal one.
+AccountUI :: () -> bool {
+    build: [3]string = .["run", "--target=c", "tools/build_desktop.zi"]
+    driver: [2]string = .["LDLIBS=-lz", "KRYON_TEST_DRIVER=1"]
+    normal: [1]string = .["LDLIBS=-lz"]
+    built := Ziran(build[:], driver[:])
+    tested := ifx built then Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") else false
+    restored := Ziran(build[:], normal[:])
+    return tested && restored
+}
+
 #program_export
 main :: (argc: s32, argv: **u8) -> s32 {
     unused CreateDirectories("build/research")
@@ -329,7 +341,7 @@ main :: (argc: s32, argv: **u8) -> s32 {
         if !Tool("design_levels", "--check") { return Fail("campaign design") }
         return ifx PrivateUI() then 0 else Fail("private UI")
     }
-    if mode == "account-ui" { return ifx Interface("account_ui_test", "account-ui-test-runner", "-lX11 -lcairo -lm") then 0 else Fail("account UI") }
+    if mode == "account-ui" { return ifx AccountUI() then 0 else Fail("account UI") }
     if mode == "name-field" { return ifx Hosted() then 0 else Fail("name field consumer") }
     if mode == "shop" {
         accounts: [1]string = .["WURM_ACCOUNT_TEST"]
