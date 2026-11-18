@@ -67,7 +67,7 @@ jobs:
           path: ziranlang/ziran
           fetch: true
           packages: >-
-            build-essential cmake pkg-config zlib1g-dev libssl-dev
+            build-essential cmake nasm meson ninja-build pkg-config zlib1g-dev libssl-dev
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
