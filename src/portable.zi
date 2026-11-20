@@ -1,28 +1,13 @@
 Apps :: #import "apps/node_types";
 Node :: #import "apps/node_app";
 #import "kryon/geometry"
-#import "kryon/session"
+UiSession :: #import "kryon/session";
 App :: #import, file "app.zi";
 Runtime :: #import "portable_runtime";
 Locale :: #import, file "localization.zi";
 host_api :: #system_library "host_api";
 
-// Keep the portable UI ABI on this app's Kryon package. Apps.AppUiFrame has
-// the same public value layout, but importing its Session would couple the
-// portable entry to whichever Kryon revision the host package was built with.
-AppUiFrame :: struct {
-    session: Session
-    width: s32
-    height: s32
-    bottom: s32
-    top: s32
-    scale: float32
-    font: s32
-    now: float64
-    dark: bool
-}
-
-ReadAppUiHost :: () -> AppUiFrame #foreign host_api;
+ReadAppUiHost :: () -> Apps.AppUiFrame #foreign host_api;
 
 #program_export
 Main :: () -> s32 { return Node.RunNodeApp(WurmFrame, WurmBack) }
@@ -33,7 +18,9 @@ WurmFrame :: (message: Apps.AppMessage) -> bool {
     Runtime.FrameTime(frame.now)
     area := Rectangle.{0.0, cast(float32)frame.top, cast(float32)frame.width,
         cast(float32)(frame.height - frame.top - frame.bottom)}
-    return App.Frame(frame.session, area) == 0
+    // The portable entry and Apps may use different Kryon revisions.
+    session := UiSession.Session.{.slot = frame.session.slot, .epoch = frame.session.epoch}
+    return App.Frame(session, area) == 0
 }
 
 WurmBack :: (message: Apps.AppMessage) -> bool {

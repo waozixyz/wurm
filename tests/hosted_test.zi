@@ -26,7 +26,7 @@ Own :: #import, file "../src/own_levels.zi";
 using WidgetKind;
 
 message: Apps.AppMessage;
-frame: Portable.AppUiFrame;
+frame: Apps.AppUiFrame;
 profile_opens: s32;
 balance_reads: s32;
 failures: s32;
@@ -48,7 +48,7 @@ ReadAppHost :: () -> Apps.AppMessage { return message }
 #program_export
 WriteAppHost :: (value: Apps.AppMessage) { message = value }
 #program_export
-ReadAppUiHost :: () -> Portable.AppUiFrame { return frame }
+ReadAppUiHost :: () -> Apps.AppUiFrame { return frame }
 field_input: TextField.Input;
 // Scripted input reaches the real collection/search field widget.
 #program_export

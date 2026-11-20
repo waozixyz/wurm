@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Use the Apps frame type so Apfelwurm and its editor open in Arcade inside Breeze.
+
 - Use Mesh naming and its canonical local referral fixture for browser tests.
 
 - Use Ziran’s standard audio mixer and SDL, Android and WebAudio sinks, preserving music transitions and volume while testing playback, pause, seek and loop behavior. Take desktop codecs from Kryon’s desktop artifact.
