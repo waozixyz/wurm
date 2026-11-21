@@ -23,6 +23,7 @@ jobs:
     runs-on: build-native-wurm-zx
     timeout-minutes: 45
     env:
+      BUILD_NATIVE_TARGET: ${{ inputs.target }}
       ZIRAN_PAR_THREADS: '1'
       MAKEFLAGS: -j1
       OMP_NUM_THREADS: '1'
