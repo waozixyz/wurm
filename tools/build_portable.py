@@ -32,6 +32,8 @@ def package_archive(root=ROOT):
     with tarfile.open(archive, 'w:gz') as output:
         for name in EXPORT_FILES:
             output.add(exports / name, arcname=name, recursive=False)
+    # The standalone download and archive member must be the same build.
+    shutil.copyfile(exports / "wurm.zx", archive.parent / "wurm.zx")
     return archive
 
 

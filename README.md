@@ -176,3 +176,16 @@ LDLIBS=-lz ziran run --target=c tests/run_local.zi
 See the [build and development guide](docs/building.md) for the editor's
 save files, Android and portable builds, asset recovery and verification.
 [Report a bug or suggest a level](https://github.com/waozixyz/wurm/issues).
+
+## Portable downloads
+
+`python3 tools/build_portable.py` builds Wurm and its editor in this repository.
+It writes the complete portable archive and the identical standalone game to
+`build/downloads/wurm.zx`. Verify their agreement with
+`python3 tests/portable_export_test.py --built`.
+
+The Gitea `portable.yml` workflow on `master` accepts only `target=zx` and uses
+the repository-scoped `build-native-wurm-zx` runner. It builds portable downloads
+without starting the Android or browser release jobs and retains the outputs as
+build artifacts. Installing that runner and verifying a hosted run are separate
+from the local packaging test. Published downloads belong to Wurm’s own releases.

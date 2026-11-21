@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Offer the standalone Wurm ZX download in Wurm’s own releases, alongside its portable archive.
+
 - Use the Apps frame type so Apfelwurm and its editor open in Arcade inside Breeze.
 
 - Use Mesh naming and its canonical local referral fixture for browser tests.
